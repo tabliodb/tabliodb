@@ -1,5 +1,10 @@
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { ProjectListResponseDto, ProjectMemberListResponseDto, ProjectResponseDto } from '@tabliodb/sdk';
+import type {
+  ProjectListQuery,
+  ProjectListResponseDto,
+  ProjectMemberListResponseDto,
+  ProjectResponseDto,
+} from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { projectsKeys } from './project.keys';
@@ -7,8 +12,10 @@ import { projectsKeys } from './project.keys';
 export const defaultProjectName = 'Library System';
 
 type ProjectsQueries = {
-  list: (query?: PaginationQuery) => AppQueryOptions<ProjectListResponseDto, ReturnType<typeof projectsKeys.list>>;
-  listOrCreateStarter: () => AppQueryOptions<ProjectResponseDto[], ReturnType<typeof projectsKeys.list>>;
+  list: (query?: ProjectListQuery) => AppQueryOptions<ProjectListResponseDto, ReturnType<typeof projectsKeys.list>>;
+  listOrCreateStarter: (
+    organizationId: string | null,
+  ) => AppQueryOptions<ProjectResponseDto[], ReturnType<typeof projectsKeys.list>>;
   members: (
     projectId: string,
     query?: PaginationQuery,
@@ -16,16 +23,17 @@ type ProjectsQueries = {
 };
 
 export const projectsQueries: ProjectsQueries = {
-  list: (query: PaginationQuery = {}) =>
+  list: (query: ProjectListQuery = {}) =>
     appQueryOptions({
       queryFn: () => sdk.projects.list(query),
       queryKey: projectsKeys.list(query),
     }),
 
-  listOrCreateStarter: () =>
+  listOrCreateStarter: (organizationId: string | null) =>
     appQueryOptions({
-      queryFn: listOrCreateStarterProjects,
-      queryKey: projectsKeys.list({ limit: 50 }),
+      enabled: Boolean(organizationId),
+      queryFn: () => listOrCreateStarterProjects(organizationId),
+      queryKey: projectsKeys.list({ limit: 50, organizationId: organizationId ?? undefined }),
     }),
 
   members: (projectId: string, query: PaginationQuery = {}) =>
@@ -36,8 +44,12 @@ export const projectsQueries: ProjectsQueries = {
     }),
 };
 
-async function listOrCreateStarterProjects(): Promise<ProjectResponseDto[]> {
-  const projects = await sdk.projects.list({ limit: 50 });
+async function listOrCreateStarterProjects(organizationId: string | null): Promise<ProjectResponseDto[]> {
+  if (!organizationId) {
+    return [];
+  }
+
+  const projects = await sdk.projects.list({ limit: 50, organizationId });
 
   if (projects.items.length > 0) {
     return projects.items;
@@ -47,6 +59,7 @@ async function listOrCreateStarterProjects(): Promise<ProjectResponseDto[]> {
   const project = await sdk.projects.create({
     description: 'Starter schema workspace',
     name: defaultProjectName,
+    organizationId,
   });
 
   return [project];

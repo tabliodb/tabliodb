@@ -38,6 +38,7 @@ export class ProjectService {
     const projects = await this.projectRepository.getVisibleToUser(auth.user.id, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
+      organizationId: query.organizationId,
     });
 
     return {

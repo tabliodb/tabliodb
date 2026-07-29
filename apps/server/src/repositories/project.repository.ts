@@ -9,6 +9,7 @@ import { slugify } from '../utils/slug.js';
 export type ProjectListOptions = {
   cursor?: string;
   limit: number;
+  organizationId?: string;
 };
 
 export type ProjectMemberListOptions = {
@@ -68,6 +69,9 @@ export class ProjectRepository {
       ])
       .where('project_members.userId', '=', userId)
       .where('projects.archivedAt', 'is', null)
+      .$if(Boolean(options.organizationId), (query) =>
+        query.where('projects.organizationId', '=', options.organizationId!),
+      )
       .orderBy('projects.updatedAt', 'desc')
       .limit(options.limit + 1)
       .offset(offset)
@@ -78,6 +82,9 @@ export class ProjectRepository {
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .where('project_members.userId', '=', userId)
       .where('projects.archivedAt', 'is', null)
+      .$if(Boolean(options.organizationId), (query) =>
+        query.where('projects.organizationId', '=', options.organizationId!),
+      )
       .executeTakeFirstOrThrow();
 
     return {

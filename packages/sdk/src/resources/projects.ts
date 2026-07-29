@@ -23,6 +23,10 @@ export type ProjectCreateDto = {
   organizationId?: string;
 };
 
+export type ProjectListQuery = PaginationQuery & {
+  organizationId?: string;
+};
+
 export type ProjectUpdateDto = {
   description?: string | null;
   name?: string;
@@ -76,7 +80,7 @@ export type ProjectsResource = {
   addMember: (projectId: string, body: ProjectMemberCreateDto) => Promise<ProjectMemberDto>;
   archive: (projectId: string) => Promise<ProjectArchiveResponseDto>;
   create: (body: ProjectCreateDto) => Promise<ProjectResponseDto>;
-  list: (query?: PaginationQuery) => Promise<ProjectListResponseDto>;
+  list: (query?: ProjectListQuery) => Promise<ProjectListResponseDto>;
   listDiagrams: (projectId: string, query?: PaginationQuery) => Promise<DiagramListResponseDto>;
   listMembers: (projectId: string, query?: PaginationQuery) => Promise<ProjectMemberListResponseDto>;
   removeMember: (projectId: string, userId: string) => Promise<ProjectMemberRemoveResponseDto>;
@@ -86,7 +90,7 @@ export type ProjectsResource = {
 
 export function createProjectsResource(opts?: RequestOpts): ProjectsResource {
   return {
-    list: (query: PaginationQuery = {}) => getProjects(query, opts) as Promise<ProjectListResponseDto>,
+    list: (query: ProjectListQuery = {}) => getProjects(query, opts) as Promise<ProjectListResponseDto>,
     create: (body: ProjectCreateDto) =>
       createProjectRequest({ projectCreateDto: body }, opts) as Promise<ProjectResponseDto>,
     update: (projectId: string, body: ProjectUpdateDto) =>

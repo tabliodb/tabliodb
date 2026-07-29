@@ -4,7 +4,12 @@ import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import { AuditLogListQueryDto, AuditLogListResponseDto } from '../dtos/audit-log.dto.js';
-import { OrganizationSettingsDto, OrganizationSettingsUpdateDto } from '../dtos/organization.dto.js';
+import {
+  OrganizationListQueryDto,
+  OrganizationListResponseDto,
+  OrganizationSettingsDto,
+  OrganizationSettingsUpdateDto,
+} from '../dtos/organization.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
 import { OrganizationService } from '../services/organization.service.js';
@@ -15,6 +20,18 @@ import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 @Authenticated()
 export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
+
+  @Get()
+  @RequirePermission(Permission.OrganizationRead)
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getOrganizations' })
+  @ZodResponse({ type: OrganizationListResponseDto })
+  getOrganizations(
+    @Auth() auth: AuthContext,
+    @Query() query: OrganizationListQueryDto,
+  ): Promise<OrganizationListResponseDto> {
+    return this.organizationService.getAll(auth, query);
+  }
 
   @Get(':organizationId/settings')
   @RequirePermission(Permission.OrganizationRead, { key: 'organizationId', source: 'param', type: 'organization' })

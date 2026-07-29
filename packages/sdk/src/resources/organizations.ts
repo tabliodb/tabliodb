@@ -1,11 +1,26 @@
-import type { Paginated, PaginationQuery, ProjectRole } from '@tabliodb/shared';
+import type { OrganizationRole, Paginated, PaginationQuery, ProjectRole } from '@tabliodb/shared';
 import type { RequestOpts } from '@oazapfts/runtime';
 import type { OrganizationSettingsUpdateDto as GeneratedOrganizationSettingsUpdateDto } from '../fetch-client.js';
 import {
+  getOrganizations,
   getOrganizationAuditLogs,
   getOrganizationSettings,
   updateOrganizationSettings as updateOrganizationSettingsRequest,
 } from '../fetch-client.js';
+
+export type OrganizationDto = {
+  allowMemberProjectCreate: boolean;
+  createdAt: string;
+  defaultProjectRole: ProjectRole.Commenter | ProjectRole.Editor | ProjectRole.Viewer | null;
+  id: string;
+  name: string;
+  role: OrganizationRole;
+  slug: string;
+  status: string;
+  updatedAt: string;
+};
+
+export type OrganizationListResponseDto = Paginated<OrganizationDto>;
 
 export type OrganizationSettingsDto = {
   allowMemberProjectCreate: boolean;
@@ -46,11 +61,14 @@ export type AuditLogListResponseDto = Paginated<AuditLogDto>;
 export type OrganizationsResource = {
   getAuditLogs: (organizationId: string, query?: PaginationQuery) => Promise<AuditLogListResponseDto>;
   getSettings: (organizationId: string) => Promise<OrganizationSettingsDto>;
+  list: (query?: PaginationQuery) => Promise<OrganizationListResponseDto>;
   updateSettings: (organizationId: string, body: OrganizationSettingsUpdateDto) => Promise<OrganizationSettingsDto>;
 };
 
 export function createOrganizationsResource(opts?: RequestOpts): OrganizationsResource {
   return {
+    list: (query: PaginationQuery = {}) =>
+      getOrganizations(query, opts) as unknown as Promise<OrganizationListResponseDto>,
     getAuditLogs: (organizationId: string, query: PaginationQuery = {}) =>
       getOrganizationAuditLogs({ organizationId, ...query }, opts) as unknown as Promise<AuditLogListResponseDto>,
     getSettings: (organizationId: string) =>

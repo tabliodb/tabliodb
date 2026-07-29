@@ -5,6 +5,7 @@ import { ProjectRole } from '@tabliodb/shared';
 import {
   TabliodbApiError,
   type AuditLogDto,
+  type OrganizationDto,
   type OrganizationSettingsDto,
   type ProjectMemberDto,
   type ProjectResponseDto,
@@ -32,6 +33,8 @@ import {
 import {
   Archive,
   Building2,
+  Check,
+  ChevronsUpDown,
   Database,
   FolderPlus,
   GitBranch,
@@ -130,7 +133,22 @@ export function EditorPage() {
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
-  const projectsQuery = useQuery(projectsQueries.listOrCreateStarter());
+  const organizationsQuery = useQuery(organizationsQueries.list({ limit: 50 }));
+  const organizations = organizationsQuery.data?.items ?? [];
+  const routeWorkspaceSlug = params.workspaceSlug ?? null;
+  const activeOrganization = useMemo(() => {
+    if (organizations.length === 0) {
+      return null;
+    }
+
+    return (
+      organizations.find((organization) => matchesWorkspaceRoute(organization, routeWorkspaceSlug)) ??
+      organizations[0] ??
+      null
+    );
+  }, [organizations, routeWorkspaceSlug]);
+
+  const projectsQuery = useQuery(projectsQueries.listOrCreateStarter(activeOrganization?.id ?? null));
 
   const projects = projectsQuery.data ?? [];
   const filteredProjects = useMemo(() => {
@@ -176,13 +194,33 @@ export function EditorPage() {
   });
 
   useEffect(() => {
-    if (projects.length > 0 && (!routeProjectId || !projects.some((project) => project.id === routeProjectId))) {
-      const project = projects[0];
-      navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }), {
+    if (organizations.length === 0 || organizationsQuery.isPending) {
+      return;
+    }
+
+    if (
+      !routeWorkspaceSlug ||
+      !organizations.some((organization) => matchesWorkspaceRoute(organization, routeWorkspaceSlug))
+    ) {
+      const organization = organizations[0];
+      navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }), {
         replace: true,
       });
     }
-  }, [navigate, projects, routeProjectId]);
+  }, [navigate, organizations, organizationsQuery.isPending, routeWorkspaceSlug]);
+
+  useEffect(() => {
+    if (!activeOrganization) {
+      return;
+    }
+
+    if (projects.length > 0 && (!routeProjectId || !projects.some((project) => project.id === routeProjectId))) {
+      const project = projects[0];
+      navigate(routes.project.to({ projectId: project.id, workspaceSlug: getOrganizationSlug(activeOrganization) }), {
+        replace: true,
+      });
+    }
+  }, [activeOrganization, navigate, projects, routeProjectId]);
 
   useEffect(() => {
     if (
@@ -237,15 +275,32 @@ export function EditorPage() {
     return <Navigate replace to={routes.login.to()} />;
   }
 
-  const blockingError = projectsQuery.error ?? diagramsQuery.error ?? snapshotsQuery.error;
+  if (isUnauthorized(organizationsQuery.error)) {
+    return <Navigate replace to={routes.login.to()} />;
+  }
+
+  const blockingError = organizationsQuery.error ?? projectsQuery.error ?? diagramsQuery.error ?? snapshotsQuery.error;
 
   if (blockingError) {
     return <ErrorState error={blockingError} onRetry={() => queryClient.invalidateQueries()} />;
   }
 
-  const isLoadingWorkspace = projectsQuery.isPending || diagramsQuery.isPending || snapshotsQuery.isPending || !model;
+  if (!organizationsQuery.isPending && organizations.length === 0) {
+    return <ErrorState error={new Error('No workspace found')} onRetry={() => queryClient.invalidateQueries()} />;
+  }
+
+  const isLoadingWorkspace =
+    organizationsQuery.isPending ||
+    Boolean(activeOrganization && projectsQuery.isPending) ||
+    Boolean(activeProject && diagramsQuery.isPending) ||
+    Boolean(activeDiagram && snapshotsQuery.isPending) ||
+    Boolean(activeProject && activeDiagram && !model);
 
   if (isLoadingWorkspace) {
+    return <LoadingState />;
+  }
+
+  if (!activeOrganization || !activeProject || !activeDiagram || !model) {
     return <LoadingState />;
   }
 
@@ -259,11 +314,22 @@ export function EditorPage() {
           <span className="text-base font-extrabold">Tabliodb</span>
         </div>
         <div className="p-4">
+          <WorkspaceSwitcher
+            activeOrganization={activeOrganization}
+            onSelect={(organization) => {
+              setModel(null);
+              setSelectedTableId(null);
+              setProjectSearchTerm('');
+              navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+            }}
+            organizations={organizations}
+          />
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Projects
             </span>
             <CreateProjectDialog
+              organizationId={activeOrganization?.id ?? null}
               onCreated={(project) => {
                 setModel(null);
                 setSelectedTableId(null);
@@ -424,7 +490,88 @@ function getWorkspaceSlug(project: ProjectResponseDto): string {
   return project.organizationSlug || project.organizationId;
 }
 
-function CreateProjectDialog({ onCreated }: { onCreated: (project: ProjectResponseDto) => void }) {
+function getOrganizationSlug(organization: OrganizationDto): string {
+  return organization.slug || organization.id;
+}
+
+function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: string | null): boolean {
+  return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
+}
+
+function WorkspaceSwitcher({
+  activeOrganization,
+  onSelect,
+  organizations,
+}: {
+  activeOrganization: OrganizationDto | null;
+  onSelect: (organization: OrganizationDto) => void;
+  organizations: OrganizationDto[];
+}) {
+  return (
+    <div className="mb-5">
+      <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+        Workspace
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="flex h-12 w-full cursor-pointer items-center gap-3 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+            type="button"
+          >
+            <div className="grid size-8 shrink-0 place-items-center rounded-[12px] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
+              <Building2 className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-extrabold">{activeOrganization?.name ?? 'Select workspace'}</div>
+              <div className="truncate text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                {activeOrganization ? formatOrganizationRole(activeOrganization.role) : 'No workspace'}
+              </div>
+            </div>
+            <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-64">
+          {organizations.map((organization) => {
+            const isActive = organization.id === activeOrganization?.id;
+
+            return (
+              <DropdownMenuItem
+                className="justify-between"
+                key={organization.id}
+                onSelect={() => {
+                  if (!isActive) {
+                    onSelect(organization);
+                  }
+                }}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-extrabold">{organization.name}</span>
+                  <span className="block truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {organization.slug}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <Badge variant={isOrganizationManager(organization) ? 'blue' : 'neutral'}>
+                    {formatOrganizationRole(organization.role)}
+                  </Badge>
+                  {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                </span>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+function CreateProjectDialog({
+  onCreated,
+  organizationId,
+}: {
+  onCreated: (project: ProjectResponseDto) => void;
+  organizationId: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const form = useForm<ProjectFormState>({
     defaultValues: {
@@ -460,13 +607,14 @@ function CreateProjectDialog({ onCreated }: { onCreated: (project: ProjectRespon
     createProjectMutation.mutate({
       description: toOptionalDescription(values.description),
       name: values.name,
+      organizationId: organizationId ?? undefined,
     });
   }
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="secondary">
+        <Button disabled={!organizationId} size="sm" variant="secondary">
           <FolderPlus className="size-4" />
           New
         </Button>
@@ -486,7 +634,7 @@ function CreateProjectDialog({ onCreated }: { onCreated: (project: ProjectRespon
               autoFocus
               aria-invalid={Boolean(errors.name)}
               control={form.control}
-              disabled={createProjectMutation.isPending}
+              disabled={!organizationId || createProjectMutation.isPending}
               name="name"
               placeholder="Billing Platform"
             />
@@ -501,7 +649,7 @@ function CreateProjectDialog({ onCreated }: { onCreated: (project: ProjectRespon
               aria-invalid={Boolean(errors.description)}
               className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
               control={form.control}
-              disabled={createProjectMutation.isPending}
+              disabled={!organizationId || createProjectMutation.isPending}
               name="description"
               placeholder="Schemas for invoices, customers, and subscriptions."
             />
@@ -523,7 +671,7 @@ function CreateProjectDialog({ onCreated }: { onCreated: (project: ProjectRespon
             >
               Cancel
             </Button>
-            <Button disabled={createProjectMutation.isPending} type="submit">
+            <Button disabled={!organizationId || createProjectMutation.isPending} type="submit">
               {createProjectMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -815,7 +963,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
       return;
     }
 
-    archiveProjectMutation.mutate(project.id);
+    archiveProjectMutation.mutate({ organizationId: project.organizationId, projectId: project.id });
   }
 
   function handleAddMember(values: MemberFormState) {
@@ -1154,6 +1302,19 @@ function formatProjectRole(role: ProjectRole): string {
     [ProjectRole.Owner]: 'Owner',
     [ProjectRole.Viewer]: 'Viewer',
   }[role];
+}
+
+function formatOrganizationRole(role: OrganizationDto['role']): string {
+  return {
+    admin: 'Admin',
+    member: 'Member',
+    owner: 'Owner',
+    viewer: 'Viewer',
+  }[role];
+}
+
+function isOrganizationManager(organization: OrganizationDto): boolean {
+  return organization.role === 'owner' || organization.role === 'admin';
 }
 
 function formatAuditLogMessage(auditLog: AuditLogDto): string {

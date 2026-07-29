@@ -159,6 +159,22 @@ export type InvitationAcceptResponseDtoOutput = {
   user: AuthUserDtoOutput;
   invitation: InvitationPublicDtoOutput;
 };
+export type OrganizationDtoOutput = {
+  id: string;
+  name: string;
+  slug: string;
+  role: Role;
+  status: string;
+  defaultProjectRole: DefaultProjectRole | null;
+  allowMemberProjectCreate: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export type OrganizationListResponseDtoOutput = {
+  items: OrganizationDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
 export type OrganizationSettingsDtoOutput = {
   id: string;
   name: string;
@@ -230,7 +246,7 @@ export type ProjectMemberDtoOutput = {
   email: string;
   name: string;
   avatarColor: string | null;
-  role: Role;
+  role: Role2;
   createdAt: string;
   updatedAt: string;
 };
@@ -241,10 +257,10 @@ export type ProjectMemberListResponseDtoOutput = {
 };
 export type ProjectMemberCreateDto = {
   email: string;
-  role?: Role;
+  role?: Role2;
 };
 export type ProjectMemberUpdateDto = {
-  role: Role;
+  role: Role2;
 };
 export type ProjectMemberRemoveResponseDtoOutput = {
   successful: boolean;
@@ -830,6 +846,33 @@ export function acceptInvitation(
     ),
   );
 }
+export function getOrganizations(
+  {
+    cursor,
+    limit,
+  }: {
+    cursor?: string;
+    limit?: number;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: OrganizationListResponseDtoOutput;
+    }>(
+      `/organizations${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
 export function getOrganizationSettings(
   {
     organizationId,
@@ -1305,12 +1348,18 @@ export enum Status {
   Revoked = 'revoked',
   Expired = 'expired',
 }
+export enum Role {
+  Owner = 'owner',
+  Admin = 'admin',
+  Member = 'member',
+  Viewer = 'viewer',
+}
 export enum DefaultProjectRole {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Role {
+export enum Role2 {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',

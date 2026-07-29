@@ -1,9 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import { AuditLogListQueryDto, AuditLogListResponseDto } from '../dtos/audit-log.dto.js';
-import { OrganizationSettingsDto, OrganizationSettingsUpdateDto } from '../dtos/organization.dto.js';
+import {
+  OrganizationDto,
+  OrganizationListQueryDto,
+  OrganizationListResponseDto,
+  OrganizationSettingsDto,
+  OrganizationSettingsUpdateDto,
+} from '../dtos/organization.dto.js';
 import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import type { JsonValue } from '../schema/index.js';
@@ -16,6 +22,18 @@ export class OrganizationService {
     private readonly auditLogRepository: AuditLogRepository,
     private readonly organizationRepository: OrganizationRepository,
   ) {}
+
+  async getAll(auth: AuthContext, query: OrganizationListQueryDto): Promise<OrganizationListResponseDto> {
+    const organizations = await this.organizationRepository.listForUser(auth.user.id, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+    });
+
+    return {
+      ...organizations,
+      items: organizations.items.map((organization) => this.serializeOrganization(organization)),
+    };
+  }
 
   async getSettings(auth: AuthContext, organizationId: string): Promise<OrganizationSettingsDto> {
     const organization = await this.organizationRepository.getSettingsForUser(auth.user.id, organizationId);
@@ -130,6 +148,20 @@ export class OrganizationService {
     };
   }
 
+  private serializeOrganization(organization: OrganizationRow): OrganizationDto {
+    return {
+      allowMemberProjectCreate: organization.allowMemberProjectCreate,
+      createdAt: toIsoDateTime(organization.createdAt),
+      defaultProjectRole: this.toDefaultProjectRole(organization.defaultProjectRole),
+      id: organization.id,
+      name: organization.name,
+      role: this.toOrganizationRole(organization.role),
+      slug: organization.slug,
+      status: organization.status,
+      updatedAt: toIsoDateTime(organization.updatedAt),
+    };
+  }
+
   private toDefaultProjectRole(
     role: string | null,
   ): ProjectRole.Commenter | ProjectRole.Editor | ProjectRole.Viewer | null {
@@ -139,7 +171,20 @@ export class OrganizationService {
 
     return null;
   }
+
+  private toOrganizationRole(role: string): OrganizationRole {
+    if (Object.values(OrganizationRole).includes(role as OrganizationRole)) {
+      return role as OrganizationRole;
+    }
+
+    return OrganizationRole.Member;
+  }
 }
+
+type OrganizationRow = OrganizationSettingsRow & {
+  role: string;
+  status: string;
+};
 
 type OrganizationSettingsRow = {
   allowMemberProjectCreate: boolean;

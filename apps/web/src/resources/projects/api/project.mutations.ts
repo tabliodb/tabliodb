@@ -13,14 +13,15 @@ import { projectsKeys } from './project.keys';
 const createProjectMutationFn = (body: ProjectCreateDto) => sdk.projects.create(body);
 const updateProjectMutationFn = (input: { body: ProjectUpdateDto; projectId: string }) =>
   sdk.projects.update(input.projectId, input.body);
-const archiveProjectMutationFn = (projectId: string) => sdk.projects.archive(projectId);
+const archiveProjectMutationFn = (input: { organizationId: string; projectId: string }) =>
+  sdk.projects.archive(input.projectId);
 const addProjectMemberMutationFn = (input: { body: ProjectMemberCreateDto; projectId: string }) =>
   sdk.projects.addMember(input.projectId, input.body);
 const updateProjectMemberMutationFn = (input: { body: ProjectMemberUpdateDto; projectId: string; userId: string }) =>
   sdk.projects.updateMember(input.projectId, input.userId, input.body);
 const removeProjectMemberMutationFn = (input: { projectId: string; userId: string }) =>
   sdk.projects.removeMember(input.projectId, input.userId);
-const starterProjectsKey = projectsKeys.list({ limit: 50 });
+const getStarterProjectsKey = (organizationId: string) => projectsKeys.list({ limit: 50, organizationId });
 
 type UseCreateProjectMutationParams = {
   mutationConfig?: MutationConfig<typeof createProjectMutationFn>;
@@ -32,7 +33,7 @@ export function useCreateProjectMutation(params: UseCreateProjectMutationParams 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Project list menjadi sumber navigasi editor, jadi setiap CRUD project selalu refresh daftar sidebar.
-      queryClient.setQueryData<ProjectResponseDto[]>(starterProjectsKey, (current) => [
+      queryClient.setQueryData<ProjectResponseDto[]>(getStarterProjectsKey(data.organizationId), (current) => [
         data,
         ...(current ?? []).filter((project) => project.id !== data.id),
       ]);
@@ -52,7 +53,7 @@ export function useUpdateProjectMutation(params: UseUpdateProjectMutationParams 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Rename project bisa mengubah slug dan header/sidebar, jadi cache list harus di-refresh setelah server menerima update.
-      queryClient.setQueryData<ProjectResponseDto[]>(starterProjectsKey, (current) =>
+      queryClient.setQueryData<ProjectResponseDto[]>(getStarterProjectsKey(data.organizationId), (current) =>
         (current ?? []).map((project) => (project.id === data.id ? data : project)),
       );
       queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
@@ -71,8 +72,8 @@ export function useArchiveProjectMutation(params: UseArchiveProjectMutationParam
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Archive mengeluarkan project dari list aktif karena server list hanya mengembalikan project non-archived.
-      queryClient.setQueryData<ProjectResponseDto[]>(starterProjectsKey, (current) =>
-        (current ?? []).filter((project) => project.id !== variables),
+      queryClient.setQueryData<ProjectResponseDto[]>(getStarterProjectsKey(variables.organizationId), (current) =>
+        (current ?? []).filter((project) => project.id !== variables.projectId),
       );
       queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
