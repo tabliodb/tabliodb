@@ -1,0 +1,27 @@
+{
+  "name": "@tabliodb/sdk",
+  "version": "0.1.0",
+  "description": "Typed TypeScript SDK for Tabliodb API.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@tabliodb/schema-core": "file:../schema-core",
+    "@tabliodb/shared": "file:../shared"
+  },
+  "devDependencies": {
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vitest": "^4.1.10"
+  }
+}

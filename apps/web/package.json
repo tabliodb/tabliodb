@@ -1,0 +1,41 @@
+{
+  "name": "@tabliodb/web",
+  "version": "0.1.0",
+  "description": "React + Vite web application for Tabliodb.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@antv/x6": "^3.1.7",
+    "@hocuspocus/provider": "^4.4.0",
+    "@tabliodb/schema-core": "file:../../packages/schema-core",
+    "@tabliodb/sdk": "file:../../packages/sdk",
+    "@tabliodb/shared": "file:../../packages/shared",
+    "@tabliodb/sql": "file:../../packages/sql",
+    "@tabliodb/ui": "file:../../packages/ui",
+    "@tanstack/react-query": "^5.101.4",
+    "lucide-react": "^1.27.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "yjs": "^13.6.31",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "happy-dom": "^20.11.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vite": "^8.1.5",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.10"
+  }
+}

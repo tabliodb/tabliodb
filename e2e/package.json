@@ -1,0 +1,17 @@
+{
+  "name": "@tabliodb/e2e",
+  "version": "0.1.0",
+  "description": "End-to-end tests for Tabliodb.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@tabliodb/sdk": "file:../packages/sdk",
+    "@types/node": "^26.1.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  }
+}

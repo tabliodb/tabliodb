@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "outDir": "dist",
+    "paths": {
+      "src/*": ["./src/*"],
+      "@tabliodb/shared": ["../../packages/shared/src/index.ts"],
+      "@tabliodb/schema-core": ["../../packages/schema-core/src/index.ts"],
+      "@tabliodb/sql": ["../../packages/sql/src/index.ts"]
+    },
+    "rootDir": "../.."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

@@ -1,0 +1,36 @@
+import { Injectable } from '@nestjs/common';
+import { Insertable, Kysely } from 'kysely';
+import { jsonObjectFrom } from 'kysely/helpers/postgres';
+import { InjectKysely } from 'nestjs-kysely';
+import type { DB, ApiKeyTable } from '../schema/index.js';
+
+@Injectable()
+export class ApiKeyRepository {
+  constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
+
+  create(dto: Insertable<ApiKeyTable>) {
+    return this.db
+      .insertInto('api_keys')
+      .values(dto)
+      .returning(['id', 'name', 'createdAt', 'updatedAt', 'permissions'])
+      .executeTakeFirstOrThrow();
+  }
+
+  getByToken(token: Buffer) {
+    return this.db
+      .selectFrom('api_keys')
+      .select((eb) => [
+        'api_keys.id',
+        'api_keys.permissions',
+        jsonObjectFrom(
+          eb
+            .selectFrom('users')
+            .select(['users.id', 'users.email', 'users.name', 'users.avatarColor'])
+            .whereRef('users.id', '=', 'api_keys.userId')
+            .where('users.deletedAt', 'is', null),
+        ).as('user'),
+      ])
+      .where('api_keys.key', '=', token)
+      .executeTakeFirst();
+  }
+}

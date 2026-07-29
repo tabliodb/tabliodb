@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "paths": {
+      "@tabliodb/shared": ["../../packages/shared/src/index.ts"],
+      "@tabliodb/schema-core": ["../../packages/schema-core/src/index.ts"],
+      "@tabliodb/sdk": ["../../packages/sdk/src/index.ts"],
+      "@tabliodb/sql": ["../../packages/sql/src/index.ts"],
+      "@tabliodb/ui": ["../../packages/ui/src/index.ts"],
+      "@/*": ["./src/*"]
+    },
+    "types": ["vite/client", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+}

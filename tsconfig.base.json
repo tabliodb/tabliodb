@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noImplicitOverride": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "ES2022",
+    "paths": {
+      "@tabliodb/shared": ["./packages/shared/src/index.ts"],
+      "@tabliodb/schema-core": ["./packages/schema-core/src/index.ts"],
+      "@tabliodb/sql": ["./packages/sql/src/index.ts"],
+      "@tabliodb/sdk": ["./packages/sdk/src/index.ts"],
+      "@tabliodb/ui": ["./packages/ui/src/index.ts"]
+    }
+  }
+}
