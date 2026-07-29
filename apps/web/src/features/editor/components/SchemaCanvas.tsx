@@ -21,10 +21,12 @@ const tablePaddingBottom = 10;
 const diagramVisualGridSize = 24;
 const diagramDragGridSize = 1;
 const relationshipActiveColor = '#58cc02';
+const relationshipEndpointLaneGap = 8;
+const relationshipMinimumBridgeGap = 24;
 const relationshipNeutralColor = '#9ca3af';
-const relationshipLaneGap = 10;
 const relationshipPortRadius = 4;
-const relationshipRouteGap = 32;
+const relationshipRouteGap = 40;
+const relationshipRouteLaneGap = 8;
 const relationshipRouterName = 'tabliodb-relationship';
 
 let relationshipRouterRegistered = false;
@@ -113,7 +115,7 @@ export function SchemaCanvas({
         allowLoop: false,
         allowMulti: true,
         allowNode: true,
-        connector: { name: 'rounded', args: { radius: 12 } },
+        connector: { name: 'normal' },
         connectionPoint: 'boundary',
         highlight: true,
         router: { name: relationshipRouterName },
@@ -444,8 +446,7 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
           },
         },
         connector: {
-          name: 'rounded',
-          args: { radius: 12 },
+          name: 'normal',
         },
         labels: [],
         router: {
@@ -573,7 +574,7 @@ function createColumnPorts(
 
       const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2;
       // The vertical lane offset makes several relationships to the same id row visually distinct while keeping every endpoint attached to the real column.
-      const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * 8;
+      const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * relationshipEndpointLaneGap;
       const color = terminal.active ? relationshipActiveColor : relationshipNeutralColor;
 
       return [
@@ -638,29 +639,105 @@ function createLiveRelationshipRoute(
 
   const sourceDirection = source.x <= sourceBBox.x + sourceBBox.width / 2 ? -1 : 1;
   const targetDirection = target.x <= targetBBox.x + targetBBox.width / 2 ? -1 : 1;
-  const edgeLaneOffset = (((options.edgeIndex ?? 0) % 7) - 3) * relationshipLaneGap;
-  const sourceExit = {
-    x: source.x + sourceDirection * (relationshipRouteGap + (options.sourceLaneIndex ?? 0) * relationshipLaneGap),
-    y: source.y,
-  };
-  const targetExit = {
-    x: target.x + targetDirection * (relationshipRouteGap + (options.targetLaneIndex ?? 0) * relationshipLaneGap),
-    y: target.y,
-  };
+  const edgeLaneOffset = (((options.edgeIndex ?? 0) % 7) - 3) * relationshipRouteLaneGap;
+  const faceToFaceBridgeX = getFaceToFaceBridgeX(
+    sourceBBox,
+    targetBBox,
+    sourceDirection,
+    targetDirection,
+    edgeLaneOffset,
+  );
 
   // This router is evaluated by X6 during node movement, so the path follows the live drag position instead of stale React model coordinates.
-  if (sourceDirection !== targetDirection) {
-    const midX = (sourceExit.x + targetExit.x) / 2 + edgeLaneOffset;
-
-    return [sourceExit, { x: midX, y: source.y }, { x: midX, y: target.y }, targetExit];
+  if (faceToFaceBridgeX !== null) {
+    return [
+      { x: faceToFaceBridgeX, y: source.y },
+      { x: faceToFaceBridgeX, y: target.y },
+    ];
   }
 
-  const outerX =
-    sourceDirection === -1
-      ? Math.min(sourceExit.x, targetExit.x) - relationshipRouteGap - Math.abs(edgeLaneOffset)
-      : Math.max(sourceExit.x, targetExit.x) + relationshipRouteGap + Math.abs(edgeLaneOffset);
+  if (sourceDirection === targetDirection) {
+    const outerX =
+      sourceDirection === -1
+        ? Math.min(sourceBBox.x, targetBBox.x) - relationshipRouteGap - Math.abs(edgeLaneOffset)
+        : Math.max(sourceBBox.x + sourceBBox.width, targetBBox.x + targetBBox.width) +
+          relationshipRouteGap +
+          Math.abs(edgeLaneOffset);
 
-  return [sourceExit, { x: outerX, y: source.y }, { x: outerX, y: target.y }, targetExit];
+    return [
+      { x: outerX, y: source.y },
+      { x: outerX, y: target.y },
+    ];
+  }
+
+  const unionLeft = Math.min(sourceBBox.x, targetBBox.x);
+  const unionRight = Math.max(sourceBBox.x + sourceBBox.width, targetBBox.x + targetBBox.width);
+  const sourceOuterX =
+    sourceDirection === -1
+      ? unionLeft - relationshipRouteGap - Math.abs(edgeLaneOffset)
+      : unionRight + relationshipRouteGap + Math.abs(edgeLaneOffset);
+  const targetOuterX =
+    targetDirection === -1
+      ? unionLeft - relationshipRouteGap - Math.abs(edgeLaneOffset)
+      : unionRight + relationshipRouteGap + Math.abs(edgeLaneOffset);
+  const detourY = getVerticalDetourY(sourceBBox, targetBBox, source.y, target.y, Math.abs(edgeLaneOffset));
+
+  return [
+    { x: sourceOuterX, y: source.y },
+    { x: sourceOuterX, y: detourY },
+    { x: targetOuterX, y: detourY },
+    { x: targetOuterX, y: target.y },
+  ];
+}
+
+function getFaceToFaceBridgeX(
+  sourceBBox: { x: number; width: number },
+  targetBBox: { x: number; width: number },
+  sourceDirection: -1 | 1,
+  targetDirection: -1 | 1,
+  laneOffset: number,
+): number | null {
+  if (sourceDirection === 1 && targetDirection === -1) {
+    const sourceRight = sourceBBox.x + sourceBBox.width;
+    const targetLeft = targetBBox.x;
+    const gap = targetLeft - sourceRight;
+
+    if (gap >= relationshipMinimumBridgeGap) {
+      return clamp(sourceRight + gap / 2 + laneOffset, sourceRight + 8, targetLeft - 8);
+    }
+  }
+
+  if (sourceDirection === -1 && targetDirection === 1) {
+    const targetRight = targetBBox.x + targetBBox.width;
+    const sourceLeft = sourceBBox.x;
+    const gap = sourceLeft - targetRight;
+
+    if (gap >= relationshipMinimumBridgeGap) {
+      return clamp(targetRight + gap / 2 + laneOffset, targetRight + 8, sourceLeft - 8);
+    }
+  }
+
+  return null;
+}
+
+function getVerticalDetourY(
+  sourceBBox: { y: number; height: number },
+  targetBBox: { y: number; height: number },
+  sourceY: number,
+  targetY: number,
+  laneOffset: number,
+): number {
+  const topY = Math.min(sourceBBox.y, targetBBox.y) - relationshipRouteGap - laneOffset;
+  const bottomY =
+    Math.max(sourceBBox.y + sourceBBox.height, targetBBox.y + targetBBox.height) + relationshipRouteGap + laneOffset;
+  const topCost = Math.abs(sourceY - topY) + Math.abs(targetY - topY);
+  const bottomCost = Math.abs(sourceY - bottomY) + Math.abs(targetY - bottomY);
+
+  return topCost <= bottomCost ? topY : bottomY;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNodeData): boolean {
