@@ -2,6 +2,7 @@ node_modules
 dist
 build
 coverage
+.tmp
 .env
 .env.*
 !.env.example
@@ -11,6 +12,7 @@ apps/web/playwright-report
 apps/web/test-results
 e2e/playwright-report
 e2e/test-results
+packages/*/src/**/*.d.ts
 *.tsbuildinfo
 *.log
 .agents

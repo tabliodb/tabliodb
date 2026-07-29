@@ -10,15 +10,25 @@ export * from './resources/snapshots.js';
 export * from './resources/users.js';
 
 import { configureTabliodbSdk, type TabliodbClientOptions } from './request-options.js';
-import { createAuthResource } from './resources/auth.js';
-import { createCommentsResource } from './resources/comments.js';
-import { createDiagramsResource } from './resources/diagrams.js';
-import { createProjectsResource } from './resources/projects.js';
-import { createSetupResource } from './resources/setup.js';
-import { createSnapshotsResource } from './resources/snapshots.js';
-import { createUsersResource } from './resources/users.js';
+import { createAuthResource, type AuthResource } from './resources/auth.js';
+import { createCommentsResource, type CommentsResource } from './resources/comments.js';
+import { createDiagramsResource, type DiagramsResource } from './resources/diagrams.js';
+import { createProjectsResource, type ProjectsResource } from './resources/projects.js';
+import { createSetupResource, type SetupResource } from './resources/setup.js';
+import { createSnapshotsResource, type SnapshotsResource } from './resources/snapshots.js';
+import { createUsersResource, type UsersResource } from './resources/users.js';
 
-export function createTabliodbSdk(options: TabliodbClientOptions = {}) {
+export type TabliodbSdk = {
+  auth: AuthResource;
+  comments: CommentsResource;
+  diagrams: DiagramsResource;
+  projects: ProjectsResource;
+  setup: SetupResource;
+  snapshots: SnapshotsResource;
+  users: UsersResource;
+};
+
+export function createTabliodbSdk(options: TabliodbClientOptions = {}): TabliodbSdk {
   const requestOptions = configureTabliodbSdk(options);
 
   return {

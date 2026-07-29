@@ -1,20 +1,25 @@
-import { queryOptions } from '@tanstack/react-query';
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { ProjectResponseDto } from '@tabliodb/sdk';
+import type { ProjectListResponseDto, ProjectResponseDto } from '@tabliodb/sdk';
+import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { projectsKeys } from './project.keys';
 
 export const defaultProjectName = 'Library System';
 
-export const projectsQueries = {
+type ProjectsQueries = {
+  list: (query?: PaginationQuery) => AppQueryOptions<ProjectListResponseDto, ReturnType<typeof projectsKeys.list>>;
+  listOrCreateStarter: () => AppQueryOptions<ProjectResponseDto[], ReturnType<typeof projectsKeys.list>>;
+};
+
+export const projectsQueries: ProjectsQueries = {
   list: (query: PaginationQuery = {}) =>
-    queryOptions({
+    appQueryOptions({
       queryFn: () => sdk.projects.list(query),
       queryKey: projectsKeys.list(query),
     }),
 
   listOrCreateStarter: () =>
-    queryOptions({
+    appQueryOptions({
       queryFn: listOrCreateStarterProjects,
       queryKey: projectsKeys.list({ limit: 50 }),
     }),

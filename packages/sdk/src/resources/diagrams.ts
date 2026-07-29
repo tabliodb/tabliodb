@@ -3,7 +3,6 @@ import type { RequestOpts } from '@oazapfts/runtime';
 import {
   createDiagram as createDiagramRequest,
   type DiagramCreateDto as GeneratedDiagramCreateDto,
-  type DiagramResponseDtoOutput,
 } from '../fetch-client.js';
 
 export type DiagramCreateDto = {
@@ -12,11 +11,20 @@ export type DiagramCreateDto = {
   dialect?: DatabaseDialect;
 };
 
-export type DiagramResponseDto = Omit<DiagramResponseDtoOutput, 'dialect'> & {
+export type DiagramResponseDto = {
+  createdAt: string;
   dialect: DatabaseDialect;
+  id: string;
+  name: string;
+  projectId: string;
+  updatedAt: string;
 };
 
-export function createDiagramsResource(opts?: RequestOpts) {
+export type DiagramsResource = {
+  create: (body: DiagramCreateDto) => Promise<DiagramResponseDto>;
+};
+
+export function createDiagramsResource(opts?: RequestOpts): DiagramsResource {
   return {
     create: (body: DiagramCreateDto) =>
       // DatabaseDialect adalah string union domain; generated client memakai enum OpenAPI, wire value-nya tetap sama.

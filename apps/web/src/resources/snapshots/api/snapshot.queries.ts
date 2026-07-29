@@ -1,22 +1,33 @@
-import { queryOptions } from '@tanstack/react-query';
 import type { DiagramModel } from '@tabliodb/schema-core';
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { DiagramResponseDto, SnapshotResponseDto } from '@tabliodb/sdk';
+import type { DiagramResponseDto, SnapshotListResponseDto, SnapshotResponseDto } from '@tabliodb/sdk';
+import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { snapshotsKeys } from './snapshot.keys';
 
 type InitialSnapshotFactory = (diagram: DiagramResponseDto) => DiagramModel;
 
-export const snapshotsQueries = {
+type SnapshotsQueries = {
+  listByDiagram: (
+    diagramId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<SnapshotListResponseDto, ReturnType<typeof snapshotsKeys.listByDiagram>>;
+  listOrCreateInitial: (
+    diagram: DiagramResponseDto | null,
+    createInitialSnapshot: InitialSnapshotFactory,
+  ) => AppQueryOptions<SnapshotResponseDto[], ReturnType<typeof snapshotsKeys.listByDiagram>>;
+};
+
+export const snapshotsQueries: SnapshotsQueries = {
   listByDiagram: (diagramId: string, query: PaginationQuery = {}) =>
-    queryOptions({
+    appQueryOptions({
       enabled: Boolean(diagramId),
       queryFn: () => sdk.snapshots.listByDiagram(diagramId, query),
       queryKey: snapshotsKeys.listByDiagram(diagramId, query),
     }),
 
   listOrCreateInitial: (diagram: DiagramResponseDto | null, createInitialSnapshot: InitialSnapshotFactory) =>
-    queryOptions({
+    appQueryOptions({
       enabled: Boolean(diagram?.id),
       queryFn: () => listOrCreateInitialSnapshots(diagram, createInitialSnapshot),
       queryKey: snapshotsKeys.listByDiagram(diagram?.id ?? 'missing-diagram', { limit: 20 }),

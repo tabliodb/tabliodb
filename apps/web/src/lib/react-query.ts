@@ -1,4 +1,4 @@
-import { QueryCache, QueryClient, type UseMutationOptions } from '@tanstack/react-query';
+import { QueryCache, QueryClient, type QueryKey, type UseMutationOptions, type UseQueryOptions } from '@tanstack/react-query';
 import { TabliodbApiError } from '@tabliodb/sdk';
 
 export const queryClient = new QueryClient({
@@ -30,7 +30,25 @@ export const queryClient = new QueryClient({
 
 export type ApiFnReturnType<FnType extends (...args: any) => Promise<any>> = Awaited<ReturnType<FnType>>;
 
-export type QueryConfig<T extends (...args: any[]) => any> = Omit<ReturnType<T>, 'queryKey' | 'queryFn'>;
+export type AppQueryOptions<TData, TQueryKey extends QueryKey = QueryKey> = Omit<
+  UseQueryOptions<TData, Error, TData, TQueryKey>,
+  'queryFn' | 'queryKey'
+> & {
+  queryFn: () => Promise<TData>;
+  queryKey: TQueryKey;
+};
+
+export function appQueryOptions<TData, TQueryKey extends QueryKey>(
+  options: AppQueryOptions<TData, TQueryKey>,
+): AppQueryOptions<TData, TQueryKey> {
+  // Wrapper ini menjaga public resource query tetap portable tanpa membawa inferred type dari generated SDK client.
+  return options;
+}
+
+export type QueryConfig<T extends (...args: any[]) => AppQueryOptions<any, any>> = Omit<
+  ReturnType<T>,
+  'queryKey' | 'queryFn'
+>;
 
 export type MutationConfig<MutationFnType extends (...args: any) => Promise<any>> = UseMutationOptions<
   ApiFnReturnType<MutationFnType>,

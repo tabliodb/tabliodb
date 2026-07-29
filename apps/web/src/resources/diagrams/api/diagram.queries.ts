@@ -1,21 +1,31 @@
-import { queryOptions } from '@tanstack/react-query';
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { DiagramResponseDto, ProjectResponseDto } from '@tabliodb/sdk';
+import type { DiagramListResponseDto, DiagramResponseDto, ProjectResponseDto } from '@tabliodb/sdk';
+import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { diagramsKeys } from './diagram.keys';
 
 export const defaultDiagramName = 'Main schema';
 
-export const diagramsQueries = {
+type DiagramsQueries = {
+  listByProject: (
+    projectId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<DiagramListResponseDto, ReturnType<typeof diagramsKeys.listByProject>>;
+  listOrCreateStarter: (
+    project: ProjectResponseDto | null,
+  ) => AppQueryOptions<DiagramResponseDto[], ReturnType<typeof diagramsKeys.listByProject>>;
+};
+
+export const diagramsQueries: DiagramsQueries = {
   listByProject: (projectId: string, query: PaginationQuery = {}) =>
-    queryOptions({
+    appQueryOptions({
       enabled: Boolean(projectId),
       queryFn: () => sdk.projects.listDiagrams(projectId, query),
       queryKey: diagramsKeys.listByProject(projectId, query),
     }),
 
   listOrCreateStarter: (project: ProjectResponseDto | null) =>
-    queryOptions({
+    appQueryOptions({
       enabled: Boolean(project?.id),
       queryFn: () => listOrCreateStarterDiagrams(project),
       queryKey: diagramsKeys.listByProject(project?.id ?? 'missing-project', { limit: 50 }),

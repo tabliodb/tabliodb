@@ -4,22 +4,39 @@ import {
   createProject as createProjectRequest,
   getProjectDiagrams,
   getProjects,
-  type ProjectCreateDto as GeneratedProjectCreateDto,
-  type ProjectListResponseDtoOutput,
-  type ProjectResponseDtoOutput,
 } from '../fetch-client.js';
 import type { DiagramResponseDto } from './diagrams.js';
 
-export type ProjectCreateDto = GeneratedProjectCreateDto;
+export type ProjectCreateDto = {
+  description?: string;
+  name: string;
+  organizationId?: string;
+};
 
-export type ProjectResponseDto = ProjectResponseDtoOutput;
+export type ProjectResponseDto = {
+  createdAt: string;
+  description: string | null;
+  id: string;
+  name: string;
+  organizationId: string;
+  organizationName: string;
+  organizationSlug: string;
+  slug: string;
+  updatedAt: string;
+};
 
 export type ProjectListResponseDto = Paginated<ProjectResponseDto>;
 export type DiagramListResponseDto = Paginated<DiagramResponseDto>;
 
-export function createProjectsResource(opts?: RequestOpts) {
+export type ProjectsResource = {
+  create: (body: ProjectCreateDto) => Promise<ProjectResponseDto>;
+  list: (query?: PaginationQuery) => Promise<ProjectListResponseDto>;
+  listDiagrams: (projectId: string, query?: PaginationQuery) => Promise<DiagramListResponseDto>;
+};
+
+export function createProjectsResource(opts?: RequestOpts): ProjectsResource {
   return {
-    list: (query: PaginationQuery = {}) => getProjects(query, opts) as Promise<ProjectListResponseDtoOutput>,
+    list: (query: PaginationQuery = {}) => getProjects(query, opts) as Promise<ProjectListResponseDto>,
     create: (body: ProjectCreateDto) =>
       createProjectRequest({ projectCreateDto: body }, opts) as Promise<ProjectResponseDto>,
     listDiagrams: (projectId: string, query: PaginationQuery = {}) =>

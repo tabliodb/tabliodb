@@ -1,5 +1,5 @@
-import { createTabliodbSdk } from '@tabliodb/sdk';
+import { createTabliodbSdk, type TabliodbSdk } from '@tabliodb/sdk';
 
-export const sdk = createTabliodbSdk({
+export const sdk: TabliodbSdk = createTabliodbSdk({
   baseUrl: '/api',
 });

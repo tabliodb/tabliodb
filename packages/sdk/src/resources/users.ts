@@ -1,11 +1,7 @@
 import type { OrganizationRole, Paginated, PaginationQuery } from '@tabliodb/shared';
 import type { RequestOpts } from '@oazapfts/runtime';
-import {
-  createUser as createUserRequest,
-  getUsers,
-  type UserCreateDto as GeneratedUserCreateDto,
-  type UserResponseDtoOutput,
-} from '../fetch-client.js';
+import type { UserCreateDto as GeneratedUserCreateDto } from '../fetch-client.js';
+import { createUser as createUserRequest, getUsers } from '../fetch-client.js';
 
 export type UserCreateDto = {
   email: string;
@@ -16,8 +12,22 @@ export type UserCreateDto = {
   password: string;
 };
 
-export type UserResponseDto = Omit<UserResponseDtoOutput, 'instanceRole'> & {
+export type UserResponseDto = {
+  avatarColor: string | null;
+  createdAt: string;
+  email: string;
+  id: string;
   instanceRole: 'owner' | 'admin' | null;
+  isDisabled: boolean;
+  name: string;
+  organizations: Array<{
+    id: string;
+    name: string;
+    role: string;
+    slug: string;
+    status: string;
+  }>;
+  updatedAt: string;
 };
 
 export type UserRoleFilter = 'owner' | 'instance-admin' | 'org-admin' | 'member';
@@ -29,13 +39,18 @@ export type UserListQuery = PaginationQuery & {
 
 export type UserListResponseDto = Paginated<UserResponseDto>;
 
-export function createUsersResource(opts?: RequestOpts) {
+export type UsersResource = {
+  create: (body: UserCreateDto) => Promise<UserResponseDto>;
+  list: (query?: UserListQuery) => Promise<UserListResponseDto>;
+};
+
+export function createUsersResource(opts?: RequestOpts): UsersResource {
   return {
     // Admin console memakai list ini sebagai satu source of truth untuk user, instance role, dan membership ringkas.
     list: (query: UserListQuery = {}) => getUsers(query, opts) as Promise<UserListResponseDto>,
     // Manual creation tetap lewat server agar hashing password, membership, dan instance role dibuat atomik di satu transaksi.
     create: (body: UserCreateDto) =>
       // Shared OrganizationRole adalah enum domain; cast ini hanya menjembatani enum generated yang value string-nya sama.
-      createUserRequest({ userCreateDto: body as GeneratedUserCreateDto }, opts) as Promise<UserResponseDto>,
+      createUserRequest({ userCreateDto: body as unknown as GeneratedUserCreateDto }, opts) as Promise<UserResponseDto>,
   };
 }
