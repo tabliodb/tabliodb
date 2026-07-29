@@ -21,6 +21,7 @@ const tablePaddingBottom = 10;
 const diagramVisualGridSize = 24;
 const diagramDragGridSize = 1;
 const relationshipActiveColor = '#58cc02';
+const relationshipConnectorRadius = 10;
 const relationshipEndpointLaneGap = 8;
 const relationshipMinimumBridgeGap = 24;
 const relationshipNeutralColor = '#9ca3af';
@@ -115,7 +116,7 @@ export function SchemaCanvas({
         allowLoop: false,
         allowMulti: true,
         allowNode: true,
-        connector: { name: 'normal' },
+        connector: { name: 'rounded', args: { radius: relationshipConnectorRadius } },
         connectionPoint: 'boundary',
         highlight: true,
         router: { name: relationshipRouterName },
@@ -446,7 +447,8 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
           },
         },
         connector: {
-          name: 'normal',
+          name: 'rounded',
+          args: { radius: relationshipConnectorRadius },
         },
         labels: [],
         router: {
