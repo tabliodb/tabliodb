@@ -19,6 +19,16 @@ export class OrganizationRepository {
       .executeTakeFirst();
   }
 
+  getByIdForUser(userId: string, organizationId: string) {
+    return this.db
+      .selectFrom('organizations')
+      .innerJoin('organization_members', 'organization_members.organizationId', 'organizations.id')
+      .selectAll('organizations')
+      .where('organization_members.userId', '=', userId)
+      .where('organizations.id', '=', organizationId)
+      .executeTakeFirst();
+  }
+
   createPersonalOrganization(options: { userId: string; name: string }) {
     const slug = slugify(options.name);
 

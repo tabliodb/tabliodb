@@ -5,6 +5,7 @@ import { DiagramController } from './diagram.controller.js';
 import { ProjectController } from './project.controller.js';
 import { SetupController } from './setup.controller.js';
 import { SnapshotController } from './snapshot.controller.js';
+import { UserController } from './user.controller.js';
 
 export const controllers = [
   AppController,
@@ -14,4 +15,5 @@ export const controllers = [
   ProjectController,
   SetupController,
   SnapshotController,
+  UserController,
 ];
