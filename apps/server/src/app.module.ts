@@ -7,6 +7,7 @@ import { controllers } from './controllers/index.js';
 import { AuthGuard } from './middleware/auth.guard.js';
 import { GlobalExceptionFilter } from './middleware/global-exception.filter.js';
 import { LoggingInterceptor } from './middleware/logging.interceptor.js';
+import { PermissionGuard } from './middleware/permission.guard.js';
 import { repositories } from './repositories/index.js';
 import { services } from './services/index.js';
 import { getKyselyConfig } from './utils/database.js';
@@ -21,6 +22,7 @@ const env = loadEnv();
     ...services,
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: PermissionGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor },
     { provide: APP_PIPE, useClass: ZodValidationPipe },

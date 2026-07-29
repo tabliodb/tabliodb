@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import {
@@ -9,6 +10,7 @@ import {
   CommentThreadResponseDto,
 } from '../dtos/comment.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
+import { RequirePermission } from '../middleware/permission.guard.js';
 import { CommentService } from '../services/comment.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
@@ -19,6 +21,7 @@ export class CommentController {
   constructor(private readonly service: CommentService) {}
 
   @Post('threads')
+  @RequirePermission(Permission.DiagramComment, { key: 'diagramId', source: 'body', type: 'diagram' })
   @ApiBody({ type: CommentThreadCreateDto })
   @ApiOperation({ operationId: 'createCommentThread' })
   @ZodResponse({ status: HttpStatus.CREATED, type: CommentThreadResponseDto })
@@ -27,6 +30,7 @@ export class CommentController {
   }
 
   @Get('diagram/:diagramId/threads')
+  @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getCommentThreads' })

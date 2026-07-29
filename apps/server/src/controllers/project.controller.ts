@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import { DiagramListQueryDto, DiagramListResponseDto } from '../dtos/diagram.dto.js';
@@ -10,6 +11,7 @@ import {
   ProjectResponseDto,
 } from '../dtos/project.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
+import { RequirePermission } from '../middleware/permission.guard.js';
 import { DiagramService } from '../services/diagram.service.js';
 import { ProjectService } from '../services/project.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
@@ -24,6 +26,7 @@ export class ProjectController {
   ) {}
 
   @Get()
+  @RequirePermission(Permission.ProjectRead)
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getProjects' })
   @ZodResponse({ type: ProjectListResponseDto })
@@ -32,6 +35,7 @@ export class ProjectController {
   }
 
   @Post()
+  @RequirePermission(Permission.ProjectCreate)
   @ApiBody({ type: ProjectCreateDto })
   @ApiOperation({ operationId: 'createProject' })
   @ZodResponse({ status: HttpStatus.CREATED, type: ProjectResponseDto })
@@ -40,6 +44,7 @@ export class ProjectController {
   }
 
   @Get(':projectId/diagrams')
+  @RequirePermission(Permission.DiagramRead, { key: 'projectId', source: 'param', type: 'project' })
   @ApiParam({ name: 'projectId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getProjectDiagrams' })

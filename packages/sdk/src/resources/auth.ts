@@ -1,5 +1,6 @@
 import type { Permission } from '@tabliodb/shared';
 import type { RequestOpts } from '@oazapfts/runtime';
+import type { ApiKeyCreateDto as GeneratedApiKeyCreateDto } from '../fetch-client.js';
 import {
   createApiKey as createApiKeyRequest,
   getCurrentUser,
@@ -66,7 +67,10 @@ export function createAuthResource(opts?: RequestOpts): AuthResource {
     signUp: (body: SignUpDto) => signUpRequest({ signUpDto: body }, opts) as Promise<LoginResponseDto>,
     logout: () => logoutRequest(opts) as Promise<LogoutResponseDto>,
     createApiKey: (body: ApiKeyCreateDto) =>
-      // Permission di domain shared adalah string literal union; generated OpenAPI menerima string[] yang kompatibel di wire format.
-      createApiKeyRequest({ apiKeyCreateDto: body }, opts) as Promise<ApiKeyCreateResponseDto>,
+      // Boundary generated-client tetap privat agar enum OpenAPI tidak bocor ke public SDK surface.
+      createApiKeyRequest(
+        { apiKeyCreateDto: body as unknown as GeneratedApiKeyCreateDto },
+        opts,
+      ) as unknown as Promise<ApiKeyCreateResponseDto>,
   };
 }

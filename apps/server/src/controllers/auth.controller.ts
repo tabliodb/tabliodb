@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@tabliodb/shared';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
 import {
@@ -12,6 +13,7 @@ import {
   SignUpDto,
 } from '../dtos/auth.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
+import { RequirePermission } from '../middleware/permission.guard.js';
 import { AuthService } from '../services/auth.service.js';
 import { AuthType } from '../constants.js';
 import { clearAuthCookies, respondWithAuthCookies } from '../utils/response.js';
@@ -69,6 +71,7 @@ export class AuthController {
 
   @Post('api-keys')
   @Authenticated()
+  @RequirePermission(Permission.ApiKeyManage)
   @ApiBody({ type: ApiKeyCreateDto })
   @ApiOperation({ operationId: 'createApiKey' })
   @ZodResponse({ status: HttpStatus.CREATED, type: ApiKeyCreateResponseDto })

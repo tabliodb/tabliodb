@@ -101,6 +101,15 @@ export class ProjectRepository {
       .executeTakeFirst();
   }
 
+  getProjectRole(userId: string, projectId: string) {
+    return this.db
+      .selectFrom('project_members')
+      .select('project_members.role')
+      .where('project_members.userId', '=', userId)
+      .where('project_members.projectId', '=', projectId)
+      .executeTakeFirst();
+  }
+
   getDiagramRole(userId: string, diagramId: string) {
     return this.db
       .selectFrom('diagrams')

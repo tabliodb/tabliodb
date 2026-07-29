@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { Permission } from '@tabliodb/shared';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Permission, isGranted } from '@tabliodb/shared';
 import { parse } from 'cookie';
 import { IncomingHttpHeaders } from 'node:http';
 import { AuthType, TabliodbCookie, TabliodbHeader, TabliodbQuery } from '../constants.js';
@@ -59,9 +59,15 @@ export class AuthService {
   }
 
   async createApiKey(auth: AuthContext, dto: ApiKeyCreateDto): Promise<ApiKeyCreateResponseDto> {
+    const permissions = dto.permissions as Permission[];
+
+    if (auth.apiKey && !isGranted({ current: auth.apiKey.permissions, requested: permissions })) {
+      // API key chaining may only create an equal-or-narrower key, which prevents limited automation from minting admin keys.
+      throw new ForbiddenException('API key cannot create a key with broader permissions');
+    }
+
     const secret = this.cryptoRepository.randomBytesAsText(32);
     const key = this.cryptoRepository.hashSha256(secret);
-    const permissions = dto.permissions as Permission[];
 
     const apiKey = await this.apiKeyRepository.create({
       keyHash: key,

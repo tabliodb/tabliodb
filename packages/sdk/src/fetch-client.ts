@@ -43,14 +43,14 @@ export type LogoutResponseDtoOutput = {
 };
 export type ApiKeyCreateDto = {
   name?: string;
-  permissions?: string[];
+  permissions?: Permissions[];
 };
 export type ApiKeyCreateResponseDtoOutput = {
   secret: string;
   apiKey: {
     id: string;
     name: string;
-    permissions: string[];
+    permissions: Permissions[];
   };
 };
 export type CommentThreadCreateDto = {
@@ -861,6 +861,23 @@ export function createUser(
       }),
     ),
   );
+}
+export enum Permissions {
+  All = 'all',
+  OrganizationRead = 'organization.read',
+  OrganizationManage = 'organization.manage',
+  ProjectCreate = 'project.create',
+  ProjectRead = 'project.read',
+  ProjectUpdate = 'project.update',
+  ProjectDelete = 'project.delete',
+  DiagramCreate = 'diagram.create',
+  DiagramRead = 'diagram.read',
+  DiagramUpdate = 'diagram.update',
+  DiagramDelete = 'diagram.delete',
+  DiagramComment = 'diagram.comment',
+  SnapshotCreate = 'snapshot.create',
+  SnapshotRead = 'snapshot.read',
+  ApiKeyManage = 'api-key.manage',
 }
 export enum TargetType {
   Table = 'table',

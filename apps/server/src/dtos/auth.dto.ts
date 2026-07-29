@@ -1,5 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { Permission } from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
 
 export type AuthDto = AuthContext;
@@ -36,7 +37,7 @@ const CurrentUserResponseSchema = AuthUserSchema.meta({ id: 'CurrentUserResponse
 const ApiKeyCreateSchema = z
   .object({
     name: z.string().min(1).default('API Key'),
-    permissions: z.array(z.string()).default(['all']),
+    permissions: z.array(z.enum(Permission)).default([Permission.All]),
   })
   .meta({ id: 'ApiKeyCreateDto' });
 
@@ -46,7 +47,7 @@ const ApiKeyCreateResponseSchema = z
     apiKey: z.object({
       id: z.string().uuid(),
       name: z.string(),
-      permissions: z.array(z.string()),
+      permissions: z.array(z.enum(Permission)),
     }),
   })
   .meta({ id: 'ApiKeyCreateResponseDto' });

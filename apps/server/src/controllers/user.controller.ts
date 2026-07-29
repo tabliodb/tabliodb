@@ -1,9 +1,11 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import { UserCreateDto, UserListQueryDto, UserListResponseDto, UserResponseDto } from '../dtos/user.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
+import { RequirePermission } from '../middleware/permission.guard.js';
 import { UserService } from '../services/user.service.js';
 
 @ApiTags('users')
@@ -13,6 +15,7 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
+  @RequirePermission(Permission.OrganizationManage)
   @ApiQuery({ name: 'cursor', required: false, type: String })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ enum: ['owner', 'instance-admin', 'org-admin', 'member'], name: 'role', required: false })
@@ -24,6 +27,7 @@ export class UserController {
   }
 
   @Post()
+  @RequirePermission(Permission.OrganizationManage)
   @HttpCode(HttpStatus.CREATED)
   @ApiBody({ type: UserCreateDto })
   @ApiOperation({ operationId: 'createUser' })
