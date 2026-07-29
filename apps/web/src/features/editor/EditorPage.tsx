@@ -2,7 +2,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DiagramModel } from '@tabliodb/schema-core';
 import { ProjectRole } from '@tabliodb/shared';
-import { TabliodbApiError, type ProjectMemberDto, type ProjectResponseDto } from '@tabliodb/sdk';
+import {
+  TabliodbApiError,
+  type AuditLogDto,
+  type OrganizationSettingsDto,
+  type ProjectMemberDto,
+  type ProjectResponseDto,
+} from '@tabliodb/sdk';
 import { generateCreateSchemaSql } from '@tabliodb/sql';
 import {
   Badge,
@@ -25,6 +31,7 @@ import {
 } from '@tabliodb/ui';
 import {
   Archive,
+  Building2,
   Database,
   FolderPlus,
   GitBranch,
@@ -50,10 +57,11 @@ import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
-import { ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
+import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
 import { defaultDiagramName, diagramsQueries } from '@/resources/diagrams';
+import { organizationsQueries, useUpdateOrganizationSettingsMutation } from '@/resources/organizations';
 import {
   defaultProjectName,
   projectsQueries,
@@ -82,6 +90,16 @@ const projectFormSchema = z.object({
 
 type ProjectFormState = z.infer<typeof projectFormSchema>;
 
+const workspaceDefaultRoleOptions = ['none', ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
+
+const workspaceSettingsFormSchema = z.object({
+  allowMemberProjectCreate: z.boolean(),
+  defaultProjectRole: z.enum(workspaceDefaultRoleOptions),
+  name: z.string().trim().min(1, 'Workspace name is required.').max(80, 'Keep the workspace name under 80 characters.'),
+});
+
+type WorkspaceSettingsFormState = z.infer<typeof workspaceSettingsFormSchema>;
+
 const memberFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
   role: z.enum([ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]),
@@ -97,6 +115,7 @@ const memberFormDefaults: MemberFormState = {
 const projectRoleOptions = [ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
 
 const projectMemberPageQuery = { limit: 50 } as const;
+const workspaceAuditLogQuery = { limit: 8 } as const;
 
 const selectClassName =
   'h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)] disabled:cursor-not-allowed disabled:opacity-50';
@@ -305,14 +324,17 @@ export function EditorPage() {
             <IconButton icon={GitBranch} label="Branches" />
             <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
             {activeProject ? (
-              <ProjectSettingsDialog
-                onArchived={() => {
-                  setModel(null);
-                  setSelectedTableId(null);
-                  navigate(routes.home.to(), { replace: true });
-                }}
-                project={activeProject}
-              />
+              <>
+                <WorkspaceSettingsDialog project={activeProject} />
+                <ProjectSettingsDialog
+                  onArchived={() => {
+                    setModel(null);
+                    setSelectedTableId(null);
+                    navigate(routes.home.to(), { replace: true });
+                  }}
+                  project={activeProject}
+                />
+              </>
             ) : null}
             <AddTableDialog onCreate={handleAddTable} />
             <Button
@@ -511,6 +533,185 @@ function CreateProjectDialog({ onCreated }: { onCreated: (project: ProjectRespon
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<WorkspaceSettingsFormState>({
+    defaultValues: getWorkspaceSettingsDefaults(project),
+    mode: 'onBlur',
+    resolver: zodResolver(workspaceSettingsFormSchema),
+  });
+  const { errors } = form.formState;
+  const settingsQueryOptions = organizationsQueries.settings(project.organizationId);
+  const settingsQuery = useQuery({
+    ...settingsQueryOptions,
+    // Workspace settings tidak perlu di-fetch sebelum user membuka dialog, jadi modal menjadi fetch boundary.
+    enabled: open && settingsQueryOptions.enabled !== false,
+  });
+  const auditLogsQueryOptions = organizationsQueries.auditLogs(project.organizationId, workspaceAuditLogQuery);
+  const auditLogsQuery = useQuery({
+    ...auditLogsQueryOptions,
+    enabled: open && auditLogsQueryOptions.enabled !== false,
+  });
+  const auditLogs = auditLogsQuery.data?.items ?? [];
+  const updateSettingsMutation = useUpdateOrganizationSettingsMutation({
+    mutationConfig: {
+      onSuccess: (settings) => {
+        // Response server menjadi source of truth karena slug bisa berubah mengikuti nama workspace.
+        form.reset(getWorkspaceSettingsDefaults(project, settings));
+      },
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset(getWorkspaceSettingsDefaults(project, settingsQuery.data));
+      updateSettingsMutation.reset();
+    }
+  }, [form, open, project, settingsQuery.data]);
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && updateSettingsMutation.isPending) {
+      return;
+    }
+
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      form.reset(getWorkspaceSettingsDefaults(project, settingsQuery.data));
+      updateSettingsMutation.reset();
+    }
+  }
+
+  function handleSubmit(values: WorkspaceSettingsFormState) {
+    updateSettingsMutation.mutate({
+      body: {
+        allowMemberProjectCreate: values.allowMemberProjectCreate,
+        defaultProjectRole: values.defaultProjectRole === 'none' ? null : values.defaultProjectRole,
+        name: values.name,
+      },
+      organizationId: project.organizationId,
+    });
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogTrigger asChild>
+        <IconButton icon={Building2} label="Workspace settings" variant="secondary" />
+      </DialogTrigger>
+      <DialogContent className="max-h-[88vh] w-[min(94vw,680px)] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Workspace settings</DialogTitle>
+          <DialogDescription>Configure the current workspace without changing the Tabliodb brand.</DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <label className="mt-4 block text-sm">
+            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Workspace name
+            </span>
+            <ControlledInput
+              aria-invalid={Boolean(errors.name)}
+              control={form.control}
+              disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+              name="name"
+            />
+            <FieldError>{errors.name?.message}</FieldError>
+          </label>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Default project role
+              </span>
+              <ControlledSelect
+                className={selectClassName}
+                control={form.control}
+                disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+                name="defaultProjectRole"
+              >
+                {workspaceDefaultRoleOptions.map((role) => (
+                  <option key={role} value={role}>
+                    {role === 'none' ? 'No automatic project role' : formatProjectRole(role)}
+                  </option>
+                ))}
+              </ControlledSelect>
+            </label>
+
+            <label className="mt-6 flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
+              <ControlledCheckbox
+                control={form.control}
+                disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+                name="allowMemberProjectCreate"
+              />
+              Members can create projects
+            </label>
+          </div>
+
+          {settingsQuery.error || updateSettingsMutation.error ? (
+            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {getErrorMessage(settingsQuery.error ?? updateSettingsMutation.error)}
+            </div>
+          ) : null}
+
+          <DialogFooter className="mt-5">
+            <Button
+              disabled={updateSettingsMutation.isPending}
+              onClick={() => handleOpenChange(false)}
+              type="button"
+              variant="secondary"
+            >
+              Close
+            </Button>
+            <Button disabled={settingsQuery.isPending || updateSettingsMutation.isPending} type="submit">
+              {updateSettingsMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              Save workspace
+            </Button>
+          </DialogFooter>
+        </form>
+
+        <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-extrabold">Recent activity</h3>
+              <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                Project and workspace changes recorded by the server
+              </p>
+            </div>
+            <Badge variant="blue">{auditLogs.length} loaded</Badge>
+          </div>
+
+          {auditLogsQuery.isPending ? (
+            <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              <Loader2 className="size-4 animate-spin" />
+              Loading activity
+            </div>
+          ) : auditLogsQuery.error ? (
+            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {getErrorMessage(auditLogsQuery.error)}
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              No activity yet
+            </div>
+          ) : (
+            <div className="mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+              <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                {auditLogs.map((auditLog) => (
+                  <AuditLogRow auditLog={auditLog} key={auditLog.id} />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
       </DialogContent>
     </Dialog>
   );
@@ -843,9 +1044,34 @@ function getProjectFormDefaults(project: ProjectResponseDto): ProjectFormState {
   };
 }
 
+function getWorkspaceSettingsDefaults(
+  project: ProjectResponseDto,
+  settings?: OrganizationSettingsDto,
+): WorkspaceSettingsFormState {
+  return {
+    allowMemberProjectCreate: settings?.allowMemberProjectCreate ?? true,
+    defaultProjectRole: settings?.defaultProjectRole ?? 'none',
+    name: settings?.name ?? project.organizationName,
+  };
+}
+
 function toOptionalDescription(value: string | undefined): string | undefined {
   const description = value?.trim();
   return description ? description : undefined;
+}
+
+function AuditLogRow({ auditLog }: { auditLog: AuditLogDto }) {
+  return (
+    <article className="grid gap-2 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_120px] sm:items-center">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-extrabold">{formatAuditLogMessage(auditLog)}</div>
+        <p className="mt-1 truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+          {auditLog.actorName ?? auditLog.actorEmail ?? 'System'} - {formatDateTime(auditLog.createdAt)}
+        </p>
+      </div>
+      <Badge variant={getAuditLogTone(auditLog.action)}>{formatAuditLogAction(auditLog.action)}</Badge>
+    </article>
+  );
 }
 
 function ProjectMemberRow({
@@ -928,6 +1154,97 @@ function formatProjectRole(role: ProjectRole): string {
     [ProjectRole.Owner]: 'Owner',
     [ProjectRole.Viewer]: 'Viewer',
   }[role];
+}
+
+function formatAuditLogMessage(auditLog: AuditLogDto): string {
+  if (auditLog.action === 'project.created') {
+    return `Created project ${readMetadataString(auditLog.metadata, 'name', 'project')}`;
+  }
+
+  if (auditLog.action === 'project.archived') {
+    return `Archived project ${readMetadataString(auditLog.metadata, 'name', 'project')}`;
+  }
+
+  if (auditLog.action === 'project.member_added') {
+    return `Added ${readMetadataString(auditLog.metadata, 'email', 'member')} as ${formatProjectRoleValue(
+      readMetadataString(auditLog.metadata, 'role', ProjectRole.Viewer),
+    )}`;
+  }
+
+  if (auditLog.action === 'project.member_removed') {
+    return `Removed ${readMetadataString(auditLog.metadata, 'email', 'member')} from project access`;
+  }
+
+  if (auditLog.action === 'project.member_role_updated') {
+    const role = readMetadataRecord(auditLog.metadata, 'role');
+    return `Changed ${readMetadataString(auditLog.metadata, 'email', 'member')} from ${formatProjectRoleValue(
+      readMetadataString(role, 'before', ProjectRole.Viewer),
+    )} to ${formatProjectRoleValue(readMetadataString(role, 'after', ProjectRole.Viewer))}`;
+  }
+
+  if (auditLog.action === 'organization.settings_updated') {
+    const changes = readMetadataRecord(auditLog.metadata, 'changes');
+    const changedFields = Object.keys(changes);
+    return changedFields.length > 0 ? `Updated workspace ${changedFields.join(', ')}` : 'Updated workspace settings';
+  }
+
+  return auditLog.action;
+}
+
+function formatAuditLogAction(action: string): string {
+  return (
+    {
+      'organization.settings_updated': 'Workspace',
+      'project.archived': 'Archived',
+      'project.created': 'Created',
+      'project.member_added': 'Member',
+      'project.member_removed': 'Removed',
+      'project.member_role_updated': 'Role',
+    }[action] ?? 'Audit'
+  );
+}
+
+function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow' {
+  if (action === 'project.created' || action === 'project.member_added') {
+    return 'green';
+  }
+
+  if (action === 'project.archived' || action === 'project.member_removed') {
+    return 'yellow';
+  }
+
+  if (action === 'organization.settings_updated' || action === 'project.member_role_updated') {
+    return 'blue';
+  }
+
+  return 'neutral';
+}
+
+function readMetadataRecord(metadata: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = metadata[key];
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function readMetadataString(metadata: Record<string, unknown>, key: string, fallback: string): string {
+  const value = metadata[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+}
+
+function formatProjectRoleValue(role: string): string {
+  if (Object.values(ProjectRole).includes(role as ProjectRole)) {
+    return formatProjectRole(role as ProjectRole);
+  }
+
+  return role;
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'short',
+  }).format(new Date(value));
 }
 
 function getMemberInitials(member: ProjectMemberDto): string {

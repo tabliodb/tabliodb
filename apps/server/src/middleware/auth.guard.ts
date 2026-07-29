@@ -13,6 +13,7 @@ import type { AuthContext } from '../database.js';
 import { AuthService } from '../services/auth.service.js';
 
 const authMetadataKey = 'tabliodb:auth';
+const requestIdHeader = 'x-request-id';
 
 export type AuthenticatedOptions = {
   permission?: string | false;
@@ -57,11 +58,28 @@ export class AuthGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<AuthRequest>();
-    request.user = await this.authService.authenticate({
+    const auth = await this.authService.authenticate({
       headers: request.headers,
       queryParams: request.query as Record<string, string | undefined>,
     });
+    request.user = {
+      ...auth,
+      request: {
+        // Audit log metadata is attached once at the auth boundary so services can stay independent from Express.
+        ipAddress: request.ip ?? null,
+        requestId: readHeader(request.headers[requestIdHeader]),
+        userAgent: readHeader(request.headers['user-agent']),
+      },
+    };
 
     return true;
   }
+}
+
+function readHeader(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
 }

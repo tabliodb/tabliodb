@@ -53,6 +53,17 @@ const rolePermissions: Record<ProjectRole, Permission[]> = {
   [ProjectRole.Viewer]: [Permission.ProjectRead, Permission.DiagramRead, Permission.SnapshotRead],
 };
 
+const organizationRolePermissions: Record<OrganizationRole, Permission[]> = {
+  [OrganizationRole.Owner]: [Permission.All],
+  [OrganizationRole.Admin]: [Permission.OrganizationRead, Permission.OrganizationManage, Permission.ProjectCreate],
+  [OrganizationRole.Member]: [Permission.OrganizationRead, Permission.ProjectCreate],
+  [OrganizationRole.Viewer]: [Permission.OrganizationRead],
+};
+
+export function permissionsForOrganizationRole(role: OrganizationRole): Permission[] {
+  return organizationRolePermissions[role];
+}
+
 export function permissionsForProjectRole(role: ProjectRole): Permission[] {
   return rolePermissions[role];
 }

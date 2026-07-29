@@ -159,6 +159,44 @@ export type InvitationAcceptResponseDtoOutput = {
   user: AuthUserDtoOutput;
   invitation: InvitationPublicDtoOutput;
 };
+export type OrganizationSettingsDtoOutput = {
+  id: string;
+  name: string;
+  slug: string;
+  defaultProjectRole: DefaultProjectRole | null;
+  allowMemberProjectCreate: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export type OrganizationSettingsUpdateDto = {
+  name?: string;
+  defaultProjectRole?: DefaultProjectRole | null;
+  allowMemberProjectCreate?: boolean;
+};
+export type AuditLogDtoOutput = {
+  id: string;
+  organizationId: string | null;
+  projectId: string | null;
+  diagramId: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata: {
+    [key: string]: any;
+  };
+  ipAddress: string | null;
+  userAgent: string | null;
+  requestId: string | null;
+  createdAt: string;
+};
+export type AuditLogListResponseDtoOutput = {
+  items: AuditLogDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
 export type ProjectResponseDtoOutput = {
   id: string;
   organizationId: string;
@@ -792,6 +830,76 @@ export function acceptInvitation(
     ),
   );
 }
+export function getOrganizationSettings(
+  {
+    organizationId,
+  }: {
+    organizationId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: OrganizationSettingsDtoOutput;
+    }>(`/organizations/${encodeURIComponent(organizationId)}/settings`, {
+      ...opts,
+    }),
+  );
+}
+export function updateOrganizationSettings(
+  {
+    organizationId,
+    organizationSettingsUpdateDto,
+  }: {
+    organizationId: string;
+    organizationSettingsUpdateDto: OrganizationSettingsUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: OrganizationSettingsDtoOutput;
+    }>(
+      `/organizations/${encodeURIComponent(organizationId)}/settings`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: organizationSettingsUpdateDto,
+      }),
+    ),
+  );
+}
+export function getOrganizationAuditLogs(
+  {
+    cursor,
+    limit,
+    organizationId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    organizationId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: AuditLogListResponseDtoOutput;
+    }>(
+      `/organizations/${encodeURIComponent(organizationId)}/audit-logs${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
 export function getProjects(
   {
     cursor,
@@ -1196,6 +1304,11 @@ export enum Status {
   Accepted = 'accepted',
   Revoked = 'revoked',
   Expired = 'expired',
+}
+export enum DefaultProjectRole {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
 }
 export enum Role {
   Owner = 'owner',

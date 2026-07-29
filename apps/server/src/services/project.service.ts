@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ProjectRole } from '@tabliodb/shared';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { AuditAction } from '../constants.js';
 import { AuthContext } from '../database.js';
 import {
   ProjectArchiveResponseDto,
@@ -15,9 +16,11 @@ import {
   ProjectResponseDto,
   ProjectUpdateDto,
 } from '../dtos/project.dto.js';
+import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
+import type { JsonValue } from '../schema/index.js';
 import { toIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
 import { slugify } from '../utils/slug.js';
@@ -25,6 +28,7 @@ import { slugify } from '../utils/slug.js';
 @Injectable()
 export class ProjectService {
   constructor(
+    private readonly auditLogRepository: AuditLogRepository,
     private readonly organizationRepository: OrganizationRepository,
     private readonly projectRepository: ProjectRepository,
     private readonly userRepository: UserRepository,
@@ -45,24 +49,41 @@ export class ProjectService {
   async create(auth: AuthContext, dto: ProjectCreateDto) {
     // Sign-up already creates a personal organization, so project creation reuses it instead of creating a duplicate slug.
     const existingOrganization = dto.organizationId
-      ? null
+      ? await this.organizationRepository.getByIdForUser(auth.user.id, dto.organizationId)
       : await this.organizationRepository.getFirstForUser(auth.user.id);
-    const organizationId =
-      dto.organizationId ??
-      existingOrganization?.id ??
-      (
-        await this.organizationRepository.createPersonalOrganization({
-          userId: auth.user.id,
-          name: `${auth.user.name}'s Workspace`,
-        })
-      ).id;
+
+    if (dto.organizationId && !existingOrganization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const organization =
+      existingOrganization ??
+      (await this.organizationRepository.createPersonalOrganization({
+        userId: auth.user.id,
+        name: `${auth.user.name}'s Workspace`,
+      }));
+
+    await this.assertCanCreateProject(auth, organization.id, organization.allowMemberProjectCreate);
 
     const project = await this.projectRepository.create({
-      organizationId,
+      organizationId: organization.id,
       name: dto.name,
       slug: slugify(dto.name),
       description: dto.description ?? null,
       createdById: auth.user.id,
+    });
+
+    await this.recordProjectAudit(auth, {
+      action: AuditAction.ProjectCreated,
+      entityId: project.id,
+      entityType: 'project',
+      metadata: {
+        description: project.description,
+        name: project.name,
+        slug: project.slug,
+      },
+      organizationId: project.organizationId,
+      projectId: project.id,
     });
 
     return this.serializeProject(project);
@@ -90,12 +111,25 @@ export class ProjectService {
     return this.serializeProject(project);
   }
 
-  async archive(_auth: AuthContext, projectId: string): Promise<ProjectArchiveResponseDto> {
+  async archive(auth: AuthContext, projectId: string): Promise<ProjectArchiveResponseDto> {
+    const project = await this.requireProject(auth, projectId);
     const archived = await this.projectRepository.archive(projectId);
 
     if (!archived) {
       throw new NotFoundException('Project not found');
     }
+
+    await this.recordProjectAudit(auth, {
+      action: AuditAction.ProjectArchived,
+      entityId: project.id,
+      entityType: 'project',
+      metadata: {
+        name: project.name,
+        slug: project.slug,
+      },
+      organizationId: project.organizationId,
+      projectId: project.id,
+    });
 
     return { successful: true };
   }
@@ -129,6 +163,7 @@ export class ProjectService {
       throw new BadRequestException('User must belong to the project workspace before joining the project');
     }
 
+    const existingMember = await this.projectRepository.getMember(projectId, user.id);
     const member = await this.projectRepository.upsertMember(projectId, {
       createdById: auth.user.id,
       role: dto.role ?? ProjectRole.Viewer,
@@ -139,26 +174,77 @@ export class ProjectService {
       throw new NotFoundException('Project member could not be loaded');
     }
 
+    if (!existingMember) {
+      await this.recordProjectAudit(auth, {
+        action: AuditAction.ProjectMemberAdded,
+        entityId: user.id,
+        entityType: 'project_member',
+        metadata: {
+          email: user.email,
+          name: user.name,
+          role: member.role,
+        },
+        organizationId: project.organizationId,
+        projectId,
+      });
+    } else if (existingMember.role !== member.role) {
+      await this.recordProjectAudit(auth, {
+        action: AuditAction.ProjectMemberRoleUpdated,
+        entityId: user.id,
+        entityType: 'project_member',
+        metadata: {
+          email: user.email,
+          name: user.name,
+          role: {
+            after: member.role,
+            before: existingMember.role,
+          },
+        },
+        organizationId: project.organizationId,
+        projectId,
+      });
+    }
+
     return this.serializeMember(member);
   }
 
   async updateMember(
-    _auth: AuthContext,
+    auth: AuthContext,
     projectId: string,
     userId: string,
     dto: ProjectMemberUpdateDto,
   ): Promise<ProjectMemberDto> {
-    await this.assertCanChangeOwnerRole(projectId, userId, dto.role);
+    const project = await this.requireProject(auth, projectId);
+    const currentMember = await this.assertCanChangeOwnerRole(projectId, userId, dto.role);
 
     const member = await this.projectRepository.updateMember(projectId, userId, dto.role);
     if (!member) {
       throw new NotFoundException('Project member not found');
     }
 
+    if (currentMember.role !== member.role) {
+      await this.recordProjectAudit(auth, {
+        action: AuditAction.ProjectMemberRoleUpdated,
+        entityId: userId,
+        entityType: 'project_member',
+        metadata: {
+          email: member.email,
+          name: member.name,
+          role: {
+            after: member.role,
+            before: currentMember.role,
+          },
+        },
+        organizationId: project.organizationId,
+        projectId,
+      });
+    }
+
     return this.serializeMember(member);
   }
 
-  async removeMember(_auth: AuthContext, projectId: string, userId: string): Promise<ProjectMemberRemoveResponseDto> {
+  async removeMember(auth: AuthContext, projectId: string, userId: string): Promise<ProjectMemberRemoveResponseDto> {
+    const project = await this.requireProject(auth, projectId);
     const currentMember = await this.projectRepository.getMember(projectId, userId);
     if (!currentMember) {
       throw new NotFoundException('Project member not found');
@@ -173,6 +259,19 @@ export class ProjectService {
 
     await this.projectRepository.removeMember(projectId, userId);
 
+    await this.recordProjectAudit(auth, {
+      action: AuditAction.ProjectMemberRemoved,
+      entityId: userId,
+      entityType: 'project_member',
+      metadata: {
+        email: currentMember.email,
+        name: currentMember.name,
+        role: currentMember.role,
+      },
+      organizationId: project.organizationId,
+      projectId,
+    });
+
     return { successful: true };
   }
 
@@ -183,6 +282,23 @@ export class ProjectService {
     }
 
     return project;
+  }
+
+  private async assertCanCreateProject(
+    auth: AuthContext,
+    organizationId: string,
+    allowMemberProjectCreate: boolean,
+  ): Promise<void> {
+    if (allowMemberProjectCreate) {
+      return;
+    }
+
+    const membership = await this.organizationRepository.getRole(auth.user.id, organizationId);
+    if (membership?.role === OrganizationRole.Owner || membership?.role === OrganizationRole.Admin) {
+      return;
+    }
+
+    throw new ForbiddenException('Workspace members cannot create projects');
   }
 
   private serializeProject(project: {
@@ -204,7 +320,7 @@ export class ProjectService {
     };
   }
 
-  private async assertCanChangeOwnerRole(projectId: string, userId: string, nextRole: ProjectRole): Promise<void> {
+  private async assertCanChangeOwnerRole(projectId: string, userId: string, nextRole: ProjectRole) {
     const currentMember = await this.projectRepository.getMember(projectId, userId);
     if (!currentMember) {
       throw new NotFoundException('Project member not found');
@@ -217,6 +333,33 @@ export class ProjectService {
         throw new BadRequestException('Project must keep at least one owner');
       }
     }
+
+    return currentMember;
+  }
+
+  private recordProjectAudit(
+    auth: AuthContext,
+    options: {
+      action: AuditAction;
+      entityId: string;
+      entityType: string;
+      metadata: Record<string, JsonValue>;
+      organizationId: string;
+      projectId: string;
+    },
+  ) {
+    return this.auditLogRepository.create({
+      action: options.action,
+      actorId: auth.user.id,
+      entityId: options.entityId,
+      entityType: options.entityType,
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: options.metadata,
+      organizationId: options.organizationId,
+      projectId: options.projectId,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
   }
 
   private serializeMember(member: {

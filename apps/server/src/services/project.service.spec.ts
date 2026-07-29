@@ -26,6 +26,9 @@ const project = {
 };
 
 describe(ProjectService.name, () => {
+  const auditLogRepository = {
+    create: vi.fn(),
+  };
   const organizationRepository = {
     createPersonalOrganization: vi.fn(),
     getByIdForUser: vi.fn(),
@@ -52,7 +55,12 @@ describe(ProjectService.name, () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    service = new ProjectService(organizationRepository as never, projectRepository as never, userRepository as never);
+    service = new ProjectService(
+      auditLogRepository as never,
+      organizationRepository as never,
+      projectRepository as never,
+      userRepository as never,
+    );
 
     projectRepository.getByIdForUser.mockResolvedValue(project);
   });
@@ -90,6 +98,16 @@ describe(ProjectService.name, () => {
       role: ProjectRole.Editor,
       userId: 'editor-id',
     });
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'project.member_added',
+        actorId: 'owner-id',
+        entityId: 'editor-id',
+        entityType: 'project_member',
+        organizationId: 'organization-id',
+        projectId: 'project-id',
+      }),
+    );
   });
 
   it('rejects adding a user that is not in the project workspace', async () => {

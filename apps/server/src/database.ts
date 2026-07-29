@@ -16,7 +16,14 @@ export type AuthApiKey = {
   permissions: Permission[];
 };
 
+export type AuthRequestMetadata = {
+  ipAddress: string | null;
+  requestId: string | null;
+  userAgent: string | null;
+};
+
 export type AuthContext = {
+  request?: AuthRequestMetadata;
   user: AuthUser;
   session?: AuthSession;
   apiKey?: AuthApiKey;

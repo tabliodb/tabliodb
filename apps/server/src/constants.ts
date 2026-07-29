@@ -20,4 +20,13 @@ export enum AuthType {
   ApiKey = 'api-key',
 }
 
+export enum AuditAction {
+  OrganizationSettingsUpdated = 'organization.settings_updated',
+  ProjectArchived = 'project.archived',
+  ProjectCreated = 'project.created',
+  ProjectMemberAdded = 'project.member_added',
+  ProjectMemberRemoved = 'project.member_removed',
+  ProjectMemberRoleUpdated = 'project.member_role_updated',
+}
+
 export const SALT_ROUNDS = 12;

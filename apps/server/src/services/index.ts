@@ -3,6 +3,7 @@ import { CollaborationService } from './collaboration.service.js';
 import { CommentService } from './comment.service.js';
 import { DiagramService } from './diagram.service.js';
 import { InvitationService } from './invitation.service.js';
+import { OrganizationService } from './organization.service.js';
 import { PermissionService } from './permission.service.js';
 import { ProjectService } from './project.service.js';
 import { ServerService } from './server.service.js';
@@ -16,6 +17,7 @@ export const services = [
   CommentService,
   DiagramService,
   InvitationService,
+  OrganizationService,
   PermissionService,
   ProjectService,
   ServerService,

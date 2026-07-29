@@ -5,6 +5,7 @@ export * from './resources/auth.js';
 export * from './resources/comments.js';
 export * from './resources/diagrams.js';
 export * from './resources/invitations.js';
+export * from './resources/organizations.js';
 export * from './resources/projects.js';
 export * from './resources/setup.js';
 export * from './resources/snapshots.js';
@@ -15,6 +16,7 @@ import { createAuthResource, type AuthResource } from './resources/auth.js';
 import { createCommentsResource, type CommentsResource } from './resources/comments.js';
 import { createDiagramsResource, type DiagramsResource } from './resources/diagrams.js';
 import { createInvitationsResource, type InvitationsResource } from './resources/invitations.js';
+import { createOrganizationsResource, type OrganizationsResource } from './resources/organizations.js';
 import { createProjectsResource, type ProjectsResource } from './resources/projects.js';
 import { createSetupResource, type SetupResource } from './resources/setup.js';
 import { createSnapshotsResource, type SnapshotsResource } from './resources/snapshots.js';
@@ -25,6 +27,7 @@ export type TabliodbSdk = {
   comments: CommentsResource;
   diagrams: DiagramsResource;
   invitations: InvitationsResource;
+  organizations: OrganizationsResource;
   projects: ProjectsResource;
   setup: SetupResource;
   snapshots: SnapshotsResource;
@@ -39,6 +42,7 @@ export function createTabliodbSdk(options: TabliodbClientOptions = {}): Tabliodb
     comments: createCommentsResource(requestOptions),
     diagrams: createDiagramsResource(requestOptions),
     invitations: createInvitationsResource(requestOptions),
+    organizations: createOrganizationsResource(requestOptions),
     projects: createProjectsResource(requestOptions),
     setup: createSetupResource(requestOptions),
     snapshots: createSnapshotsResource(requestOptions),

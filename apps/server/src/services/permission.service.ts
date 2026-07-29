@@ -1,11 +1,19 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Permission, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
+import {
+  OrganizationRole,
+  Permission,
+  isGranted,
+  permissionsForOrganizationRole,
+  permissionsForProjectRole,
+} from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
+import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
 
 export type PermissionTarget =
   | { type: 'global' }
   | { id: string; type: 'diagram' }
+  | { id: string; type: 'organization' }
   | { id: string; type: 'project' };
 
 export type PermissionRequirement = {
@@ -15,12 +23,35 @@ export type PermissionRequirement = {
 
 @Injectable()
 export class PermissionService {
-  constructor(private readonly projectRepository: ProjectRepository) {}
+  constructor(
+    private readonly organizationRepository: OrganizationRepository,
+    private readonly projectRepository: ProjectRepository,
+  ) {}
 
   async assertAllowed(auth: AuthContext, requirement: PermissionRequirement): Promise<void> {
     this.assertApiKeyScope(auth, requirement.permission);
 
     if (requirement.target.type === 'global') {
+      return;
+    }
+
+    if (requirement.target.type === 'organization') {
+      const membership = await this.organizationRepository.getRole(auth.user.id, requirement.target.id);
+      if (!membership) {
+        throw new NotFoundException('Organization not found');
+      }
+
+      const role = this.toOrganizationRole(membership.role);
+      if (
+        !role ||
+        !isGranted({
+          current: permissionsForOrganizationRole(role),
+          requested: [requirement.permission],
+        })
+      ) {
+        throw new ForbiddenException(`${requirement.permission} permission is required`);
+      }
+
       return;
     }
 
@@ -56,5 +87,13 @@ export class PermissionService {
 
   private formatTarget(type: Exclude<PermissionTarget['type'], 'global'>): string {
     return type[0].toUpperCase() + type.slice(1);
+  }
+
+  private toOrganizationRole(role: string): OrganizationRole | null {
+    if (Object.values(OrganizationRole).includes(role as OrganizationRole)) {
+      return role as OrganizationRole;
+    }
+
+    return null;
   }
 }
