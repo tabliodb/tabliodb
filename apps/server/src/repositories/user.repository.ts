@@ -12,6 +12,7 @@ export class UserRepository {
       .selectFrom('users')
       .selectAll()
       .where('email', '=', email.trim().toLowerCase())
+      .where('isDisabled', '=', false)
       .where('deletedAt', 'is', null)
       .executeTakeFirst();
   }
@@ -21,6 +22,7 @@ export class UserRepository {
       .selectFrom('users')
       .select(['id', 'email', 'name', 'avatarColor'])
       .where('id', '=', id)
+      .where('isDisabled', '=', false)
       .where('deletedAt', 'is', null)
       .executeTakeFirst();
   }

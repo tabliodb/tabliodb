@@ -23,10 +23,12 @@ export class SessionRepository {
             .selectFrom('users')
             .select(['users.id', 'users.email', 'users.name', 'users.avatarColor'])
             .whereRef('users.id', '=', 'sessions.userId')
+            .where('users.isDisabled', '=', false)
             .where('users.deletedAt', 'is', null),
         ).as('user'),
       ])
-      .where('sessions.token', '=', token)
+      .where('sessions.tokenHash', '=', token)
+      .where('sessions.revokedAt', 'is', null)
       .where((eb) => eb.or([eb('sessions.expiresAt', 'is', null), eb('sessions.expiresAt', '>', new Date())]))
       .executeTakeFirst();
   }

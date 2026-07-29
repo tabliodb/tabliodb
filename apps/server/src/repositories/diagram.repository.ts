@@ -12,7 +12,7 @@ export class DiagramRepository {
       const diagram = await tx.insertInto('diagrams').values(dto).returningAll().executeTakeFirstOrThrow();
 
       // Every diagram gets a row for Yjs persistence on creation, even before the first realtime update arrives.
-      await tx.insertInto('diagram_documents').values({ diagramId: diagram.id, state: null }).execute();
+      await tx.insertInto('diagram_documents').values({ diagramId: diagram.id, yjsState: null }).execute();
 
       return diagram;
     });

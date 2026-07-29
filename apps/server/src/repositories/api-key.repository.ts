@@ -27,10 +27,13 @@ export class ApiKeyRepository {
             .selectFrom('users')
             .select(['users.id', 'users.email', 'users.name', 'users.avatarColor'])
             .whereRef('users.id', '=', 'api_keys.userId')
+            .where('users.isDisabled', '=', false)
             .where('users.deletedAt', 'is', null),
         ).as('user'),
       ])
-      .where('api_keys.key', '=', token)
+      .where('api_keys.keyHash', '=', token)
+      .where('api_keys.revokedAt', 'is', null)
+      .where((eb) => eb.or([eb('api_keys.expiresAt', 'is', null), eb('api_keys.expiresAt', '>', new Date())]))
       .executeTakeFirst();
   }
 }

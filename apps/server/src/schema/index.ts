@@ -2,40 +2,71 @@ import type { ColumnType, Generated, Insertable, Selectable, Updateable } from '
 import type { Permission, ProjectRole } from '@tabliodb/shared';
 
 export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>;
+export type NullableColumn<T> = ColumnType<T | null, T | null | undefined, T | null>;
+export type NullableTimestamp = ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+export type BinaryColumn = ColumnType<Buffer, Buffer | Uint8Array, Buffer | Uint8Array>;
+export type NullableBinaryColumn = ColumnType<
+  Buffer | null,
+  Buffer | Uint8Array | null | undefined,
+  Buffer | Uint8Array | null
+>;
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type JsonColumn<T extends JsonValue = JsonValue> = ColumnType<T, T | string | undefined, T | string>;
+export type NullableJsonColumn<T extends JsonValue = JsonValue> = ColumnType<
+  T | null,
+  T | string | null | undefined,
+  T | string | null
+>;
+export type StringArrayColumn<T extends string = string> = ColumnType<T[], T[] | undefined, T[]>;
+export type Defaulted<T> = ColumnType<T, T | undefined, T>;
 
 export interface UserTable {
   id: Generated<string>;
   email: string;
   name: string;
-  password: string | null;
-  avatarColor: string | null;
-  createdAt: Generated<Timestamp>;
-  updatedAt: Generated<Timestamp>;
-  deletedAt: Timestamp | null;
+  passwordHash: NullableColumn<string>;
+  avatarColor: NullableColumn<string>;
+  locale: NullableColumn<string>;
+  timezone: NullableColumn<string>;
+  isDisabled: Defaulted<boolean>;
+  disabledAt: NullableTimestamp;
+  lastLoginAt: NullableTimestamp;
+  passwordChangedAt: NullableTimestamp;
+  metadata: JsonColumn;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  deletedAt: NullableTimestamp;
+}
+
+export interface SystemSettingTable {
+  key: string;
+  value: JsonColumn;
+  isSecret: Defaulted<boolean>;
+  updatedById: NullableColumn<string>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface InstanceMemberTable {
+  userId: string;
+  role: 'owner' | 'admin';
+  createdById: NullableColumn<string>;
+  createdAt: Timestamp;
 }
 
 export interface SessionTable {
   id: Generated<string>;
-  token: Buffer;
+  tokenHash: BinaryColumn;
   userId: string;
-  deviceType: string;
-  deviceOS: string;
-  appVersion: string | null;
-  expiresAt: Timestamp | null;
-  createdAt: Generated<Timestamp>;
-  updatedAt: Generated<Timestamp>;
-}
-
-export interface ApiKeyTable {
-  id: Generated<string>;
-  key: Buffer;
-  name: string;
-  userId: string;
-  permissions: Permission[];
-  createdAt: Generated<Timestamp>;
-  updatedAt: Generated<Timestamp>;
+  deviceType: Defaulted<string>;
+  deviceOs: Defaulted<string>;
+  userAgent: NullableColumn<string>;
+  ipAddress: NullableColumn<string>;
+  appVersion: NullableColumn<string>;
+  expiresAt: NullableTimestamp;
+  revokedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface OrganizationTable {
@@ -43,15 +74,40 @@ export interface OrganizationTable {
   name: string;
   slug: string;
   createdById: string;
-  createdAt: Generated<Timestamp>;
-  updatedAt: Generated<Timestamp>;
+  defaultProjectRole: NullableColumn<string>;
+  allowMemberProjectCreate: Defaulted<boolean>;
+  metadata: JsonColumn;
+  archivedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface OrganizationMemberTable {
   organizationId: string;
   userId: string;
   role: string;
-  createdAt: Generated<Timestamp>;
+  status: Defaulted<'pending' | 'active' | 'suspended'>;
+  joinedAt: NullableTimestamp;
+  createdById: NullableColumn<string>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface InvitationTable {
+  id: Generated<string>;
+  organizationId: string;
+  projectId: NullableColumn<string>;
+  email: string;
+  organizationRole: string;
+  projectRole: NullableColumn<ProjectRole>;
+  tokenHash: BinaryColumn;
+  message: NullableColumn<string>;
+  invitedById: string;
+  acceptedById: NullableColumn<string>;
+  acceptedAt: NullableTimestamp;
+  revokedAt: NullableTimestamp;
+  expiresAt: Timestamp;
+  createdAt: Timestamp;
 }
 
 export interface ProjectTable {
@@ -59,89 +115,161 @@ export interface ProjectTable {
   organizationId: string;
   name: string;
   slug: string;
-  description: string | null;
+  description: NullableColumn<string>;
+  defaultDialect: Defaulted<string>;
+  visibility: Defaulted<'private' | 'organization'>;
   createdById: string;
-  createdAt: Generated<Timestamp>;
-  updatedAt: Generated<Timestamp>;
+  archivedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface ProjectMemberTable {
   projectId: string;
   userId: string;
   role: ProjectRole;
-  createdAt: Generated<Timestamp>;
+  createdById: NullableColumn<string>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface ApiKeyTable {
+  id: Generated<string>;
+  keyHash: BinaryColumn;
+  name: string;
+  userId: string;
+  organizationId: NullableColumn<string>;
+  projectId: NullableColumn<string>;
+  permissions: StringArrayColumn<Permission>;
+  lastUsedAt: NullableTimestamp;
+  expiresAt: NullableTimestamp;
+  revokedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface DiagramTable {
   id: Generated<string>;
   projectId: string;
   name: string;
-  dialect: string;
+  slug: NullableColumn<string>;
+  dialect: Defaulted<string>;
+  status: Defaulted<'draft' | 'reviewed' | 'approved' | 'changes_requested'>;
+  currentSnapshotId: NullableColumn<string>;
+  lastSnapshotVersion: Defaulted<number>;
   createdById: string;
-  createdAt: Generated<Timestamp>;
-  updatedAt: Generated<Timestamp>;
+  archivedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface DiagramDocumentTable {
   diagramId: string;
-  state: Buffer | null;
-  version: Generated<number>;
-  updatedAt: Generated<Timestamp>;
+  yjsState: NullableBinaryColumn;
+  stateVector: NullableBinaryColumn;
+  version: Defaulted<number>;
+  checksum: NullableColumn<string>;
+  schemaCache: NullableJsonColumn;
+  updatedById: NullableColumn<string>;
+  updatedAt: Timestamp;
 }
 
 export interface DiagramSnapshotTable {
   id: Generated<string>;
   diagramId: string;
   version: number;
-  message: string | null;
+  message: NullableColumn<string>;
   snapshot: JsonColumn;
+  checksum: NullableColumn<string>;
   createdById: string;
-  createdAt: Generated<Timestamp>;
+  restoredFromSnapshotId: NullableColumn<string>;
+  createdAt: Timestamp;
+}
+
+export interface DiagramEntityIndexTable {
+  id: Generated<string>;
+  diagramId: string;
+  entityType: string;
+  entityId: string;
+  parentEntityId: NullableColumn<string>;
+  name: string;
+  path: string;
+  searchText: string;
+  metadata: JsonColumn;
+  updatedAt: Timestamp;
+}
+
+export interface DiagramReviewSignalTable {
+  id: Generated<string>;
+  diagramId: string;
+  ruleKey: string;
+  severity: 'info' | 'warning' | 'error' | 'success';
+  targetType: string;
+  targetId: NullableColumn<string>;
+  message: string;
+  metadata: JsonColumn;
+  ignoredById: NullableColumn<string>;
+  ignoredAt: NullableTimestamp;
+  generatedAt: Timestamp;
 }
 
 export interface CommentThreadTable {
   id: Generated<string>;
   diagramId: string;
   targetType: string;
-  targetId: string;
-  resolvedAt: Timestamp | null;
+  targetId: NullableColumn<string>;
+  status: Defaulted<'open' | 'resolved'>;
+  resolvedById: NullableColumn<string>;
+  resolvedAt: NullableTimestamp;
   createdById: string;
-  createdAt: Generated<Timestamp>;
-  updatedAt: Generated<Timestamp>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface CommentTable {
   id: Generated<string>;
   threadId: string;
   body: string;
+  bodyFormat: Defaulted<'markdown'>;
   createdById: string;
-  createdAt: Generated<Timestamp>;
-  updatedAt: Generated<Timestamp>;
+  editedAt: NullableTimestamp;
+  deletedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface AuditLogTable {
   id: Generated<string>;
-  organizationId: string | null;
-  projectId: string | null;
-  actorId: string | null;
+  organizationId: NullableColumn<string>;
+  projectId: NullableColumn<string>;
+  diagramId: NullableColumn<string>;
+  actorId: NullableColumn<string>;
   action: string;
   entityType: string;
   entityId: string;
   metadata: JsonColumn;
-  createdAt: Generated<Timestamp>;
+  ipAddress: NullableColumn<string>;
+  userAgent: NullableColumn<string>;
+  requestId: NullableColumn<string>;
+  createdAt: Timestamp;
 }
 
 export interface DB {
   users: UserTable;
+  system_settings: SystemSettingTable;
+  instance_members: InstanceMemberTable;
   sessions: SessionTable;
-  api_keys: ApiKeyTable;
   organizations: OrganizationTable;
   organization_members: OrganizationMemberTable;
+  invitations: InvitationTable;
   projects: ProjectTable;
   project_members: ProjectMemberTable;
+  api_keys: ApiKeyTable;
   diagrams: DiagramTable;
   diagram_documents: DiagramDocumentTable;
   diagram_snapshots: DiagramSnapshotTable;
+  diagram_entity_index: DiagramEntityIndexTable;
+  diagram_review_signals: DiagramReviewSignalTable;
   comment_threads: CommentThreadTable;
   comments: CommentTable;
   audit_logs: AuditLogTable;

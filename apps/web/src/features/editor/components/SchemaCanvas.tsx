@@ -9,7 +9,13 @@ import {
   type NodeMetadata,
   type PointLike,
 } from '@antv/x6';
-import { getTableColumns, type DatabaseColumn, type DatabaseTable, type DiagramModel } from '@tabliodb/schema-core';
+import {
+  getRelationshipColumnPairs,
+  getTableColumns,
+  type DatabaseColumn,
+  type DatabaseTable,
+  type DiagramModel,
+} from '@tabliodb/schema-core';
 import { useEffect, useRef } from 'react';
 import { formatColumnType } from '../diagram-model';
 
@@ -385,6 +391,7 @@ function createTableNodeMetadata(
 ): NodeMetadata {
   const columns = getTableColumns(model, table.id);
   const height = tableHeaderHeight + columns.length * tableColumnHeight + tablePaddingBottom;
+  const width = getTableWidth(table);
 
   return {
     id: table.id,
@@ -399,7 +406,7 @@ function createTableNodeMetadata(
     position: table.position,
     ports: createColumnPorts(model, table, terminals),
     shape: tableNodeShape,
-    width: tableNodeWidth,
+    width,
     zIndex: table.id === selectedTableId ? 2 : 1,
   };
 }
@@ -475,12 +482,15 @@ function createRelationshipPlan(model: DiagramModel, selectedTableId: string | n
   for (const relationship of Object.values(model.relationships)) {
     const sourceTable = model.tables[relationship.sourceTableId];
     const targetTable = model.tables[relationship.targetTableId];
+    const [columnPair] = getRelationshipColumnPairs(relationship);
 
-    if (!sourceTable || !targetTable) {
+    if (!sourceTable || !targetTable || !columnPair) {
       continue;
     }
 
-    const sourceIsLeft = sourceTable.position.x + tableNodeWidth / 2 <= targetTable.position.x + tableNodeWidth / 2;
+    const sourceIsLeft =
+      sourceTable.position.x + getTableWidth(sourceTable) / 2 <=
+      targetTable.position.x + getTableWidth(targetTable) / 2;
     // Selecting either the primary-key table or the foreign-key table should light up the relationship for quick bidirectional tracing.
     const active = selectedTableId === relationship.sourceTableId || selectedTableId === relationship.targetTableId;
     const sourceSide: PortSide = sourceIsLeft ? 'right' : 'left';
@@ -490,7 +500,7 @@ function createRelationshipPlan(model: DiagramModel, selectedTableId: string | n
       groupedTerminals,
       createTerminalBase({
         active,
-        columnId: relationship.sourceColumnId,
+        columnId: columnPair.sourceColumnId,
         relationshipId: relationship.id,
         role: 'primary',
         side: sourceSide,
@@ -501,7 +511,7 @@ function createRelationshipPlan(model: DiagramModel, selectedTableId: string | n
       groupedTerminals,
       createTerminalBase({
         active,
-        columnId: relationship.targetColumnId,
+        columnId: columnPair.targetColumnId,
         relationshipId: relationship.id,
         role: 'foreign',
         side: targetSide,
@@ -583,7 +593,7 @@ function createColumnPorts(
       return [
         {
           args: {
-            x: terminal.side === 'left' ? 0 : tableNodeWidth,
+            x: terminal.side === 'left' ? 0 : getTableWidth(table),
             y: y + laneOffset,
           },
           attrs: {
@@ -603,6 +613,10 @@ function createColumnPorts(
       ];
     }),
   };
+}
+
+function getTableWidth(table: DatabaseTable): number {
+  return Math.max(table.width, tableNodeWidth);
 }
 
 function registerRelationshipRouter(): void {

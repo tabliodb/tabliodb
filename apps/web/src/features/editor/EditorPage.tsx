@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getTableColumns, type DatabaseTable, type DiagramModel } from '@tabliodb/schema-core';
+import {
+  getRelationshipColumnPairs,
+  getTableColumns,
+  type DatabaseTable,
+  type DiagramModel,
+} from '@tabliodb/schema-core';
 import {
   TabliodbApiError,
   type DiagramResponseDto,
@@ -650,7 +655,9 @@ function countTableRelationships(model: DiagramModel, table: DatabaseTable): num
 
 function getReviewSignals(model: DiagramModel): string[] {
   const relationshipsByTargetColumn = new Set(
-    Object.values(model.relationships).map((relationship) => relationship.targetColumnId),
+    Object.values(model.relationships).flatMap((relationship) =>
+      getRelationshipColumnPairs(relationship).map((pair) => pair.targetColumnId),
+    ),
   );
 
   const missingRelationshipIndexes = Object.values(model.columns)

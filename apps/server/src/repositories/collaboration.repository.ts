@@ -10,20 +10,20 @@ export class CollaborationRepository {
   async loadDocument(diagramId: string): Promise<Uint8Array | null> {
     const row = await this.db
       .selectFrom('diagram_documents')
-      .select(['state'])
+      .select(['yjsState'])
       .where('diagramId', '=', diagramId)
       .executeTakeFirst();
 
-    return row?.state ? new Uint8Array(row.state) : null;
+    return row?.yjsState ? new Uint8Array(row.yjsState) : null;
   }
 
   async storeDocument(diagramId: string, state: Uint8Array): Promise<void> {
     await this.db
       .insertInto('diagram_documents')
-      .values({ diagramId, state: Buffer.from(state), version: 1 })
+      .values({ diagramId, yjsState: Buffer.from(state), version: 1 })
       .onConflict((oc) =>
         oc.column('diagramId').doUpdateSet((eb) => ({
-          state: Buffer.from(state),
+          yjsState: Buffer.from(state),
           version: eb('diagram_documents.version', '+', 1),
           updatedAt: new Date(),
         })),

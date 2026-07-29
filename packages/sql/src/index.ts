@@ -1,6 +1,12 @@
-import { DiagramModel, getTableColumns, type ColumnTypeSpec, type DatabaseColumn } from '@tabliodb/schema-core';
+import {
+  DiagramModel,
+  getTableColumns,
+  type ColumnTypeSpec,
+  type DatabaseColumn,
+  type DatabaseDialect,
+} from '@tabliodb/schema-core';
 
-export type SqlDialect = 'postgresql' | 'mysql';
+export type SqlDialect = DatabaseDialect;
 
 export type GenerateSqlOptions = {
   dialect: SqlDialect;

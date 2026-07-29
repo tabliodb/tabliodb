@@ -45,7 +45,7 @@ export class AuthService {
     const user = await this.userRepository.create({
       email,
       name: dto.name,
-      password,
+      passwordHash: password,
       avatarColor: '#2563eb',
     });
 
@@ -59,7 +59,7 @@ export class AuthService {
 
   async login(dto: LoginCredentialDto): Promise<LoginResponseDto> {
     const user = await this.userRepository.getByEmail(dto.email);
-    if (!user?.password || !this.cryptoRepository.compareBcrypt(dto.password, user.password)) {
+    if (!user?.passwordHash || !this.cryptoRepository.compareBcrypt(dto.password, user.passwordHash)) {
       throw new UnauthorizedException('Incorrect email or password');
     }
 
@@ -78,7 +78,7 @@ export class AuthService {
     const permissions = dto.permissions as Permission[];
 
     const apiKey = await this.apiKeyRepository.create({
-      key,
+      keyHash: key,
       name: dto.name,
       permissions,
       userId: auth.user.id,
@@ -143,9 +143,9 @@ export class AuthService {
 
     // The database stores only the SHA-256 hash, so a leaked session table does not expose usable bearer tokens.
     await this.sessionRepository.create({
-      token,
+      tokenHash: token,
       userId: user.id,
-      deviceOS: '',
+      deviceOs: '',
       deviceType: '',
       appVersion: null,
       expiresAt: null,
