@@ -90,7 +90,7 @@ export class ProjectService {
     return this.serializeProject(project);
   }
 
-  async update(_auth: AuthContext, projectId: string, dto: ProjectUpdateDto): Promise<ProjectResponseDto> {
+  async update(auth: AuthContext, projectId: string, dto: ProjectUpdateDto): Promise<ProjectResponseDto> {
     if (dto.name === undefined && dto.description === undefined) {
       throw new BadRequestException('At least one project field is required');
     }
@@ -100,7 +100,7 @@ export class ProjectService {
       throw new BadRequestException('Project name is required');
     }
 
-    const project = await this.projectRepository.update(projectId, {
+    const project = await this.projectRepository.update(auth.user.id, projectId, {
       description: dto.description === undefined ? undefined : dto.description?.trim() || null,
       name: nextName,
     });
@@ -310,6 +310,7 @@ export class ProjectService {
     organizationId: string;
     organizationName: string;
     organizationSlug: string;
+    projectRole: ProjectRole;
     slug: string;
     updatedAt: Date | string;
   }): ProjectResponseDto {

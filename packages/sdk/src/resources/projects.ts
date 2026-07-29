@@ -40,6 +40,7 @@ export type ProjectResponseDto = {
   organizationId: string;
   organizationName: string;
   organizationSlug: string;
+  projectRole: ProjectRole;
   slug: string;
   updatedAt: string;
 };
@@ -92,9 +93,9 @@ export function createProjectsResource(opts?: RequestOpts): ProjectsResource {
   return {
     list: (query: ProjectListQuery = {}) => getProjects(query, opts) as Promise<ProjectListResponseDto>,
     create: (body: ProjectCreateDto) =>
-      createProjectRequest({ projectCreateDto: body }, opts) as Promise<ProjectResponseDto>,
+      createProjectRequest({ projectCreateDto: body }, opts) as unknown as Promise<ProjectResponseDto>,
     update: (projectId: string, body: ProjectUpdateDto) =>
-      updateProjectRequest({ projectId, projectUpdateDto: body }, opts) as Promise<ProjectResponseDto>,
+      updateProjectRequest({ projectId, projectUpdateDto: body }, opts) as unknown as Promise<ProjectResponseDto>,
     archive: (projectId: string) => archiveProjectRequest({ projectId }, opts) as Promise<ProjectArchiveResponseDto>,
     listDiagrams: (projectId: string, query: PaginationQuery = {}) =>
       getProjectDiagrams({ projectId, ...query }, opts) as Promise<DiagramListResponseDto>,

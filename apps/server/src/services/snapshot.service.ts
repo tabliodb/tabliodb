@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { DiagramModel } from '@tabliodb/schema-core';
+import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
 import { SnapshotCreateDto, SnapshotListQueryDto } from '../dtos/snapshot.dto.js';
 import { SnapshotRepository } from '../repositories/snapshot.repository.js';
@@ -15,7 +16,7 @@ export class SnapshotService {
   ) {}
 
   async create(auth: AuthContext, dto: SnapshotCreateDto) {
-    await this.diagramService.requireDiagram(auth, dto.diagramId);
+    await this.diagramService.requireDiagram(auth, dto.diagramId, Permission.SnapshotCreate);
 
     const snapshot = await this.snapshotRepository.create({
       diagramId: dto.diagramId,
@@ -36,7 +37,7 @@ export class SnapshotService {
   }
 
   async getByDiagram(auth: AuthContext, diagramId: string, query: SnapshotListQueryDto) {
-    await this.diagramService.requireDiagram(auth, diagramId);
+    await this.diagramService.requireDiagram(auth, diagramId, Permission.SnapshotRead);
 
     const snapshots = await this.snapshotRepository.getByDiagram(diagramId, {
       cursor: query.cursor,

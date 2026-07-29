@@ -26,6 +26,7 @@ const ProjectResponseSchema = z
     organizationId: z.string().uuid(),
     organizationName: z.string(),
     organizationSlug: z.string(),
+    projectRole: ProjectRoleSchema,
     name: z.string(),
     slug: z.string(),
     description: z.string().nullable(),

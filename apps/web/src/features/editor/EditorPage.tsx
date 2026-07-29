@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DiagramModel } from '@tabliodb/schema-core';
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import {
   TabliodbApiError,
   type AuditLogDto,
@@ -56,7 +56,7 @@ import {
   UserPlus,
   UsersRound,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
@@ -181,9 +181,17 @@ export function EditorPage() {
 
   const diagrams = diagramsQuery.data ?? [];
   const activeDiagram = diagrams.find((diagram) => diagram.id === routeDiagramId) ?? diagrams[0] ?? null;
+  const canEditDiagram = activeProject
+    ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate)
+    : false;
+  const canCreateSnapshot = activeProject
+    ? hasProjectPermission(activeProject.projectRole, Permission.SnapshotCreate)
+    : false;
 
   const snapshotsQuery = useQuery(
-    snapshotsQueries.listOrCreateInitial(activeDiagram, (diagram) => createSeedDiagramModel(diagram.name)),
+    snapshotsQueries.listOrCreateInitial(activeDiagram, activeProject, (diagram) =>
+      createSeedDiagramModel(diagram.name),
+    ),
   );
 
   const latestSnapshot = snapshotsQuery.data?.[0] ?? null;
@@ -205,6 +213,17 @@ export function EditorPage() {
       },
     },
   });
+
+  const handleModelChange = useCallback(
+    (nextModel: DiagramModel) => {
+      if (!canEditDiagram) {
+        return;
+      }
+
+      setModel(nextModel);
+    },
+    [canEditDiagram],
+  );
 
   useEffect(() => {
     if (organizations.length === 0 || organizationsQuery.isPending) {
@@ -262,6 +281,16 @@ export function EditorPage() {
     setSelectedTableId((current) => current ?? Object.keys(latestSnapshot.snapshot.tables)[0] ?? null);
   }, [latestSnapshot]);
 
+  useEffect(() => {
+    if (!activeDiagram || snapshotsQuery.isPending || snapshotsQuery.data === undefined || latestSnapshot) {
+      return;
+    }
+
+    // Empty read-only diagrams cannot create an initial snapshot, so the editor renders an unsaved empty model instead of spinning forever.
+    setModel(createSeedDiagramModel(activeDiagram.name));
+    setSelectedTableId(null);
+  }, [activeDiagram, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
+
   async function handleExportSql() {
     if (!model) {
       return;
@@ -273,7 +302,7 @@ export function EditorPage() {
   }
 
   function handleAddTable(tableName?: string) {
-    if (!model) {
+    if (!canEditDiagram || !model) {
       return;
     }
 
@@ -311,6 +340,17 @@ export function EditorPage() {
 
   if (isLoadingWorkspace) {
     return <LoadingState />;
+  }
+
+  if (!diagramsQuery.isPending && activeProject && diagrams.length === 0) {
+    return (
+      <ErrorState
+        error={
+          new Error(canEditDiagram ? 'No diagram found' : 'No diagram is available for your current project role yet')
+        }
+        onRetry={() => queryClient.invalidateQueries()}
+      />
+    );
   }
 
   if (!activeOrganization || !activeProject || !activeDiagram || !model) {
@@ -398,6 +438,7 @@ export function EditorPage() {
             </p>
           </div>
           <div className="flex items-center gap-1">
+            <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
             <IconButton icon={MessageSquareText} label="Comments" />
             <IconButton icon={History} label="History" />
             <IconButton icon={GitBranch} label="Branches" />
@@ -415,12 +456,12 @@ export function EditorPage() {
                 />
               </>
             ) : null}
-            <AddTableDialog onCreate={handleAddTable} />
+            <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} />
             <Button
               className="gap-2"
-              disabled={saveSnapshotMutation.isPending}
+              disabled={saveSnapshotMutation.isPending || !canCreateSnapshot}
               onClick={() => {
-                if (!activeDiagram || !model) {
+                if (!activeDiagram || !model || !canCreateSnapshot) {
                   return;
                 }
 
@@ -483,8 +524,9 @@ export function EditorPage() {
           fitKey={activeDiagram?.id ?? 'empty'}
           fitSignal={fitSignal}
           model={model}
-          onModelChange={setModel}
+          onModelChange={handleModelChange}
           onSelectedTableChange={setSelectedTableId}
+          readOnly={!canEditDiagram}
           selectedTableId={selectedTableId}
         />
       </section>
@@ -492,7 +534,8 @@ export function EditorPage() {
       <SchemaInspector
         latestSnapshotVersion={latestSnapshot?.version ?? 0}
         model={model}
-        onModelChange={setModel}
+        onModelChange={handleModelChange}
+        readOnly={!canEditDiagram}
         selectedTableId={selectedTableId}
       />
     </main>
@@ -1521,6 +1564,13 @@ function isOrganizationManager(organization: OrganizationDto): boolean {
   return organization.role === 'owner' || organization.role === 'admin';
 }
 
+function hasProjectPermission(role: ProjectRole, permission: Permission): boolean {
+  return isGranted({
+    current: permissionsForProjectRole(role),
+    requested: [permission],
+  });
+}
+
 function formatAuditLogMessage(auditLog: AuditLogDto): string {
   if (auditLog.action === 'project.created') {
     return `Created project ${readMetadataString(auditLog.metadata, 'name', 'project')}`;
@@ -1652,7 +1702,13 @@ function getMemberInitials(member: Pick<ProjectMemberDto, 'email' | 'name'>): st
     .join('');
 }
 
-function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }) {
+function AddTableDialog({
+  disabled = false,
+  onCreate,
+}: {
+  disabled?: boolean;
+  onCreate: (tableName?: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const form = useForm<AddTableFormState>({
     defaultValues: {
@@ -1663,6 +1719,10 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
   const { errors } = form.formState;
 
   function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen && disabled) {
+      return;
+    }
+
     setOpen(nextOpen);
 
     if (!nextOpen) {
@@ -1671,6 +1731,10 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
   }
 
   function handleSubmit(values: AddTableFormState) {
+    if (disabled) {
+      return;
+    }
+
     onCreate(values.tableName || undefined);
     form.reset();
     setOpen(false);
@@ -1679,7 +1743,7 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <Button className="ml-2 gap-2" variant="secondary">
+        <Button className="ml-2 gap-2" disabled={disabled} variant="secondary">
           <Plus className="size-4" />
           Table
         </Button>
@@ -1709,7 +1773,7 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
             <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
-            <Button type="submit">
+            <Button disabled={disabled} type="submit">
               <Plus className="size-4" />
               Create table
             </Button>

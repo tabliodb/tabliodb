@@ -2777,6 +2777,15 @@
           "organizationSlug": {
             "type": "string"
           },
+          "projectRole": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "editor",
+              "commenter",
+              "viewer"
+            ]
+          },
           "name": {
             "type": "string"
           },
@@ -2803,6 +2812,7 @@
           "organizationId",
           "organizationName",
           "organizationSlug",
+          "projectRole",
           "name",
           "slug",
           "description",

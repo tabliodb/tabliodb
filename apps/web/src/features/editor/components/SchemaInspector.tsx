@@ -182,6 +182,7 @@ export type SchemaInspectorProps = {
   latestSnapshotVersion: number;
   model: DiagramModel;
   onModelChange: (model: DiagramModel) => void;
+  readOnly?: boolean;
   selectedTableId: string | null;
 };
 
@@ -189,6 +190,7 @@ export function SchemaInspector({
   latestSnapshotVersion,
   model,
   onModelChange,
+  readOnly = false,
   selectedTableId,
 }: SchemaInspectorProps) {
   const enums = Object.values(model.enums);
@@ -270,13 +272,21 @@ export function SchemaInspector({
         <div className="flex flex-wrap gap-2">
           <Badge variant="green">{model.dialect}</Badge>
           <Badge variant="blue">v{latestSnapshotVersion}</Badge>
+          {readOnly ? <Badge variant="yellow">View only</Badge> : null}
         </div>
+        {readOnly ? (
+          <Surface className="border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-xs font-extrabold text-[rgb(var(--tabliodb-gold-text))]">
+            This project role can inspect the schema, export SQL, and follow relationships, but cannot change the
+            diagram.
+          </Surface>
+        ) : null}
         <EnumEditorPanel
           databaseEnum={selectedEnum}
           enums={enums}
           model={model}
           onEnumSelect={setSelectedEnumId}
           onModelChange={onModelChange}
+          readOnly={readOnly}
           selectedEnumId={selectedEnumId}
         />
         <section>
@@ -298,10 +308,12 @@ export function SchemaInspector({
                   style={{ backgroundColor: selectedTable.color ?? '#0f766e' }}
                 />
               </div>
-              <div className="mt-3 flex gap-2">
-                <EditTableDialog model={model} onModelChange={onModelChange} table={selectedTable} />
-                <AddColumnDialog model={model} onModelChange={onModelChange} table={selectedTable} />
-              </div>
+              {!readOnly ? (
+                <div className="mt-3 flex gap-2">
+                  <EditTableDialog model={model} onModelChange={onModelChange} table={selectedTable} />
+                  <AddColumnDialog model={model} onModelChange={onModelChange} table={selectedTable} />
+                </div>
+              ) : null}
               <div className="mt-3 space-y-1">
                 {selectedColumns.map((column) => (
                   <button
@@ -336,7 +348,13 @@ export function SchemaInspector({
             </Surface>
           )}
         </section>
-        <ColumnInspector column={selectedColumn} model={model} onModelChange={onModelChange} table={selectedTable} />
+        <ColumnInspector
+          column={selectedColumn}
+          model={model}
+          onModelChange={onModelChange}
+          readOnly={readOnly}
+          table={selectedTable}
+        />
         <IndexBuilderPanel
           columns={selectedColumns}
           index={selectedIndex}
@@ -344,6 +362,7 @@ export function SchemaInspector({
           model={model}
           onIndexSelect={setSelectedIndexId}
           onModelChange={onModelChange}
+          readOnly={readOnly}
           selectedIndexId={selectedIndexId}
           table={selectedTable}
         />
@@ -351,6 +370,7 @@ export function SchemaInspector({
           model={model}
           onModelChange={onModelChange}
           onRelationshipSelect={setSelectedRelationshipId}
+          readOnly={readOnly}
           relationship={selectedRelationship}
           relationships={selectedRelationships}
           selectedRelationshipId={selectedRelationshipId}
@@ -381,6 +401,7 @@ function EnumEditorPanel({
   model,
   onEnumSelect,
   onModelChange,
+  readOnly,
   selectedEnumId,
 }: {
   databaseEnum: DatabaseEnum | null;
@@ -388,6 +409,7 @@ function EnumEditorPanel({
   model: DiagramModel;
   onEnumSelect: (enumId: string) => void;
   onModelChange: (model: DiagramModel) => void;
+  readOnly: boolean;
   selectedEnumId: string | null;
 }) {
   return (
@@ -401,7 +423,7 @@ function EnumEditorPanel({
               Reusable database type values
             </div>
           </div>
-          <AddEnumDialog model={model} onModelChange={onModelChange} />
+          {!readOnly ? <AddEnumDialog model={model} onModelChange={onModelChange} /> : null}
         </div>
         {enums.length > 0 ? (
           <div className="mt-3 space-y-1">
@@ -438,7 +460,9 @@ function EnumEditorPanel({
                   {databaseEnum.schema ? `${databaseEnum.schema} schema` : 'default schema'}
                 </div>
               </div>
-              <EditEnumDialog databaseEnum={databaseEnum} model={model} onModelChange={onModelChange} />
+              {!readOnly ? (
+                <EditEnumDialog databaseEnum={databaseEnum} model={model} onModelChange={onModelChange} />
+              ) : null}
             </div>
             <div className="mt-3 flex flex-wrap gap-1">
               {databaseEnum.values.map((value) => (
@@ -898,11 +922,13 @@ function ColumnInspector({
   column,
   model,
   onModelChange,
+  readOnly,
   table,
 }: {
   column: DatabaseColumn | null;
   model: DiagramModel;
   onModelChange: (model: DiagramModel) => void;
+  readOnly: boolean;
   table: DatabaseTable | null;
 }) {
   return (
@@ -919,7 +945,7 @@ function ColumnInspector({
                 {table.name} / {formatColumnType(column.type)}
               </div>
             </div>
-            <EditColumnDialog column={column} model={model} onModelChange={onModelChange} />
+            {!readOnly ? <EditColumnDialog column={column} model={model} onModelChange={onModelChange} /> : null}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <ColumnFact label="Primary key" value={column.primaryKey ? 'Yes' : 'No'} />
@@ -1086,6 +1112,7 @@ function IndexBuilderPanel({
   model,
   onIndexSelect,
   onModelChange,
+  readOnly,
   selectedIndexId,
   table,
 }: {
@@ -1095,6 +1122,7 @@ function IndexBuilderPanel({
   model: DiagramModel;
   onIndexSelect: (indexId: string) => void;
   onModelChange: (model: DiagramModel) => void;
+  readOnly: boolean;
   selectedIndexId: string | null;
   table: DatabaseTable | null;
 }) {
@@ -1110,7 +1138,9 @@ function IndexBuilderPanel({
                 Composite, unique, and partial indexes
               </div>
             </div>
-            <AddIndexDialog columns={columns} model={model} onModelChange={onModelChange} table={table} />
+            {!readOnly ? (
+              <AddIndexDialog columns={columns} model={model} onModelChange={onModelChange} table={table} />
+            ) : null}
           </div>
           {indexes.length > 0 ? (
             <div className="mt-3 space-y-1">
@@ -1147,7 +1177,9 @@ function IndexBuilderPanel({
                     {index.unique ? 'Unique index' : 'Non-unique index'}
                   </div>
                 </div>
-                <EditIndexDialog columns={columns} index={index} model={model} onModelChange={onModelChange} />
+                {!readOnly ? (
+                  <EditIndexDialog columns={columns} index={index} model={model} onModelChange={onModelChange} />
+                ) : null}
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <ColumnFact label="Method" value={formatIndexMethod(index.method)} />
@@ -1562,6 +1594,7 @@ function RelationshipInspector({
   model,
   onModelChange,
   onRelationshipSelect,
+  readOnly,
   relationship,
   relationships,
   selectedRelationshipId,
@@ -1569,6 +1602,7 @@ function RelationshipInspector({
   model: DiagramModel;
   onModelChange: (model: DiagramModel) => void;
   onRelationshipSelect: (relationshipId: string) => void;
+  readOnly: boolean;
   relationship: DatabaseRelationship | null;
   relationships: DatabaseRelationship[];
   selectedRelationshipId: string | null;
@@ -1613,7 +1647,9 @@ function RelationshipInspector({
                     {formatRelationshipCardinality(relationship.cardinality)}
                   </div>
                 </div>
-                <EditRelationshipDialog model={model} onModelChange={onModelChange} relationship={relationship} />
+                {!readOnly ? (
+                  <EditRelationshipDialog model={model} onModelChange={onModelChange} relationship={relationship} />
+                ) : null}
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <ColumnFact label="On delete" value={formatReferentialAction(relationship.onDelete)} />

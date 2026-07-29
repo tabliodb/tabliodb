@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { DatabaseDialect } from '@tabliodb/schema-core';
+import { Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
 import { DiagramCreateDto, DiagramListQueryDto } from '../dtos/diagram.dto.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
@@ -19,6 +20,8 @@ export class DiagramService {
     if (!project) {
       throw new NotFoundException('Project not found');
     }
+
+    this.assertProjectPermission(project.projectRole, Permission.DiagramCreate);
 
     const diagram = await this.diagramRepository.create({
       projectId: dto.projectId,
@@ -44,6 +47,8 @@ export class DiagramService {
       throw new NotFoundException('Project not found');
     }
 
+    this.assertProjectPermission(project.projectRole, Permission.DiagramRead);
+
     const diagrams = await this.diagramRepository.getByProject(projectId, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
@@ -60,11 +65,13 @@ export class DiagramService {
     };
   }
 
-  async requireDiagram(auth: AuthContext, diagramId: string) {
+  async requireDiagram(auth: AuthContext, diagramId: string, permission: Permission = Permission.DiagramRead) {
     const role = await this.projectRepository.getDiagramRole(auth.user.id, diagramId);
     if (!role) {
       throw new NotFoundException('Diagram not found');
     }
+
+    this.assertProjectPermission(role.role, permission);
 
     const diagram = await this.diagramRepository.getById(diagramId);
     if (!diagram) {
@@ -72,5 +79,16 @@ export class DiagramService {
     }
 
     return diagram;
+  }
+
+  private assertProjectPermission(role: ProjectRole, permission: Permission): void {
+    if (
+      !isGranted({
+        current: permissionsForProjectRole(role),
+        requested: [permission],
+      })
+    ) {
+      throw new ForbiddenException(`${permission} permission is required`);
+    }
   }
 }

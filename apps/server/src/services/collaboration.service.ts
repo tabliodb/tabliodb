@@ -1,7 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { Database } from '@hocuspocus/extension-database';
 import { Server } from '@hocuspocus/server';
-import { parseDiagramDocumentName } from '@tabliodb/shared';
+import {
+  Permission,
+  ProjectRole,
+  isGranted,
+  parseDiagramDocumentName,
+  permissionsForProjectRole,
+} from '@tabliodb/shared';
 import { AuthService } from './auth.service.js';
 import { CollaborationRepository } from '../repositories/collaboration.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
@@ -27,7 +33,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
 
     this.server = new Server({
       port: realtime.port,
-      onAuthenticate: async ({ token, documentName }) => {
+      onAuthenticate: async ({ connectionConfig, token, documentName }) => {
         const parsed = parseDiagramDocumentName(documentName);
         if (!parsed || !token) {
           throw new UnauthorizedException('Invalid realtime document');
@@ -39,12 +45,19 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
           throw new UnauthorizedException('Diagram access denied');
         }
 
+        const readOnly = !isGranted({
+          current: permissionsForProjectRole(role.role),
+          requested: [Permission.DiagramUpdate],
+        });
+        connectionConfig.readOnly = readOnly;
+
         // The context becomes available to later Hocuspocus hooks and gives us a clean boundary for authorization.
         return {
           userId: auth.user.id,
           diagramId: parsed.diagramId,
           role: role.role,
-        };
+          readOnly,
+        } satisfies CollaborationContext;
       },
       extensions: [
         new Database({
@@ -52,9 +65,12 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
             const parsed = parseDiagramDocumentName(documentName);
             return parsed ? this.collaborationRepository.loadDocument(parsed.diagramId) : null;
           },
-          store: async ({ documentName, state }) => {
+          store: async ({ documentName, lastContext, state }) => {
             const parsed = parseDiagramDocumentName(documentName);
-            if (parsed) {
+            const context = readCollaborationContext(lastContext);
+
+            if (parsed && context && !context.readOnly) {
+              // Realtime persistence only accepts updates from users that can update the diagram, mirroring REST snapshot permissions.
               await this.collaborationRepository.storeDocument(parsed.diagramId, state);
             }
           },
@@ -69,4 +85,31 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     await this.server?.destroy();
   }
+}
+
+type CollaborationContext = {
+  diagramId: string;
+  readOnly: boolean;
+  role: ProjectRole;
+  userId: string;
+};
+
+function readCollaborationContext(value: unknown): CollaborationContext | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const context = value as Partial<CollaborationContext>;
+
+  if (
+    typeof context.diagramId === 'string' &&
+    typeof context.readOnly === 'boolean' &&
+    typeof context.userId === 'string' &&
+    context.role &&
+    Object.values(ProjectRole).includes(context.role)
+  ) {
+    return context as CollaborationContext;
+  }
+
+  return null;
 }

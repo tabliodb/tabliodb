@@ -34,6 +34,7 @@ export class ProjectRepository {
       return tx
         .selectFrom('projects')
         .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
+        .innerJoin('project_members', 'project_members.projectId', 'projects.id')
         .select([
           'projects.id',
           'projects.organizationId',
@@ -44,8 +45,10 @@ export class ProjectRepository {
           'projects.updatedAt',
           'organizations.name as organizationName',
           'organizations.slug as organizationSlug',
+          'project_members.role as projectRole',
         ])
         .where('projects.id', '=', project.id)
+        .where('project_members.userId', '=', dto.createdById)
         .executeTakeFirstOrThrow();
     });
   }
@@ -66,6 +69,7 @@ export class ProjectRepository {
         'projects.updatedAt',
         'organizations.name as organizationName',
         'organizations.slug as organizationSlug',
+        'project_members.role as projectRole',
       ])
       .where('project_members.userId', '=', userId)
       .where('projects.archivedAt', 'is', null)
@@ -110,6 +114,7 @@ export class ProjectRepository {
         'projects.updatedAt',
         'organizations.name as organizationName',
         'organizations.slug as organizationSlug',
+        'project_members.role as projectRole',
       ])
       .where('project_members.userId', '=', userId)
       .where('projects.id', '=', projectId)
@@ -141,7 +146,7 @@ export class ProjectRepository {
       .executeTakeFirst();
   }
 
-  async update(projectId: string, dto: { description?: string | null; name?: string }) {
+  async update(userId: string, projectId: string, dto: { description?: string | null; name?: string }) {
     const values: { description?: string | null; name?: string; slug?: string; updatedAt: Date } = {
       updatedAt: new Date(),
     };
@@ -163,7 +168,7 @@ export class ProjectRepository {
       .returning('id')
       .executeTakeFirst();
 
-    return project ? this.getById(project.id) : undefined;
+    return project ? this.getByIdForUser(userId, project.id) : undefined;
   }
 
   async archive(projectId: string): Promise<boolean> {
@@ -284,25 +289,5 @@ export class ProjectRepository {
       .executeTakeFirstOrThrow();
 
     return Number(row.count);
-  }
-
-  private getById(projectId: string) {
-    return this.db
-      .selectFrom('projects')
-      .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
-      .select([
-        'projects.id',
-        'projects.organizationId',
-        'projects.name',
-        'projects.slug',
-        'projects.description',
-        'projects.createdAt',
-        'projects.updatedAt',
-        'organizations.name as organizationName',
-        'organizations.slug as organizationSlug',
-      ])
-      .where('projects.id', '=', projectId)
-      .where('projects.archivedAt', 'is', null)
-      .executeTakeFirst();
   }
 }

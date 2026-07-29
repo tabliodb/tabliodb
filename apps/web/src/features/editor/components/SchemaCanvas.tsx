@@ -47,6 +47,7 @@ export type SchemaCanvasProps = {
   selectedTableId: string | null;
   onModelChange: (model: DiagramModel) => void;
   onSelectedTableChange: (tableId: string | null) => void;
+  readOnly?: boolean;
 };
 
 type TableNodeData = {
@@ -82,6 +83,7 @@ export function SchemaCanvas({
   model,
   onModelChange,
   onSelectedTableChange,
+  readOnly = false,
   selectedTableId,
 }: SchemaCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -142,7 +144,7 @@ export function SchemaCanvas({
       interacting: {
         edgeLabelMovable: false,
         edgeMovable: false,
-        nodeMovable: true,
+        nodeMovable: !readOnly,
         vertexAddable: false,
         vertexDeletable: false,
       },
@@ -173,6 +175,10 @@ export function SchemaCanvas({
     });
 
     graph.on('node:moved', ({ node }) => {
+      if (readOnly) {
+        return;
+      }
+
       const data = node.getData<TableNodeData>();
       const table = modelRef.current.tables[data.tableId];
 
@@ -201,7 +207,7 @@ export function SchemaCanvas({
       graph.dispose();
       graphRef.current = null;
     };
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     const graph = graphRef.current;
@@ -210,13 +216,13 @@ export function SchemaCanvas({
       return;
     }
 
-    syncGraphFromModel(graph, model, selectedTableId);
+    syncGraphFromModel(graph, model, selectedTableId, readOnly);
 
     if (fitKeyRef.current !== fitKey) {
       fitKeyRef.current = fitKey;
       fitGraphContent(graph);
     }
-  }, [fitKey, model, selectedTableId]);
+  }, [fitKey, model, readOnly, selectedTableId]);
 
   useEffect(() => {
     const graph = graphRef.current;
@@ -249,7 +255,12 @@ function registerTableNodeShape(): void {
   tableShapeRegistered = true;
 }
 
-function syncGraphFromModel(graph: Graph, model: DiagramModel, selectedTableId: string | null): void {
+function syncGraphFromModel(
+  graph: Graph,
+  model: DiagramModel,
+  selectedTableId: string | null,
+  readOnly: boolean,
+): void {
   const relationshipPlan = createRelationshipPlan(model, selectedTableId);
   const nodeIds = new Set(Object.keys(model.tables));
   const edgeMetadata = createRelationshipEdgeMetadata(model, relationshipPlan);
@@ -271,7 +282,13 @@ function syncGraphFromModel(graph: Graph, model: DiagramModel, selectedTableId: 
     for (const table of Object.values(model.tables)) {
       syncTableNode(
         graph,
-        createTableNodeMetadata(model, table, selectedTableId, relationshipPlan.terminalsByTable.get(table.id) ?? []),
+        createTableNodeMetadata(
+          model,
+          table,
+          selectedTableId,
+          relationshipPlan.terminalsByTable.get(table.id) ?? [],
+          readOnly,
+        ),
       );
     }
 
@@ -382,6 +399,7 @@ function createTableNodeMetadata(
   table: DatabaseTable,
   selectedTableId: string | null,
   terminals: RelationshipTerminal[],
+  readOnly: boolean,
 ): NodeMetadata {
   const columns = getTableColumns(model, table.id);
   const height = tableHeaderHeight + columns.length * tableColumnHeight + tablePaddingBottom;
@@ -398,7 +416,7 @@ function createTableNodeMetadata(
     } satisfies TableNodeData,
     height,
     position: table.position,
-    ports: createColumnPorts(model, table, terminals),
+    ports: createColumnPorts(model, table, terminals, readOnly),
     shape: tableNodeShape,
     width,
     zIndex: table.id === selectedTableId ? 2 : 1,
@@ -562,6 +580,7 @@ function createColumnPorts(
   model: DiagramModel,
   table: DatabaseTable,
   terminals: RelationshipTerminal[],
+  readOnly: boolean,
 ): NodeMetadata['ports'] {
   const columns = getTableColumns(model, table.id);
 
@@ -592,9 +611,9 @@ function createColumnPorts(
           },
           attrs: {
             portBody: {
-              cursor: 'crosshair',
+              cursor: readOnly ? 'default' : 'crosshair',
               fill: '#ffffff',
-              magnet: true,
+              magnet: !readOnly,
               r: terminal.active ? relationshipPortRadius + 1 : relationshipPortRadius,
               stroke: color,
               strokeWidth: terminal.active ? 3 : 2,

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
 import { CommentThreadCreateDto, CommentThreadListQueryDto } from '../dtos/comment.dto.js';
 import { CommentRepository } from '../repositories/comment.repository.js';
@@ -14,7 +15,7 @@ export class CommentService {
   ) {}
 
   async createThread(auth: AuthContext, dto: CommentThreadCreateDto) {
-    await this.diagramService.requireDiagram(auth, dto.diagramId);
+    await this.diagramService.requireDiagram(auth, dto.diagramId, Permission.DiagramComment);
 
     const result = await this.commentRepository.createThreadWithComment({
       diagramId: dto.diagramId,
@@ -45,7 +46,7 @@ export class CommentService {
   }
 
   async getThreads(auth: AuthContext, diagramId: string, query: CommentThreadListQueryDto) {
-    await this.diagramService.requireDiagram(auth, diagramId);
+    await this.diagramService.requireDiagram(auth, diagramId, Permission.DiagramRead);
 
     const threads = await this.commentRepository.getThreads(diagramId, {
       cursor: query.cursor,

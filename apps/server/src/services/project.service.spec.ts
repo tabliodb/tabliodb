@@ -21,6 +21,7 @@ const project = {
   organizationId: 'organization-id',
   organizationName: 'Default Workspace',
   organizationSlug: 'default-workspace',
+  projectRole: ProjectRole.Owner,
   slug: 'library-system',
   updatedAt: new Date('2026-07-29T10:00:00.000Z'),
 };

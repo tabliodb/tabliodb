@@ -240,6 +240,7 @@ export type ProjectResponseDtoOutput = {
   organizationId: string;
   organizationName: string;
   organizationSlug: string;
+  projectRole: ProjectRole2;
   name: string;
   slug: string;
   description: string | null;
@@ -1460,6 +1461,12 @@ export enum Status2 {
   Pending = 'pending',
   Active = 'active',
   Suspended = 'suspended',
+}
+export enum ProjectRole2 {
+  Owner = 'owner',
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
 }
 export enum Role2 {
   Owner = 'owner',

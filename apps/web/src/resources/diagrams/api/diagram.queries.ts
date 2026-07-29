@@ -1,4 +1,4 @@
-import type { PaginationQuery } from '@tabliodb/shared';
+import { Permission, isGranted, permissionsForProjectRole, type PaginationQuery } from '@tabliodb/shared';
 import type { DiagramListResponseDto, DiagramResponseDto, ProjectResponseDto } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
@@ -41,6 +41,11 @@ async function listOrCreateStarterDiagrams(project: ProjectResponseDto | null): 
 
   if (diagrams.items.length > 0) {
     return diagrams.items;
+  }
+
+  if (!isGranted({ current: permissionsForProjectRole(project.projectRole), requested: [Permission.DiagramCreate] })) {
+    // Read-only project members should see an empty state instead of triggering a forbidden starter-write.
+    return [];
   }
 
   const diagram = await sdk.diagrams.create({
