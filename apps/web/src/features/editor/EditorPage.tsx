@@ -55,18 +55,21 @@ import { SchemaCanvas } from './components/SchemaCanvas';
 const defaultProjectName = 'Library System';
 const defaultDiagramName = 'Main schema';
 const authDefaults = {
-  email: 'demo@tabliodb.local',
-  name: 'Tabliodb Maker',
+  email: 'owner@tabliodb.local',
   password: 'tabliodb-dev',
 };
 
-type AuthMode = 'login' | 'sign-up';
-
 type AuthFormState = {
   email: string;
-  mode: AuthMode;
-  name: string;
   password: string;
+};
+
+type SetupFormState = {
+  ownerEmail: string;
+  ownerName: string;
+  ownerPassword: string;
+  publicUrl: string;
+  workspaceName: string;
 };
 
 export function EditorPage() {
@@ -78,7 +81,16 @@ export function EditorPage() {
   const [model, setModel] = useState<DiagramModel | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
+  const setupQuery = useQuery({
+    queryKey: ['setup'],
+    queryFn: sdk.setup.getStatus,
+    retry: false,
+  });
+
+  const setupStatus = setupQuery.data ?? null;
+
   const projectsQuery = useQuery({
+    enabled: setupStatus?.isSetupComplete === true,
     queryKey: ['projects'],
     queryFn: loadOrCreateProjects,
     retry: false,
@@ -110,31 +122,31 @@ export function EditorPage() {
   const reviewSignals = useMemo(() => (model ? getReviewSignals(model) : []), [model]);
 
   const authMutation = useMutation({
-    mutationFn: async (form: AuthFormState) => {
-      if (form.mode === 'login') {
-        return sdk.auth.login({ email: form.email, password: form.password });
-      }
-
-      try {
-        return await sdk.auth.signUp({
-          email: form.email,
-          name: form.name,
-          password: form.password,
-        });
-      } catch (error) {
-        if (isEmailAlreadyRegistered(error)) {
-          // The seeded dev credential is intentionally reusable, so an existing user falls through to login.
-          return sdk.auth.login({ email: form.email, password: form.password });
-        }
-
-        throw error;
-      }
-    },
+    mutationFn: (form: AuthFormState) => sdk.auth.login({ email: form.email, password: form.password }),
     onSuccess: async () => {
       setActiveDiagramId(null);
       setActiveProjectId(null);
       setModel(null);
       setSelectedTableId(null);
+      await queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+
+  const setupMutation = useMutation({
+    mutationFn: (form: SetupFormState) =>
+      sdk.setup.complete({
+        ownerEmail: form.ownerEmail,
+        ownerName: form.ownerName,
+        ownerPassword: form.ownerPassword,
+        publicUrl: form.publicUrl.trim() || undefined,
+        workspaceName: form.workspaceName,
+      }),
+    onSuccess: async () => {
+      setActiveDiagramId(null);
+      setActiveProjectId(null);
+      setModel(null);
+      setSelectedTableId(null);
+      await queryClient.invalidateQueries({ queryKey: ['setup'] });
       await queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
@@ -221,6 +233,22 @@ export function EditorPage() {
 
     setModel(nextModel);
     setSelectedTableId(nextTableId);
+  }
+
+  if (setupQuery.isPending) {
+    return <LoadingState />;
+  }
+
+  if (setupQuery.error) {
+    return (
+      <ErrorState error={setupQuery.error} onRetry={() => queryClient.invalidateQueries({ queryKey: ['setup'] })} />
+    );
+  }
+
+  if (setupStatus && !setupStatus.isSetupComplete) {
+    return (
+      <SetupGate error={setupMutation.error} isSubmitting={setupMutation.isPending} onSubmit={setupMutation.mutate} />
+    );
   }
 
   if (isUnauthorized(projectsQuery.error)) {
@@ -514,8 +542,6 @@ function AuthGate({
 }) {
   const [form, setForm] = useState<AuthFormState>({
     email: authDefaults.email,
-    mode: 'sign-up',
-    name: authDefaults.name,
     password: authDefaults.password,
   });
 
@@ -534,44 +560,9 @@ function AuthGate({
             </div>
             <div>
               <h1 className="text-base font-extrabold">Tabliodb</h1>
-              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Development workspace</p>
+              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Sign in to your workspace</p>
             </div>
           </div>
-          <div className="mb-4 grid grid-cols-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-1 text-sm font-extrabold">
-            <button
-              className={`cursor-pointer rounded-[12px] px-3 py-1.5 transition ${
-                form.mode === 'sign-up'
-                  ? 'bg-white text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]'
-                  : 'text-[rgb(var(--tabliodb-ink-muted))]'
-              }`}
-              onClick={() => setForm((current) => ({ ...current, mode: 'sign-up' }))}
-              type="button"
-            >
-              Sign up
-            </button>
-            <button
-              className={`cursor-pointer rounded-[12px] px-3 py-1.5 transition ${
-                form.mode === 'login'
-                  ? 'bg-white text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]'
-                  : 'text-[rgb(var(--tabliodb-ink-muted))]'
-              }`}
-              onClick={() => setForm((current) => ({ ...current, mode: 'login' }))}
-              type="button"
-            >
-              Login
-            </button>
-          </div>
-          {form.mode === 'sign-up' ? (
-            <label className="mb-3 block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Name
-              </span>
-              <Input
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                value={form.name}
-              />
-            </label>
-          ) : null}
           <label className="mb-3 block text-sm">
             <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Email
@@ -600,6 +591,106 @@ function AuthGate({
           <Button className="w-full gap-2" disabled={isSubmitting} type="submit">
             {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
             Continue
+          </Button>
+        </form>
+      </Surface>
+    </main>
+  );
+}
+
+function SetupGate({
+  error,
+  isSubmitting,
+  onSubmit,
+}: {
+  error: unknown;
+  isSubmitting: boolean;
+  onSubmit: (form: SetupFormState) => void;
+}) {
+  const [form, setForm] = useState<SetupFormState>({
+    ownerEmail: authDefaults.email,
+    ownerName: 'Tabliodb Owner',
+    ownerPassword: authDefaults.password,
+    publicUrl: typeof window === 'undefined' ? '' : window.location.origin,
+    workspaceName: 'Personal Workspace',
+  });
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onSubmit(form);
+  }
+
+  return (
+    <main className="grid min-h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 py-10 text-[rgb(var(--tabliodb-ink))]">
+      <Surface className="w-full max-w-lg p-5" depth="md">
+        <form onSubmit={handleSubmit}>
+          <div className="mb-5 flex items-center gap-2">
+            <div className="grid size-10 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+              <Database className="size-5" />
+            </div>
+            <div>
+              <h1 className="text-base font-extrabold">Tabliodb</h1>
+              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Set up this instance</p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Owner name
+              </span>
+              <Input
+                onChange={(event) => setForm((current) => ({ ...current, ownerName: event.target.value }))}
+                value={form.ownerName}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Owner email
+              </span>
+              <Input
+                onChange={(event) => setForm((current) => ({ ...current, ownerEmail: event.target.value }))}
+                type="email"
+                value={form.ownerEmail}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Password
+              </span>
+              <Input
+                onChange={(event) => setForm((current) => ({ ...current, ownerPassword: event.target.value }))}
+                type="password"
+                value={form.ownerPassword}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Workspace
+              </span>
+              <Input
+                onChange={(event) => setForm((current) => ({ ...current, workspaceName: event.target.value }))}
+                value={form.workspaceName}
+              />
+            </label>
+          </div>
+          <label className="mt-3 block text-sm">
+            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Public URL
+            </span>
+            <Input
+              onChange={(event) => setForm((current) => ({ ...current, publicUrl: event.target.value }))}
+              type="url"
+              value={form.publicUrl}
+            />
+          </label>
+          {error ? (
+            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {getErrorMessage(error)}
+            </div>
+          ) : null}
+          <Button className="mt-5 w-full gap-2" disabled={isSubmitting} type="submit">
+            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
+            Create owner and workspace
           </Button>
         </form>
       </Surface>
@@ -637,10 +728,6 @@ function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => void })
 
 function isUnauthorized(error: unknown): boolean {
   return error instanceof TabliodbApiError && error.status === 401;
-}
-
-function isEmailAlreadyRegistered(error: unknown): boolean {
-  return error instanceof TabliodbApiError && error.status === 400 && error.message.includes('already registered');
 }
 
 function getErrorMessage(error: unknown): string {

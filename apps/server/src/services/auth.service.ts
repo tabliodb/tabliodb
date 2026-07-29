@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import { Permission } from '@tabliodb/shared';
 import { parse } from 'cookie';
 import { IncomingHttpHeaders } from 'node:http';
-import { AuthType, SALT_ROUNDS, TabliodbCookie, TabliodbHeader, TabliodbQuery } from '../constants.js';
+import { AuthType, TabliodbCookie, TabliodbHeader, TabliodbQuery } from '../constants.js';
 import { AuthContext } from '../database.js';
 import {
   ApiKeyCreateDto,
@@ -14,8 +14,8 @@ import {
 import { ApiKeyRepository } from '../repositories/api-key.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { CryptoRepository } from '../repositories/crypto.repository.js';
-import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { SessionRepository } from '../repositories/session.repository.js';
+import { SetupRepository } from '../repositories/setup.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 
 export type ValidateRequest = {
@@ -29,32 +29,18 @@ export class AuthService {
     private readonly apiKeyRepository: ApiKeyRepository,
     private readonly configRepository: ConfigRepository,
     private readonly cryptoRepository: CryptoRepository,
-    private readonly organizationRepository: OrganizationRepository,
     private readonly sessionRepository: SessionRepository,
+    private readonly setupRepository: SetupRepository,
     private readonly userRepository: UserRepository,
   ) {}
 
-  async signUp(dto: SignUpDto): Promise<LoginResponseDto> {
-    const email = dto.email.trim().toLowerCase();
-    const existing = await this.userRepository.getByEmail(email);
-    if (existing) {
-      throw new BadRequestException('Email is already registered');
+  async signUp(_dto: SignUpDto): Promise<LoginResponseDto> {
+    const setup = await this.setupRepository.getStatus();
+    if (setup.isSetupComplete) {
+      throw new BadRequestException('Public sign-up is disabled for this Tabliodb instance');
     }
 
-    const password = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
-    const user = await this.userRepository.create({
-      email,
-      name: dto.name,
-      passwordHash: password,
-      avatarColor: '#2563eb',
-    });
-
-    await this.organizationRepository.createPersonalOrganization({
-      userId: user.id,
-      name: `${user.name}'s Workspace`,
-    });
-
-    return this.createLoginResponse(user);
+    throw new BadRequestException('Complete first setup before creating regular user accounts');
   }
 
   async login(dto: LoginCredentialDto): Promise<LoginResponseDto> {
@@ -137,7 +123,7 @@ export class AuthService {
     };
   }
 
-  private async createLoginResponse(user: { id: string; email: string; name: string; avatarColor: string | null }) {
+  async createLoginResponse(user: { id: string; email: string; name: string; avatarColor: string | null }) {
     const accessToken = this.cryptoRepository.randomBytesAsText(32);
     const token = this.cryptoRepository.hashSha256(accessToken);
 
