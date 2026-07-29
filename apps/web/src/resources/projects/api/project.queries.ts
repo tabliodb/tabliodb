@@ -1,5 +1,5 @@
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { ProjectListResponseDto, ProjectResponseDto } from '@tabliodb/sdk';
+import type { ProjectListResponseDto, ProjectMemberListResponseDto, ProjectResponseDto } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { projectsKeys } from './project.keys';
@@ -9,6 +9,10 @@ export const defaultProjectName = 'Library System';
 type ProjectsQueries = {
   list: (query?: PaginationQuery) => AppQueryOptions<ProjectListResponseDto, ReturnType<typeof projectsKeys.list>>;
   listOrCreateStarter: () => AppQueryOptions<ProjectResponseDto[], ReturnType<typeof projectsKeys.list>>;
+  members: (
+    projectId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<ProjectMemberListResponseDto, ReturnType<typeof projectsKeys.members>>;
 };
 
 export const projectsQueries: ProjectsQueries = {
@@ -22,6 +26,13 @@ export const projectsQueries: ProjectsQueries = {
     appQueryOptions({
       queryFn: listOrCreateStarterProjects,
       queryKey: projectsKeys.list({ limit: 50 }),
+    }),
+
+  members: (projectId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(projectId),
+      queryFn: () => sdk.projects.listMembers(projectId, query),
+      queryKey: projectsKeys.members(projectId, query),
     }),
 };
 

@@ -11,6 +11,11 @@ export type ProjectListOptions = {
   limit: number;
 };
 
+export type ProjectMemberListOptions = {
+  cursor?: string;
+  limit: number;
+};
+
 @Injectable()
 export class ProjectRepository {
   constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
@@ -163,6 +168,115 @@ export class ProjectRepository {
       .executeTakeFirst();
 
     return Number(result.numUpdatedRows) > 0;
+  }
+
+  async getMembers(projectId: string, options: ProjectMemberListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await this.db
+      .selectFrom('project_members')
+      .innerJoin('users', 'users.id', 'project_members.userId')
+      .select([
+        'project_members.userId',
+        'users.email',
+        'users.name',
+        'users.avatarColor',
+        'project_members.role',
+        'project_members.createdAt',
+        'project_members.updatedAt',
+      ])
+      .where('project_members.projectId', '=', projectId)
+      .where('users.deletedAt', 'is', null)
+      .orderBy('project_members.createdAt', 'asc')
+      .orderBy('project_members.userId', 'asc')
+      .limit(options.limit + 1)
+      .offset(offset)
+      .execute();
+    const totalRow = await this.db
+      .selectFrom('project_members')
+      .innerJoin('users', 'users.id', 'project_members.userId')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('project_members.projectId', '=', projectId)
+      .where('users.deletedAt', 'is', null)
+      .executeTakeFirstOrThrow();
+
+    return {
+      // Project member list is paginated from the first implementation so large internal teams do not force a later API break.
+      items: rows.slice(0, options.limit),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
+  }
+
+  getMember(projectId: string, userId: string) {
+    return this.db
+      .selectFrom('project_members')
+      .innerJoin('users', 'users.id', 'project_members.userId')
+      .select([
+        'project_members.userId',
+        'users.email',
+        'users.name',
+        'users.avatarColor',
+        'project_members.role',
+        'project_members.createdAt',
+        'project_members.updatedAt',
+      ])
+      .where('project_members.projectId', '=', projectId)
+      .where('project_members.userId', '=', userId)
+      .where('users.deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  async upsertMember(projectId: string, options: { createdById: string; role: ProjectRole; userId: string }) {
+    await this.db
+      .insertInto('project_members')
+      .values({
+        createdById: options.createdById,
+        projectId,
+        role: options.role,
+        userId: options.userId,
+      })
+      .onConflict((oc) =>
+        oc.columns(['projectId', 'userId']).doUpdateSet({
+          role: options.role,
+          updatedAt: new Date(),
+        }),
+      )
+      .execute();
+
+    return this.getMember(projectId, options.userId);
+  }
+
+  async updateMember(projectId: string, userId: string, role: ProjectRole) {
+    const member = await this.db
+      .updateTable('project_members')
+      .set({ role, updatedAt: new Date() })
+      .where('projectId', '=', projectId)
+      .where('userId', '=', userId)
+      .returning('userId')
+      .executeTakeFirst();
+
+    return member ? this.getMember(projectId, member.userId) : undefined;
+  }
+
+  async removeMember(projectId: string, userId: string): Promise<boolean> {
+    const result = await this.db
+      .deleteFrom('project_members')
+      .where('projectId', '=', projectId)
+      .where('userId', '=', userId)
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows) > 0;
+  }
+
+  async getProjectOwnerCount(projectId: string): Promise<number> {
+    const row = await this.db
+      .selectFrom('project_members')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('projectId', '=', projectId)
+      .where('role', '=', ProjectRole.Owner)
+      .executeTakeFirstOrThrow();
+
+    return Number(row.count);
   }
 
   private getById(projectId: string) {

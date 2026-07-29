@@ -1,5 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
-import type { ProjectCreateDto, ProjectResponseDto, ProjectUpdateDto } from '@tabliodb/sdk';
+import type {
+  ProjectCreateDto,
+  ProjectMemberCreateDto,
+  ProjectMemberUpdateDto,
+  ProjectResponseDto,
+  ProjectUpdateDto,
+} from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { projectsKeys } from './project.keys';
@@ -8,6 +14,12 @@ const createProjectMutationFn = (body: ProjectCreateDto) => sdk.projects.create(
 const updateProjectMutationFn = (input: { body: ProjectUpdateDto; projectId: string }) =>
   sdk.projects.update(input.projectId, input.body);
 const archiveProjectMutationFn = (projectId: string) => sdk.projects.archive(projectId);
+const addProjectMemberMutationFn = (input: { body: ProjectMemberCreateDto; projectId: string }) =>
+  sdk.projects.addMember(input.projectId, input.body);
+const updateProjectMemberMutationFn = (input: { body: ProjectMemberUpdateDto; projectId: string; userId: string }) =>
+  sdk.projects.updateMember(input.projectId, input.userId, input.body);
+const removeProjectMemberMutationFn = (input: { projectId: string; userId: string }) =>
+  sdk.projects.removeMember(input.projectId, input.userId);
 const starterProjectsKey = projectsKeys.list({ limit: 50 });
 
 type UseCreateProjectMutationParams = {
@@ -63,6 +75,54 @@ export function useArchiveProjectMutation(params: UseArchiveProjectMutationParam
         (current ?? []).filter((project) => project.id !== variables),
       );
       queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+type UseAddProjectMemberMutationParams = {
+  mutationConfig?: MutationConfig<typeof addProjectMemberMutationFn>;
+};
+
+export function useAddProjectMemberMutation(params: UseAddProjectMemberMutationParams = {}) {
+  return useMutation({
+    mutationFn: addProjectMemberMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Member management memakai query terpisah dari project list agar cache sidebar tidak ikut churn.
+      queryClient.invalidateQueries({ queryKey: projectsKeys.membersRoot(variables.projectId) });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+type UseUpdateProjectMemberMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateProjectMemberMutationFn>;
+};
+
+export function useUpdateProjectMemberMutation(params: UseUpdateProjectMemberMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateProjectMemberMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Role change harus muncul segera di settings agar owner tahu perubahan akses sudah diterima server.
+      queryClient.invalidateQueries({ queryKey: projectsKeys.membersRoot(variables.projectId) });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+type UseRemoveProjectMemberMutationParams = {
+  mutationConfig?: MutationConfig<typeof removeProjectMemberMutationFn>;
+};
+
+export function useRemoveProjectMemberMutation(params: UseRemoveProjectMemberMutationParams = {}) {
+  return useMutation({
+    mutationFn: removeProjectMemberMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Removing a user changes only the member list, so we scope invalidation narrowly to that project.
+      queryClient.invalidateQueries({ queryKey: projectsKeys.membersRoot(variables.projectId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

@@ -187,6 +187,30 @@ export type ProjectUpdateDto = {
 export type ProjectArchiveResponseDtoOutput = {
   successful: boolean;
 };
+export type ProjectMemberDtoOutput = {
+  userId: string;
+  email: string;
+  name: string;
+  avatarColor: string | null;
+  role: Role;
+  createdAt: string;
+  updatedAt: string;
+};
+export type ProjectMemberListResponseDtoOutput = {
+  items: ProjectMemberDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type ProjectMemberCreateDto = {
+  email: string;
+  role?: Role;
+};
+export type ProjectMemberUpdateDto = {
+  role: Role;
+};
+export type ProjectMemberRemoveResponseDtoOutput = {
+  successful: boolean;
+};
 export type DiagramListResponseDtoOutput = {
   items: DiagramResponseDtoOutput[];
   nextCursor: string | null;
@@ -859,6 +883,105 @@ export function archiveProject(
     }),
   );
 }
+export function getProjectMembers(
+  {
+    cursor,
+    limit,
+    projectId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    projectId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: ProjectMemberListResponseDtoOutput;
+    }>(
+      `/projects/${encodeURIComponent(projectId)}/members${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function addProjectMember(
+  {
+    projectId,
+    projectMemberCreateDto,
+  }: {
+    projectId: string;
+    projectMemberCreateDto: ProjectMemberCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: ProjectMemberDtoOutput;
+    }>(
+      `/projects/${encodeURIComponent(projectId)}/members`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: projectMemberCreateDto,
+      }),
+    ),
+  );
+}
+export function updateProjectMember(
+  {
+    userId,
+    projectId,
+    projectMemberUpdateDto,
+  }: {
+    userId: string;
+    projectId: string;
+    projectMemberUpdateDto: ProjectMemberUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: ProjectMemberDtoOutput;
+    }>(
+      `/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: projectMemberUpdateDto,
+      }),
+    ),
+  );
+}
+export function removeProjectMember(
+  {
+    userId,
+    projectId,
+  }: {
+    userId: string;
+    projectId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ProjectMemberRemoveResponseDtoOutput;
+    }>(`/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
 export function getProjectDiagrams(
   {
     cursor,
@@ -1034,6 +1157,7 @@ export enum Permissions {
   ProjectRead = 'project.read',
   ProjectUpdate = 'project.update',
   ProjectDelete = 'project.delete',
+  ProjectMemberManage = 'project.member.manage',
   DiagramCreate = 'diagram.create',
   DiagramRead = 'diagram.read',
   DiagramUpdate = 'diagram.update',
@@ -1072,6 +1196,12 @@ export enum Status {
   Accepted = 'accepted',
   Revoked = 'revoked',
   Expired = 'expired',
+}
+export enum Role {
+  Owner = 'owner',
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
 }
 export enum SignupPolicy {
   SignupDisabled = 'signup_disabled',

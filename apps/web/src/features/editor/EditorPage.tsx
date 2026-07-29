@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DiagramModel } from '@tabliodb/schema-core';
-import { TabliodbApiError, type ProjectResponseDto } from '@tabliodb/sdk';
+import { ProjectRole } from '@tabliodb/shared';
+import { TabliodbApiError, type ProjectMemberDto, type ProjectResponseDto } from '@tabliodb/sdk';
 import { generateCreateSchemaSql } from '@tabliodb/sql';
 import {
+  Badge,
   Button,
   Dialog,
   DialogContent,
@@ -39,21 +41,27 @@ import {
   Settings,
   Share2,
   ShieldCheck,
+  Trash2,
+  UserPlus,
+  UsersRound,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
-import { ControlledInput, ControlledTextarea } from '@/features/app/FormControls';
+import { ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
 import { defaultDiagramName, diagramsQueries } from '@/resources/diagrams';
 import {
   defaultProjectName,
   projectsQueries,
+  useAddProjectMemberMutation,
   useArchiveProjectMutation,
   useCreateProjectMutation,
+  useRemoveProjectMemberMutation,
+  useUpdateProjectMemberMutation,
   useUpdateProjectMutation,
 } from '@/resources/projects';
 import { snapshotsQueries, useCreateSnapshotMutation } from '@/resources/snapshots';
@@ -73,6 +81,25 @@ const projectFormSchema = z.object({
 });
 
 type ProjectFormState = z.infer<typeof projectFormSchema>;
+
+const memberFormSchema = z.object({
+  email: z.string().trim().email('Enter a valid email.'),
+  role: z.enum([ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]),
+});
+
+type MemberFormState = z.infer<typeof memberFormSchema>;
+
+const memberFormDefaults: MemberFormState = {
+  email: '',
+  role: ProjectRole.Viewer,
+};
+
+const projectRoleOptions = [ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
+
+const projectMemberPageQuery = { limit: 50 } as const;
+
+const selectClassName =
+  'h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)] disabled:cursor-not-allowed disabled:opacity-50';
 
 export function EditorPage() {
   const navigate = useNavigate();
@@ -241,23 +268,23 @@ export function EditorPage() {
           ) : (
             <div className="space-y-1">
               {filteredProjects.map((project) => (
-              <button
-                className={`flex w-full cursor-pointer items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
-                  project.id === activeProject?.id
-                    ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
-                    : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
-                }`}
-                key={project.id}
-                onClick={() => {
-                  setModel(null);
-                  setSelectedTableId(null);
-                  navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
-                }}
-                type="button"
-              >
-                <span className="min-w-0 truncate">{project.name}</span>
-                <span className="text-xs opacity-70">{project.slug}</span>
-              </button>
+                <button
+                  className={`flex w-full cursor-pointer items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
+                    project.id === activeProject?.id
+                      ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
+                      : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
+                  }`}
+                  key={project.id}
+                  onClick={() => {
+                    setModel(null);
+                    setSelectedTableId(null);
+                    navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+                  }}
+                  type="button"
+                >
+                  <span className="min-w-0 truncate">{project.name}</span>
+                  <span className="text-xs opacity-70">{project.slug}</span>
+                </button>
               ))}
             </div>
           )}
@@ -489,13 +516,7 @@ function CreateProjectDialog({ onCreated }: { onCreated: (project: ProjectRespon
   );
 }
 
-function ProjectSettingsDialog({
-  onArchived,
-  project,
-}: {
-  onArchived: () => void;
-  project: ProjectResponseDto;
-}) {
+function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void; project: ProjectResponseDto }) {
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [open, setOpen] = useState(false);
   const form = useForm<ProjectFormState>({
@@ -503,15 +524,29 @@ function ProjectSettingsDialog({
     mode: 'onBlur',
     resolver: zodResolver(projectFormSchema),
   });
+  const memberForm = useForm<MemberFormState>({
+    defaultValues: memberFormDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(memberFormSchema),
+  });
   const { errors } = form.formState;
+  const { errors: memberErrors } = memberForm.formState;
+  const membersQueryOptions = projectsQueries.members(project.id, projectMemberPageQuery);
+  const membersQuery = useQuery({
+    ...membersQueryOptions,
+    // Member list is only needed while the modal is visible, so opening settings becomes the fetch boundary.
+    enabled: open && membersQueryOptions.enabled !== false,
+  });
+  const members = membersQuery.data?.items ?? [];
 
   useEffect(() => {
     if (open) {
       // Opening settings always reflects the latest project data from query cache.
       form.reset(getProjectFormDefaults(project));
+      memberForm.reset(memberFormDefaults);
       setConfirmArchive(false);
     }
-  }, [form, open, project]);
+  }, [form, memberForm, open, project]);
 
   const updateProjectMutation = useUpdateProjectMutation({
     mutationConfig: {
@@ -528,15 +563,38 @@ function ProjectSettingsDialog({
       },
     },
   });
+  const addProjectMemberMutation = useAddProjectMemberMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        // Keep the role sticky at viewer after add so repeated safe invites are quick, but clear the consumed email.
+        memberForm.reset(memberFormDefaults);
+      },
+    },
+  });
+  const updateProjectMemberMutation = useUpdateProjectMemberMutation();
+  const removeProjectMemberMutation = useRemoveProjectMemberMutation();
+  const isProjectMutationPending = updateProjectMutation.isPending || archiveProjectMutation.isPending;
+  const isMemberMutationPending =
+    addProjectMemberMutation.isPending ||
+    updateProjectMemberMutation.isPending ||
+    removeProjectMemberMutation.isPending;
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && (isProjectMutationPending || isMemberMutationPending)) {
+      return;
+    }
+
     setOpen(nextOpen);
 
-    if (!nextOpen && !updateProjectMutation.isPending && !archiveProjectMutation.isPending) {
+    if (!nextOpen) {
       form.reset(getProjectFormDefaults(project));
+      memberForm.reset(memberFormDefaults);
       setConfirmArchive(false);
       updateProjectMutation.reset();
       archiveProjectMutation.reset();
+      addProjectMemberMutation.reset();
+      updateProjectMemberMutation.reset();
+      removeProjectMemberMutation.reset();
     }
   }
 
@@ -559,20 +617,53 @@ function ProjectSettingsDialog({
     archiveProjectMutation.mutate(project.id);
   }
 
+  function handleAddMember(values: MemberFormState) {
+    addProjectMemberMutation.mutate({
+      body: {
+        email: values.email,
+        role: values.role,
+      },
+      projectId: project.id,
+    });
+  }
+
+  function handleUpdateMemberRole(member: ProjectMemberDto, role: ProjectRole) {
+    if (member.role === role) {
+      return;
+    }
+
+    updateProjectMemberMutation.mutate({
+      body: { role },
+      projectId: project.id,
+      userId: member.userId,
+    });
+  }
+
+  function handleRemoveMember(member: ProjectMemberDto) {
+    removeProjectMemberMutation.mutate({
+      projectId: project.id,
+      userId: member.userId,
+    });
+  }
+
   const mutationError = updateProjectMutation.error ?? archiveProjectMutation.error;
+  const memberMutationError =
+    addProjectMemberMutation.error ?? updateProjectMemberMutation.error ?? removeProjectMemberMutation.error;
+  const updatingUserId = updateProjectMemberMutation.isPending ? updateProjectMemberMutation.variables?.userId : null;
+  const removingUserId = removeProjectMemberMutation.isPending ? removeProjectMemberMutation.variables?.userId : null;
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
         <IconButton icon={Settings} label="Project settings" variant="secondary" />
       </DialogTrigger>
-      <DialogContent className="w-[min(94vw,560px)]">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
-          <DialogHeader>
-            <DialogTitle>Project settings</DialogTitle>
-            <DialogDescription>Update project details or archive it from the active workspace.</DialogDescription>
-          </DialogHeader>
+      <DialogContent className="max-h-[88vh] w-[min(94vw,680px)] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Project settings</DialogTitle>
+          <DialogDescription>Manage project details, access, and archive state.</DialogDescription>
+        </DialogHeader>
 
+        <form id="project-settings-form" onSubmit={form.handleSubmit(handleSubmit)}>
           <label className="mt-4 block text-sm">
             <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Project name
@@ -580,7 +671,7 @@ function ProjectSettingsDialog({
             <ControlledInput
               aria-invalid={Boolean(errors.name)}
               control={form.control}
-              disabled={updateProjectMutation.isPending || archiveProjectMutation.isPending}
+              disabled={isProjectMutationPending}
               name="name"
             />
             <FieldError>{errors.name?.message}</FieldError>
@@ -594,7 +685,7 @@ function ProjectSettingsDialog({
               aria-invalid={Boolean(errors.description)}
               className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
               control={form.control}
-              disabled={updateProjectMutation.isPending || archiveProjectMutation.isPending}
+              disabled={isProjectMutationPending}
               name="description"
             />
             <FieldError>{errors.description?.message}</FieldError>
@@ -605,41 +696,141 @@ function ProjectSettingsDialog({
               {getErrorMessage(mutationError)}
             </div>
           ) : null}
+        </form>
 
-          <DialogFooter className="mt-5 justify-between sm:justify-between">
-            <Button
-              disabled={updateProjectMutation.isPending || archiveProjectMutation.isPending}
-              onClick={handleArchive}
-              type="button"
-              variant={confirmArchive ? 'danger' : 'secondary'}
-            >
-              {archiveProjectMutation.isPending ? (
+        <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-extrabold">
+                <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+                Project members
+              </h3>
+              <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                {membersQuery.data?.totalCount ?? members.length} people with direct project access
+              </p>
+            </div>
+            <Badge variant="green">{members.length} loaded</Badge>
+          </div>
+
+          <form
+            className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
+            onSubmit={memberForm.handleSubmit(handleAddMember)}
+          >
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Email
+              </span>
+              <ControlledInput
+                aria-invalid={Boolean(memberErrors.email)}
+                autoComplete="email"
+                control={memberForm.control}
+                disabled={isMemberMutationPending}
+                name="email"
+                placeholder="teammate@example.com"
+                type="email"
+              />
+              <FieldError>{memberErrors.email?.message}</FieldError>
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Role
+              </span>
+              <ControlledSelect
+                className={selectClassName}
+                control={memberForm.control}
+                disabled={isMemberMutationPending}
+                name="role"
+              >
+                {projectRoleOptions.map((role) => (
+                  <option key={role} value={role}>
+                    {formatProjectRole(role)}
+                  </option>
+                ))}
+              </ControlledSelect>
+            </label>
+            <Button className="self-start sm:mt-6" disabled={isMemberMutationPending} type="submit">
+              {addProjectMemberMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
-                <Archive className="size-4" />
+                <UserPlus className="size-4" />
               )}
-              {confirmArchive ? 'Confirm archive' : 'Archive'}
+              Add
             </Button>
-            <div className="flex gap-2">
-              <Button
-                disabled={updateProjectMutation.isPending || archiveProjectMutation.isPending}
-                onClick={() => handleOpenChange(false)}
-                type="button"
-                variant="secondary"
-              >
-                Cancel
-              </Button>
-              <Button disabled={updateProjectMutation.isPending || archiveProjectMutation.isPending} type="submit">
-                {updateProjectMutation.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Save className="size-4" />
-                )}
-                Save changes
-              </Button>
+          </form>
+
+          {membersQuery.isPending ? (
+            <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              <Loader2 className="size-4 animate-spin" />
+              Loading members
             </div>
-          </DialogFooter>
-        </form>
+          ) : membersQuery.error ? (
+            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {getErrorMessage(membersQuery.error)}
+            </div>
+          ) : members.length === 0 ? (
+            <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              No project members yet
+            </div>
+          ) : (
+            <div className="mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+              <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                {members.map((member) => (
+                  <ProjectMemberRow
+                    isRemoving={removingUserId === member.userId}
+                    isUpdating={updatingUserId === member.userId}
+                    key={member.userId}
+                    member={member}
+                    onRemove={handleRemoveMember}
+                    onRoleChange={handleUpdateMemberRole}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {memberMutationError ? (
+            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {getErrorMessage(memberMutationError)}
+            </div>
+          ) : null}
+        </section>
+
+        <DialogFooter className="mt-1 justify-between sm:justify-between">
+          <Button
+            disabled={isProjectMutationPending || isMemberMutationPending}
+            onClick={handleArchive}
+            variant={confirmArchive ? 'danger' : 'secondary'}
+          >
+            {archiveProjectMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Archive className="size-4" />
+            )}
+            {confirmArchive ? 'Confirm archive' : 'Archive'}
+          </Button>
+          <div className="flex gap-2">
+            <Button
+              disabled={isProjectMutationPending || isMemberMutationPending}
+              onClick={() => handleOpenChange(false)}
+              type="button"
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={isProjectMutationPending || isMemberMutationPending}
+              form="project-settings-form"
+              type="submit"
+            >
+              {updateProjectMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              Save changes
+            </Button>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -655,6 +846,99 @@ function getProjectFormDefaults(project: ProjectResponseDto): ProjectFormState {
 function toOptionalDescription(value: string | undefined): string | undefined {
   const description = value?.trim();
   return description ? description : undefined;
+}
+
+function ProjectMemberRow({
+  isRemoving,
+  isUpdating,
+  member,
+  onRemove,
+  onRoleChange,
+}: {
+  isRemoving: boolean;
+  isUpdating: boolean;
+  member: ProjectMemberDto;
+  onRemove: (member: ProjectMemberDto) => void;
+  onRoleChange: (member: ProjectMemberDto, role: ProjectRole) => void;
+}) {
+  const isBusy = isRemoving || isUpdating;
+
+  return (
+    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center">
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className="grid size-10 shrink-0 place-items-center rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
+          style={member.avatarColor ? { backgroundColor: member.avatarColor } : undefined}
+        >
+          {getMemberInitials(member)}
+        </div>
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h4 className="truncate text-sm font-extrabold">{member.name}</h4>
+            <ProjectRoleBadge role={member.role} />
+          </div>
+          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
+        </div>
+      </div>
+      <select
+        className={selectClassName}
+        disabled={isBusy}
+        onChange={(event) => onRoleChange(member, event.currentTarget.value as ProjectRole)}
+        value={member.role}
+      >
+        {projectRoleOptions.map((role) => (
+          <option key={role} value={role}>
+            {formatProjectRole(role)}
+          </option>
+        ))}
+      </select>
+      <Button
+        aria-label={`Remove ${member.name}`}
+        disabled={isBusy}
+        onClick={() => onRemove(member)}
+        size="icon"
+        variant="ghost"
+      >
+        {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+      </Button>
+    </article>
+  );
+}
+
+function ProjectRoleBadge({ role }: { role: ProjectRole }) {
+  if (role === ProjectRole.Owner) {
+    return <Badge variant="yellow">{formatProjectRole(role)}</Badge>;
+  }
+
+  if (role === ProjectRole.Editor) {
+    return <Badge variant="green">{formatProjectRole(role)}</Badge>;
+  }
+
+  if (role === ProjectRole.Commenter) {
+    return <Badge variant="blue">{formatProjectRole(role)}</Badge>;
+  }
+
+  return <Badge>{formatProjectRole(role)}</Badge>;
+}
+
+function formatProjectRole(role: ProjectRole): string {
+  return {
+    [ProjectRole.Commenter]: 'Commenter',
+    [ProjectRole.Editor]: 'Editor',
+    [ProjectRole.Owner]: 'Owner',
+    [ProjectRole.Viewer]: 'Viewer',
+  }[role];
+}
+
+function getMemberInitials(member: ProjectMemberDto): string {
+  const source = member.name.trim() || member.email;
+
+  return source
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
 }
 
 function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }) {

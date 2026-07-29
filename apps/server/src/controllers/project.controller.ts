@@ -9,6 +9,12 @@ import {
   ProjectCreateDto,
   ProjectListQueryDto,
   ProjectListResponseDto,
+  ProjectMemberCreateDto,
+  ProjectMemberDto,
+  ProjectMemberListQueryDto,
+  ProjectMemberListResponseDto,
+  ProjectMemberRemoveResponseDto,
+  ProjectMemberUpdateDto,
   ProjectResponseDto,
   ProjectUpdateDto,
 } from '../dtos/project.dto.js';
@@ -63,6 +69,65 @@ export class ProjectController {
   @ZodResponse({ status: HttpStatus.OK, type: ProjectArchiveResponseDto })
   archiveProject(@Auth() auth: AuthContext, @Param('projectId') projectId: string): Promise<ProjectArchiveResponseDto> {
     return this.projectService.archive(auth, projectId);
+  }
+
+  @Get(':projectId/members')
+  @RequirePermission(Permission.ProjectMemberManage, { key: 'projectId', source: 'param', type: 'project' })
+  @ApiParam({ name: 'projectId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getProjectMembers' })
+  @ZodResponse({ type: ProjectMemberListResponseDto })
+  getProjectMembers(
+    @Auth() auth: AuthContext,
+    @Param('projectId') projectId: string,
+    @Query() query: ProjectMemberListQueryDto,
+  ): Promise<ProjectMemberListResponseDto> {
+    return this.projectService.getMembers(auth, projectId, query);
+  }
+
+  @Post(':projectId/members')
+  @RequirePermission(Permission.ProjectMemberManage, { key: 'projectId', source: 'param', type: 'project' })
+  @ApiParam({ name: 'projectId', type: String })
+  @ApiBody({ type: ProjectMemberCreateDto })
+  @ApiOperation({ operationId: 'addProjectMember' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: ProjectMemberDto })
+  addProjectMember(
+    @Auth() auth: AuthContext,
+    @Param('projectId') projectId: string,
+    @Body() dto: ProjectMemberCreateDto,
+  ): Promise<ProjectMemberDto> {
+    return this.projectService.addMember(auth, projectId, dto);
+  }
+
+  @Patch(':projectId/members/:userId')
+  @RequirePermission(Permission.ProjectMemberManage, { key: 'projectId', source: 'param', type: 'project' })
+  @ApiParam({ name: 'projectId', type: String })
+  @ApiParam({ name: 'userId', type: String })
+  @ApiBody({ type: ProjectMemberUpdateDto })
+  @ApiOperation({ operationId: 'updateProjectMember' })
+  @ZodResponse({ type: ProjectMemberDto })
+  updateProjectMember(
+    @Auth() auth: AuthContext,
+    @Param('projectId') projectId: string,
+    @Param('userId') userId: string,
+    @Body() dto: ProjectMemberUpdateDto,
+  ): Promise<ProjectMemberDto> {
+    return this.projectService.updateMember(auth, projectId, userId, dto);
+  }
+
+  @Delete(':projectId/members/:userId')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission(Permission.ProjectMemberManage, { key: 'projectId', source: 'param', type: 'project' })
+  @ApiParam({ name: 'projectId', type: String })
+  @ApiParam({ name: 'userId', type: String })
+  @ApiOperation({ operationId: 'removeProjectMember' })
+  @ZodResponse({ status: HttpStatus.OK, type: ProjectMemberRemoveResponseDto })
+  removeProjectMember(
+    @Auth() auth: AuthContext,
+    @Param('projectId') projectId: string,
+    @Param('userId') userId: string,
+  ): Promise<ProjectMemberRemoveResponseDto> {
+    return this.projectService.removeMember(auth, projectId, userId);
   }
 
   @Get(':projectId/diagrams')

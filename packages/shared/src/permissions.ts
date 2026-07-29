@@ -20,6 +20,7 @@ export enum Permission {
   ProjectRead = 'project.read',
   ProjectUpdate = 'project.update',
   ProjectDelete = 'project.delete',
+  ProjectMemberManage = 'project.member.manage',
   DiagramCreate = 'diagram.create',
   DiagramRead = 'diagram.read',
   DiagramUpdate = 'diagram.update',
