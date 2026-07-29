@@ -11,6 +11,13 @@ const ProjectCreateSchema = z
   })
   .meta({ id: 'ProjectCreateDto' });
 
+const ProjectUpdateSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    description: z.string().nullable().optional(),
+  })
+  .meta({ id: 'ProjectUpdateDto' });
+
 const ProjectResponseSchema = z
   .object({
     id: z.string().uuid(),
@@ -40,7 +47,15 @@ const ProjectListResponseSchema = z
   })
   .meta({ id: 'ProjectListResponseDto' });
 
+const ProjectArchiveResponseSchema = z
+  .object({
+    successful: z.boolean(),
+  })
+  .meta({ id: 'ProjectArchiveResponseDto' });
+
+export class ProjectArchiveResponseDto extends createZodDto(ProjectArchiveResponseSchema) {}
 export class ProjectCreateDto extends createZodDto(ProjectCreateSchema) {}
 export class ProjectListQueryDto extends createZodDto(ProjectListQuerySchema) {}
 export class ProjectListResponseDto extends createZodDto(ProjectListResponseSchema) {}
 export class ProjectResponseDto extends createZodDto(ProjectResponseSchema) {}
+export class ProjectUpdateDto extends createZodDto(ProjectUpdateSchema) {}

@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthContext } from '../database.js';
 import {
+  ProjectArchiveResponseDto,
   ProjectCreateDto,
   ProjectListQueryDto,
   ProjectListResponseDto,
   ProjectResponseDto,
+  ProjectUpdateDto,
 } from '../dtos/project.dto.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
@@ -55,6 +57,38 @@ export class ProjectService {
     });
 
     return this.serializeProject(project);
+  }
+
+  async update(_auth: AuthContext, projectId: string, dto: ProjectUpdateDto): Promise<ProjectResponseDto> {
+    if (dto.name === undefined && dto.description === undefined) {
+      throw new BadRequestException('At least one project field is required');
+    }
+
+    const nextName = dto.name?.trim();
+    if (dto.name !== undefined && !nextName) {
+      throw new BadRequestException('Project name is required');
+    }
+
+    const project = await this.projectRepository.update(projectId, {
+      description: dto.description === undefined ? undefined : dto.description?.trim() || null,
+      name: nextName,
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return this.serializeProject(project);
+  }
+
+  async archive(_auth: AuthContext, projectId: string): Promise<ProjectArchiveResponseDto> {
+    const archived = await this.projectRepository.archive(projectId);
+
+    if (!archived) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return { successful: true };
   }
 
   async requireProject(auth: AuthContext, projectId: string) {

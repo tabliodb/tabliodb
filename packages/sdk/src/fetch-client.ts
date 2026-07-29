@@ -180,6 +180,13 @@ export type ProjectCreateDto = {
   name: string;
   description?: string;
 };
+export type ProjectUpdateDto = {
+  name?: string;
+  description?: string | null;
+};
+export type ProjectArchiveResponseDtoOutput = {
+  successful: boolean;
+};
 export type DiagramListResponseDtoOutput = {
   items: DiagramResponseDtoOutput[];
   nextCursor: string | null;
@@ -808,6 +815,48 @@ export function createProject(
         body: projectCreateDto,
       }),
     ),
+  );
+}
+export function updateProject(
+  {
+    projectId,
+    projectUpdateDto,
+  }: {
+    projectId: string;
+    projectUpdateDto: ProjectUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: ProjectResponseDtoOutput;
+    }>(
+      `/projects/${encodeURIComponent(projectId)}`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: projectUpdateDto,
+      }),
+    ),
+  );
+}
+export function archiveProject(
+  {
+    projectId,
+  }: {
+    projectId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ProjectArchiveResponseDtoOutput;
+    }>(`/projects/${encodeURIComponent(projectId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
   );
 }
 export function getProjectDiagrams(
