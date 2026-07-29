@@ -64,6 +64,49 @@ describe('schema-core diagram commands', () => {
     expect(nextModel.tables.books.width).toBe(240);
   });
 
+  it('updates a column without mutating the previous model', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Column update test'),
+      {
+        type: 'table.create',
+        tableId: 'users',
+        name: 'users',
+        columns: [{ id: 'users-name', name: 'name', type: { family: 'varchar', length: 120 }, nullable: true }],
+      },
+      { now: fixedNow },
+    );
+    const nextModel = applyDiagramCommand(
+      model,
+      {
+        type: 'column.update',
+        columnId: 'users-name',
+        changes: {
+          defaultValue: "'anonymous'",
+          name: 'display_name',
+          nullable: false,
+          type: { family: 'varchar', length: 180 },
+          unique: true,
+        },
+      },
+      { now: () => '2026-07-29T01:00:00.000Z' },
+    );
+
+    // The command API is immutable so optimistic UI, undo, and realtime sync can compare old/new model snapshots safely.
+    expect(model.columns['users-name']).toMatchObject({
+      name: 'name',
+      nullable: true,
+      unique: false,
+    });
+    expect(nextModel.columns['users-name']).toMatchObject({
+      defaultValue: "'anonymous'",
+      name: 'display_name',
+      nullable: false,
+      type: { family: 'varchar', length: 180 },
+      unique: true,
+    });
+    expect(nextModel.metadata.updatedAt).toBe('2026-07-29T01:00:00.000Z');
+  });
+
   it('deletes a column and removes dependent relationships and empty indexes', () => {
     const modelWithTables = applyDiagramCommand(
       applyDiagramCommand(
