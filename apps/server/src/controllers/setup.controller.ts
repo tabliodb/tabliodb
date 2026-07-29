@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { ZodResponse } from 'nestjs-zod';
 import { AuthType } from '../constants.js';
 import { SetupCreateDto, SetupCreateResponseDto, SetupStatusResponseDto } from '../dtos/setup.dto.js';
 import { SetupService } from '../services/setup.service.js';
@@ -12,12 +13,17 @@ export class SetupController {
   constructor(private readonly service: SetupService) {}
 
   @Get()
+  @ApiOperation({ operationId: 'getSetupStatus' })
+  @ZodResponse({ type: SetupStatusResponseDto })
   getStatus(): Promise<SetupStatusResponseDto> {
     return this.service.getStatus();
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: SetupCreateDto })
+  @ApiOperation({ operationId: 'completeSetup' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: SetupCreateResponseDto })
   async complete(
     @Res({ passthrough: true }) res: Response,
     @Body() dto: SetupCreateDto,

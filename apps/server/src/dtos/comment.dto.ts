@@ -1,11 +1,13 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+const DateTimeSchema = z.iso.datetime({ offset: true });
+
 const CommentThreadCreateSchema = z
   .object({
     diagramId: z.string().uuid(),
     targetType: z.enum(['table', 'column', 'relationship', 'enum', 'note', 'diagram']),
-    targetId: z.string(),
+    targetId: z.string().nullable(),
     body: z.string().min(1),
   })
   .meta({ id: 'CommentThreadCreateDto' });
@@ -16,17 +18,17 @@ const CommentThreadResponseSchema = z
       id: z.string().uuid(),
       diagramId: z.string().uuid(),
       targetType: z.string(),
-      targetId: z.string(),
-      resolvedAt: z.date().nullable(),
-      createdAt: z.date(),
-      updatedAt: z.date(),
+      targetId: z.string().nullable(),
+      resolvedAt: DateTimeSchema.nullable(),
+      createdAt: DateTimeSchema,
+      updatedAt: DateTimeSchema,
     }),
     comment: z.object({
       id: z.string().uuid(),
       threadId: z.string().uuid(),
       body: z.string(),
-      createdAt: z.date(),
-      updatedAt: z.date(),
+      createdAt: DateTimeSchema,
+      updatedAt: DateTimeSchema,
     }),
   })
   .meta({ id: 'CommentThreadResponseDto' });
@@ -38,9 +40,9 @@ const CommentThreadListItemSchema = z
     targetType: z.string(),
     targetId: z.string().nullable(),
     status: z.string(),
-    resolvedAt: z.date().nullable(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    resolvedAt: DateTimeSchema.nullable(),
+    createdAt: DateTimeSchema,
+    updatedAt: DateTimeSchema,
   })
   .meta({ id: 'CommentThreadListItemDto' });
 

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { ZodResponse } from 'nestjs-zod';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
@@ -23,11 +24,16 @@ export class AuthController {
 
   @Get('me')
   @Authenticated()
+  @ApiOperation({ operationId: 'getCurrentUser' })
+  @ZodResponse({ type: CurrentUserResponseDto })
   getCurrentUser(@Auth() auth: AuthContext): CurrentUserResponseDto {
     return auth.user;
   }
 
   @Post('sign-up')
+  @ApiBody({ type: SignUpDto })
+  @ApiOperation({ operationId: 'signUp' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: LoginResponseDto })
   async signUp(@Res({ passthrough: true }) res: Response, @Body() dto: SignUpDto): Promise<LoginResponseDto> {
     const body = await this.service.signUp(dto);
     return respondWithAuthCookies(res, body, {
@@ -39,6 +45,9 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: LoginCredentialDto })
+  @ApiOperation({ operationId: 'login' })
+  @ZodResponse({ status: HttpStatus.OK, type: LoginResponseDto })
   async login(@Res({ passthrough: true }) res: Response, @Body() dto: LoginCredentialDto): Promise<LoginResponseDto> {
     const body = await this.service.login(dto);
     return respondWithAuthCookies(res, body, {
@@ -51,6 +60,8 @@ export class AuthController {
   @Post('logout')
   @Authenticated()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: 'logout' })
+  @ZodResponse({ status: HttpStatus.OK, type: LogoutResponseDto })
   async logout(@Res({ passthrough: true }) res: Response, @Auth() auth: AuthContext): Promise<LogoutResponseDto> {
     await this.service.logout(auth);
     return clearAuthCookies(res, { successful: true });
@@ -58,6 +69,9 @@ export class AuthController {
 
   @Post('api-keys')
   @Authenticated()
+  @ApiBody({ type: ApiKeyCreateDto })
+  @ApiOperation({ operationId: 'createApiKey' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: ApiKeyCreateResponseDto })
   createApiKey(@Auth() auth: AuthContext, @Body() dto: ApiKeyCreateDto): Promise<ApiKeyCreateResponseDto> {
     return this.service.createApiKey(auth, dto);
   }

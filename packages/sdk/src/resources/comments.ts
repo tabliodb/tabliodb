@@ -1,30 +1,26 @@
 import type { Paginated, PaginationQuery } from '@tabliodb/shared';
-import type { TabliodbClient } from '../fetch-client.js';
+import type { RequestOpts } from '@oazapfts/runtime';
+import {
+  createCommentThread as createCommentThreadRequest,
+  getCommentThreads,
+  type CommentThreadCreateDto as GeneratedCommentThreadCreateDto,
+  type CommentThreadListItemDtoOutput,
+  type CommentThreadListResponseDtoOutput,
+  type CommentThreadResponseDtoOutput,
+} from '../fetch-client.js';
 
-export type CommentThreadCreateDto = {
-  diagramId: string;
-  targetType: 'table' | 'column' | 'relationship' | 'enum' | 'note' | 'diagram';
-  targetId: string | null;
-  body: string;
-};
+export type CommentThreadCreateDto = GeneratedCommentThreadCreateDto;
 
-export type CommentThreadListItemDto = {
-  createdAt: string;
-  diagramId: string;
-  id: string;
-  resolvedAt: string | null;
-  status: string;
-  targetId: string;
-  targetType: string;
-  updatedAt: string;
-};
+export type CommentThreadResponseDto = CommentThreadResponseDtoOutput;
+export type CommentThreadListItemDto = CommentThreadListItemDtoOutput;
 
 export type CommentThreadListResponseDto = Paginated<CommentThreadListItemDto>;
 
-export function createCommentsResource(client: TabliodbClient) {
+export function createCommentsResource(opts?: RequestOpts) {
   return {
-    createThread: (body: CommentThreadCreateDto) => client.request('/comments/threads', { body, method: 'POST' }),
+    createThread: (body: CommentThreadCreateDto) =>
+      createCommentThreadRequest({ commentThreadCreateDto: body }, opts) as Promise<CommentThreadResponseDto>,
     listThreads: (diagramId: string, query: PaginationQuery = {}) =>
-      client.request<CommentThreadListResponseDto>(`/comments/diagram/${diagramId}/threads`, { query }),
+      getCommentThreads({ diagramId, ...query }, opts) as Promise<CommentThreadListResponseDtoOutput>,
   };
 }

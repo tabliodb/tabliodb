@@ -11,6 +11,7 @@
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "db:migrate": "tsx src/bin/migrate.ts",
+    "openapi:sync": "tsx src/bin/sync-open-api.ts",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

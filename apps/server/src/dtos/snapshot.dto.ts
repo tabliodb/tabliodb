@@ -2,6 +2,8 @@ import { DiagramModelSchema } from '@tabliodb/schema-core';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+const DateTimeSchema = z.iso.datetime({ offset: true });
+
 const SnapshotCreateSchema = z
   .object({
     diagramId: z.string().uuid(),
@@ -17,7 +19,7 @@ const SnapshotResponseSchema = z
     version: z.number(),
     message: z.string().nullable(),
     snapshot: DiagramModelSchema,
-    createdAt: z.date(),
+    createdAt: DateTimeSchema,
   })
   .meta({ id: 'SnapshotResponseDto' });
 

@@ -8,7 +8,7 @@ Tabliodb adalah open-source collaborative database schema designer: AntV X6 untu
 - `apps/web`: React + Vite editor experience.
 - `packages/schema-core`: canonical database schema model yang dipakai web, server, realtime, import/export, dan history.
 - `packages/sql`: SQL generator/importer surface untuk dialect awal.
-- `packages/sdk`: typed fetch client ala Immich SDK.
+- `packages/sdk`: OpenAPI-generated TypeScript SDK ala Immich.
 - `packages/shared`: permission, API envelope, dan shared constants.
 - `packages/ui`: React UI primitives yang reusable.
 - `e2e`: Playwright API/UI tests.
@@ -45,3 +45,17 @@ Di PowerShell, salin env dengan:
 ```powershell
 Copy-Item docker\example.env .env
 ```
+
+## Generated SDK
+
+SDK TypeScript di `packages/sdk/src/fetch-client.ts` digenerate dari OpenAPI spec server, mengikuti pola Immich. File generated ini jangan diedit manual.
+
+```bash
+npm run openapi:sync
+npm run sdk:generate
+npm run sdk:build
+```
+
+- `npm run openapi:sync` membuat `open-api/tabliodb-openapi-specs.json` dari NestJS controller dan Zod DTO.
+- `npm run sdk:generate` menjalankan sync OpenAPI lalu menulis ulang generated fetch client dengan `oazapfts`.
+- Facade `createTabliodbSdk()` tetap tersedia agar frontend bisa memakai `sdk.auth.login()`, `sdk.projects.list()`, dan resource lain tanpa langsung bergantung ke detail generated function.

@@ -1,5 +1,10 @@
 import type { DatabaseDialect } from '@tabliodb/schema-core';
-import type { TabliodbClient } from '../fetch-client.js';
+import type { RequestOpts } from '@oazapfts/runtime';
+import {
+  createDiagram as createDiagramRequest,
+  type DiagramCreateDto as GeneratedDiagramCreateDto,
+  type DiagramResponseDtoOutput,
+} from '../fetch-client.js';
 
 export type DiagramCreateDto = {
   projectId: string;
@@ -7,17 +12,17 @@ export type DiagramCreateDto = {
   dialect?: DatabaseDialect;
 };
 
-export type DiagramResponseDto = {
-  id: string;
-  projectId: string;
-  name: string;
+export type DiagramResponseDto = Omit<DiagramResponseDtoOutput, 'dialect'> & {
   dialect: DatabaseDialect;
-  createdAt: string;
-  updatedAt: string;
 };
 
-export function createDiagramsResource(client: TabliodbClient) {
+export function createDiagramsResource(opts?: RequestOpts) {
   return {
-    create: (body: DiagramCreateDto) => client.request<DiagramResponseDto>('/diagrams', { body, method: 'POST' }),
+    create: (body: DiagramCreateDto) =>
+      // DatabaseDialect adalah string union domain; generated client memakai enum OpenAPI, wire value-nya tetap sama.
+      createDiagramRequest(
+        { diagramCreateDto: body as GeneratedDiagramCreateDto },
+        opts,
+      ) as Promise<DiagramResponseDto>,
   };
 }

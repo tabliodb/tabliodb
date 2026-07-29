@@ -1,6 +1,8 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+const DateTimeSchema = z.iso.datetime({ offset: true });
+
 const ProjectCreateSchema = z
   .object({
     organizationId: z.string().uuid().optional(),
@@ -18,8 +20,8 @@ const ProjectResponseSchema = z
     name: z.string(),
     slug: z.string(),
     description: z.string().nullable(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    createdAt: DateTimeSchema,
+    updatedAt: DateTimeSchema,
   })
   .meta({ id: 'ProjectResponseDto' });
 

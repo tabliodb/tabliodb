@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import { UserCreateDto, UserListQueryDto, UserListResponseDto, UserResponseDto } from '../dtos/user.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
@@ -12,12 +13,21 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
+  @ApiQuery({ name: 'cursor', required: false, type: String })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ enum: ['owner', 'instance-admin', 'org-admin', 'member'], name: 'role', required: false })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiOperation({ operationId: 'getUsers' })
+  @ZodResponse({ type: UserListResponseDto })
   getUsers(@Auth() auth: AuthContext, @Query() query: UserListQueryDto): Promise<UserListResponseDto> {
     return this.userService.getAll(auth, query);
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: UserCreateDto })
+  @ApiOperation({ operationId: 'createUser' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: UserResponseDto })
   createUser(@Auth() auth: AuthContext, @Body() dto: UserCreateDto): Promise<UserResponseDto> {
     return this.userService.create(auth, dto);
   }

@@ -1,6 +1,13 @@
 import type { DiagramModel } from '@tabliodb/schema-core';
 import type { Paginated, PaginationQuery } from '@tabliodb/shared';
-import type { TabliodbClient } from '../fetch-client.js';
+import type { RequestOpts } from '@oazapfts/runtime';
+import {
+  createSnapshot as createSnapshotRequest,
+  getDiagramSnapshots,
+  type SnapshotCreateDto as GeneratedSnapshotCreateDto,
+  type SnapshotListResponseDtoOutput,
+  type SnapshotResponseDtoOutput,
+} from '../fetch-client.js';
 
 export type SnapshotCreateDto = {
   diagramId: string;
@@ -8,21 +15,21 @@ export type SnapshotCreateDto = {
   snapshot: DiagramModel;
 };
 
-export type SnapshotResponseDto = {
-  id: string;
-  diagramId: string;
-  version: number;
-  message: string | null;
+export type SnapshotResponseDto = Omit<SnapshotResponseDtoOutput, 'snapshot'> & {
   snapshot: DiagramModel;
-  createdAt: string;
 };
 
 export type SnapshotListResponseDto = Paginated<SnapshotResponseDto>;
 
-export function createSnapshotsResource(client: TabliodbClient) {
+export function createSnapshotsResource(opts?: RequestOpts) {
   return {
-    create: (body: SnapshotCreateDto) => client.request<SnapshotResponseDto>('/snapshots', { body, method: 'POST' }),
+    create: (body: SnapshotCreateDto) =>
+      // DiagramModelSchema di OpenAPI menghasilkan enum generated; facade tetap mengekspos tipe domain schema-core ke frontend.
+      createSnapshotRequest(
+        { snapshotCreateDto: body as GeneratedSnapshotCreateDto },
+        opts,
+      ) as Promise<SnapshotResponseDto>,
     listByDiagram: (diagramId: string, query: PaginationQuery = {}) =>
-      client.request<SnapshotListResponseDto>(`/snapshots/diagram/${diagramId}`, { query }),
+      getDiagramSnapshots({ diagramId, ...query }, opts) as Promise<SnapshotListResponseDtoOutput>,
   };
 }

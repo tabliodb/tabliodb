@@ -2,6 +2,8 @@ import { DatabaseDialectSchema } from '@tabliodb/schema-core';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+const DateTimeSchema = z.iso.datetime({ offset: true });
+
 const DiagramCreateSchema = z
   .object({
     projectId: z.string().uuid(),
@@ -16,8 +18,8 @@ const DiagramResponseSchema = z
     projectId: z.string().uuid(),
     name: z.string(),
     dialect: DatabaseDialectSchema,
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    createdAt: DateTimeSchema,
+    updatedAt: DateTimeSchema,
   })
   .meta({ id: 'DiagramResponseDto' });
 

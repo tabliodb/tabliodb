@@ -1,12 +1,2 @@
-import type { ApiErrorResponse } from '@tabliodb/shared';
-
-export class TabliodbApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly response?: ApiErrorResponse,
-  ) {
-    super(message);
-    this.name = 'TabliodbApiError';
-  }
-}
+// Oazapfts melempar HttpError dari runtime generated client; alias ini menjaga API lama frontend tetap `instanceof TabliodbApiError`.
+export { HttpError as TabliodbApiError } from '@oazapfts/runtime';

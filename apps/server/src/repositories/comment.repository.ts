@@ -16,7 +16,7 @@ export class CommentRepository {
   createThreadWithComment(options: {
     diagramId: string;
     targetType: string;
-    targetId: string;
+    targetId: string | null;
     body: string;
     createdById: string;
   }) {

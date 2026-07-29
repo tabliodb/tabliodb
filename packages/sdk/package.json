@@ -1,7 +1,7 @@
 {
   "name": "@tabliodb/sdk",
   "version": "0.1.0",
-  "description": "Typed TypeScript SDK for Tabliodb API.",
+  "description": "OpenAPI-generated TypeScript SDK for Tabliodb API.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,6 +17,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@oazapfts/runtime": "^1.2.0",
     "@tabliodb/schema-core": "file:../schema-core",
     "@tabliodb/shared": "file:../shared"
   },

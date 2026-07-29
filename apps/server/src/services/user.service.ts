@@ -6,6 +6,7 @@ import { UserCreateDto, UserListQueryDto, UserListResponseDto } from '../dtos/us
 import { CryptoRepository } from '../repositories/crypto.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
+import { toIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
 
 @Injectable()
@@ -19,13 +20,18 @@ export class UserService {
   async getAll(auth: AuthContext, query: UserListQueryDto): Promise<UserListResponseDto> {
     await this.requireInstanceManager(auth);
 
-    return this.userRepository.listManagedUsers({
+    const users = await this.userRepository.listManagedUsers({
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
       role: query.role,
       // Empty search diperlakukan seperti tanpa search agar query index-friendly saat field kosong.
       search: query.search?.trim() || undefined,
     });
+
+    return {
+      ...users,
+      items: users.items.map((user) => this.serializeManagedUser(user)),
+    };
   }
 
   async create(auth: AuthContext, dto: UserCreateDto) {
@@ -51,7 +57,7 @@ export class UserService {
 
     const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
 
-    return this.userRepository.createManagedUser({
+    const user = await this.userRepository.createManagedUser({
       avatarColor: '#1cb0f6',
       createdById: auth.user.id,
       email,
@@ -61,6 +67,12 @@ export class UserService {
       organizationRole: dto.organizationRole ?? OrganizationRole.Member,
       passwordHash,
     });
+
+    if (!user) {
+      throw new NotFoundException('Created user could not be loaded');
+    }
+
+    return this.serializeManagedUser(user);
   }
 
   private async requireInstanceManager(auth: AuthContext) {
@@ -71,5 +83,14 @@ export class UserService {
     }
 
     return instanceMember.role;
+  }
+
+  private serializeManagedUser(user: NonNullable<Awaited<ReturnType<UserRepository['getManagedUserById']>>>) {
+    return {
+      ...user,
+      // Admin UI dan generated SDK menerima timestamp sebagai string ISO, selaras dengan bentuk JSON response sebenarnya.
+      createdAt: toIsoDateTime(user.createdAt),
+      updatedAt: toIsoDateTime(user.updatedAt),
+    };
   }
 }

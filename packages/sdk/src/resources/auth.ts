@@ -1,48 +1,46 @@
 import type { Permission } from '@tabliodb/shared';
-import type { TabliodbClient } from '../fetch-client.js';
+import type { RequestOpts } from '@oazapfts/runtime';
+import {
+  createApiKey as createApiKeyRequest,
+  getCurrentUser,
+  login as loginRequest,
+  logout as logoutRequest,
+  signUp as signUpRequest,
+  type ApiKeyCreateDto as GeneratedApiKeyCreateDto,
+  type ApiKeyCreateResponseDtoOutput,
+  type AuthUserDtoOutput,
+  type LoginCredentialDto as GeneratedLoginCredentialDto,
+  type LoginResponseDtoOutput,
+  type LogoutResponseDtoOutput,
+  type SignUpDto as GeneratedSignUpDto,
+} from '../fetch-client.js';
 
-export type LoginCredentialDto = {
-  email: string;
-  password: string;
-};
+export type LoginCredentialDto = GeneratedLoginCredentialDto;
 
-export type SignUpDto = LoginCredentialDto & {
-  name: string;
-};
+export type SignUpDto = GeneratedSignUpDto;
 
-export type LoginResponseDto = {
-  accessToken: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    avatarColor: string | null;
-  };
-};
+export type LoginResponseDto = LoginResponseDtoOutput;
 
-export type CurrentUserResponseDto = LoginResponseDto['user'];
+export type CurrentUserResponseDto = AuthUserDtoOutput;
 
 export type ApiKeyCreateDto = {
   name?: string;
   permissions?: Permission[];
 };
 
-export type ApiKeyCreateResponseDto = {
-  secret: string;
-  apiKey: {
-    id: string;
-    name: string;
-    permissions: Permission[];
-  };
-};
+export type ApiKeyCreateResponseDto = ApiKeyCreateResponseDtoOutput;
 
-export function createAuthResource(client: TabliodbClient) {
+export function createAuthResource(opts?: RequestOpts) {
   return {
-    me: () => client.request<CurrentUserResponseDto>('/auth/me'),
-    login: (body: LoginCredentialDto) => client.request<LoginResponseDto>('/auth/login', { body, method: 'POST' }),
-    signUp: (body: SignUpDto) => client.request<LoginResponseDto>('/auth/sign-up', { body, method: 'POST' }),
-    logout: () => client.request<{ successful: true }>('/auth/logout', { method: 'POST' }),
+    me: () => getCurrentUser(opts) as Promise<CurrentUserResponseDto>,
+    login: (body: LoginCredentialDto) => loginRequest({ loginCredentialDto: body }, opts) as Promise<LoginResponseDto>,
+    signUp: (body: SignUpDto) => signUpRequest({ signUpDto: body }, opts) as Promise<LoginResponseDto>,
+    logout: () => logoutRequest(opts) as Promise<LogoutResponseDtoOutput>,
     createApiKey: (body: ApiKeyCreateDto) =>
-      client.request<ApiKeyCreateResponseDto>('/auth/api-keys', { body, method: 'POST' }),
+      // Permission di domain shared adalah string literal union; generated OpenAPI menerima string[] yang kompatibel di wire format.
+      createApiKeyRequest(
+        { apiKeyCreateDto: body as GeneratedApiKeyCreateDto },
+        opts,
+      ) as Promise<ApiKeyCreateResponseDto>,
   };
 }

@@ -1,9 +1,11 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+const DateTimeSchema = z.iso.datetime({ offset: true });
+
 const SetupStatusResponseSchema = z
   .object({
-    completedAt: z.string().datetime().nullable(),
+    completedAt: DateTimeSchema.nullable(),
     hasOrganization: z.boolean(),
     hasOwner: z.boolean(),
     isSetupComplete: z.boolean(),

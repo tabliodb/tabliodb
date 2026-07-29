@@ -5,6 +5,7 @@ import { z } from 'zod';
 const UserOrganizationRoleSchema = z.enum([OrganizationRole.Admin, OrganizationRole.Member]);
 const InstanceRoleSchema = z.enum(['owner', 'admin']);
 const UserRoleFilterSchema = z.enum(['owner', 'instance-admin', 'org-admin', 'member']);
+const DateTimeSchema = z.iso.datetime({ offset: true });
 
 const UserCreateSchema = z
   .object({
@@ -34,8 +35,8 @@ const UserResponseSchema = z
         status: z.string(),
       }),
     ),
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    createdAt: DateTimeSchema,
+    updatedAt: DateTimeSchema,
   })
   .meta({ id: 'UserResponseDto' });
 
