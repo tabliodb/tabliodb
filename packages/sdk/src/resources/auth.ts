@@ -20,6 +20,8 @@ export type LoginResponseDto = {
   };
 };
 
+export type CurrentUserResponseDto = LoginResponseDto['user'];
+
 export type ApiKeyCreateDto = {
   name?: string;
   permissions?: Permission[];
@@ -36,6 +38,7 @@ export type ApiKeyCreateResponseDto = {
 
 export function createAuthResource(client: TabliodbClient) {
   return {
+    me: () => client.request<CurrentUserResponseDto>('/auth/me'),
     login: (body: LoginCredentialDto) => client.request<LoginResponseDto>('/auth/login', { body, method: 'POST' }),
     signUp: (body: SignUpDto) => client.request<LoginResponseDto>('/auth/sign-up', { body, method: 'POST' }),
     logout: () => client.request<{ successful: true }>('/auth/logout', { method: 'POST' }),

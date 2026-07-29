@@ -15,17 +15,23 @@ const SignUpSchema = LoginCredentialSchema.extend({
   name: z.string().min(1),
 }).meta({ id: 'SignUpDto' });
 
+const AuthUserSchema = z
+  .object({
+    id: z.string().uuid(),
+    email: z.string().email(),
+    name: z.string(),
+    avatarColor: z.string().nullable(),
+  })
+  .meta({ id: 'AuthUserDto' });
+
 const LoginResponseSchema = z
   .object({
     accessToken: z.string(),
-    user: z.object({
-      id: z.string().uuid(),
-      email: z.string().email(),
-      name: z.string(),
-      avatarColor: z.string().nullable(),
-    }),
+    user: AuthUserSchema,
   })
   .meta({ id: 'LoginResponseDto' });
+
+const CurrentUserResponseSchema = AuthUserSchema.meta({ id: 'CurrentUserResponseDto' });
 
 const ApiKeyCreateSchema = z
   .object({
@@ -54,6 +60,7 @@ const LogoutResponseSchema = z
 export class LoginCredentialDto extends createZodDto(LoginCredentialSchema) {}
 export class SignUpDto extends createZodDto(SignUpSchema) {}
 export class LoginResponseDto extends createZodDto(LoginResponseSchema) {}
+export class CurrentUserResponseDto extends createZodDto(CurrentUserResponseSchema) {}
 export class ApiKeyCreateDto extends createZodDto(ApiKeyCreateSchema) {}
 export class ApiKeyCreateResponseDto extends createZodDto(ApiKeyCreateResponseSchema) {}
 export class LogoutResponseDto extends createZodDto(LogoutResponseSchema) {}

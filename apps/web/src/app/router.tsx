@@ -7,6 +7,7 @@ import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
 import { LoadingState } from '@/features/app/RouteStates';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { requireAuthenticated } from '@/features/auth/middleware/requireAuthenticated';
 import { editorLoader } from '@/features/editor/loaders/editorLoader';
 import { EditorPage } from '@/features/editor/EditorPage';
 import { requireSetupComplete } from '@/features/setup/middleware/requireSetupComplete';
@@ -45,7 +46,7 @@ export const router = createBrowserRouter([
             element: <EditorLayout />,
             errorElement: <RouteErrorBoundary />,
             loader: editorLoader,
-            middleware: [requireSetupComplete],
+            middleware: [requireSetupComplete, requireAuthenticated],
             children: [
               {
                 element: <EditorPage />,

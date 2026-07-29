@@ -1,9 +1,10 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
+  CurrentUserResponseDto,
   LoginCredentialDto,
   LoginResponseDto,
   LogoutResponseDto,
@@ -19,6 +20,12 @@ import type { AuthContext } from '../database.js';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly service: AuthService) {}
+
+  @Get('me')
+  @Authenticated()
+  getCurrentUser(@Auth() auth: AuthContext): CurrentUserResponseDto {
+    return auth.user;
+  }
 
   @Post('sign-up')
   async signUp(@Res({ passthrough: true }) res: Response, @Body() dto: SignUpDto): Promise<LoginResponseDto> {
