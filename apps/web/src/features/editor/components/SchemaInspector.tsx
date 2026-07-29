@@ -7,6 +7,7 @@ import {
   type ColumnTypeFamily,
   type ColumnTypeSpec,
   type DatabaseColumn,
+  type DatabaseEnum,
   type DatabaseIndex,
   type DatabaseIndexColumn,
   type DatabaseRelationship,
@@ -36,6 +37,7 @@ import { z } from 'zod';
 import { formatColumnType } from '../diagram-model';
 
 const tableColorOptions = ['#58cc02', '#1cb0f6', '#ffc800', '#ff4b4b', '#8b5cf6', '#0f766e'] as const;
+const unsetSelectValue = '__unset' as const;
 
 const editTableFormSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a valid hex color.'),
@@ -59,27 +61,60 @@ const columnTypeFamilyOptions = [
   'varchar',
 ] as const satisfies readonly ColumnTypeFamily[];
 
-const columnFormSchema = z.object({
-  autoIncrement: z.boolean(),
-  comment: z.string().trim().max(240, 'Keep the comment under 240 characters.'),
-  defaultValue: z.string().trim().max(120, 'Keep the default value under 120 characters.'),
-  family: z.enum(columnTypeFamilyOptions),
-  length: z.number().int().min(1).max(2048).optional(),
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Column name is required.')
-    .max(64, 'Keep the column name under 64 characters.')
-    .regex(/^[a-z][a-z0-9_]*$/, 'Use lowercase letters, numbers, and underscores.'),
-  nullable: z.boolean(),
-  primaryKey: z.boolean(),
-  unique: z.boolean(),
-});
+const columnFormSchema = z
+  .object({
+    autoIncrement: z.boolean(),
+    comment: z.string().trim().max(240, 'Keep the comment under 240 characters.'),
+    defaultValue: z.string().trim().max(120, 'Keep the default value under 120 characters.'),
+    enumId: z.string(),
+    family: z.enum(columnTypeFamilyOptions),
+    length: z.number().int().min(1).max(2048).optional(),
+    name: z
+      .string()
+      .trim()
+      .min(1, 'Column name is required.')
+      .max(64, 'Keep the column name under 64 characters.')
+      .regex(/^[a-z][a-z0-9_]*$/, 'Use lowercase letters, numbers, and underscores.'),
+    nullable: z.boolean(),
+    primaryKey: z.boolean(),
+    unique: z.boolean(),
+  })
+  .superRefine((values, context) => {
+    if (values.family === 'enum' && values.enumId === unsetSelectValue) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Choose an enum type.',
+        path: ['enumId'],
+      });
+    }
+  });
 
 type EditTableFormState = z.infer<typeof editTableFormSchema>;
 type ColumnFormState = z.infer<typeof columnFormSchema>;
 
-const unsetSelectValue = '__unset' as const;
+const enumFormSchema = z
+  .object({
+    comment: z.string().trim().max(240, 'Keep the comment under 240 characters.'),
+    name: z
+      .string()
+      .trim()
+      .min(1, 'Enum name is required.')
+      .max(64, 'Keep the enum name under 64 characters.')
+      .regex(/^[a-z][a-z0-9_]*$/, 'Use lowercase letters, numbers, and underscores.'),
+    schema: z.string().trim().max(64, 'Keep the schema name under 64 characters.'),
+    valuesText: z.string().trim(),
+  })
+  .superRefine((values, context) => {
+    if (parseEnumValues(values.valuesText).length === 0) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Add at least one enum value.',
+        path: ['valuesText'],
+      });
+    }
+  });
+
+type EnumFormState = z.infer<typeof enumFormSchema>;
 
 const indexMethodOptions = [unsetSelectValue, 'btree', 'hash', 'gin', 'gist', 'brin'] as const;
 const indexOrderOptions = [unsetSelectValue, 'asc', 'desc'] as const;
@@ -150,21 +185,32 @@ export function SchemaInspector({
   onModelChange,
   selectedTableId,
 }: SchemaInspectorProps) {
+  const enums = Object.values(model.enums);
   const selectedTable = selectedTableId ? model.tables[selectedTableId] : null;
   const selectedColumns = selectedTable ? getTableColumns(model, selectedTable.id) : [];
   const selectedIndexes = selectedTable ? getTableIndexes(model, selectedTable) : [];
   const selectedRelationships = selectedTable ? getTableRelationships(model, selectedTable.id) : [];
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
+  const [selectedEnumId, setSelectedEnumId] = useState<string | null>(null);
   const [selectedIndexId, setSelectedIndexId] = useState<string | null>(null);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const selectedColumnIds = selectedColumns.map((column) => column.id).join('|');
+  const selectedEnumIds = enums.map((databaseEnum) => databaseEnum.id).join('|');
   const selectedIndexIds = selectedIndexes.map((index) => index.id).join('|');
   const selectedRelationshipIds = selectedRelationships.map((relationship) => relationship.id).join('|');
   const selectedColumn = selectedColumns.find((column) => column.id === selectedColumnId) ?? null;
+  const selectedEnum = enums.find((databaseEnum) => databaseEnum.id === selectedEnumId) ?? null;
   const selectedIndex = selectedIndexes.find((index) => index.id === selectedIndexId) ?? null;
   const selectedRelationship =
     selectedRelationships.find((relationship) => relationship.id === selectedRelationshipId) ?? null;
   const reviewSignals = useMemo(() => getReviewSignals(model), [model]);
+
+  useEffect(() => {
+    if (!selectedEnumId || !enums.some((databaseEnum) => databaseEnum.id === selectedEnumId)) {
+      // Enum selection is global to the diagram, so it follows the available enum list instead of the active table.
+      setSelectedEnumId(enums[0]?.id ?? null);
+    }
+  }, [enums, selectedEnumId, selectedEnumIds]);
 
   useEffect(() => {
     if (!selectedTable) {
@@ -219,6 +265,14 @@ export function SchemaInspector({
           <Badge variant="green">{model.dialect}</Badge>
           <Badge variant="blue">v{latestSnapshotVersion}</Badge>
         </div>
+        <EnumEditorPanel
+          databaseEnum={selectedEnum}
+          enums={enums}
+          model={model}
+          onEnumSelect={setSelectedEnumId}
+          onModelChange={onModelChange}
+          selectedEnumId={selectedEnumId}
+        />
         <section>
           <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Selected table
@@ -312,6 +366,264 @@ export function SchemaInspector({
         </section>
       </div>
     </aside>
+  );
+}
+
+function EnumEditorPanel({
+  databaseEnum,
+  enums,
+  model,
+  onEnumSelect,
+  onModelChange,
+  selectedEnumId,
+}: {
+  databaseEnum: DatabaseEnum | null;
+  enums: DatabaseEnum[];
+  model: DiagramModel;
+  onEnumSelect: (enumId: string) => void;
+  onModelChange: (model: DiagramModel) => void;
+  selectedEnumId: string | null;
+}) {
+  return (
+    <section>
+      <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">Enums</h2>
+      <Surface className="mt-2 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-extrabold">{enums.length} enums</div>
+            <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              Reusable database type values
+            </div>
+          </div>
+          <AddEnumDialog model={model} onModelChange={onModelChange} />
+        </div>
+        {enums.length > 0 ? (
+          <div className="mt-3 space-y-1">
+            {enums.map((currentEnum) => (
+              <button
+                aria-pressed={selectedEnumId === currentEnum.id}
+                className={cn(
+                  'w-full cursor-pointer rounded-xl px-2 py-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+                  selectedEnumId === currentEnum.id &&
+                    'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                )}
+                key={currentEnum.id}
+                onClick={() => onEnumSelect(currentEnum.id)}
+                type="button"
+              >
+                <div className="truncate text-xs font-extrabold">{currentEnum.name}</div>
+                <div className="mt-1 truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {currentEnum.values.join(', ')}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+            No enums yet
+          </div>
+        )}
+        {databaseEnum ? (
+          <div className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-extrabold">{databaseEnum.name}</div>
+                <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {databaseEnum.schema ? `${databaseEnum.schema} schema` : 'default schema'}
+                </div>
+              </div>
+              <EditEnumDialog databaseEnum={databaseEnum} model={model} onModelChange={onModelChange} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1">
+              {databaseEnum.values.map((value) => (
+                <ColumnBadge key={value}>{value}</ColumnBadge>
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <ColumnFact label="Values" value={String(databaseEnum.values.length)} />
+              <ColumnFact label="Used by" value={String(countEnumUsage(model, databaseEnum.id))} />
+            </div>
+            {databaseEnum.comment ? (
+              <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                {databaseEnum.comment}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </Surface>
+    </section>
+  );
+}
+
+function AddEnumDialog({
+  model,
+  onModelChange,
+}: {
+  model: DiagramModel;
+  onModelChange: (model: DiagramModel) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<EnumFormState>({
+    defaultValues: getNewEnumDefaults(model),
+    resolver: zodResolver(enumFormSchema),
+  });
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      form.reset(getNewEnumDefaults(model));
+    }
+  }
+
+  function handleSubmit(values: EnumFormState) {
+    onModelChange(
+      applyDiagramCommand(model, {
+        type: 'enum.create',
+        name: values.name.trim(),
+        comment: normalizeOptionalString(values.comment),
+        schema: normalizeOptionalString(values.schema),
+        values: parseEnumValues(values.valuesText),
+      }),
+    );
+    handleOpenChange(false);
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="soft">
+          <Plus className="size-4" />
+          Enum
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[88vh] w-[min(92vw,520px)] overflow-y-auto">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>New enum</DialogTitle>
+            <DialogDescription>Create reusable values for enum columns.</DialogDescription>
+          </DialogHeader>
+          <EnumFormFields form={form} />
+          <DialogFooter className="mt-5">
+            <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button type="submit">
+              <Plus className="size-4" />
+              Add enum
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditEnumDialog({
+  databaseEnum,
+  model,
+  onModelChange,
+}: {
+  databaseEnum: DatabaseEnum;
+  model: DiagramModel;
+  onModelChange: (model: DiagramModel) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<EnumFormState>({
+    defaultValues: getEnumDefaults(databaseEnum),
+    resolver: zodResolver(enumFormSchema),
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset(getEnumDefaults(databaseEnum));
+    }
+  }, [databaseEnum, form, open]);
+
+  function handleSubmit(values: EnumFormState) {
+    onModelChange(
+      applyDiagramCommand(model, {
+        type: 'enum.update',
+        enumId: databaseEnum.id,
+        changes: {
+          name: values.name.trim(),
+          comment: normalizeOptionalString(values.comment),
+          schema: normalizeOptionalString(values.schema),
+          values: parseEnumValues(values.valuesText),
+        },
+      }),
+    );
+    setOpen(false);
+  }
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="secondary">
+          <Pencil className="size-4" />
+          Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[88vh] w-[min(92vw,520px)] overflow-y-auto">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Edit enum</DialogTitle>
+            <DialogDescription>Update enum values and metadata.</DialogDescription>
+          </DialogHeader>
+          <EnumFormFields form={form} />
+          <DialogFooter className="mt-5">
+            <Button onClick={() => setOpen(false)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button type="submit">
+              <Save className="size-4" />
+              Save enum
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EnumFormFields({ form }: { form: UseFormReturn<EnumFormState> }) {
+  const { errors } = form.formState;
+
+  return (
+    <div className="mt-4 grid gap-4">
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Enum name
+        </span>
+        <Input autoFocus aria-invalid={Boolean(errors.name)} placeholder="order_status" {...form.register('name')} />
+        <FieldError>{errors.name?.message}</FieldError>
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Schema
+        </span>
+        <Input placeholder="public" {...form.register('schema')} />
+        <FieldError>{errors.schema?.message}</FieldError>
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Values
+        </span>
+        <textarea
+          className="min-h-28 w-full resize-y rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 py-2 text-sm font-semibold text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+          placeholder={'draft\npublished\narchived'}
+          {...form.register('valuesText')}
+        />
+        <FieldError>{errors.valuesText?.message}</FieldError>
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Comment
+        </span>
+        <Input placeholder="Enum note" {...form.register('comment')} />
+        <FieldError>{errors.comment?.message}</FieldError>
+      </label>
+    </div>
   );
 }
 
@@ -437,6 +749,7 @@ function AddColumnDialog({
     resolver: zodResolver(columnFormSchema),
   });
   const { errors } = form.formState;
+  const enumOptions = Object.values(model.enums);
   const family = form.watch('family');
 
   function handleOpenChange(nextOpen: boolean) {
@@ -522,6 +835,7 @@ function AddColumnDialog({
                 <FieldError>{errors.length?.message}</FieldError>
               </label>
             ) : null}
+            {family === 'enum' ? <EnumSelectField enumOptions={enumOptions} form={form} /> : null}
             <div className="grid gap-2">
               <CheckboxField label="Primary key" {...form.register('primaryKey')} />
               <CheckboxField label="Unique" {...form.register('unique')} />
@@ -623,6 +937,7 @@ function EditColumnDialog({
     resolver: zodResolver(columnFormSchema),
   });
   const { errors } = form.formState;
+  const enumOptions = Object.values(model.enums);
   const family = form.watch('family');
 
   useEffect(() => {
@@ -703,6 +1018,7 @@ function EditColumnDialog({
                 <FieldError>{errors.length?.message}</FieldError>
               </label>
             ) : null}
+            {family === 'enum' ? <EnumSelectField enumOptions={enumOptions} form={form} /> : null}
             <div className="grid gap-2">
               <CheckboxField label="Primary key" {...form.register('primaryKey')} />
               <CheckboxField label="Unique" {...form.register('unique')} />
@@ -1186,6 +1502,30 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
   );
 }
 
+function EnumSelectField({ enumOptions, form }: { enumOptions: DatabaseEnum[]; form: UseFormReturn<ColumnFormState> }) {
+  const { errors } = form.formState;
+
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+        Enum type
+      </span>
+      <select
+        className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+        {...form.register('enumId')}
+      >
+        <option value={unsetSelectValue}>{enumOptions.length > 0 ? 'Choose enum' : 'Create enum first'}</option>
+        {enumOptions.map((databaseEnum) => (
+          <option key={databaseEnum.id} value={databaseEnum.id}>
+            {databaseEnum.name}
+          </option>
+        ))}
+      </select>
+      <FieldError>{errors.enumId?.message}</FieldError>
+    </label>
+  );
+}
+
 function RelationshipInspector({
   model,
   onModelChange,
@@ -1569,6 +1909,7 @@ function getNewColumnDefaults(): ColumnFormState {
     autoIncrement: false,
     comment: '',
     defaultValue: '',
+    enumId: unsetSelectValue,
     family: 'varchar',
     length: 160,
     name: '',
@@ -1583,6 +1924,7 @@ function getColumnDefaults(column: DatabaseColumn): ColumnFormState {
     autoIncrement: column.autoIncrement,
     comment: column.comment ?? '',
     defaultValue: column.defaultValue ?? '',
+    enumId: column.type.enumId ?? unsetSelectValue,
     family: column.type.family,
     length: column.type.length ?? 160,
     name: column.name,
@@ -1605,6 +1947,15 @@ function createColumnType(values: ColumnFormState, currentType?: ColumnTypeSpec)
     };
   }
 
+  if (values.family === 'enum') {
+    return {
+      family: values.family,
+      // Enum columns point at a diagram enum entity, so rename/edit enum values do not require column rewrites.
+      enumId: values.enumId,
+      raw: undefined,
+    };
+  }
+
   if (preservedType) {
     // Preserve precision, scale, enumId, and raw metadata when the user edits flags without changing the type family.
     return preservedType;
@@ -1618,6 +1969,40 @@ function normalizeOptionalString(value: string): string | undefined {
 
   // Store blank optional values as undefined so generated SQL and inspector facts do not carry empty strings.
   return trimmedValue.length > 0 ? trimmedValue : undefined;
+}
+
+function getNewEnumDefaults(model: DiagramModel): EnumFormState {
+  const nextEnumIndex = Object.keys(model.enums).length + 1;
+
+  return {
+    comment: '',
+    name: `status_${nextEnumIndex}`,
+    schema: '',
+    valuesText: 'draft\npublished\narchived',
+  };
+}
+
+function getEnumDefaults(databaseEnum: DatabaseEnum): EnumFormState {
+  return {
+    comment: databaseEnum.comment ?? '',
+    name: databaseEnum.name,
+    schema: databaseEnum.schema ?? '',
+    valuesText: databaseEnum.values.join('\n'),
+  };
+}
+
+function parseEnumValues(value: string): string[] {
+  const values = value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  // Preserve the user's ordering while removing duplicates, matching schema-core command normalization.
+  return Array.from(new Set(values));
+}
+
+function countEnumUsage(model: DiagramModel, enumId: string): number {
+  return Object.values(model.columns).filter((column) => column.type.enumId === enumId).length;
 }
 
 function countTableRelationships(model: DiagramModel, table: DatabaseTable): number {

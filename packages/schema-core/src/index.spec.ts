@@ -180,6 +180,77 @@ describe('schema-core diagram commands', () => {
     expect(nextModel.metadata.updatedAt).toBe('2026-07-29T03:00:00.000Z');
   });
 
+  it('creates and updates enums while protecting used enum types', () => {
+    const model = createEmptyDiagramModel('Enum editor test');
+    const modelWithEnum = applyDiagramCommand(
+      model,
+      {
+        type: 'enum.create',
+        enumId: 'order-status',
+        name: 'order_status',
+        values: ['draft', 'published', 'draft'],
+      },
+      { now: fixedNow },
+    );
+    const modelWithColumn = applyDiagramCommand(
+      modelWithEnum,
+      {
+        type: 'table.create',
+        tableId: 'orders',
+        name: 'orders',
+        columns: [
+          { id: 'orders-id', name: 'id', type: { family: 'uuid' }, primaryKey: true, nullable: false },
+          {
+            id: 'orders-status',
+            name: 'status',
+            type: { family: 'enum', enumId: 'order-status' },
+            nullable: false,
+          },
+        ],
+      },
+      { now: fixedNow },
+    );
+    const nextModel = applyDiagramCommand(
+      modelWithColumn,
+      {
+        type: 'enum.update',
+        enumId: 'order-status',
+        changes: {
+          comment: 'Public workflow states',
+          values: ['draft', 'published', 'archived', 'published'],
+        },
+      },
+      { now: () => '2026-07-29T04:00:00.000Z' },
+    );
+
+    // Enum values are deduped at the command boundary so generated SQL never receives duplicate labels.
+    expect(model.enums['order-status']).toBeUndefined();
+    expect(modelWithEnum.enums['order-status'].values).toEqual(['draft', 'published']);
+    expect(nextModel.enums['order-status']).toMatchObject({
+      comment: 'Public workflow states',
+      values: ['draft', 'published', 'archived'],
+    });
+    expect(nextModel.metadata.updatedAt).toBe('2026-07-29T04:00:00.000Z');
+    expect(() =>
+      applyDiagramCommand(nextModel, { type: 'enum.delete', enumId: 'order-status' }, { now: fixedNow }),
+    ).toThrow(DiagramCommandError);
+  });
+
+  it('throws a domain error when an enum column references a missing enum', () => {
+    expect(() =>
+      applyDiagramCommand(
+        createEmptyDiagramModel('Missing enum test'),
+        {
+          type: 'table.create',
+          tableId: 'orders',
+          name: 'orders',
+          columns: [{ id: 'orders-status', name: 'status', type: { family: 'enum', enumId: 'missing-enum' } }],
+        },
+        { now: fixedNow },
+      ),
+    ).toThrow(DiagramCommandError);
+  });
+
   it('deletes a column and removes dependent relationships and empty indexes', () => {
     const modelWithTables = applyDiagramCommand(
       applyDiagramCommand(

@@ -14,9 +14,10 @@ export type GenerateSqlOptions = {
 };
 
 export function generateCreateSchemaSql(model: DiagramModel, options: GenerateSqlOptions): string {
-  const statements = Object.values(model.tables).map((table) => {
+  const enumStatements = renderEnumStatements(model, options.dialect);
+  const tableStatements = Object.values(model.tables).map((table) => {
     const columns = getTableColumns(model, table.id);
-    const body = columns.map((column) => `  ${renderColumn(column, options.dialect)}`).join(',\n');
+    const body = columns.map((column) => `  ${renderColumn(column, model, options.dialect)}`).join(',\n');
     const tableName = table.schema
       ? `${quoteIdentifier(table.schema, options.dialect)}.${quoteIdentifier(table.name, options.dialect)}`
       : quoteIdentifier(table.name, options.dialect);
@@ -24,13 +25,13 @@ export function generateCreateSchemaSql(model: DiagramModel, options: GenerateSq
     return `CREATE TABLE ${tableName} (\n${body}\n);`;
   });
 
-  return statements.join('\n\n');
+  return [...enumStatements, ...tableStatements].join('\n\n');
 }
 
-function renderColumn(column: DatabaseColumn, dialect: SqlDialect): string {
+function renderColumn(column: DatabaseColumn, model: DiagramModel, dialect: SqlDialect): string {
   const parts = [
     quoteIdentifier(column.name, dialect),
-    renderType(column.type, dialect),
+    renderType(column.type, model, dialect),
     column.primaryKey ? 'PRIMARY KEY' : undefined,
     column.nullable ? undefined : 'NOT NULL',
     column.unique ? 'UNIQUE' : undefined,
@@ -41,9 +42,13 @@ function renderColumn(column: DatabaseColumn, dialect: SqlDialect): string {
   return parts.filter(Boolean).join(' ');
 }
 
-function renderType(type: ColumnTypeSpec, dialect: SqlDialect): string {
+function renderType(type: ColumnTypeSpec, model: DiagramModel, dialect: SqlDialect): string {
   if (type.raw) {
     return type.raw;
+  }
+
+  if (type.family === 'enum') {
+    return renderEnumType(type, model, dialect);
   }
 
   if (type.family === 'varchar') {
@@ -65,7 +70,49 @@ function renderType(type: ColumnTypeSpec, dialect: SqlDialect): string {
   return type.family.toUpperCase();
 }
 
+function renderEnumStatements(model: DiagramModel, dialect: SqlDialect): string[] {
+  if (dialect !== 'postgresql') {
+    return [];
+  }
+
+  return Object.values(model.enums).map((databaseEnum) => {
+    const enumName = renderQualifiedName(databaseEnum.schema, databaseEnum.name, dialect);
+    const values = databaseEnum.values.map(quoteStringLiteral).join(', ');
+
+    // PostgreSQL enum types must be declared before tables can reference them.
+    return `CREATE TYPE ${enumName} AS ENUM (${values});`;
+  });
+}
+
+function renderEnumType(type: ColumnTypeSpec, model: DiagramModel, dialect: SqlDialect): string {
+  const databaseEnum = type.enumId ? model.enums[type.enumId] : undefined;
+
+  if (!databaseEnum) {
+    return 'TEXT';
+  }
+
+  if (dialect === 'postgresql') {
+    return renderQualifiedName(databaseEnum.schema, databaseEnum.name, dialect);
+  }
+
+  if (dialect === 'mysql' || dialect === 'mariadb') {
+    return `ENUM(${databaseEnum.values.map(quoteStringLiteral).join(', ')})`;
+  }
+
+  return 'TEXT';
+}
+
+function renderQualifiedName(schema: string | undefined, name: string, dialect: SqlDialect): string {
+  return schema
+    ? `${quoteIdentifier(schema, dialect)}.${quoteIdentifier(name, dialect)}`
+    : quoteIdentifier(name, dialect);
+}
+
 function quoteIdentifier(value: string, dialect: SqlDialect): string {
   const quote = dialect === 'mysql' ? '`' : '"';
   return `${quote}${value.replaceAll(quote, `${quote}${quote}`)}${quote}`;
+}
+
+function quoteStringLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
 }

@@ -424,6 +424,26 @@ export type DeleteIndexCommand = {
   indexId: string;
 };
 
+export type CreateEnumCommand = {
+  type: 'enum.create';
+  enumId?: string;
+  name: string;
+  schema?: string;
+  values: string[];
+  comment?: string;
+};
+
+export type UpdateEnumCommand = {
+  type: 'enum.update';
+  enumId: string;
+  changes: Partial<Omit<DatabaseEnum, 'id'>>;
+};
+
+export type DeleteEnumCommand = {
+  type: 'enum.delete';
+  enumId: string;
+};
+
 export type DiagramCommand =
   | CreateTableCommand
   | RenameTableCommand
@@ -440,7 +460,10 @@ export type DiagramCommand =
   | DeleteRelationshipCommand
   | CreateIndexCommand
   | UpdateIndexCommand
-  | DeleteIndexCommand;
+  | DeleteIndexCommand
+  | CreateEnumCommand
+  | UpdateEnumCommand
+  | DeleteEnumCommand;
 
 export function applyDiagramCommands(
   model: DiagramModel,
@@ -490,6 +513,12 @@ export function applyDiagramCommand(
       return finalizeDiagramModel(updateIndex(model, command), options);
     case 'index.delete':
       return finalizeDiagramModel(deleteIndex(model, command.indexId), options);
+    case 'enum.create':
+      return finalizeDiagramModel(createEnum(model, command, idFactory), options);
+    case 'enum.update':
+      return finalizeDiagramModel(updateEnum(model, command), options);
+    case 'enum.delete':
+      return finalizeDiagramModel(deleteEnum(model, command.enumId), options);
   }
 }
 
@@ -512,6 +541,7 @@ function createTable(model: DiagramModel, command: CreateTableCommand, idFactory
   const tableColumns = (command.columns ?? getDefaultTableColumns()).map((columnInput) =>
     createColumnEntity(tableId, columnInput, idFactory),
   );
+  tableColumns.forEach((column) => assertColumnTypeReferences(model, column.type));
   const table = DatabaseTableSchema.parse({
     id: tableId,
     name: command.name,
@@ -619,6 +649,7 @@ function createColumnFromCommand(
     },
     idFactory,
   );
+  assertColumnTypeReferences(model, column.type);
 
   return {
     ...model,
@@ -638,17 +669,19 @@ function createColumnFromCommand(
 
 function updateColumn(model: DiagramModel, command: UpdateColumnCommand): DiagramModel {
   const column = requireColumn(model, command.columnId);
+  const nextColumn = DatabaseColumnSchema.parse({
+    ...column,
+    ...command.changes,
+    id: column.id,
+    tableId: column.tableId,
+  });
+  assertColumnTypeReferences(model, nextColumn.type);
 
   return {
     ...model,
     columns: {
       ...model.columns,
-      [column.id]: DatabaseColumnSchema.parse({
-        ...column,
-        ...command.changes,
-        id: column.id,
-        tableId: column.tableId,
-      }),
+      [column.id]: nextColumn,
     },
   };
 }
@@ -846,6 +879,60 @@ function deleteIndex(model: DiagramModel, indexId: string): DiagramModel {
   };
 }
 
+function createEnum(model: DiagramModel, command: CreateEnumCommand, idFactory: DiagramIdFactory): DiagramModel {
+  const enumId = command.enumId ?? idFactory('enum');
+  assertMissingEntity(model.enums[enumId], `Enum "${enumId}" already exists`);
+
+  const databaseEnum = DatabaseEnumSchema.parse({
+    id: enumId,
+    name: command.name,
+    schema: command.schema,
+    // Duplicate values make generated SQL ambiguous, so command input is normalized before it reaches snapshots.
+    values: uniqueValues(command.values),
+    comment: command.comment,
+  });
+
+  return {
+    ...model,
+    enums: {
+      ...model.enums,
+      [databaseEnum.id]: databaseEnum,
+    },
+  };
+}
+
+function updateEnum(model: DiagramModel, command: UpdateEnumCommand): DiagramModel {
+  const databaseEnum = requireEnum(model, command.enumId);
+
+  return {
+    ...model,
+    enums: {
+      ...model.enums,
+      [databaseEnum.id]: DatabaseEnumSchema.parse({
+        ...databaseEnum,
+        ...command.changes,
+        id: databaseEnum.id,
+        // Enum values stay unique after edit because duplicates are usually accidental in visual schema tools.
+        values: command.changes.values ? uniqueValues(command.changes.values) : databaseEnum.values,
+      }),
+    },
+  };
+}
+
+function deleteEnum(model: DiagramModel, enumId: string): DiagramModel {
+  requireEnum(model, enumId);
+
+  const usedByColumn = Object.values(model.columns).find((column) => column.type.enumId === enumId);
+  if (usedByColumn) {
+    throw new DiagramCommandError(`Enum "${enumId}" is still used by column "${usedByColumn.id}"`);
+  }
+
+  return {
+    ...model,
+    enums: omitKey(model.enums, enumId),
+  };
+}
+
 function createColumnEntity(
   tableId: string,
   input: CreateTableColumnInput & { id?: string },
@@ -922,6 +1009,10 @@ function insertAtIndex(values: string[], value: string, index: number): string[]
   return nextValues;
 }
 
+function uniqueValues(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
 function requireTable(model: DiagramModel, tableId: string): DatabaseTable {
   const table = model.tables[tableId];
   if (!table) {
@@ -958,10 +1049,31 @@ function requireIndex(model: DiagramModel, indexId: string): DatabaseIndex {
   return index;
 }
 
+function requireEnum(model: DiagramModel, enumId: string): DatabaseEnum {
+  const databaseEnum = model.enums[enumId];
+  if (!databaseEnum) {
+    throw new DiagramCommandError(`Enum "${enumId}" does not exist`);
+  }
+
+  return databaseEnum;
+}
+
 function assertMissingEntity(entity: unknown, message: string): void {
   if (entity) {
     throw new DiagramCommandError(message);
   }
+}
+
+function assertColumnTypeReferences(model: DiagramModel, type: ColumnTypeSpec): void {
+  if (type.family !== 'enum') {
+    return;
+  }
+
+  if (!type.enumId) {
+    throw new DiagramCommandError('Enum column type must reference an enum');
+  }
+
+  requireEnum(model, type.enumId);
 }
 
 function assertTableOwnsColumn(table: DatabaseTable, columnId: string): void {
