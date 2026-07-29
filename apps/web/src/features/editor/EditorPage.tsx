@@ -1,17 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getRelationshipColumnPairs,
   getTableColumns,
   type DatabaseTable,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import {
-  TabliodbApiError,
-  type DiagramResponseDto,
-  type ProjectResponseDto,
-  type SnapshotResponseDto,
-} from '@tabliodb/sdk';
+import { TabliodbApiError, type ProjectResponseDto } from '@tabliodb/sdk';
 import { generateCreateSchemaSql } from '@tabliodb/sql';
 import {
   Badge,
@@ -54,12 +49,13 @@ import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ErrorState, LoadingState } from '@/features/app/RouteStates';
-import { sdk } from '@/services/sdk';
+import { useLogoutMutation } from '@/resources/auth';
+import { defaultDiagramName, diagramsQueries } from '@/resources/diagrams';
+import { defaultProjectName, projectsQueries } from '@/resources/projects';
+import { snapshotsQueries, useCreateSnapshotMutation } from '@/resources/snapshots';
 import { addTableToDiagramModel, createSeedDiagramModel, formatColumnType } from './diagram-model';
 import { SchemaCanvas } from './components/SchemaCanvas';
 
-const defaultProjectName = 'Library System';
-const defaultDiagramName = 'Main schema';
 const addTableFormSchema = z.object({
   tableName: z.string().trim().max(64, 'Keep the table name under 64 characters.'),
 });
@@ -75,76 +71,42 @@ export function EditorPage() {
   const [model, setModel] = useState<DiagramModel | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
-  const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: loadOrCreateProjects,
-    retry: false,
-  });
+  const projectsQuery = useQuery(projectsQueries.listOrCreateStarter());
 
   const projects = projectsQuery.data ?? [];
   const routeProjectId = params.projectId ?? null;
   const routeDiagramId = params.diagramId ?? null;
   const activeProject = projects.find((project) => project.id === routeProjectId) ?? projects[0] ?? null;
 
-  const diagramsQuery = useQuery({
-    enabled: Boolean(activeProject?.id),
-    queryKey: ['diagrams', activeProject?.id],
-    queryFn: () => loadOrCreateDiagrams(activeProject!),
-    retry: false,
-  });
+  const diagramsQuery = useQuery(diagramsQueries.listOrCreateStarter(activeProject));
 
   const diagrams = diagramsQuery.data ?? [];
   const activeDiagram = diagrams.find((diagram) => diagram.id === routeDiagramId) ?? diagrams[0] ?? null;
 
-  const snapshotsQuery = useQuery({
-    enabled: Boolean(activeDiagram?.id),
-    queryKey: ['snapshots', activeDiagram?.id],
-    queryFn: () => loadOrCreateSnapshots(activeDiagram!),
-    retry: false,
-  });
+  const snapshotsQuery = useQuery(
+    snapshotsQueries.listOrCreateInitial(activeDiagram, (diagram) => createSeedDiagramModel(diagram.name)),
+  );
 
   const latestSnapshot = snapshotsQuery.data?.[0] ?? null;
   const selectedTable = selectedTableId && model ? model.tables[selectedTableId] : null;
   const selectedColumns = selectedTable && model ? getTableColumns(model, selectedTable.id) : [];
   const reviewSignals = useMemo(() => (model ? getReviewSignals(model) : []), [model]);
 
-  const saveSnapshotMutation = useMutation({
-    mutationFn: async () => {
-      if (!activeDiagram || !model) {
-        throw new Error('Diagram is not ready yet');
-      }
-
-      const snapshot: DiagramModel = {
-        ...model,
-        metadata: {
-          ...model.metadata,
-          // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
-          updatedAt: new Date().toISOString(),
-        },
-      };
-
-      return sdk.snapshots.create({
-        diagramId: activeDiagram.id,
-        message: 'Manual save',
-        snapshot,
-      });
-    },
-    onSuccess: (snapshot) => {
-      setModel(snapshot.snapshot);
-      queryClient.setQueryData<SnapshotResponseDto[]>(['snapshots', snapshot.diagramId], (current) => [
-        snapshot,
-        ...(current ?? []),
-      ]);
+  const saveSnapshotMutation = useCreateSnapshotMutation({
+    mutationConfig: {
+      onSuccess: (snapshot) => {
+        setModel(snapshot.snapshot);
+      },
     },
   });
 
-  const logoutMutation = useMutation({
-    mutationFn: () => sdk.auth.logout(),
-    onSuccess: () => {
-      setModel(null);
-      setSelectedTableId(null);
-      queryClient.clear();
-      navigate(routes.login.to(), { replace: true });
+  const logoutMutation = useLogoutMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        setModel(null);
+        setSelectedTableId(null);
+        navigate(routes.login.to(), { replace: true });
+      },
     },
   });
 
@@ -277,7 +239,24 @@ export function EditorPage() {
             <Button
               className="gap-2"
               disabled={saveSnapshotMutation.isPending}
-              onClick={() => saveSnapshotMutation.mutate()}
+              onClick={() => {
+                if (!activeDiagram || !model) {
+                  return;
+                }
+
+                saveSnapshotMutation.mutate({
+                  diagramId: activeDiagram.id,
+                  message: 'Manual save',
+                  snapshot: {
+                    ...model,
+                    metadata: {
+                      ...model.metadata,
+                      // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
+                      updatedAt: new Date().toISOString(),
+                    },
+                  },
+                });
+              }}
             >
               {saveSnapshotMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -308,7 +287,7 @@ export function EditorPage() {
                   Share workspace
                 </DropdownMenuItem>
                 <DropdownMenuSeparatorItem />
-                <DropdownMenuItem disabled={logoutMutation.isPending} onSelect={() => logoutMutation.mutate()}>
+                <DropdownMenuItem disabled={logoutMutation.isPending} onSelect={() => logoutMutation.mutate(undefined)}>
                   <LogOut className="size-4" />
                   Logout
                 </DropdownMenuItem>
@@ -384,56 +363,8 @@ export function EditorPage() {
   );
 }
 
-async function loadOrCreateProjects(): Promise<ProjectResponseDto[]> {
-  const projects = await sdk.projects.list();
-
-  if (projects.length > 0) {
-    return projects;
-  }
-
-  // The first authenticated visit should produce a real database-backed workspace instead of keeping the UI in mock mode.
-  const project = await sdk.projects.create({
-    name: defaultProjectName,
-    description: 'Starter schema workspace',
-  });
-
-  return [project];
-}
-
 function getWorkspaceSlug(project: ProjectResponseDto): string {
   return project.organizationSlug || project.organizationId;
-}
-
-async function loadOrCreateDiagrams(project: ProjectResponseDto): Promise<DiagramResponseDto[]> {
-  const diagrams = await sdk.projects.listDiagrams(project.id);
-
-  if (diagrams.length > 0) {
-    return diagrams;
-  }
-
-  const diagram = await sdk.diagrams.create({
-    projectId: project.id,
-    name: defaultDiagramName,
-    dialect: 'postgresql',
-  });
-
-  return [diagram];
-}
-
-async function loadOrCreateSnapshots(diagram: DiagramResponseDto): Promise<SnapshotResponseDto[]> {
-  const snapshots = await sdk.snapshots.listByDiagram(diagram.id);
-
-  if (snapshots.length > 0) {
-    return snapshots;
-  }
-
-  const snapshot = await sdk.snapshots.create({
-    diagramId: diagram.id,
-    message: 'Initial schema',
-    snapshot: createSeedDiagramModel(diagram.name),
-  });
-
-  return [snapshot];
 }
 
 function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }) {

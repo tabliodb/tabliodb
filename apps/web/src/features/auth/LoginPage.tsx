@@ -1,13 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, FieldError, Input, Surface } from '@tabliodb/ui';
 import { Database, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { Navigate, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
-import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
-import { sdk } from '@/services/sdk';
+import { getErrorMessage } from '@/features/app/RouteStates';
+import { useLoginMutation } from '@/resources/auth';
 
 const loginFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
@@ -23,7 +22,6 @@ const loginDefaults: LoginFormState = {
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const form = useForm<LoginFormState>({
     defaultValues: loginDefaults,
     mode: 'onBlur',
@@ -31,33 +29,14 @@ export function LoginPage() {
   });
   const { errors } = form.formState;
 
-  const setupQuery = useQuery({
-    queryKey: ['setup'],
-    queryFn: sdk.setup.getStatus,
-    retry: false,
-  });
-
-  const loginMutation = useMutation({
-    mutationFn: (body: LoginFormState) => sdk.auth.login(body),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['projects'] });
-      navigate(routes.home.to(), { replace: true });
+  const loginMutation = useLoginMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        // Redirect login diputuskan di mutation success karena user sudah eksplisit menyelesaikan submit form.
+        navigate(routes.home.to(), { replace: true });
+      },
     },
   });
-
-  if (setupQuery.isPending) {
-    return <LoadingState />;
-  }
-
-  if (setupQuery.error) {
-    return (
-      <ErrorState error={setupQuery.error} onRetry={() => queryClient.invalidateQueries({ queryKey: ['setup'] })} />
-    );
-  }
-
-  if (!setupQuery.data.isSetupComplete) {
-    return <Navigate replace to={routes.setup.to()} />;
-  }
 
   return (
     <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 text-[rgb(var(--tabliodb-ink))]">

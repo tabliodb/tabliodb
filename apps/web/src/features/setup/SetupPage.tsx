@@ -1,13 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, FieldError, Input, Surface } from '@tabliodb/ui';
 import { Database, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { Navigate, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
-import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
-import { sdk } from '@/services/sdk';
+import { getErrorMessage } from '@/features/app/RouteStates';
+import { useCompleteSetupMutation } from '@/resources/setup';
 
 const setupFormSchema = z.object({
   ownerEmail: z.string().trim().email('Enter a valid owner email.'),
@@ -44,7 +43,6 @@ function isOptionalUrl(value: string): boolean {
 
 export function SetupPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const form = useForm<SetupFormState>({
     defaultValues: getSetupDefaults(),
     mode: 'onBlur',
@@ -52,46 +50,29 @@ export function SetupPage() {
   });
   const { errors } = form.formState;
 
-  const setupQuery = useQuery({
-    queryKey: ['setup'],
-    queryFn: sdk.setup.getStatus,
-    retry: false,
-  });
-
-  const setupMutation = useMutation({
-    mutationFn: (body: SetupFormState) =>
-      sdk.setup.complete({
-        ownerEmail: body.ownerEmail,
-        ownerName: body.ownerName,
-        ownerPassword: body.ownerPassword,
-        publicUrl: body.publicUrl.trim() || undefined,
-        workspaceName: body.workspaceName,
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['setup'] });
-      await queryClient.invalidateQueries({ queryKey: ['projects'] });
-      navigate(routes.home.to(), { replace: true });
+  const setupMutation = useCompleteSetupMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        // Setelah owner/workspace pertama dibuat, editor branch loader akan mengambil project starter yang valid.
+        navigate(routes.home.to(), { replace: true });
+      },
     },
   });
-
-  if (setupQuery.isPending) {
-    return <LoadingState />;
-  }
-
-  if (setupQuery.error) {
-    return (
-      <ErrorState error={setupQuery.error} onRetry={() => queryClient.invalidateQueries({ queryKey: ['setup'] })} />
-    );
-  }
-
-  if (setupQuery.data.isSetupComplete) {
-    return <Navigate replace to={routes.home.to()} />;
-  }
 
   return (
     <main className="grid min-h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 py-10 text-[rgb(var(--tabliodb-ink))]">
       <Surface className="w-full max-w-lg p-5" depth="md">
-        <form onSubmit={form.handleSubmit((values) => setupMutation.mutate(values))}>
+        <form
+          onSubmit={form.handleSubmit((values) =>
+            setupMutation.mutate({
+              ownerEmail: values.ownerEmail,
+              ownerName: values.ownerName,
+              ownerPassword: values.ownerPassword,
+              publicUrl: values.publicUrl.trim() || undefined,
+              workspaceName: values.workspaceName,
+            }),
+          )}
+        >
           <div className="mb-5 flex items-center gap-2">
             <div className="grid size-10 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
               <Database className="size-5" />

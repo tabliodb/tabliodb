@@ -2,9 +2,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/app.css';
 import { App } from './app/App';
+import { bootstrapApp } from './app/bootstrap/bootstrapApp';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+const root = createRoot(document.getElementById('root')!);
+
+bootstrapApp().finally(() => {
+  root.render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+});

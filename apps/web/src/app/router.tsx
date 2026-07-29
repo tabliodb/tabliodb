@@ -1,36 +1,76 @@
 import { createBrowserRouter, Navigate } from 'react-router';
-import { EditorRouteGate } from '@/features/app/EditorRouteGate';
+import { AuthLayout } from './layouts/AuthLayout';
+import { EditorLayout } from './layouts/EditorLayout';
+import { RootLayout } from './layouts/RootLayout';
+import { SystemLayout } from './layouts/SystemLayout';
+import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
+import { LoadingState } from '@/features/app/RouteStates';
+import { loginLoader } from '@/features/auth/loaders/loginLoader';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { editorLoader } from '@/features/editor/loaders/editorLoader';
+import { EditorPage } from '@/features/editor/EditorPage';
+import { requireSetupComplete } from '@/features/setup/middleware/requireSetupComplete';
+import { setupLoader } from '@/features/setup/loaders/setupLoader';
 import { SetupPage } from '@/features/setup/SetupPage';
 import { routes } from './routes';
 
 export const router = createBrowserRouter([
   {
-    path: routes.home.path,
-    element: <EditorRouteGate />,
-  },
-  {
-    path: routes.setup.path,
-    element: <SetupPage />,
-  },
-  {
-    path: routes.login.path,
-    element: <LoginPage />,
-  },
-  {
-    path: routes.workspace.path,
-    element: <EditorRouteGate />,
-  },
-  {
-    path: routes.project.path,
-    element: <EditorRouteGate />,
-  },
-  {
-    path: routes.diagram.path,
-    element: <EditorRouteGate />,
-  },
-  {
-    path: '*',
-    element: <Navigate replace to={routes.home.to()} />,
+    element: <SystemLayout />,
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <LoadingState />,
+    id: 'system',
+    children: [
+      {
+        element: <SetupPage />,
+        loader: setupLoader,
+        path: routes.setup.path,
+      },
+      {
+        element: <RootLayout />,
+        errorElement: <RouteErrorBoundary />,
+        children: [
+          {
+            element: <AuthLayout />,
+            errorElement: <RouteErrorBoundary />,
+            children: [
+              {
+                element: <LoginPage />,
+                loader: loginLoader,
+                path: routes.login.path,
+              },
+            ],
+          },
+          {
+            element: <EditorLayout />,
+            errorElement: <RouteErrorBoundary />,
+            loader: editorLoader,
+            middleware: [requireSetupComplete],
+            children: [
+              {
+                element: <EditorPage />,
+                index: true,
+              },
+              {
+                element: <EditorPage />,
+                path: routes.workspace.path,
+              },
+              {
+                element: <EditorPage />,
+                path: routes.project.path,
+              },
+              {
+                element: <EditorPage />,
+                path: routes.diagram.path,
+              },
+            ],
+          },
+          {
+            element: <Navigate replace to={routes.home.to()} />,
+            path: '*',
+          },
+        ],
+      },
+    ],
   },
 ]);
