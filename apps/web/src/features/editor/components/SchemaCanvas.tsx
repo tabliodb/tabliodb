@@ -10,6 +10,7 @@ import {
   type PointLike,
 } from '@antv/x6';
 import {
+  applyDiagramCommand,
   getRelationshipColumnPairs,
   getTableColumns,
   type DatabaseColumn,
@@ -181,24 +182,17 @@ export function SchemaCanvas({
 
       const position = node.getPosition();
 
-      onModelChangeRef.current({
-        ...modelRef.current,
-        tables: {
-          ...modelRef.current.tables,
-          [data.tableId]: {
-            ...table,
-            // X6 owns interaction coordinates while the domain model remains the persistence source for table positions.
-            position: {
-              x: position.x,
-              y: position.y,
-            },
+      onModelChangeRef.current(
+        applyDiagramCommand(modelRef.current, {
+          type: 'table.move',
+          tableId: table.id,
+          // X6 owns interaction coordinates while the domain model remains the persistence source for table positions.
+          position: {
+            x: position.x,
+            y: position.y,
           },
-        },
-        metadata: {
-          ...modelRef.current.metadata,
-          updatedAt: new Date().toISOString(),
-        },
-      });
+        }),
+      );
     });
 
     graphRef.current = graph;

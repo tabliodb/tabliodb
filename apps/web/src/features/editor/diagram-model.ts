@@ -1,4 +1,9 @@
-import type { ColumnTypeSpec, DatabaseColumn, DiagramModel } from '@tabliodb/schema-core';
+import {
+  applyDiagramCommand,
+  type ColumnTypeSpec,
+  type DatabaseColumn,
+  type DiagramModel,
+} from '@tabliodb/schema-core';
 
 export function formatColumnType(type: ColumnTypeSpec): string {
   if (type.raw) {
@@ -169,41 +174,15 @@ export function createSeedDiagramModel(name = 'Library System'): DiagramModel {
 
 export function addTableToDiagramModel(model: DiagramModel, tableName?: string): DiagramModel {
   const nextIndex = Object.keys(model.tables).length + 1;
-  const tableId = `table-${Date.now()}`;
-  const idColumnId = `${tableId}-id`;
-  const nameColumnId = `${tableId}-name`;
   const normalizedName = normalizeTableName(tableName) || `new_table_${nextIndex}`;
 
-  return {
-    ...model,
-    tables: {
-      ...model.tables,
-      [tableId]: {
-        id: tableId,
-        name: normalizedName,
-        position: { x: 160 + nextIndex * 36, y: 120 + nextIndex * 28 },
-        width: 288,
-        columnIds: [idColumnId, nameColumnId],
-        indexIds: [],
-        color: '#1cb0f6',
-      },
-    },
-    columns: {
-      ...model.columns,
-      [idColumnId]: createColumn(idColumnId, tableId, 'id', { family: 'uuid' }, { nullable: false, primaryKey: true }),
-      [nameColumnId]: createColumn(
-        nameColumnId,
-        tableId,
-        'name',
-        { family: 'varchar', length: 160 },
-        { nullable: false },
-      ),
-    },
-    metadata: {
-      ...model.metadata,
-      updatedAt: new Date().toISOString(),
-    },
-  };
+  return applyDiagramCommand(model, {
+    type: 'table.create',
+    name: normalizedName,
+    position: { x: 160 + nextIndex * 36, y: 120 + nextIndex * 28 },
+    width: 288,
+    color: '#1cb0f6',
+  });
 }
 
 function normalizeTableName(tableName?: string): string {

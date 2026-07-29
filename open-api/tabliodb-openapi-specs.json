@@ -18,9 +18,7 @@
           }
         },
         "summary": "",
-        "tags": [
-          "server"
-        ]
+        "tags": ["server"]
       }
     },
     "/auth/me": {
@@ -51,9 +49,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/auth/sign-up": {
@@ -83,9 +79,7 @@
           }
         },
         "summary": "",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/auth/login": {
@@ -115,9 +109,7 @@
           }
         },
         "summary": "",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/auth/logout": {
@@ -148,9 +140,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/auth/api-keys": {
@@ -191,9 +181,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/comments/threads": {
@@ -234,9 +222,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "comments"
-        ]
+        "tags": ["comments"]
       }
     },
     "/comments/diagram/{diagramId}/threads": {
@@ -292,9 +278,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "comments"
-        ]
+        "tags": ["comments"]
       }
     },
     "/diagrams": {
@@ -335,9 +319,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "diagrams"
-        ]
+        "tags": ["diagrams"]
       }
     },
     "/projects": {
@@ -385,9 +367,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "projects"
-        ]
+        "tags": ["projects"]
       },
       "post": {
         "operationId": "createProject",
@@ -426,9 +406,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "projects"
-        ]
+        "tags": ["projects"]
       }
     },
     "/projects/{projectId}/diagrams": {
@@ -484,9 +462,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "projects"
-        ]
+        "tags": ["projects"]
       }
     },
     "/setup": {
@@ -506,9 +482,7 @@
           }
         },
         "summary": "",
-        "tags": [
-          "setup"
-        ]
+        "tags": ["setup"]
       },
       "post": {
         "operationId": "completeSetup",
@@ -536,9 +510,7 @@
           }
         },
         "summary": "",
-        "tags": [
-          "setup"
-        ]
+        "tags": ["setup"]
       }
     },
     "/snapshots": {
@@ -579,9 +551,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "snapshots"
-        ]
+        "tags": ["snapshots"]
       }
     },
     "/snapshots/diagram/{diagramId}": {
@@ -637,9 +607,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "snapshots"
-        ]
+        "tags": ["snapshots"]
       }
     },
     "/users": {
@@ -659,12 +627,7 @@
             "required": false,
             "in": "query",
             "schema": {
-              "enum": [
-                "owner",
-                "instance-admin",
-                "org-admin",
-                "member"
-              ],
+              "enum": ["owner", "instance-admin", "org-admin", "member"],
               "type": "string"
             }
           },
@@ -709,9 +672,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "users"
-        ]
+        "tags": ["users"]
       },
       "post": {
         "operationId": "createUser",
@@ -750,9 +711,7 @@
           }
         ],
         "summary": "",
-        "tags": [
-          "users"
-        ]
+        "tags": ["users"]
       }
     }
   },
@@ -800,11 +759,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "name",
-          "ok",
-          "version"
-        ],
+        "required": ["name", "ok", "version"],
         "additionalProperties": false
       },
       "AuthUserDto_Output": {
@@ -828,12 +783,7 @@
             "nullable": true
           }
         },
-        "required": [
-          "id",
-          "email",
-          "name",
-          "avatarColor"
-        ],
+        "required": ["id", "email", "name", "avatarColor"],
         "additionalProperties": false
       },
       "CurrentUserResponseDto_Output": {
@@ -856,11 +806,7 @@
             "minLength": 1
           }
         },
-        "required": [
-          "email",
-          "password",
-          "name"
-        ]
+        "required": ["email", "password", "name"]
       },
       "LoginResponseDto_Output": {
         "type": "object",
@@ -872,10 +818,7 @@
             "$ref": "#/components/schemas/AuthUserDto_Output"
           }
         },
-        "required": [
-          "accessToken",
-          "user"
-        ],
+        "required": ["accessToken", "user"],
         "additionalProperties": false
       },
       "LoginCredentialDto": {
@@ -891,10 +834,7 @@
             "minLength": 1
           }
         },
-        "required": [
-          "email",
-          "password"
-        ]
+        "required": ["email", "password"]
       },
       "LogoutResponseDto_Output": {
         "type": "object",
@@ -903,9 +843,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "successful"
-        ],
+        "required": ["successful"],
         "additionalProperties": false
       },
       "ApiKeyCreateDto": {
@@ -917,9 +855,7 @@
             "minLength": 1
           },
           "permissions": {
-            "default": [
-              "all"
-            ],
+            "default": ["all"],
             "type": "array",
             "items": {
               "type": "string"
@@ -951,18 +887,11 @@
                 }
               }
             },
-            "required": [
-              "id",
-              "name",
-              "permissions"
-            ],
+            "required": ["id", "name", "permissions"],
             "additionalProperties": false
           }
         },
-        "required": [
-          "secret",
-          "apiKey"
-        ],
+        "required": ["secret", "apiKey"],
         "additionalProperties": false
       },
       "CommentThreadCreateDto": {
@@ -975,14 +904,7 @@
           },
           "targetType": {
             "type": "string",
-            "enum": [
-              "table",
-              "column",
-              "relationship",
-              "enum",
-              "note",
-              "diagram"
-            ]
+            "enum": ["table", "column", "relationship", "enum", "note", "diagram"]
           },
           "targetId": {
             "type": "string",
@@ -993,12 +915,7 @@
             "minLength": 1
           }
         },
-        "required": [
-          "diagramId",
-          "targetType",
-          "targetId",
-          "body"
-        ]
+        "required": ["diagramId", "targetType", "targetId", "body"]
       },
       "CommentThreadResponseDto_Output": {
         "type": "object",
@@ -1040,15 +957,7 @@
                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
               }
             },
-            "required": [
-              "id",
-              "diagramId",
-              "targetType",
-              "targetId",
-              "resolvedAt",
-              "createdAt",
-              "updatedAt"
-            ],
+            "required": ["id", "diagramId", "targetType", "targetId", "resolvedAt", "createdAt", "updatedAt"],
             "additionalProperties": false
           },
           "comment": {
@@ -1078,20 +987,11 @@
                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
               }
             },
-            "required": [
-              "id",
-              "threadId",
-              "body",
-              "createdAt",
-              "updatedAt"
-            ],
+            "required": ["id", "threadId", "body", "createdAt", "updatedAt"],
             "additionalProperties": false
           }
         },
-        "required": [
-          "thread",
-          "comment"
-        ],
+        "required": ["thread", "comment"],
         "additionalProperties": false
       },
       "CommentThreadListItemDto_Output": {
@@ -1134,16 +1034,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": [
-          "id",
-          "diagramId",
-          "targetType",
-          "targetId",
-          "status",
-          "resolvedAt",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["id", "diagramId", "targetType", "targetId", "status", "resolvedAt", "createdAt", "updatedAt"],
         "additionalProperties": false
       },
       "CommentThreadListResponseDto_Output": {
@@ -1165,11 +1056,7 @@
             "maximum": 9007199254740991
           }
         },
-        "required": [
-          "items",
-          "nextCursor",
-          "totalCount"
-        ],
+        "required": ["items", "nextCursor", "totalCount"],
         "additionalProperties": false
       },
       "DiagramCreateDto": {
@@ -1187,19 +1074,10 @@
           "dialect": {
             "default": "postgresql",
             "type": "string",
-            "enum": [
-              "postgresql",
-              "mysql",
-              "sqlite",
-              "mariadb",
-              "sqlserver"
-            ]
+            "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
           }
         },
-        "required": [
-          "projectId",
-          "name"
-        ]
+        "required": ["projectId", "name"]
       },
       "DiagramResponseDto_Output": {
         "type": "object",
@@ -1219,13 +1097,7 @@
           },
           "dialect": {
             "type": "string",
-            "enum": [
-              "postgresql",
-              "mysql",
-              "sqlite",
-              "mariadb",
-              "sqlserver"
-            ]
+            "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
           },
           "createdAt": {
             "type": "string",
@@ -1238,14 +1110,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": [
-          "id",
-          "projectId",
-          "name",
-          "dialect",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["id", "projectId", "name", "dialect", "createdAt", "updatedAt"],
         "additionalProperties": false
       },
       "ProjectResponseDto_Output": {
@@ -1320,11 +1185,7 @@
             "maximum": 9007199254740991
           }
         },
-        "required": [
-          "items",
-          "nextCursor",
-          "totalCount"
-        ],
+        "required": ["items", "nextCursor", "totalCount"],
         "additionalProperties": false
       },
       "ProjectCreateDto": {
@@ -1343,9 +1204,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "name"
-        ]
+        "required": ["name"]
       },
       "DiagramListResponseDto_Output": {
         "type": "object",
@@ -1366,11 +1225,7 @@
             "maximum": 9007199254740991
           }
         },
-        "required": [
-          "items",
-          "nextCursor",
-          "totalCount"
-        ],
+        "required": ["items", "nextCursor", "totalCount"],
         "additionalProperties": false
       },
       "SetupStatusResponseDto_Output": {
@@ -1393,22 +1248,10 @@
           },
           "signupPolicy": {
             "type": "string",
-            "enum": [
-              "signup_disabled",
-              "invite_only",
-              "allowed_domains",
-              "sso_only",
-              "public_signup"
-            ]
+            "enum": ["signup_disabled", "invite_only", "allowed_domains", "sso_only", "public_signup"]
           }
         },
-        "required": [
-          "completedAt",
-          "hasOrganization",
-          "hasOwner",
-          "isSetupComplete",
-          "signupPolicy"
-        ],
+        "required": ["completedAt", "hasOrganization", "hasOwner", "isSetupComplete", "signupPolicy"],
         "additionalProperties": false
       },
       "SetupCreateDto": {
@@ -1436,12 +1279,7 @@
             "minLength": 1
           }
         },
-        "required": [
-          "ownerEmail",
-          "ownerName",
-          "ownerPassword",
-          "workspaceName"
-        ]
+        "required": ["ownerEmail", "ownerName", "ownerPassword", "workspaceName"]
       },
       "SetupCreateResponseDto_Output": {
         "type": "object",
@@ -1473,20 +1311,11 @@
                 "type": "string"
               }
             },
-            "required": [
-              "avatarColor",
-              "email",
-              "id",
-              "name"
-            ],
+            "required": ["avatarColor", "email", "id", "name"],
             "additionalProperties": false
           }
         },
-        "required": [
-          "accessToken",
-          "setup",
-          "user"
-        ],
+        "required": ["accessToken", "setup", "user"],
         "additionalProperties": false
       },
       "SnapshotCreateDto": {
@@ -1512,13 +1341,7 @@
               },
               "dialect": {
                 "type": "string",
-                "enum": [
-                  "postgresql",
-                  "mysql",
-                  "sqlite",
-                  "mariadb",
-                  "sqlserver"
-                ]
+                "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
               },
               "tables": {
                 "type": "object",
@@ -1544,10 +1367,7 @@
                           "type": "number"
                         }
                       },
-                      "required": [
-                        "x",
-                        "y"
-                      ]
+                      "required": ["x", "y"]
                     },
                     "width": {
                       "default": 288,
@@ -1564,11 +1384,7 @@
                     },
                     "displayMode": {
                       "type": "string",
-                      "enum": [
-                        "all_columns",
-                        "pk_fk_only",
-                        "header_only"
-                      ]
+                      "enum": ["all_columns", "pk_fk_only", "header_only"]
                     },
                     "columnIds": {
                       "type": "array",
@@ -1590,12 +1406,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "name",
-                    "position",
-                    "columnIds"
-                  ]
+                  "required": ["id", "name", "position", "columnIds"]
                 }
               },
               "columns": {
@@ -1657,9 +1468,7 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "family"
-                      ]
+                      "required": ["family"]
                     },
                     "primaryKey": {
                       "default": false,
@@ -1693,12 +1502,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "tableId",
-                    "name",
-                    "type"
-                  ]
+                  "required": ["id", "tableId", "name", "type"]
                 }
               },
               "indexes": {
@@ -1725,22 +1529,14 @@
                           },
                           "order": {
                             "type": "string",
-                            "enum": [
-                              "asc",
-                              "desc"
-                            ]
+                            "enum": ["asc", "desc"]
                           },
                           "nulls": {
                             "type": "string",
-                            "enum": [
-                              "first",
-                              "last"
-                            ]
+                            "enum": ["first", "last"]
                           }
                         },
-                        "required": [
-                          "columnId"
-                        ]
+                        "required": ["columnId"]
                       }
                     },
                     "unique": {
@@ -1749,13 +1545,7 @@
                     },
                     "method": {
                       "type": "string",
-                      "enum": [
-                        "btree",
-                        "hash",
-                        "gin",
-                        "gist",
-                        "brin"
-                      ]
+                      "enum": ["btree", "hash", "gin", "gist", "brin"]
                     },
                     "where": {
                       "type": "string"
@@ -1770,12 +1560,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "tableId",
-                    "name",
-                    "columns"
-                  ]
+                  "required": ["id", "tableId", "name", "columns"]
                 }
               },
               "relationships": {
@@ -1808,31 +1593,15 @@
                     },
                     "cardinality": {
                       "type": "string",
-                      "enum": [
-                        "one_to_one",
-                        "one_to_many",
-                        "many_to_many"
-                      ]
+                      "enum": ["one_to_one", "one_to_many", "many_to_many"]
                     },
                     "onDelete": {
                       "type": "string",
-                      "enum": [
-                        "cascade",
-                        "restrict",
-                        "set_null",
-                        "set_default",
-                        "no_action"
-                      ]
+                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
                     },
                     "onUpdate": {
                       "type": "string",
-                      "enum": [
-                        "cascade",
-                        "restrict",
-                        "set_null",
-                        "set_default",
-                        "no_action"
-                      ]
+                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
                     },
                     "name": {
                       "type": "string"
@@ -1842,11 +1611,7 @@
                     },
                     "matchType": {
                       "type": "string",
-                      "enum": [
-                        "simple",
-                        "full",
-                        "partial"
-                      ]
+                      "enum": ["simple", "full", "partial"]
                     },
                     "comment": {
                       "type": "string"
@@ -1886,11 +1651,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "name",
-                    "values"
-                  ]
+                  "required": ["id", "name", "values"]
                 }
               },
               "checks": {
@@ -1918,12 +1679,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "tableId",
-                    "name",
-                    "expression"
-                  ]
+                  "required": ["id", "tableId", "name", "expression"]
                 }
               },
               "notes": {
@@ -1947,10 +1703,7 @@
                           "type": "number"
                         }
                       },
-                      "required": [
-                        "x",
-                        "y"
-                      ]
+                      "required": ["x", "y"]
                     },
                     "width": {
                       "type": "integer",
@@ -1962,11 +1715,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "text",
-                    "position"
-                  ]
+                  "required": ["id", "text", "position"]
                 }
               },
               "groups": {
@@ -1991,10 +1740,7 @@
                           "type": "number"
                         }
                       },
-                      "required": [
-                        "x",
-                        "y"
-                      ]
+                      "required": ["x", "y"]
                     },
                     "width": {
                       "type": "integer",
@@ -2018,14 +1764,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "id",
-                    "name",
-                    "position",
-                    "width",
-                    "height",
-                    "tableIds"
-                  ]
+                  "required": ["id", "name", "position", "width", "height", "tableIds"]
                 }
               },
               "metadata": {
@@ -2037,7 +1776,7 @@
                   "updatedAt": {
                     "type": "string",
                     "format": "date-time",
-                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
                   },
                   "viewport": {
                     "type": "object",
@@ -2052,11 +1791,7 @@
                         "type": "number"
                       }
                     },
-                    "required": [
-                      "x",
-                      "y",
-                      "zoom"
-                    ]
+                    "required": ["x", "y", "zoom"]
                   },
                   "gridSize": {
                     "type": "integer",
@@ -2072,34 +1807,16 @@
                   },
                   "relationshipRouting": {
                     "type": "string",
-                    "enum": [
-                      "smart_orthogonal",
-                      "straight",
-                      "manual"
-                    ]
+                    "enum": ["smart_orthogonal", "straight", "manual"]
                   }
                 },
-                "required": [
-                  "name"
-                ]
+                "required": ["name"]
               }
             },
-            "required": [
-              "dialect",
-              "tables",
-              "columns",
-              "indexes",
-              "relationships",
-              "enums",
-              "notes",
-              "metadata"
-            ]
+            "required": ["dialect", "tables", "columns", "indexes", "relationships", "enums", "notes", "metadata"]
           }
         },
-        "required": [
-          "diagramId",
-          "snapshot"
-        ]
+        "required": ["diagramId", "snapshot"]
       },
       "SnapshotResponseDto_Output": {
         "type": "object",
@@ -2133,13 +1850,7 @@
               },
               "dialect": {
                 "type": "string",
-                "enum": [
-                  "postgresql",
-                  "mysql",
-                  "sqlite",
-                  "mariadb",
-                  "sqlserver"
-                ]
+                "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
               },
               "tables": {
                 "type": "object",
@@ -2165,10 +1876,7 @@
                           "type": "number"
                         }
                       },
-                      "required": [
-                        "x",
-                        "y"
-                      ],
+                      "required": ["x", "y"],
                       "additionalProperties": false
                     },
                     "width": {
@@ -2186,11 +1894,7 @@
                     },
                     "displayMode": {
                       "type": "string",
-                      "enum": [
-                        "all_columns",
-                        "pk_fk_only",
-                        "header_only"
-                      ]
+                      "enum": ["all_columns", "pk_fk_only", "header_only"]
                     },
                     "columnIds": {
                       "type": "array",
@@ -2212,14 +1916,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "name",
-                    "position",
-                    "width",
-                    "columnIds",
-                    "indexIds"
-                  ],
+                  "required": ["id", "name", "position", "width", "columnIds", "indexIds"],
                   "additionalProperties": false
                 }
               },
@@ -2282,9 +1979,7 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "family"
-                      ],
+                      "required": ["family"],
                       "additionalProperties": false
                     },
                     "primaryKey": {
@@ -2319,16 +2014,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "tableId",
-                    "name",
-                    "type",
-                    "primaryKey",
-                    "nullable",
-                    "unique",
-                    "autoIncrement"
-                  ],
+                  "required": ["id", "tableId", "name", "type", "primaryKey", "nullable", "unique", "autoIncrement"],
                   "additionalProperties": false
                 }
               },
@@ -2356,22 +2042,14 @@
                           },
                           "order": {
                             "type": "string",
-                            "enum": [
-                              "asc",
-                              "desc"
-                            ]
+                            "enum": ["asc", "desc"]
                           },
                           "nulls": {
                             "type": "string",
-                            "enum": [
-                              "first",
-                              "last"
-                            ]
+                            "enum": ["first", "last"]
                           }
                         },
-                        "required": [
-                          "columnId"
-                        ],
+                        "required": ["columnId"],
                         "additionalProperties": false
                       }
                     },
@@ -2381,13 +2059,7 @@
                     },
                     "method": {
                       "type": "string",
-                      "enum": [
-                        "btree",
-                        "hash",
-                        "gin",
-                        "gist",
-                        "brin"
-                      ]
+                      "enum": ["btree", "hash", "gin", "gist", "brin"]
                     },
                     "where": {
                       "type": "string"
@@ -2402,13 +2074,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "tableId",
-                    "name",
-                    "columns",
-                    "unique"
-                  ],
+                  "required": ["id", "tableId", "name", "columns", "unique"],
                   "additionalProperties": false
                 }
               },
@@ -2442,31 +2108,15 @@
                     },
                     "cardinality": {
                       "type": "string",
-                      "enum": [
-                        "one_to_one",
-                        "one_to_many",
-                        "many_to_many"
-                      ]
+                      "enum": ["one_to_one", "one_to_many", "many_to_many"]
                     },
                     "onDelete": {
                       "type": "string",
-                      "enum": [
-                        "cascade",
-                        "restrict",
-                        "set_null",
-                        "set_default",
-                        "no_action"
-                      ]
+                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
                     },
                     "onUpdate": {
                       "type": "string",
-                      "enum": [
-                        "cascade",
-                        "restrict",
-                        "set_null",
-                        "set_default",
-                        "no_action"
-                      ]
+                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
                     },
                     "name": {
                       "type": "string"
@@ -2476,11 +2126,7 @@
                     },
                     "matchType": {
                       "type": "string",
-                      "enum": [
-                        "simple",
-                        "full",
-                        "partial"
-                      ]
+                      "enum": ["simple", "full", "partial"]
                     },
                     "comment": {
                       "type": "string"
@@ -2521,11 +2167,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "name",
-                    "values"
-                  ],
+                  "required": ["id", "name", "values"],
                   "additionalProperties": false
                 }
               },
@@ -2554,12 +2196,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "tableId",
-                    "name",
-                    "expression"
-                  ],
+                  "required": ["id", "tableId", "name", "expression"],
                   "additionalProperties": false
                 }
               },
@@ -2584,10 +2221,7 @@
                           "type": "number"
                         }
                       },
-                      "required": [
-                        "x",
-                        "y"
-                      ],
+                      "required": ["x", "y"],
                       "additionalProperties": false
                     },
                     "width": {
@@ -2600,11 +2234,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "id",
-                    "text",
-                    "position"
-                  ],
+                  "required": ["id", "text", "position"],
                   "additionalProperties": false
                 }
               },
@@ -2630,10 +2260,7 @@
                           "type": "number"
                         }
                       },
-                      "required": [
-                        "x",
-                        "y"
-                      ],
+                      "required": ["x", "y"],
                       "additionalProperties": false
                     },
                     "width": {
@@ -2658,14 +2285,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "id",
-                    "name",
-                    "position",
-                    "width",
-                    "height",
-                    "tableIds"
-                  ],
+                  "required": ["id", "name", "position", "width", "height", "tableIds"],
                   "additionalProperties": false
                 }
               },
@@ -2678,7 +2298,7 @@
                   "updatedAt": {
                     "type": "string",
                     "format": "date-time",
-                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
                   },
                   "viewport": {
                     "type": "object",
@@ -2693,11 +2313,7 @@
                         "type": "number"
                       }
                     },
-                    "required": [
-                      "x",
-                      "y",
-                      "zoom"
-                    ],
+                    "required": ["x", "y", "zoom"],
                     "additionalProperties": false
                   },
                   "gridSize": {
@@ -2714,16 +2330,10 @@
                   },
                   "relationshipRouting": {
                     "type": "string",
-                    "enum": [
-                      "smart_orthogonal",
-                      "straight",
-                      "manual"
-                    ]
+                    "enum": ["smart_orthogonal", "straight", "manual"]
                   }
                 },
-                "required": [
-                  "name"
-                ],
+                "required": ["name"],
                 "additionalProperties": false
               }
             },
@@ -2748,14 +2358,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": [
-          "id",
-          "diagramId",
-          "version",
-          "message",
-          "snapshot",
-          "createdAt"
-        ],
+        "required": ["id", "diagramId", "version", "message", "snapshot", "createdAt"],
         "additionalProperties": false
       },
       "SnapshotListResponseDto_Output": {
@@ -2777,11 +2380,7 @@
             "maximum": 9007199254740991
           }
         },
-        "required": [
-          "items",
-          "nextCursor",
-          "totalCount"
-        ],
+        "required": ["items", "nextCursor", "totalCount"],
         "additionalProperties": false
       },
       "UserResponseDto_Output": {
@@ -2809,10 +2408,7 @@
           },
           "instanceRole": {
             "type": "string",
-            "enum": [
-              "owner",
-              "admin"
-            ],
+            "enum": ["owner", "admin"],
             "nullable": true
           },
           "organizations": {
@@ -2838,13 +2434,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id",
-                "name",
-                "slug",
-                "role",
-                "status"
-              ],
+              "required": ["id", "name", "slug", "role", "status"],
               "additionalProperties": false
             }
           },
@@ -2891,11 +2481,7 @@
             "maximum": 9007199254740991
           }
         },
-        "required": [
-          "items",
-          "nextCursor",
-          "totalCount"
-        ],
+        "required": ["items", "nextCursor", "totalCount"],
         "additionalProperties": false
       },
       "UserCreateDto": {
@@ -2921,23 +2507,14 @@
           },
           "organizationRole": {
             "type": "string",
-            "enum": [
-              "admin",
-              "member"
-            ]
+            "enum": ["admin", "member"]
           },
           "instanceRole": {
             "type": "string",
-            "enum": [
-              "admin"
-            ]
+            "enum": ["admin"]
           }
         },
-        "required": [
-          "email",
-          "name",
-          "password"
-        ]
+        "required": ["email", "name", "password"]
       }
     }
   }
