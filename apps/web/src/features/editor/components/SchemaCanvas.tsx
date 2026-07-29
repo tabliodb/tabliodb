@@ -414,7 +414,7 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
       return [];
     }
 
-    // Only relationships owned by the selected primary-key table use the active Duolingo green, so inactive wiring stays readable but subdued.
+    // Relationships become active when either endpoint table is selected, so both PK-side and FK-side inspection highlights the same wiring.
     const stroke = terminals.source.active ? relationshipActiveColor : relationshipNeutralColor;
     const strokeWidth = terminals.source.active ? 3 : 2;
 
@@ -481,7 +481,8 @@ function createRelationshipPlan(model: DiagramModel, selectedTableId: string | n
     }
 
     const sourceIsLeft = sourceTable.position.x + tableNodeWidth / 2 <= targetTable.position.x + tableNodeWidth / 2;
-    const active = selectedTableId === relationship.sourceTableId;
+    // Selecting either the primary-key table or the foreign-key table should light up the relationship for quick bidirectional tracing.
+    const active = selectedTableId === relationship.sourceTableId || selectedTableId === relationship.targetTableId;
     const sourceSide: PortSide = sourceIsLeft ? 'right' : 'left';
     const targetSide: PortSide = sourceIsLeft ? 'left' : 'right';
 
