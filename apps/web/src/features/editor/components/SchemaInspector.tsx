@@ -7,6 +7,8 @@ import {
   type ColumnTypeFamily,
   type ColumnTypeSpec,
   type DatabaseColumn,
+  type DatabaseIndex,
+  type DatabaseIndexColumn,
   type DatabaseRelationship,
   type DatabaseTable,
   type DiagramModel,
@@ -29,7 +31,7 @@ import {
 } from '@tabliodb/ui';
 import { Pencil, Plus, Save, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState, type InputHTMLAttributes } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
 import { formatColumnType } from '../diagram-model';
 
@@ -79,6 +81,29 @@ type ColumnFormState = z.infer<typeof columnFormSchema>;
 
 const unsetSelectValue = '__unset' as const;
 
+const indexMethodOptions = [unsetSelectValue, 'btree', 'hash', 'gin', 'gist', 'brin'] as const;
+const indexOrderOptions = [unsetSelectValue, 'asc', 'desc'] as const;
+const indexNullsOptions = [unsetSelectValue, 'first', 'last'] as const;
+
+const indexFormSchema = z.object({
+  columnIds: z.array(z.string()).min(1, 'Choose at least one index column.'),
+  comment: z.string().trim().max(240, 'Keep the comment under 240 characters.'),
+  includeColumnIds: z.array(z.string()),
+  method: z.enum(indexMethodOptions),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Index name is required.')
+    .max(96, 'Keep the index name under 96 characters.')
+    .regex(/^[a-z][a-z0-9_]*$/, 'Use lowercase letters, numbers, and underscores.'),
+  nullsByColumnId: z.record(z.string(), z.enum(indexNullsOptions)),
+  orderByColumnId: z.record(z.string(), z.enum(indexOrderOptions)),
+  unique: z.boolean(),
+  where: z.string().trim().max(240, 'Keep the WHERE expression under 240 characters.'),
+});
+
+type IndexFormState = z.infer<typeof indexFormSchema>;
+
 const relationshipCardinalityOptions = [
   'one_to_one',
   'one_to_many',
@@ -127,12 +152,16 @@ export function SchemaInspector({
 }: SchemaInspectorProps) {
   const selectedTable = selectedTableId ? model.tables[selectedTableId] : null;
   const selectedColumns = selectedTable ? getTableColumns(model, selectedTable.id) : [];
+  const selectedIndexes = selectedTable ? getTableIndexes(model, selectedTable) : [];
   const selectedRelationships = selectedTable ? getTableRelationships(model, selectedTable.id) : [];
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
+  const [selectedIndexId, setSelectedIndexId] = useState<string | null>(null);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const selectedColumnIds = selectedColumns.map((column) => column.id).join('|');
+  const selectedIndexIds = selectedIndexes.map((index) => index.id).join('|');
   const selectedRelationshipIds = selectedRelationships.map((relationship) => relationship.id).join('|');
   const selectedColumn = selectedColumns.find((column) => column.id === selectedColumnId) ?? null;
+  const selectedIndex = selectedIndexes.find((index) => index.id === selectedIndexId) ?? null;
   const selectedRelationship =
     selectedRelationships.find((relationship) => relationship.id === selectedRelationshipId) ?? null;
   const reviewSignals = useMemo(() => getReviewSignals(model), [model]);
@@ -148,6 +177,18 @@ export function SchemaInspector({
       setSelectedColumnId(selectedColumns[0]?.id ?? null);
     }
   }, [selectedColumnId, selectedColumnIds, selectedColumns, selectedTable]);
+
+  useEffect(() => {
+    if (!selectedTable) {
+      setSelectedIndexId(null);
+      return;
+    }
+
+    if (!selectedIndexId || !selectedIndexes.some((index) => index.id === selectedIndexId)) {
+      // Keep index actions scoped to the active table, matching the table/column/relationship inspector behavior.
+      setSelectedIndexId(selectedIndexes[0]?.id ?? null);
+    }
+  }, [selectedIndexId, selectedIndexIds, selectedIndexes, selectedTable]);
 
   useEffect(() => {
     if (!selectedTable) {
@@ -236,6 +277,16 @@ export function SchemaInspector({
           )}
         </section>
         <ColumnInspector column={selectedColumn} model={model} onModelChange={onModelChange} table={selectedTable} />
+        <IndexBuilderPanel
+          columns={selectedColumns}
+          index={selectedIndex}
+          indexes={selectedIndexes}
+          model={model}
+          onIndexSelect={setSelectedIndexId}
+          onModelChange={onModelChange}
+          selectedIndexId={selectedIndexId}
+          table={selectedTable}
+        />
         <RelationshipInspector
           model={model}
           onModelChange={onModelChange}
@@ -688,6 +739,453 @@ function EditColumnDialog({
   );
 }
 
+function IndexBuilderPanel({
+  columns,
+  index,
+  indexes,
+  model,
+  onIndexSelect,
+  onModelChange,
+  selectedIndexId,
+  table,
+}: {
+  columns: DatabaseColumn[];
+  index: DatabaseIndex | null;
+  indexes: DatabaseIndex[];
+  model: DiagramModel;
+  onIndexSelect: (indexId: string) => void;
+  onModelChange: (model: DiagramModel) => void;
+  selectedIndexId: string | null;
+  table: DatabaseTable | null;
+}) {
+  return (
+    <section>
+      <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">Indexes</h2>
+      {table ? (
+        <Surface className="mt-2 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold">{indexes.length} indexes</div>
+              <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                Composite, unique, and partial indexes
+              </div>
+            </div>
+            <AddIndexDialog columns={columns} model={model} onModelChange={onModelChange} table={table} />
+          </div>
+          {indexes.length > 0 ? (
+            <div className="mt-3 space-y-1">
+              {indexes.map((currentIndex) => (
+                <button
+                  aria-pressed={selectedIndexId === currentIndex.id}
+                  className={cn(
+                    'w-full cursor-pointer rounded-xl px-2 py-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+                    selectedIndexId === currentIndex.id &&
+                      'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                  )}
+                  key={currentIndex.id}
+                  onClick={() => onIndexSelect(currentIndex.id)}
+                  type="button"
+                >
+                  <div className="truncate text-xs font-extrabold">{currentIndex.name}</div>
+                  <div className="mt-1 truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {formatIndexColumns(model, currentIndex)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              No indexes yet
+            </div>
+          )}
+          {index ? (
+            <div className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-extrabold">{index.name}</div>
+                  <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {index.unique ? 'Unique index' : 'Non-unique index'}
+                  </div>
+                </div>
+                <EditIndexDialog columns={columns} index={index} model={model} onModelChange={onModelChange} />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <ColumnFact label="Method" value={formatIndexMethod(index.method)} />
+                <ColumnFact label="Columns" value={String(index.columns.length)} />
+                <ColumnFact label="Include" value={String(index.includeColumnIds?.length ?? 0)} />
+                <ColumnFact label="Partial" value={index.where ? 'Yes' : 'No'} />
+              </div>
+              {index.where ? (
+                <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  WHERE {index.where}
+                </p>
+              ) : null}
+              {index.comment ? (
+                <p className="mt-2 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {index.comment}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </Surface>
+      ) : (
+        <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+          No table selected
+        </Surface>
+      )}
+    </section>
+  );
+}
+
+function AddIndexDialog({
+  columns,
+  model,
+  onModelChange,
+  table,
+}: {
+  columns: DatabaseColumn[];
+  model: DiagramModel;
+  onModelChange: (model: DiagramModel) => void;
+  table: DatabaseTable;
+}) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<IndexFormState>({
+    defaultValues: getNewIndexDefaults(table, columns),
+    resolver: zodResolver(indexFormSchema),
+  });
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      form.reset(getNewIndexDefaults(table, columns));
+    }
+  }
+
+  function handleSubmit(values: IndexFormState) {
+    onModelChange(
+      applyDiagramCommand(model, {
+        type: 'index.create',
+        tableId: table.id,
+        name: values.name.trim(),
+        columns: createIndexColumns(values),
+        comment: normalizeOptionalString(values.comment),
+        includeColumnIds: normalizeIncludeColumnIds(values),
+        method: normalizeIndexMethod(values.method),
+        unique: values.unique,
+        where: normalizeOptionalString(values.where),
+      }),
+    );
+    handleOpenChange(false);
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogTrigger asChild>
+        <Button disabled={columns.length === 0} size="sm" variant="soft">
+          <Plus className="size-4" />
+          Index
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>New index</DialogTitle>
+            <DialogDescription>Build a table index from one or more columns.</DialogDescription>
+          </DialogHeader>
+          <IndexFormFields columns={columns} form={form} />
+          <DialogFooter className="mt-5">
+            <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button type="submit">
+              <Plus className="size-4" />
+              Add index
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditIndexDialog({
+  columns,
+  index,
+  model,
+  onModelChange,
+}: {
+  columns: DatabaseColumn[];
+  index: DatabaseIndex;
+  model: DiagramModel;
+  onModelChange: (model: DiagramModel) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<IndexFormState>({
+    defaultValues: getIndexDefaults(index, columns),
+    resolver: zodResolver(indexFormSchema),
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset(getIndexDefaults(index, columns));
+    }
+  }, [columns, form, index, open]);
+
+  function handleSubmit(values: IndexFormState) {
+    onModelChange(
+      applyDiagramCommand(model, {
+        type: 'index.update',
+        indexId: index.id,
+        changes: {
+          name: values.name.trim(),
+          columns: createIndexColumns(values),
+          comment: normalizeOptionalString(values.comment),
+          includeColumnIds: normalizeIncludeColumnIds(values),
+          method: normalizeIndexMethod(values.method),
+          unique: values.unique,
+          where: normalizeOptionalString(values.where),
+        },
+      }),
+    );
+    setOpen(false);
+  }
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="secondary">
+          <Pencil className="size-4" />
+          Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Edit index</DialogTitle>
+            <DialogDescription>Change indexed columns, method, and partial predicate.</DialogDescription>
+          </DialogHeader>
+          <IndexFormFields columns={columns} form={form} />
+          <DialogFooter className="mt-5">
+            <Button onClick={() => setOpen(false)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button type="submit">
+              <Save className="size-4" />
+              Save index
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: UseFormReturn<IndexFormState> }) {
+  const { errors } = form.formState;
+  const columnIds = form.watch('columnIds');
+  const includeColumnIds = form.watch('includeColumnIds');
+  const nullsByColumnId = form.watch('nullsByColumnId');
+  const orderByColumnId = form.watch('orderByColumnId');
+
+  function handleColumnToggle(columnId: string, checked: boolean) {
+    const nextColumnIds = checked
+      ? [...form.getValues('columnIds'), columnId]
+      : form.getValues('columnIds').filter((currentColumnId) => currentColumnId !== columnId);
+
+    // Include columns must not duplicate key columns, so toggling a key column also removes it from INCLUDE.
+    form.setValue('columnIds', nextColumnIds, { shouldDirty: true, shouldValidate: true });
+    form.setValue(
+      'includeColumnIds',
+      form.getValues('includeColumnIds').filter((includeColumnId) => !nextColumnIds.includes(includeColumnId)),
+      { shouldDirty: true, shouldValidate: true },
+    );
+  }
+
+  function handleIncludeColumnToggle(columnId: string, checked: boolean) {
+    const currentIncludeColumnIds = form.getValues('includeColumnIds');
+    const nextIncludeColumnIds = checked
+      ? [...currentIncludeColumnIds, columnId]
+      : currentIncludeColumnIds.filter((currentColumnId) => currentColumnId !== columnId);
+
+    // The array is controlled manually because index columns are a builder-style set, not a simple scalar input.
+    form.setValue('includeColumnIds', nextIncludeColumnIds, { shouldDirty: true, shouldValidate: true });
+  }
+
+  function handleOrderChange(columnId: string, value: IndexFormState['orderByColumnId'][string]) {
+    form.setValue(
+      'orderByColumnId',
+      {
+        ...form.getValues('orderByColumnId'),
+        [columnId]: value,
+      },
+      { shouldDirty: true, shouldValidate: true },
+    );
+  }
+
+  function handleNullsChange(columnId: string, value: IndexFormState['nullsByColumnId'][string]) {
+    form.setValue(
+      'nullsByColumnId',
+      {
+        ...form.getValues('nullsByColumnId'),
+        [columnId]: value,
+      },
+      { shouldDirty: true, shouldValidate: true },
+    );
+  }
+
+  return (
+    <div className="mt-4 grid gap-4">
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Index name
+        </span>
+        <Input autoFocus aria-invalid={Boolean(errors.name)} placeholder="users_email_idx" {...form.register('name')} />
+        <FieldError>{errors.name?.message}</FieldError>
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Method
+          </span>
+          <select
+            className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+            {...form.register('method')}
+          >
+            {indexMethodOptions.map((option) => (
+              <option key={option} value={option}>
+                {option === unsetSelectValue ? 'Default' : option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="pt-6">
+          <CheckboxField label="Unique index" {...form.register('unique')} />
+        </div>
+      </div>
+      <div>
+        <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Key columns
+        </div>
+        <div className="grid gap-2">
+          {columns.map((column) => {
+            const selected = columnIds.includes(column.id);
+
+            return (
+              <div
+                className={cn(
+                  'rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3',
+                  selected && 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))]',
+                )}
+                key={column.id}
+              >
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-extrabold">
+                  <input
+                    checked={selected}
+                    className="size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))]"
+                    onChange={(event) => handleColumnToggle(column.id, event.currentTarget.checked)}
+                    type="checkbox"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{column.name}</span>
+                  <span className="text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {formatColumnType(column.type)}
+                  </span>
+                </label>
+                {selected ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="block text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                      Order
+                      <select
+                        className="mt-1 h-10 w-full cursor-pointer rounded-xl border-2 border-[rgb(var(--tabliodb-border))] bg-white px-2 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))]"
+                        onChange={(event) =>
+                          handleOrderChange(
+                            column.id,
+                            event.currentTarget.value as IndexFormState['orderByColumnId'][string],
+                          )
+                        }
+                        value={orderByColumnId[column.id] ?? unsetSelectValue}
+                      >
+                        {indexOrderOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option === unsetSelectValue ? 'Default' : option.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                      Nulls
+                      <select
+                        className="mt-1 h-10 w-full cursor-pointer rounded-xl border-2 border-[rgb(var(--tabliodb-border))] bg-white px-2 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))]"
+                        onChange={(event) =>
+                          handleNullsChange(
+                            column.id,
+                            event.currentTarget.value as IndexFormState['nullsByColumnId'][string],
+                          )
+                        }
+                        value={nullsByColumnId[column.id] ?? unsetSelectValue}
+                      >
+                        {indexNullsOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option === unsetSelectValue ? 'Default' : option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+        <FieldError>{errors.columnIds?.message}</FieldError>
+      </div>
+      <div>
+        <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Include columns
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {columns.map((column) => {
+            const selectedAsKey = columnIds.includes(column.id);
+
+            return (
+              <label
+                className={cn(
+                  'flex cursor-pointer items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] px-3 py-2 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+                  selectedAsKey && 'cursor-not-allowed opacity-50',
+                )}
+                key={column.id}
+              >
+                <input
+                  checked={includeColumnIds.includes(column.id)}
+                  className="size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))] disabled:cursor-not-allowed"
+                  disabled={selectedAsKey}
+                  onChange={(event) => handleIncludeColumnToggle(column.id, event.currentTarget.checked)}
+                  type="checkbox"
+                />
+                <span className="min-w-0 truncate">{column.name}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Partial WHERE
+        </span>
+        <Input placeholder="deleted_at IS NULL" {...form.register('where')} />
+        <FieldError>{errors.where?.message}</FieldError>
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Comment
+        </span>
+        <Input placeholder="Index note" {...form.register('comment')} />
+        <FieldError>{errors.comment?.message}</FieldError>
+      </label>
+    </div>
+  );
+}
+
 function RelationshipInspector({
   model,
   onModelChange,
@@ -1128,6 +1626,14 @@ function countTableRelationships(model: DiagramModel, table: DatabaseTable): num
   ).length;
 }
 
+function getTableIndexes(model: DiagramModel, table: DatabaseTable): DatabaseIndex[] {
+  return table.indexIds.flatMap((indexId) => {
+    const index = model.indexes[indexId];
+
+    return index ? [index] : [];
+  });
+}
+
 function getTableRelationships(model: DiagramModel, tableId: string): DatabaseRelationship[] {
   return Object.values(model.relationships).filter(
     (relationship) => relationship.sourceTableId === tableId || relationship.targetTableId === tableId,
@@ -1143,6 +1649,130 @@ function countColumnRelationships(model: DiagramModel, column: DatabaseColumn): 
 
 function relationshipTouchesColumn(relationship: DatabaseRelationship, columnId: string): boolean {
   return relationship.sourceColumnIds.includes(columnId) || relationship.targetColumnIds.includes(columnId);
+}
+
+function getNewIndexDefaults(table: DatabaseTable, columns: DatabaseColumn[]): IndexFormState {
+  const firstColumn = columns[0];
+  const orderByColumnId: IndexFormState['orderByColumnId'] = Object.fromEntries(
+    columns.map((column) => [column.id, unsetSelectValue]),
+  );
+  const nullsByColumnId: IndexFormState['nullsByColumnId'] = Object.fromEntries(
+    columns.map((column) => [column.id, unsetSelectValue]),
+  );
+
+  return {
+    columnIds: firstColumn ? [firstColumn.id] : [],
+    comment: '',
+    includeColumnIds: [],
+    method: unsetSelectValue,
+    name: getSuggestedIndexName(table, firstColumn),
+    nullsByColumnId,
+    orderByColumnId,
+    unique: false,
+    where: '',
+  };
+}
+
+function getIndexDefaults(index: DatabaseIndex, columns: DatabaseColumn[]): IndexFormState {
+  const orderByColumnId: IndexFormState['orderByColumnId'] = Object.fromEntries(
+    columns.map((column) => [column.id, unsetSelectValue]),
+  );
+  const nullsByColumnId: IndexFormState['nullsByColumnId'] = Object.fromEntries(
+    columns.map((column) => [column.id, unsetSelectValue]),
+  );
+
+  for (const indexColumn of index.columns) {
+    orderByColumnId[indexColumn.columnId] = indexColumn.order ?? unsetSelectValue;
+    nullsByColumnId[indexColumn.columnId] = indexColumn.nulls ?? unsetSelectValue;
+  }
+
+  return {
+    columnIds: index.columns.map((column) => column.columnId),
+    comment: index.comment ?? '',
+    includeColumnIds: index.includeColumnIds ?? [],
+    method: index.method ?? unsetSelectValue,
+    name: index.name,
+    nullsByColumnId,
+    orderByColumnId,
+    unique: index.unique,
+    where: index.where ?? '',
+  };
+}
+
+function createIndexColumns(values: IndexFormState): DatabaseIndexColumn[] {
+  return values.columnIds.map((columnId) => {
+    const indexColumn: DatabaseIndexColumn = { columnId };
+    const order = normalizeIndexOrder(values.orderByColumnId[columnId] ?? unsetSelectValue);
+    const nulls = normalizeIndexNulls(values.nullsByColumnId[columnId] ?? unsetSelectValue);
+
+    if (order) {
+      indexColumn.order = order;
+    }
+
+    if (nulls) {
+      indexColumn.nulls = nulls;
+    }
+
+    return indexColumn;
+  });
+}
+
+function normalizeIncludeColumnIds(values: IndexFormState): string[] | undefined {
+  const keyColumnIds = new Set(values.columnIds);
+  const includeColumnIds = values.includeColumnIds.filter((columnId) => !keyColumnIds.has(columnId));
+
+  // Empty INCLUDE lists are stored as undefined to keep the serialized diagram compact.
+  return includeColumnIds.length > 0 ? includeColumnIds : undefined;
+}
+
+function normalizeIndexMethod(value: IndexFormState['method']): DatabaseIndex['method'] | undefined {
+  return value === unsetSelectValue ? undefined : value;
+}
+
+function normalizeIndexOrder(
+  value: IndexFormState['orderByColumnId'][string],
+): DatabaseIndexColumn['order'] | undefined {
+  return value === unsetSelectValue ? undefined : value;
+}
+
+function normalizeIndexNulls(
+  value: IndexFormState['nullsByColumnId'][string],
+): DatabaseIndexColumn['nulls'] | undefined {
+  return value === unsetSelectValue ? undefined : value;
+}
+
+function getSuggestedIndexName(table: DatabaseTable, column: DatabaseColumn | undefined): string {
+  return normalizeIdentifier(`${table.name}_${column?.name ?? 'column'}_idx`) || `idx_${table.id}`;
+}
+
+function normalizeIdentifier(value: string): string {
+  const normalizedValue = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  // Index names must start with a letter because the form schema intentionally follows common SQL identifier rules.
+  return /^[a-z]/.test(normalizedValue) ? normalizedValue : `idx_${normalizedValue}`;
+}
+
+function formatIndexColumns(model: DiagramModel, index: DatabaseIndex): string {
+  return index.columns.map((column) => formatIndexColumn(model, column)).join(', ');
+}
+
+function formatIndexColumn(model: DiagramModel, indexColumn: DatabaseIndexColumn): string {
+  const columnName = model.columns[indexColumn.columnId]?.name ?? indexColumn.columnId;
+  const facets = [
+    indexColumn.order ? indexColumn.order.toUpperCase() : undefined,
+    indexColumn.nulls ? `NULLS ${indexColumn.nulls.toUpperCase()}` : undefined,
+  ].filter(Boolean);
+
+  return facets.length > 0 ? `${columnName} ${facets.join(' ')}` : columnName;
+}
+
+function formatIndexMethod(method: DatabaseIndex['method']): string {
+  return method ?? 'default';
 }
 
 function getRelationshipDefaults(relationship: DatabaseRelationship): RelationshipFormState {

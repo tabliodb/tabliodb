@@ -107,6 +107,79 @@ describe('schema-core diagram commands', () => {
     expect(nextModel.metadata.updatedAt).toBe('2026-07-29T01:00:00.000Z');
   });
 
+  it('creates and updates an index without mutating the previous model', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Index builder test'),
+      {
+        type: 'table.create',
+        tableId: 'users',
+        name: 'users',
+        columns: [
+          { id: 'users-id', name: 'id', type: { family: 'uuid' }, primaryKey: true, nullable: false },
+          { id: 'users-email', name: 'email', type: { family: 'varchar', length: 190 }, nullable: false },
+          { id: 'users-status', name: 'status', type: { family: 'varchar', length: 32 }, nullable: false },
+        ],
+      },
+      { now: fixedNow },
+    );
+    const indexedModel = applyDiagramCommand(
+      model,
+      {
+        type: 'index.create',
+        indexId: 'users-email-idx',
+        tableId: 'users',
+        name: 'users_email_idx',
+        columns: [{ columnId: 'users-email', order: 'asc', nulls: 'last' }],
+        includeColumnIds: ['users-status'],
+        method: 'btree',
+        unique: true,
+        where: 'status = active',
+      },
+      { now: fixedNow },
+    );
+    const nextModel = applyDiagramCommand(
+      indexedModel,
+      {
+        type: 'index.update',
+        indexId: 'users-email-idx',
+        changes: {
+          comment: 'Lookup active users by status and email',
+          columns: [
+            { columnId: 'users-status', order: 'desc' },
+            { columnId: 'users-email', order: 'asc' },
+          ],
+          includeColumnIds: ['users-id'],
+          name: 'users_status_email_idx',
+          unique: false,
+          where: 'status <> archived',
+        },
+      },
+      { now: () => '2026-07-29T03:00:00.000Z' },
+    );
+
+    // Index commands are immutable so table-level index editing can later support undo and collaboration snapshots.
+    expect(model.tables.users.indexIds).toEqual([]);
+    expect(indexedModel.tables.users.indexIds).toEqual(['users-email-idx']);
+    expect(indexedModel.indexes['users-email-idx']).toMatchObject({
+      columns: [{ columnId: 'users-email', order: 'asc', nulls: 'last' }],
+      includeColumnIds: ['users-status'],
+      method: 'btree',
+      unique: true,
+    });
+    expect(nextModel.indexes['users-email-idx']).toMatchObject({
+      columns: [
+        { columnId: 'users-status', order: 'desc' },
+        { columnId: 'users-email', order: 'asc' },
+      ],
+      comment: 'Lookup active users by status and email',
+      includeColumnIds: ['users-id'],
+      name: 'users_status_email_idx',
+      unique: false,
+      where: 'status <> archived',
+    });
+    expect(nextModel.metadata.updatedAt).toBe('2026-07-29T03:00:00.000Z');
+  });
+
   it('deletes a column and removes dependent relationships and empty indexes', () => {
     const modelWithTables = applyDiagramCommand(
       applyDiagramCommand(
