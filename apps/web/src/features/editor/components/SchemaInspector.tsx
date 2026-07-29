@@ -26,14 +26,20 @@ import {
   DialogTitle,
   DialogTrigger,
   FieldError,
-  Input,
   Surface,
   cn,
 } from '@tabliodb/ui';
 import { Pencil, Plus, Save, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useMemo, useState, type InputHTMLAttributes } from 'react';
-import { useForm, type UseFormReturn } from 'react-hook-form';
+import { useEffect, useMemo, useState } from 'react';
+import { useForm, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
+import {
+  ControlledCheckbox,
+  ControlledInput,
+  ControlledSelect,
+  ControlledTextarea,
+  type ControlledCheckboxProps,
+} from '@/features/app/FormControls';
 import { formatColumnType } from '../diagram-model';
 
 const tableColorOptions = ['#58cc02', '#1cb0f6', '#ffc800', '#ff4b4b', '#8b5cf6', '#0f766e'] as const;
@@ -595,24 +601,31 @@ function EnumFormFields({ form }: { form: UseFormReturn<EnumFormState> }) {
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Enum name
         </span>
-        <Input autoFocus aria-invalid={Boolean(errors.name)} placeholder="order_status" {...form.register('name')} />
+        <ControlledInput
+          autoFocus
+          aria-invalid={Boolean(errors.name)}
+          control={form.control}
+          name="name"
+          placeholder="order_status"
+        />
         <FieldError>{errors.name?.message}</FieldError>
       </label>
       <label className="block text-sm">
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Schema
         </span>
-        <Input placeholder="public" {...form.register('schema')} />
+        <ControlledInput control={form.control} name="schema" placeholder="public" />
         <FieldError>{errors.schema?.message}</FieldError>
       </label>
       <label className="block text-sm">
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Values
         </span>
-        <textarea
+        <ControlledTextarea
           className="min-h-28 w-full resize-y rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 py-2 text-sm font-semibold text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+          control={form.control}
+          name="valuesText"
           placeholder={'draft\npublished\narchived'}
-          {...form.register('valuesText')}
         />
         <FieldError>{errors.valuesText?.message}</FieldError>
       </label>
@@ -620,7 +633,7 @@ function EnumFormFields({ form }: { form: UseFormReturn<EnumFormState> }) {
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Comment
         </span>
-        <Input placeholder="Enum note" {...form.register('comment')} />
+        <ControlledInput control={form.control} name="comment" placeholder="Enum note" />
         <FieldError>{errors.comment?.message}</FieldError>
       </label>
     </div>
@@ -680,19 +693,20 @@ function EditTableDialog({
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Table name
               </span>
-              <Input autoFocus aria-invalid={Boolean(errors.name)} {...form.register('name')} />
+              <ControlledInput autoFocus aria-invalid={Boolean(errors.name)} control={form.control} name="name" />
               <FieldError>{errors.name?.message}</FieldError>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Width
               </span>
-              <Input
+              <ControlledInput
                 aria-invalid={Boolean(errors.width)}
+                control={form.control}
                 min={240}
                 max={720}
+                name="width"
                 type="number"
-                {...form.register('width', { valueAsNumber: true })}
               />
               <FieldError>{errors.width?.message}</FieldError>
             </label>
@@ -715,7 +729,12 @@ function EditTableDialog({
                   />
                 ))}
               </div>
-              <Input className="mt-3" aria-invalid={Boolean(errors.color)} {...form.register('color')} />
+              <ControlledInput
+                aria-invalid={Boolean(errors.color)}
+                className="mt-3"
+                control={form.control}
+                name="color"
+              />
               <FieldError>{errors.color?.message}</FieldError>
             </div>
           </div>
@@ -797,11 +816,12 @@ function AddColumnDialog({
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Column name
               </span>
-              <Input
+              <ControlledInput
                 autoFocus
                 aria-invalid={Boolean(errors.name)}
+                control={form.control}
+                name="name"
                 placeholder="created_at"
-                {...form.register('name')}
               />
               <FieldError>{errors.name?.message}</FieldError>
             </label>
@@ -809,51 +829,53 @@ function AddColumnDialog({
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Type
               </span>
-              <select
+              <ControlledSelect
                 className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                {...form.register('family')}
+                control={form.control}
+                name="family"
               >
                 {columnTypeFamilyOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>
                 ))}
-              </select>
+              </ControlledSelect>
             </label>
             {family === 'varchar' ? (
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Length
                 </span>
-                <Input
+                <ControlledInput
                   aria-invalid={Boolean(errors.length)}
+                  control={form.control}
                   min={1}
                   max={2048}
+                  name="length"
                   type="number"
-                  {...form.register('length', { valueAsNumber: true })}
                 />
                 <FieldError>{errors.length?.message}</FieldError>
               </label>
             ) : null}
             {family === 'enum' ? <EnumSelectField enumOptions={enumOptions} form={form} /> : null}
             <div className="grid gap-2">
-              <CheckboxField label="Primary key" {...form.register('primaryKey')} />
-              <CheckboxField label="Unique" {...form.register('unique')} />
-              <CheckboxField label="Auto increment" {...form.register('autoIncrement')} />
-              <CheckboxField label="Nullable" {...form.register('nullable')} />
+              <CheckboxField control={form.control} label="Primary key" name="primaryKey" />
+              <CheckboxField control={form.control} label="Unique" name="unique" />
+              <CheckboxField control={form.control} label="Auto increment" name="autoIncrement" />
+              <CheckboxField control={form.control} label="Nullable" name="nullable" />
             </div>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Default value
               </span>
-              <Input placeholder="now()" {...form.register('defaultValue')} />
+              <ControlledInput control={form.control} name="defaultValue" placeholder="now()" />
               <FieldError>{errors.defaultValue?.message}</FieldError>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Comment
               </span>
-              <Input placeholder="Shown in generated docs later" {...form.register('comment')} />
+              <ControlledInput control={form.control} name="comment" placeholder="Shown in generated docs later" />
               <FieldError>{errors.comment?.message}</FieldError>
             </label>
           </div>
@@ -985,58 +1007,60 @@ function EditColumnDialog({
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Column name
               </span>
-              <Input autoFocus aria-invalid={Boolean(errors.name)} {...form.register('name')} />
+              <ControlledInput autoFocus aria-invalid={Boolean(errors.name)} control={form.control} name="name" />
               <FieldError>{errors.name?.message}</FieldError>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Type
               </span>
-              <select
+              <ControlledSelect
                 className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                {...form.register('family')}
+                control={form.control}
+                name="family"
               >
                 {columnTypeFamilyOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>
                 ))}
-              </select>
+              </ControlledSelect>
             </label>
             {family === 'varchar' ? (
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Length
                 </span>
-                <Input
+                <ControlledInput
                   aria-invalid={Boolean(errors.length)}
+                  control={form.control}
                   min={1}
                   max={2048}
+                  name="length"
                   type="number"
-                  {...form.register('length', { valueAsNumber: true })}
                 />
                 <FieldError>{errors.length?.message}</FieldError>
               </label>
             ) : null}
             {family === 'enum' ? <EnumSelectField enumOptions={enumOptions} form={form} /> : null}
             <div className="grid gap-2">
-              <CheckboxField label="Primary key" {...form.register('primaryKey')} />
-              <CheckboxField label="Unique" {...form.register('unique')} />
-              <CheckboxField label="Auto increment" {...form.register('autoIncrement')} />
-              <CheckboxField label="Nullable" {...form.register('nullable')} />
+              <CheckboxField control={form.control} label="Primary key" name="primaryKey" />
+              <CheckboxField control={form.control} label="Unique" name="unique" />
+              <CheckboxField control={form.control} label="Auto increment" name="autoIncrement" />
+              <CheckboxField control={form.control} label="Nullable" name="nullable" />
             </div>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Default value
               </span>
-              <Input placeholder="now()" {...form.register('defaultValue')} />
+              <ControlledInput control={form.control} name="defaultValue" placeholder="now()" />
               <FieldError>{errors.defaultValue?.message}</FieldError>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Comment
               </span>
-              <Input placeholder="Column note" {...form.register('comment')} />
+              <ControlledInput control={form.control} name="comment" placeholder="Column note" />
               <FieldError>{errors.comment?.message}</FieldError>
             </label>
           </div>
@@ -1356,7 +1380,13 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Index name
         </span>
-        <Input autoFocus aria-invalid={Boolean(errors.name)} placeholder="users_email_idx" {...form.register('name')} />
+        <ControlledInput
+          autoFocus
+          aria-invalid={Boolean(errors.name)}
+          control={form.control}
+          name="name"
+          placeholder="users_email_idx"
+        />
         <FieldError>{errors.name?.message}</FieldError>
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -1364,19 +1394,20 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
           <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Method
           </span>
-          <select
+          <ControlledSelect
             className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-            {...form.register('method')}
+            control={form.control}
+            name="method"
           >
             {indexMethodOptions.map((option) => (
               <option key={option} value={option}>
                 {option === unsetSelectValue ? 'Default' : option}
               </option>
             ))}
-          </select>
+          </ControlledSelect>
         </label>
         <div className="pt-6">
-          <CheckboxField label="Unique index" {...form.register('unique')} />
+          <CheckboxField control={form.control} label="Unique index" name="unique" />
         </div>
       </div>
       <div>
@@ -1488,14 +1519,14 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Partial WHERE
         </span>
-        <Input placeholder="deleted_at IS NULL" {...form.register('where')} />
+        <ControlledInput control={form.control} name="where" placeholder="deleted_at IS NULL" />
         <FieldError>{errors.where?.message}</FieldError>
       </label>
       <label className="block text-sm">
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Comment
         </span>
-        <Input placeholder="Index note" {...form.register('comment')} />
+        <ControlledInput control={form.control} name="comment" placeholder="Index note" />
         <FieldError>{errors.comment?.message}</FieldError>
       </label>
     </div>
@@ -1510,9 +1541,10 @@ function EnumSelectField({ enumOptions, form }: { enumOptions: DatabaseEnum[]; f
       <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
         Enum type
       </span>
-      <select
+      <ControlledSelect
         className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-        {...form.register('enumId')}
+        control={form.control}
+        name="enumId"
       >
         <option value={unsetSelectValue}>{enumOptions.length > 0 ? 'Choose enum' : 'Create enum first'}</option>
         {enumOptions.map((databaseEnum) => (
@@ -1520,7 +1552,7 @@ function EnumSelectField({ enumOptions, form }: { enumOptions: DatabaseEnum[]; f
             {databaseEnum.name}
           </option>
         ))}
-      </select>
+      </ControlledSelect>
       <FieldError>{errors.enumId?.message}</FieldError>
     </label>
   );
@@ -1701,7 +1733,7 @@ function EditRelationshipDialog({
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Relationship name
               </span>
-              <Input autoFocus placeholder="orders_user_id_fkey" {...form.register('name')} />
+              <ControlledInput autoFocus control={form.control} name="name" placeholder="orders_user_id_fkey" />
               <FieldError>{errors.name?.message}</FieldError>
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1709,25 +1741,27 @@ function EditRelationshipDialog({
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Primary table
                 </span>
-                <select
+                <ControlledSelect
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  {...form.register('sourceTableId')}
+                  control={form.control}
+                  name="sourceTableId"
                 >
                   {tables.map((table) => (
                     <option key={table.id} value={table.id}>
                       {table.name}
                     </option>
                   ))}
-                </select>
+                </ControlledSelect>
                 <FieldError>{errors.sourceTableId?.message}</FieldError>
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Primary column
                 </span>
-                <select
+                <ControlledSelect
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  {...form.register('sourceColumnId')}
+                  control={form.control}
+                  name="sourceColumnId"
                 >
                   {sourceColumns.length > 0 ? (
                     sourceColumns.map((column) => (
@@ -1738,7 +1772,7 @@ function EditRelationshipDialog({
                   ) : (
                     <option value="">No columns</option>
                   )}
-                </select>
+                </ControlledSelect>
                 <FieldError>{errors.sourceColumnId?.message}</FieldError>
               </label>
             </div>
@@ -1747,25 +1781,27 @@ function EditRelationshipDialog({
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Foreign table
                 </span>
-                <select
+                <ControlledSelect
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  {...form.register('targetTableId')}
+                  control={form.control}
+                  name="targetTableId"
                 >
                   {tables.map((table) => (
                     <option key={table.id} value={table.id}>
                       {table.name}
                     </option>
                   ))}
-                </select>
+                </ControlledSelect>
                 <FieldError>{errors.targetTableId?.message}</FieldError>
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Foreign column
                 </span>
-                <select
+                <ControlledSelect
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  {...form.register('targetColumnId')}
+                  control={form.control}
+                  name="targetColumnId"
                 >
                   {targetColumns.length > 0 ? (
                     targetColumns.map((column) => (
@@ -1776,7 +1812,7 @@ function EditRelationshipDialog({
                   ) : (
                     <option value="">No columns</option>
                   )}
-                </select>
+                </ControlledSelect>
                 <FieldError>{errors.targetColumnId?.message}</FieldError>
               </label>
             </div>
@@ -1785,31 +1821,33 @@ function EditRelationshipDialog({
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Cardinality
                 </span>
-                <select
+                <ControlledSelect
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  {...form.register('cardinality')}
+                  control={form.control}
+                  name="cardinality"
                 >
                   {relationshipCardinalityOptions.map((option) => (
                     <option key={option} value={option}>
                       {formatRelationshipCardinality(option)}
                     </option>
                   ))}
-                </select>
+                </ControlledSelect>
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Match type
                 </span>
-                <select
+                <ControlledSelect
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  {...form.register('matchType')}
+                  control={form.control}
+                  name="matchType"
                 >
                   {matchTypeOptions.map((option) => (
                     <option key={option} value={option}>
                       {option === unsetSelectValue ? 'Not set' : option}
                     </option>
                   ))}
-                </select>
+                </ControlledSelect>
               </label>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1817,39 +1855,41 @@ function EditRelationshipDialog({
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   On delete
                 </span>
-                <select
+                <ControlledSelect
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  {...form.register('onDelete')}
+                  control={form.control}
+                  name="onDelete"
                 >
                   {referentialActionOptions.map((option) => (
                     <option key={option} value={option}>
                       {option === unsetSelectValue ? 'Not set' : formatReferentialAction(option)}
                     </option>
                   ))}
-                </select>
+                </ControlledSelect>
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   On update
                 </span>
-                <select
+                <ControlledSelect
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  {...form.register('onUpdate')}
+                  control={form.control}
+                  name="onUpdate"
                 >
                   {referentialActionOptions.map((option) => (
                     <option key={option} value={option}>
                       {option === unsetSelectValue ? 'Not set' : formatReferentialAction(option)}
                     </option>
                   ))}
-                </select>
+                </ControlledSelect>
               </label>
             </div>
-            <CheckboxField label="Deferrable" {...form.register('deferrable')} />
+            <CheckboxField control={form.control} label="Deferrable" name="deferrable" />
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Comment
               </span>
-              <Input placeholder="Relationship note" {...form.register('comment')} />
+              <ControlledInput control={form.control} name="comment" placeholder="Relationship note" />
               <FieldError>{errors.comment?.message}</FieldError>
             </label>
           </div>
@@ -1868,10 +1908,13 @@ function EditRelationshipDialog({
   );
 }
 
-function CheckboxField({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+function CheckboxField<TFieldValues extends FieldValues>({
+  label,
+  ...props
+}: ControlledCheckboxProps<TFieldValues> & { label: string }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] px-3 py-2 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))]">
-      <input className="size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))]" type="checkbox" {...props} />
+      <ControlledCheckbox {...props} />
       {label}
     </label>
   );

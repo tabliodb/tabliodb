@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, FieldError, Input, Surface } from '@tabliodb/ui';
+import { Button, FieldError, Surface } from '@tabliodb/ui';
 import { Database, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
+import { ControlledInput } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
 import { useLoginMutation } from '@/resources/auth';
 
@@ -55,12 +56,13 @@ export function LoginPage() {
             <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Email
             </span>
-            <Input
+            <ControlledInput
               aria-invalid={Boolean(errors.email)}
               autoComplete="email"
+              control={form.control}
               disabled={loginMutation.isPending}
+              name="email"
               type="email"
-              {...form.register('email')}
             />
             <FieldError>{errors.email?.message}</FieldError>
           </label>
@@ -68,12 +70,13 @@ export function LoginPage() {
             <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Password
             </span>
-            <Input
+            <ControlledInput
               aria-invalid={Boolean(errors.password)}
               autoComplete="current-password"
+              control={form.control}
               disabled={loginMutation.isPending}
+              name="password"
               type="password"
-              {...form.register('password')}
             />
             <FieldError>{errors.password?.message}</FieldError>
           </label>

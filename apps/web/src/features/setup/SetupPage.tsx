@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, FieldError, Input, Surface } from '@tabliodb/ui';
+import { Button, FieldError, Surface } from '@tabliodb/ui';
 import { Database, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
+import { ControlledInput } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
 import { useCompleteSetupMutation } from '@/resources/setup';
 
@@ -87,11 +88,12 @@ export function SetupPage() {
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Owner name
               </span>
-              <Input
+              <ControlledInput
                 aria-invalid={Boolean(errors.ownerName)}
                 autoComplete="name"
+                control={form.control}
                 disabled={setupMutation.isPending}
-                {...form.register('ownerName')}
+                name="ownerName"
               />
               <FieldError>{errors.ownerName?.message}</FieldError>
             </label>
@@ -99,12 +101,13 @@ export function SetupPage() {
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Owner email
               </span>
-              <Input
+              <ControlledInput
                 aria-invalid={Boolean(errors.ownerEmail)}
                 autoComplete="email"
+                control={form.control}
                 disabled={setupMutation.isPending}
+                name="ownerEmail"
                 type="email"
-                {...form.register('ownerEmail')}
               />
               <FieldError>{errors.ownerEmail?.message}</FieldError>
             </label>
@@ -112,12 +115,13 @@ export function SetupPage() {
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Password
               </span>
-              <Input
+              <ControlledInput
                 aria-invalid={Boolean(errors.ownerPassword)}
                 autoComplete="new-password"
+                control={form.control}
                 disabled={setupMutation.isPending}
+                name="ownerPassword"
                 type="password"
-                {...form.register('ownerPassword')}
               />
               <FieldError>{errors.ownerPassword?.message}</FieldError>
             </label>
@@ -125,11 +129,12 @@ export function SetupPage() {
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Workspace
               </span>
-              <Input
+              <ControlledInput
                 aria-invalid={Boolean(errors.workspaceName)}
                 autoComplete="organization"
+                control={form.control}
                 disabled={setupMutation.isPending}
-                {...form.register('workspaceName')}
+                name="workspaceName"
               />
               <FieldError>{errors.workspaceName?.message}</FieldError>
             </label>
@@ -138,12 +143,13 @@ export function SetupPage() {
             <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Public URL
             </span>
-            <Input
+            <ControlledInput
               aria-invalid={Boolean(errors.publicUrl)}
               autoComplete="url"
+              control={form.control}
               disabled={setupMutation.isPending}
+              name="publicUrl"
               type="url"
-              {...form.register('publicUrl')}
             />
             <FieldError>{errors.publicUrl?.message}</FieldError>
           </label>

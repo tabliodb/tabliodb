@@ -21,6 +21,7 @@ import { Crown, Loader2, Plus, Search, ShieldCheck, UserPlus, UsersRound } from 
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { ControlledCheckbox, ControlledInput } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
 import { useCreateUserMutation, usersQueries } from '@/resources/users';
 
@@ -261,11 +262,12 @@ function CreateUserDialog() {
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Name
               </span>
-              <Input
+              <ControlledInput
                 aria-invalid={Boolean(errors.name)}
                 autoComplete="name"
+                control={form.control}
                 disabled={createUserMutation.isPending}
-                {...form.register('name')}
+                name="name"
               />
               <FieldError>{errors.name?.message}</FieldError>
             </label>
@@ -273,12 +275,13 @@ function CreateUserDialog() {
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Email
               </span>
-              <Input
+              <ControlledInput
                 aria-invalid={Boolean(errors.email)}
                 autoComplete="email"
+                control={form.control}
                 disabled={createUserMutation.isPending}
+                name="email"
                 type="email"
-                {...form.register('email')}
               />
               <FieldError>{errors.email?.message}</FieldError>
             </label>
@@ -288,12 +291,13 @@ function CreateUserDialog() {
             <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Temporary password
             </span>
-            <Input
+            <ControlledInput
               aria-invalid={Boolean(errors.password)}
               autoComplete="new-password"
+              control={form.control}
               disabled={createUserMutation.isPending}
+              name="password"
               type="password"
-              {...form.register('password')}
             />
             <FieldError>{errors.password?.message}</FieldError>
           </label>
@@ -319,11 +323,11 @@ function CreateUserDialog() {
           </fieldset>
 
           <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
-            <input
+            <ControlledCheckbox
               className="size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))]"
+              control={form.control}
               disabled={createUserMutation.isPending}
-              type="checkbox"
-              {...form.register('grantInstanceAdmin')}
+              name="grantInstanceAdmin"
             />
             <span className="flex min-w-0 flex-1 items-center gap-2">
               <ShieldCheck className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />

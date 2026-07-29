@@ -42,6 +42,7 @@ import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
+import { ControlledInput } from '@/features/app/FormControls';
 import { ErrorState, LoadingState } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
 import { defaultDiagramName, diagramsQueries } from '@/resources/diagrams';
@@ -359,11 +360,12 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
             <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Table name
             </span>
-            <Input
+            <ControlledInput
               autoFocus
               aria-invalid={Boolean(errors.tableName)}
+              control={form.control}
+              name="tableName"
               placeholder="subscriptions"
-              {...form.register('tableName')}
             />
             <FieldError>{errors.tableName?.message}</FieldError>
           </label>
