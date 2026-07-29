@@ -16,9 +16,15 @@ const tableNodeWidth = 288;
 const tableHeaderHeight = 46;
 const tableColumnHeight = 32;
 const tablePaddingBottom = 10;
+const diagramVisualGridSize = 24;
+const diagramDragGridSize = 1;
 const relationshipActiveColor = '#58cc02';
 const relationshipNeutralColor = '#9ca3af';
+const relationshipExitGap = 42;
+const relationshipLaneGap = 12;
 const relationshipPortRadius = 4;
+const relationshipPortGap = 14;
+const relationshipSameSideGap = 64;
 
 let tableShapeRegistered = false;
 
@@ -107,13 +113,13 @@ export function SchemaCanvas({
         connector: { name: 'rounded', args: { radius: 12 } },
         connectionPoint: 'boundary',
         highlight: true,
-        router: { name: 'manhattan', args: { padding: 28 } },
+        router: { name: 'normal' },
         snap: { radius: 24 },
       },
       container: containerRef.current,
       grid: {
         visible: true,
-        size: 24,
+        size: diagramVisualGridSize,
         type: 'dot',
         args: {
           color: '#e5e5e5',
@@ -140,6 +146,9 @@ export function SchemaCanvas({
         eventTypes: ['rightMouseDown', 'mouseWheel'],
       },
     });
+
+    // X6 couples node movement snapping to the visible grid size; keeping the visual grid at 24px while snapping at 1px makes drag placement precise.
+    graph.getGridSize = () => diagramDragGridSize;
 
     graph.on('node:click', ({ node }) => {
       const data = node.getData<TableNodeData>();
@@ -437,8 +446,7 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
         },
         labels: [],
         router: {
-          name: 'manhattan',
-          args: { padding: 28 },
+          name: 'normal',
         },
         source: { cell: relationship.sourceTableId, port: terminals.source.portId },
         target: { cell: relationship.targetTableId, port: terminals.target.portId },
@@ -564,7 +572,7 @@ function createColumnPorts(
       return [
         {
           args: {
-            x: terminal.side === 'left' ? -2 : tableNodeWidth + 2,
+            x: getPortX(terminal.side),
             y: y + laneOffset,
           },
           attrs: {
@@ -595,31 +603,33 @@ function createRelationshipVertices(
 ): Array<{ x: number; y: number }> {
   const sourcePoint = getTerminalPoint(sourceTable, source);
   const targetPoint = getTerminalPoint(targetTable, target);
-  const horizontalDistance = Math.abs(sourcePoint.x - targetPoint.x);
-  // A stable per-relationship lane nudges parallel Manhattan routes apart without changing their FK/PK attachment points.
-  const laneOffset = ((index % 9) - 4) * 10;
+  const sourceDirection = getSideDirection(source.side);
+  const targetDirection = getSideDirection(target.side);
+  // A stable per-relationship lane nudges parallel routes apart without changing their FK/PK attachment points.
+  const laneOffset = ((index % 9) - 4) * relationshipLaneGap;
+  const sourceExitDistance = relationshipExitGap + source.laneIndex * relationshipLaneGap;
+  const targetExitDistance = relationshipExitGap + target.laneIndex * relationshipLaneGap;
+  const sourceExit = {
+    x: sourcePoint.x + sourceDirection * sourceExitDistance,
+    y: sourcePoint.y,
+  };
+  const targetExit = {
+    x: targetPoint.x + targetDirection * targetExitDistance,
+    y: targetPoint.y,
+  };
 
-  if (horizontalDistance > 96) {
-    const midX = (sourcePoint.x + targetPoint.x) / 2 + laneOffset;
+  if (source.side !== target.side) {
+    const midX = (sourceExit.x + targetExit.x) / 2 + laneOffset;
 
-    return [
-      { x: midX, y: sourcePoint.y },
-      { x: midX, y: targetPoint.y },
-    ];
+    return [sourceExit, { x: midX, y: sourcePoint.y }, { x: midX, y: targetPoint.y }, targetExit];
   }
 
-  const sourceDirection = source.side === 'left' ? -1 : 1;
-  const targetDirection = target.side === 'left' ? -1 : 1;
-  const sourceX = sourcePoint.x + sourceDirection * (52 + Math.abs(laneOffset));
-  const targetX = targetPoint.x + targetDirection * (52 + Math.abs(laneOffset));
-  const midY = (sourcePoint.y + targetPoint.y) / 2;
+  const outerX =
+    source.side === 'left'
+      ? Math.min(sourceExit.x, targetExit.x) - relationshipSameSideGap - Math.abs(laneOffset)
+      : Math.max(sourceExit.x, targetExit.x) + relationshipSameSideGap + Math.abs(laneOffset);
 
-  return [
-    { x: sourceX, y: sourcePoint.y },
-    { x: sourceX, y: midY },
-    { x: targetX, y: midY },
-    { x: targetX, y: targetPoint.y },
-  ];
+  return [sourceExit, { x: outerX, y: sourcePoint.y }, { x: outerX, y: targetPoint.y }, targetExit];
 }
 
 function getTerminalPoint(table: DatabaseTable, terminal: RelationshipTerminal): { x: number; y: number } {
@@ -627,7 +637,7 @@ function getTerminalPoint(table: DatabaseTable, terminal: RelationshipTerminal):
   const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * 8;
 
   return {
-    x: table.position.x + (terminal.side === 'left' ? 0 : tableNodeWidth),
+    x: table.position.x + getPortX(terminal.side),
     y:
       table.position.y +
       tableHeaderHeight +
@@ -635,6 +645,14 @@ function getTerminalPoint(table: DatabaseTable, terminal: RelationshipTerminal):
       tableColumnHeight / 2 +
       laneOffset,
   };
+}
+
+function getPortX(side: PortSide): number {
+  return side === 'left' ? -relationshipPortGap : tableNodeWidth + relationshipPortGap;
+}
+
+function getSideDirection(side: PortSide): -1 | 1 {
+  return side === 'left' ? -1 : 1;
 }
 
 function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNodeData): boolean {
