@@ -1,30 +1,56 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Input, Surface } from '@tabliodb/ui';
+import { Button, FieldError, Input, Surface } from '@tabliodb/ui';
 import { Database, Loader2 } from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate } from 'react-router';
+import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { sdk } from '@/services/sdk';
 
-type SetupFormState = {
-  ownerEmail: string;
-  ownerName: string;
-  ownerPassword: string;
-  publicUrl: string;
-  workspaceName: string;
-};
+const setupFormSchema = z.object({
+  ownerEmail: z.string().trim().email('Enter a valid owner email.'),
+  ownerName: z.string().trim().min(1, 'Owner name is required.'),
+  ownerPassword: z.string().min(8, 'Password must be at least 8 characters.'),
+  publicUrl: z.string().trim().refine(isOptionalUrl, 'Enter a valid public URL.'),
+  workspaceName: z.string().trim().min(1, 'Workspace name is required.'),
+});
 
-export function SetupPage() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [form, setForm] = useState<SetupFormState>({
+type SetupFormState = z.infer<typeof setupFormSchema>;
+
+function getSetupDefaults(): SetupFormState {
+  return {
     ownerEmail: 'owner@tabliodb.local',
     ownerName: 'Tabliodb Owner',
     ownerPassword: 'tabliodb-dev',
     publicUrl: typeof window === 'undefined' ? '' : window.location.origin,
     workspaceName: 'Personal Workspace',
+  };
+}
+
+function isOptionalUrl(value: string): boolean {
+  if (value.length === 0) {
+    return true;
+  }
+
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function SetupPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const form = useForm<SetupFormState>({
+    defaultValues: getSetupDefaults(),
+    mode: 'onBlur',
+    resolver: zodResolver(setupFormSchema),
   });
+  const { errors } = form.formState;
 
   const setupQuery = useQuery({
     queryKey: ['setup'],
@@ -48,11 +74,6 @@ export function SetupPage() {
     },
   });
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setupMutation.mutate(form);
-  }
-
   if (setupQuery.isPending) {
     return <LoadingState />;
   }
@@ -70,7 +91,7 @@ export function SetupPage() {
   return (
     <main className="grid min-h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 py-10 text-[rgb(var(--tabliodb-ink))]">
       <Surface className="w-full max-w-lg p-5" depth="md">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={form.handleSubmit((values) => setupMutation.mutate(values))}>
           <div className="mb-5 flex items-center gap-2">
             <div className="grid size-10 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
               <Database className="size-5" />
@@ -86,38 +107,50 @@ export function SetupPage() {
                 Owner name
               </span>
               <Input
-                onChange={(event) => setForm((current) => ({ ...current, ownerName: event.target.value }))}
-                value={form.ownerName}
+                aria-invalid={Boolean(errors.ownerName)}
+                autoComplete="name"
+                disabled={setupMutation.isPending}
+                {...form.register('ownerName')}
               />
+              <FieldError>{errors.ownerName?.message}</FieldError>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Owner email
               </span>
               <Input
-                onChange={(event) => setForm((current) => ({ ...current, ownerEmail: event.target.value }))}
+                aria-invalid={Boolean(errors.ownerEmail)}
+                autoComplete="email"
+                disabled={setupMutation.isPending}
                 type="email"
-                value={form.ownerEmail}
+                {...form.register('ownerEmail')}
               />
+              <FieldError>{errors.ownerEmail?.message}</FieldError>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Password
               </span>
               <Input
-                onChange={(event) => setForm((current) => ({ ...current, ownerPassword: event.target.value }))}
+                aria-invalid={Boolean(errors.ownerPassword)}
+                autoComplete="new-password"
+                disabled={setupMutation.isPending}
                 type="password"
-                value={form.ownerPassword}
+                {...form.register('ownerPassword')}
               />
+              <FieldError>{errors.ownerPassword?.message}</FieldError>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Workspace
               </span>
               <Input
-                onChange={(event) => setForm((current) => ({ ...current, workspaceName: event.target.value }))}
-                value={form.workspaceName}
+                aria-invalid={Boolean(errors.workspaceName)}
+                autoComplete="organization"
+                disabled={setupMutation.isPending}
+                {...form.register('workspaceName')}
               />
+              <FieldError>{errors.workspaceName?.message}</FieldError>
             </label>
           </div>
           <label className="mt-3 block text-sm">
@@ -125,10 +158,13 @@ export function SetupPage() {
               Public URL
             </span>
             <Input
-              onChange={(event) => setForm((current) => ({ ...current, publicUrl: event.target.value }))}
+              aria-invalid={Boolean(errors.publicUrl)}
+              autoComplete="url"
+              disabled={setupMutation.isPending}
               type="url"
-              value={form.publicUrl}
+              {...form.register('publicUrl')}
             />
+            <FieldError>{errors.publicUrl?.message}</FieldError>
           </label>
           {setupMutation.error ? (
             <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">

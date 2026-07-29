@@ -1,3 +1,4 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getRelationshipColumnPairs,
@@ -26,6 +27,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparatorItem,
+  FieldError,
   DropdownMenuTrigger,
   IconButton,
   Input,
@@ -46,8 +48,10 @@ import {
   Search,
   Share2,
 } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
+import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ErrorState, LoadingState } from '@/features/app/RouteStates';
 import { sdk } from '@/services/sdk';
@@ -56,6 +60,11 @@ import { SchemaCanvas } from './components/SchemaCanvas';
 
 const defaultProjectName = 'Library System';
 const defaultDiagramName = 'Main schema';
+const addTableFormSchema = z.object({
+  tableName: z.string().trim().max(64, 'Keep the table name under 64 characters.'),
+});
+
+type AddTableFormState = z.infer<typeof addTableFormSchema>;
 
 export function EditorPage() {
   const navigate = useNavigate();
@@ -429,17 +438,30 @@ async function loadOrCreateSnapshots(diagram: DiagramResponseDto): Promise<Snaps
 
 function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [tableName, setTableName] = useState('');
+  const form = useForm<AddTableFormState>({
+    defaultValues: {
+      tableName: '',
+    },
+    resolver: zodResolver(addTableFormSchema),
+  });
+  const { errors } = form.formState;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onCreate(tableName);
-    setTableName('');
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      form.reset();
+    }
+  }
+
+  function handleSubmit(values: AddTableFormState) {
+    onCreate(values.tableName || undefined);
+    form.reset();
     setOpen(false);
   }
 
   return (
-    <Dialog onOpenChange={setOpen} open={open}>
+    <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
         <Button className="ml-2 gap-2" variant="secondary">
           <Plus className="size-4" />
@@ -447,7 +469,7 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New table</DialogTitle>
             <DialogDescription>
@@ -460,13 +482,14 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
             </span>
             <Input
               autoFocus
-              onChange={(event) => setTableName(event.target.value)}
+              aria-invalid={Boolean(errors.tableName)}
               placeholder="subscriptions"
-              value={tableName}
+              {...form.register('tableName')}
             />
+            <FieldError>{errors.tableName?.message}</FieldError>
           </label>
           <DialogFooter className="mt-5">
-            <Button onClick={() => setOpen(false)} type="button" variant="secondary">
+            <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
             <Button type="submit">

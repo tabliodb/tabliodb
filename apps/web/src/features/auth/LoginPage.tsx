@@ -1,16 +1,20 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Input, Surface } from '@tabliodb/ui';
+import { Button, FieldError, Input, Surface } from '@tabliodb/ui';
 import { Database, Loader2 } from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate } from 'react-router';
+import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { sdk } from '@/services/sdk';
 
-type LoginFormState = {
-  email: string;
-  password: string;
-};
+const loginFormSchema = z.object({
+  email: z.string().trim().email('Enter a valid email.'),
+  password: z.string().min(1, 'Password is required.'),
+});
+
+type LoginFormState = z.infer<typeof loginFormSchema>;
 
 const loginDefaults: LoginFormState = {
   email: 'owner@tabliodb.local',
@@ -20,7 +24,12 @@ const loginDefaults: LoginFormState = {
 export function LoginPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<LoginFormState>(loginDefaults);
+  const form = useForm<LoginFormState>({
+    defaultValues: loginDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(loginFormSchema),
+  });
+  const { errors } = form.formState;
 
   const setupQuery = useQuery({
     queryKey: ['setup'],
@@ -35,11 +44,6 @@ export function LoginPage() {
       navigate(routes.home.to(), { replace: true });
     },
   });
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    loginMutation.mutate(form);
-  }
 
   if (setupQuery.isPending) {
     return <LoadingState />;
@@ -58,7 +62,7 @@ export function LoginPage() {
   return (
     <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 text-[rgb(var(--tabliodb-ink))]">
       <Surface className="w-full max-w-sm p-5" depth="md">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={form.handleSubmit((values) => loginMutation.mutate(values))}>
           <div className="mb-5 flex items-center gap-2">
             <div className="grid size-10 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
               <Database className="size-5" />
@@ -73,20 +77,26 @@ export function LoginPage() {
               Email
             </span>
             <Input
-              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+              aria-invalid={Boolean(errors.email)}
+              autoComplete="email"
+              disabled={loginMutation.isPending}
               type="email"
-              value={form.email}
+              {...form.register('email')}
             />
+            <FieldError>{errors.email?.message}</FieldError>
           </label>
           <label className="mb-4 block text-sm">
             <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Password
             </span>
             <Input
-              onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+              aria-invalid={Boolean(errors.password)}
+              autoComplete="current-password"
+              disabled={loginMutation.isPending}
               type="password"
-              value={form.password}
+              {...form.register('password')}
             />
+            <FieldError>{errors.password?.message}</FieldError>
           </label>
           {loginMutation.error ? (
             <div className="mb-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">

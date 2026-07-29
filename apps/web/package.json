@@ -14,6 +14,7 @@
   "dependencies": {
     "@antv/x6": "^3.1.7",
     "@hocuspocus/provider": "^4.4.0",
+    "@hookform/resolvers": "^5.5.7",
     "@tabliodb/schema-core": "file:../../packages/schema-core",
     "@tabliodb/sdk": "file:../../packages/sdk",
     "@tabliodb/shared": "file:../../packages/shared",
@@ -23,8 +24,10 @@
     "lucide-react": "^1.27.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-hook-form": "^7.83.0",
     "react-router": "^8.3.0",
     "yjs": "^13.6.31",
+    "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
