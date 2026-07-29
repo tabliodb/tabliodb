@@ -3,8 +3,9 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import type { ButtonHTMLAttributes, PropsWithChildren } from 'react';
 import { cn } from '../lib/utils.js';
 
+// The shared primitive owns pointer affordance so every shadcn-style button reads as clickable across the app.
 export const buttonVariants = cva(
-  'inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-[14px] text-sm font-extrabold tracking-normal outline-none transition-[background,border-color,box-shadow,color,transform] focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-primary)/0.25)] disabled:pointer-events-none disabled:opacity-50 active:translate-y-0.5',
+  'inline-flex cursor-pointer select-none items-center justify-center gap-2 whitespace-nowrap rounded-[14px] text-sm font-extrabold tracking-normal outline-none transition-[background,border-color,box-shadow,color,transform] focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-primary)/0.25)] disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-0.5',
   {
     defaultVariants: {
       size: 'default',

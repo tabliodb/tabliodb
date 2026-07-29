@@ -13,9 +13,12 @@ import { formatColumnType } from '../diagram-model';
 
 const tableNodeShape = 'tabliodb-table';
 const tableNodeWidth = 288;
-const tableHeaderHeight = 42;
-const tableColumnHeight = 30;
+const tableHeaderHeight = 46;
+const tableColumnHeight = 32;
 const tablePaddingBottom = 10;
+const relationshipActiveColor = '#58cc02';
+const relationshipNeutralColor = '#9ca3af';
+const relationshipPortRadius = 4;
 
 let tableShapeRegistered = false;
 
@@ -34,6 +37,25 @@ type TableNodeData = {
   selected: boolean;
   tableId: string;
   tableName: string;
+};
+
+type PortSide = 'left' | 'right';
+
+type RelationshipTerminal = {
+  active: boolean;
+  columnId: string;
+  laneIndex: number;
+  laneTotal: number;
+  portId: string;
+  relationshipId: string;
+  role: 'foreign' | 'primary';
+  side: PortSide;
+  tableId: string;
+};
+
+type RelationshipPlan = {
+  terminalsByRelationship: Map<string, { source?: RelationshipTerminal; target?: RelationshipTerminal }>;
+  terminalsByTable: Map<string, RelationshipTerminal[]>;
 };
 
 export function SchemaCanvas({
@@ -82,16 +104,10 @@ export function SchemaCanvas({
         allowLoop: false,
         allowMulti: true,
         allowNode: true,
-        connector: {
-          name: 'rounded',
-          args: { radius: 10 },
-        },
+        connector: { name: 'rounded', args: { radius: 12 } },
         connectionPoint: 'boundary',
         highlight: true,
-        router: {
-          name: 'manhattan',
-          args: { padding: 18 },
-        },
+        router: { name: 'manhattan', args: { padding: 28 } },
         snap: { radius: 24 },
       },
       container: containerRef.current,
@@ -219,8 +235,9 @@ function registerTableNodeShape(): void {
 }
 
 function syncGraphFromModel(graph: Graph, model: DiagramModel, selectedTableId: string | null): void {
+  const relationshipPlan = createRelationshipPlan(model, selectedTableId);
   const nodeIds = new Set(Object.keys(model.tables));
-  const edgeMetadata = createRelationshipEdgeMetadata(model);
+  const edgeMetadata = createRelationshipEdgeMetadata(model, relationshipPlan);
   const edgeIds = new Set(edgeMetadata.map((edge) => edge.id).filter((id): id is string => Boolean(id)));
 
   graph.batchUpdate('tabliodb-model-sync', () => {
@@ -237,7 +254,10 @@ function syncGraphFromModel(graph: Graph, model: DiagramModel, selectedTableId: 
     }
 
     for (const table of Object.values(model.tables)) {
-      syncTableNode(graph, createTableNodeMetadata(model, table, selectedTableId));
+      syncTableNode(
+        graph,
+        createTableNodeMetadata(model, table, selectedTableId, relationshipPlan.terminalsByTable.get(table.id) ?? []),
+      );
     }
 
     for (const edge of edgeMetadata) {
@@ -263,9 +283,15 @@ function syncTableNode(graph: Graph, metadata: NodeMetadata): void {
     width: metadata.width ?? tableNodeWidth,
     height: metadata.height ?? tableHeaderHeight,
   };
+  const nextPorts = metadata.ports;
 
   if (!isTableNodeDataEqual(currentData, nextData)) {
     existing.setData(nextData, { overwrite: true });
+  }
+
+  if (JSON.stringify(existing.getPorts()) !== JSON.stringify(getPortItems(nextPorts))) {
+    // Relationship endpoints are rendered as X6 ports, so port metadata must move with column rows and lane offsets.
+    existing.setProp('ports', nextPorts);
   }
 
   if (currentSize.width !== nextSize.width || currentSize.height !== nextSize.height) {
@@ -290,7 +316,9 @@ function syncRelationshipEdge(graph: Graph, metadata: EdgeMetadata): void {
 
   if (
     existing.getSourceCellId() !== getMetadataTerminalCellId(metadata.source) ||
-    existing.getTargetCellId() !== getMetadataTerminalCellId(metadata.target)
+    existing.getTargetCellId() !== getMetadataTerminalCellId(metadata.target) ||
+    existing.getSourcePortId() !== getMetadataTerminalPortId(metadata.source) ||
+    existing.getTargetPortId() !== getMetadataTerminalPortId(metadata.target)
   ) {
     graph.removeCell(existing);
     graph.addEdge(metadata);
@@ -301,6 +329,7 @@ function syncRelationshipEdge(graph: Graph, metadata: EdgeMetadata): void {
   existing.setRouter(metadata.router!);
   existing.setConnector(metadata.connector!);
   existing.attr(metadata.attrs ?? {});
+  existing.setVertices(metadata.vertices ?? []);
   existing.setZIndex(metadata.zIndex ?? 0);
 }
 
@@ -316,10 +345,28 @@ function getMetadataTerminalCellId(terminal: EdgeMetadata['source']): string | n
   return null;
 }
 
+function getMetadataTerminalPortId(terminal: EdgeMetadata['source']): string | null {
+  if (terminal && typeof terminal === 'object' && 'port' in terminal && typeof terminal.port === 'string') {
+    return terminal.port;
+  }
+
+  return null;
+}
+
+function getPortItems(ports: NodeMetadata['ports'] | undefined): unknown[] {
+  if (Array.isArray(ports)) {
+    return ports;
+  }
+
+  // X6 accepts both a raw port array and a full ports metadata object; normalizing here keeps sync comparisons type-safe.
+  return ports?.items ?? [];
+}
+
 function createTableNodeMetadata(
   model: DiagramModel,
   table: DatabaseTable,
   selectedTableId: string | null,
+  terminals: RelationshipTerminal[],
 ): NodeMetadata {
   const columns = getTableColumns(model, table.id);
   const height = tableHeaderHeight + columns.length * tableColumnHeight + tablePaddingBottom;
@@ -335,24 +382,26 @@ function createTableNodeMetadata(
     } satisfies TableNodeData,
     height,
     position: table.position,
+    ports: createColumnPorts(model, table, terminals),
     shape: tableNodeShape,
     width: tableNodeWidth,
     zIndex: table.id === selectedTableId ? 2 : 1,
   };
 }
 
-function createRelationshipEdgeMetadata(model: DiagramModel): EdgeMetadata[] {
-  return Object.values(model.relationships).flatMap<EdgeMetadata>((relationship) => {
+function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipPlan): EdgeMetadata[] {
+  return Object.values(model.relationships).flatMap<EdgeMetadata>((relationship, index) => {
     const sourceTable = model.tables[relationship.sourceTableId];
     const targetTable = model.tables[relationship.targetTableId];
+    const terminals = plan.terminalsByRelationship.get(relationship.id);
 
-    if (!sourceTable || !targetTable) {
+    if (!sourceTable || !targetTable || !terminals?.source || !terminals.target) {
       return [];
     }
 
-    const sourceColumn = model.columns[relationship.sourceColumnId];
-    const targetColumn = model.columns[relationship.targetColumnId];
-    const label = `${sourceColumn?.name ?? 'id'} -> ${targetColumn?.name ?? 'id'}`;
+    // Only relationships owned by the selected primary-key table use the active Duolingo green, so inactive wiring stays readable but subdued.
+    const stroke = terminals.source.active ? relationshipActiveColor : relationshipNeutralColor;
+    const strokeWidth = terminals.source.active ? 3 : 2;
 
     return [
       {
@@ -360,32 +409,232 @@ function createRelationshipEdgeMetadata(model: DiagramModel): EdgeMetadata[] {
         attrs: {
           line: {
             sourceMarker: {
-              name: 'circle',
-              size: 6,
+              d: 'M 0 -8 L 0 8',
+              fill: 'none',
+              name: 'path',
+              offsetX: -5,
+              stroke,
+              strokeWidth,
             },
-            stroke: '#58cc02',
-            strokeWidth: 2,
+            stroke,
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth,
             targetMarker: {
-              name: 'classic',
-              size: 8,
+              // DrawSQL-style crow's foot marker communicates the many side of the relationship at the foreign-key endpoint.
+              d: 'M 10 -9 L 0 0 L 10 9 M 0 0 L 10 0',
+              fill: 'none',
+              name: 'path',
+              offsetX: 1,
+              stroke,
+              strokeWidth,
             },
           },
         },
         connector: {
           name: 'rounded',
-          args: { radius: 10 },
+          args: { radius: 12 },
         },
-        labels: [label],
+        labels: [],
         router: {
           name: 'manhattan',
-          args: { padding: 18 },
+          args: { padding: 28 },
         },
-        source: { cell: relationship.sourceTableId },
-        target: { cell: relationship.targetTableId },
-        zIndex: 0,
+        source: { cell: relationship.sourceTableId, port: terminals.source.portId },
+        target: { cell: relationship.targetTableId, port: terminals.target.portId },
+        vertices: createRelationshipVertices(sourceTable, targetTable, terminals.source, terminals.target, index),
+        zIndex: terminals.source.active ? 1 : 0,
       },
     ];
   });
+}
+
+function createRelationshipPlan(model: DiagramModel, selectedTableId: string | null): RelationshipPlan {
+  const groupedTerminals = new Map<string, Omit<RelationshipTerminal, 'laneIndex' | 'laneTotal'>[]>();
+  const terminalsByRelationship = new Map<string, { source?: RelationshipTerminal; target?: RelationshipTerminal }>();
+  const terminalsByTable = new Map<string, RelationshipTerminal[]>();
+
+  for (const relationship of Object.values(model.relationships)) {
+    const sourceTable = model.tables[relationship.sourceTableId];
+    const targetTable = model.tables[relationship.targetTableId];
+
+    if (!sourceTable || !targetTable) {
+      continue;
+    }
+
+    const sourceIsLeft = sourceTable.position.x + tableNodeWidth / 2 <= targetTable.position.x + tableNodeWidth / 2;
+    const active = selectedTableId === relationship.sourceTableId;
+    const sourceSide: PortSide = sourceIsLeft ? 'right' : 'left';
+    const targetSide: PortSide = sourceIsLeft ? 'left' : 'right';
+
+    pushGroupedTerminal(
+      groupedTerminals,
+      createTerminalBase({
+        active,
+        columnId: relationship.sourceColumnId,
+        relationshipId: relationship.id,
+        role: 'primary',
+        side: sourceSide,
+        tableId: relationship.sourceTableId,
+      }),
+    );
+    pushGroupedTerminal(
+      groupedTerminals,
+      createTerminalBase({
+        active,
+        columnId: relationship.targetColumnId,
+        relationshipId: relationship.id,
+        role: 'foreign',
+        side: targetSide,
+        tableId: relationship.targetTableId,
+      }),
+    );
+  }
+
+  for (const terminals of groupedTerminals.values()) {
+    terminals.forEach((terminal, laneIndex) => {
+      // Endpoints that share the same table, column, and side receive separate lanes so multiple wires do not collapse into one line.
+      const hydratedTerminal: RelationshipTerminal = {
+        ...terminal,
+        laneIndex,
+        laneTotal: terminals.length,
+      };
+      const existing = terminalsByRelationship.get(terminal.relationshipId) ?? {};
+
+      terminalsByRelationship.set(terminal.relationshipId, {
+        source: terminal.role === 'primary' ? hydratedTerminal : existing.source,
+        target: terminal.role === 'foreign' ? hydratedTerminal : existing.target,
+      });
+
+      terminalsByTable.set(terminal.tableId, [...(terminalsByTable.get(terminal.tableId) ?? []), hydratedTerminal]);
+    });
+  }
+
+  return { terminalsByRelationship, terminalsByTable };
+}
+
+function createTerminalBase(options: {
+  active: boolean;
+  columnId: string;
+  relationshipId: string;
+  role: RelationshipTerminal['role'];
+  side: PortSide;
+  tableId: string;
+}): Omit<RelationshipTerminal, 'laneIndex' | 'laneTotal'> {
+  return {
+    ...options,
+    portId: `${options.relationshipId}:${options.role}:${options.columnId}:${options.side}`,
+  };
+}
+
+function pushGroupedTerminal(
+  groupedTerminals: Map<string, Omit<RelationshipTerminal, 'laneIndex' | 'laneTotal'>[]>,
+  terminal: Omit<RelationshipTerminal, 'laneIndex' | 'laneTotal'>,
+): void {
+  const key = `${terminal.tableId}:${terminal.columnId}:${terminal.side}`;
+  groupedTerminals.set(key, [...(groupedTerminals.get(key) ?? []), terminal]);
+}
+
+function createColumnPorts(
+  model: DiagramModel,
+  table: DatabaseTable,
+  terminals: RelationshipTerminal[],
+): NodeMetadata['ports'] {
+  const columns = getTableColumns(model, table.id);
+
+  return {
+    groups: {
+      absolute: {
+        markup: [{ selector: 'portBody', tagName: 'circle' }],
+        position: 'absolute',
+      },
+    },
+    items: terminals.flatMap((terminal) => {
+      const columnIndex = columns.findIndex((column) => column.id === terminal.columnId);
+
+      if (columnIndex < 0) {
+        return [];
+      }
+
+      const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2;
+      // The vertical lane offset makes several relationships to the same id row visually distinct while keeping every endpoint attached to the real column.
+      const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * 8;
+      const color = terminal.active ? relationshipActiveColor : relationshipNeutralColor;
+
+      return [
+        {
+          args: {
+            x: terminal.side === 'left' ? -2 : tableNodeWidth + 2,
+            y: y + laneOffset,
+          },
+          attrs: {
+            portBody: {
+              cursor: 'crosshair',
+              fill: '#ffffff',
+              magnet: true,
+              r: terminal.active ? relationshipPortRadius + 1 : relationshipPortRadius,
+              stroke: color,
+              strokeWidth: terminal.active ? 3 : 2,
+            },
+          },
+          group: 'absolute',
+          id: terminal.portId,
+          zIndex: 10,
+        },
+      ];
+    }),
+  };
+}
+
+function createRelationshipVertices(
+  sourceTable: DatabaseTable,
+  targetTable: DatabaseTable,
+  source: RelationshipTerminal,
+  target: RelationshipTerminal,
+  index: number,
+): Array<{ x: number; y: number }> {
+  const sourcePoint = getTerminalPoint(sourceTable, source);
+  const targetPoint = getTerminalPoint(targetTable, target);
+  const horizontalDistance = Math.abs(sourcePoint.x - targetPoint.x);
+  // A stable per-relationship lane nudges parallel Manhattan routes apart without changing their FK/PK attachment points.
+  const laneOffset = ((index % 9) - 4) * 10;
+
+  if (horizontalDistance > 96) {
+    const midX = (sourcePoint.x + targetPoint.x) / 2 + laneOffset;
+
+    return [
+      { x: midX, y: sourcePoint.y },
+      { x: midX, y: targetPoint.y },
+    ];
+  }
+
+  const sourceDirection = source.side === 'left' ? -1 : 1;
+  const targetDirection = target.side === 'left' ? -1 : 1;
+  const sourceX = sourcePoint.x + sourceDirection * (52 + Math.abs(laneOffset));
+  const targetX = targetPoint.x + targetDirection * (52 + Math.abs(laneOffset));
+  const midY = (sourcePoint.y + targetPoint.y) / 2;
+
+  return [
+    { x: sourceX, y: sourcePoint.y },
+    { x: sourceX, y: midY },
+    { x: targetX, y: midY },
+    { x: targetX, y: targetPoint.y },
+  ];
+}
+
+function getTerminalPoint(table: DatabaseTable, terminal: RelationshipTerminal): { x: number; y: number } {
+  const columnIndex = table.columnIds.indexOf(terminal.columnId);
+  const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * 8;
+
+  return {
+    x: table.position.x + (terminal.side === 'left' ? 0 : tableNodeWidth),
+    y:
+      table.position.y +
+      tableHeaderHeight +
+      Math.max(columnIndex, 0) * tableColumnHeight +
+      tableColumnHeight / 2 +
+      laneOffset,
+  };
 }
 
 function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNodeData): boolean {

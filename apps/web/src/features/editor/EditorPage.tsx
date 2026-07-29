@@ -251,7 +251,7 @@ export function EditorPage() {
           <div className="space-y-1">
             {projects.map((project) => (
               <button
-                className={`flex w-full items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
+                className={`flex w-full cursor-pointer items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
                   project.id === activeProject?.id
                     ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
                     : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
@@ -534,7 +534,7 @@ function AuthGate({
           </div>
           <div className="mb-4 grid grid-cols-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-1 text-sm font-extrabold">
             <button
-              className={`rounded-[12px] px-3 py-1.5 transition ${
+              className={`cursor-pointer rounded-[12px] px-3 py-1.5 transition ${
                 form.mode === 'sign-up'
                   ? 'bg-white text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]'
                   : 'text-[rgb(var(--tabliodb-ink-muted))]'
@@ -545,7 +545,7 @@ function AuthGate({
               Sign up
             </button>
             <button
-              className={`rounded-[12px] px-3 py-1.5 transition ${
+              className={`cursor-pointer rounded-[12px] px-3 py-1.5 transition ${
                 form.mode === 'login'
                   ? 'bg-white text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]'
                   : 'text-[rgb(var(--tabliodb-ink-muted))]'
