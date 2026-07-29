@@ -4,8 +4,10 @@ import {
   type Cell,
   type Edge as X6Edge,
   type EdgeMetadata,
+  type EdgeView,
   type Node as X6Node,
   type NodeMetadata,
+  type PointLike,
 } from '@antv/x6';
 import { getTableColumns, type DatabaseColumn, type DatabaseTable, type DiagramModel } from '@tabliodb/schema-core';
 import { useEffect, useRef } from 'react';
@@ -20,12 +22,12 @@ const diagramVisualGridSize = 24;
 const diagramDragGridSize = 1;
 const relationshipActiveColor = '#58cc02';
 const relationshipNeutralColor = '#9ca3af';
-const relationshipExitGap = 42;
-const relationshipLaneGap = 12;
+const relationshipLaneGap = 10;
 const relationshipPortRadius = 4;
-const relationshipPortGap = 14;
-const relationshipSameSideGap = 64;
+const relationshipRouteGap = 32;
+const relationshipRouterName = 'tabliodb-relationship';
 
+let relationshipRouterRegistered = false;
 let tableShapeRegistered = false;
 
 export type SchemaCanvasProps = {
@@ -97,6 +99,7 @@ export function SchemaCanvas({
     }
 
     registerTableNodeShape();
+    registerRelationshipRouter();
 
     const graph = new Graph({
       // HTML table nodes are small enough for synchronous rendering, which avoids queued stale views after drag-end state sync.
@@ -113,7 +116,7 @@ export function SchemaCanvas({
         connector: { name: 'rounded', args: { radius: 12 } },
         connectionPoint: 'boundary',
         highlight: true,
-        router: { name: 'normal' },
+        router: { name: relationshipRouterName },
         snap: { radius: 24 },
       },
       container: containerRef.current,
@@ -446,11 +449,15 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
         },
         labels: [],
         router: {
-          name: 'normal',
+          name: relationshipRouterName,
+          args: {
+            edgeIndex: index,
+            sourceLaneIndex: terminals.source.laneIndex,
+            targetLaneIndex: terminals.target.laneIndex,
+          },
         },
         source: { cell: relationship.sourceTableId, port: terminals.source.portId },
         target: { cell: relationship.targetTableId, port: terminals.target.portId },
-        vertices: createRelationshipVertices(sourceTable, targetTable, terminals.source, terminals.target, index),
         zIndex: terminals.source.active ? 1 : 0,
       },
     ];
@@ -572,7 +579,7 @@ function createColumnPorts(
       return [
         {
           args: {
-            x: getPortX(terminal.side),
+            x: terminal.side === 'left' ? 0 : tableNodeWidth,
             y: y + laneOffset,
           },
           attrs: {
@@ -594,65 +601,66 @@ function createColumnPorts(
   };
 }
 
-function createRelationshipVertices(
-  sourceTable: DatabaseTable,
-  targetTable: DatabaseTable,
-  source: RelationshipTerminal,
-  target: RelationshipTerminal,
-  index: number,
-): Array<{ x: number; y: number }> {
-  const sourcePoint = getTerminalPoint(sourceTable, source);
-  const targetPoint = getTerminalPoint(targetTable, target);
-  const sourceDirection = getSideDirection(source.side);
-  const targetDirection = getSideDirection(target.side);
-  // A stable per-relationship lane nudges parallel routes apart without changing their FK/PK attachment points.
-  const laneOffset = ((index % 9) - 4) * relationshipLaneGap;
-  const sourceExitDistance = relationshipExitGap + source.laneIndex * relationshipLaneGap;
-  const targetExitDistance = relationshipExitGap + target.laneIndex * relationshipLaneGap;
+function registerRelationshipRouter(): void {
+  if (relationshipRouterRegistered) {
+    return;
+  }
+
+  Graph.registerRouter(
+    relationshipRouterName,
+    (vertices, options, edgeView) => createLiveRelationshipRoute(vertices, options, edgeView),
+    true,
+  );
+  relationshipRouterRegistered = true;
+}
+
+function createLiveRelationshipRoute(
+  vertices: PointLike[],
+  options: {
+    edgeIndex?: number;
+    sourceLaneIndex?: number;
+    targetLaneIndex?: number;
+  },
+  edgeView: EdgeView,
+): PointLike[] {
+  if (!edgeView.sourceAnchor || !edgeView.targetAnchor) {
+    return vertices;
+  }
+
+  const source = edgeView.sourceAnchor;
+  const target = edgeView.targetAnchor;
+  const sourceBBox = edgeView.sourceView?.cell.getBBox();
+  const targetBBox = edgeView.targetView?.cell.getBBox();
+
+  if (!sourceBBox || !targetBBox) {
+    return vertices;
+  }
+
+  const sourceDirection = source.x <= sourceBBox.x + sourceBBox.width / 2 ? -1 : 1;
+  const targetDirection = target.x <= targetBBox.x + targetBBox.width / 2 ? -1 : 1;
+  const edgeLaneOffset = (((options.edgeIndex ?? 0) % 7) - 3) * relationshipLaneGap;
   const sourceExit = {
-    x: sourcePoint.x + sourceDirection * sourceExitDistance,
-    y: sourcePoint.y,
+    x: source.x + sourceDirection * (relationshipRouteGap + (options.sourceLaneIndex ?? 0) * relationshipLaneGap),
+    y: source.y,
   };
   const targetExit = {
-    x: targetPoint.x + targetDirection * targetExitDistance,
-    y: targetPoint.y,
+    x: target.x + targetDirection * (relationshipRouteGap + (options.targetLaneIndex ?? 0) * relationshipLaneGap),
+    y: target.y,
   };
 
-  if (source.side !== target.side) {
-    const midX = (sourceExit.x + targetExit.x) / 2 + laneOffset;
+  // This router is evaluated by X6 during node movement, so the path follows the live drag position instead of stale React model coordinates.
+  if (sourceDirection !== targetDirection) {
+    const midX = (sourceExit.x + targetExit.x) / 2 + edgeLaneOffset;
 
-    return [sourceExit, { x: midX, y: sourcePoint.y }, { x: midX, y: targetPoint.y }, targetExit];
+    return [sourceExit, { x: midX, y: source.y }, { x: midX, y: target.y }, targetExit];
   }
 
   const outerX =
-    source.side === 'left'
-      ? Math.min(sourceExit.x, targetExit.x) - relationshipSameSideGap - Math.abs(laneOffset)
-      : Math.max(sourceExit.x, targetExit.x) + relationshipSameSideGap + Math.abs(laneOffset);
+    sourceDirection === -1
+      ? Math.min(sourceExit.x, targetExit.x) - relationshipRouteGap - Math.abs(edgeLaneOffset)
+      : Math.max(sourceExit.x, targetExit.x) + relationshipRouteGap + Math.abs(edgeLaneOffset);
 
-  return [sourceExit, { x: outerX, y: sourcePoint.y }, { x: outerX, y: targetPoint.y }, targetExit];
-}
-
-function getTerminalPoint(table: DatabaseTable, terminal: RelationshipTerminal): { x: number; y: number } {
-  const columnIndex = table.columnIds.indexOf(terminal.columnId);
-  const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * 8;
-
-  return {
-    x: table.position.x + getPortX(terminal.side),
-    y:
-      table.position.y +
-      tableHeaderHeight +
-      Math.max(columnIndex, 0) * tableColumnHeight +
-      tableColumnHeight / 2 +
-      laneOffset,
-  };
-}
-
-function getPortX(side: PortSide): number {
-  return side === 'left' ? -relationshipPortGap : tableNodeWidth + relationshipPortGap;
-}
-
-function getSideDirection(side: PortSide): -1 | 1 {
-  return side === 'left' ? -1 : 1;
+  return [sourceExit, { x: outerX, y: source.y }, { x: outerX, y: target.y }, targetExit];
 }
 
 function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNodeData): boolean {
