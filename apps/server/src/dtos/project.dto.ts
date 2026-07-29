@@ -13,6 +13,8 @@ const ProjectResponseSchema = z
   .object({
     id: z.string().uuid(),
     organizationId: z.string().uuid(),
+    organizationName: z.string(),
+    organizationSlug: z.string(),
     name: z.string(),
     slug: z.string(),
     description: z.string().nullable(),

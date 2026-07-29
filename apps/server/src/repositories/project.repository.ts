@@ -18,15 +18,41 @@ export class ProjectRepository {
         .values({ projectId: project.id, userId: dto.createdById, role: ProjectRole.Owner })
         .execute();
 
-      return project;
+      return tx
+        .selectFrom('projects')
+        .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
+        .select([
+          'projects.id',
+          'projects.organizationId',
+          'projects.name',
+          'projects.slug',
+          'projects.description',
+          'projects.createdAt',
+          'projects.updatedAt',
+          'organizations.name as organizationName',
+          'organizations.slug as organizationSlug',
+        ])
+        .where('projects.id', '=', project.id)
+        .executeTakeFirstOrThrow();
     });
   }
 
   getVisibleToUser(userId: string) {
     return this.db
       .selectFrom('projects')
+      .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
       .innerJoin('project_members', 'project_members.projectId', 'projects.id')
-      .selectAll('projects')
+      .select([
+        'projects.id',
+        'projects.organizationId',
+        'projects.name',
+        'projects.slug',
+        'projects.description',
+        'projects.createdAt',
+        'projects.updatedAt',
+        'organizations.name as organizationName',
+        'organizations.slug as organizationSlug',
+      ])
       .where('project_members.userId', '=', userId)
       .orderBy('projects.updatedAt', 'desc')
       .execute();
@@ -35,8 +61,19 @@ export class ProjectRepository {
   getByIdForUser(userId: string, projectId: string) {
     return this.db
       .selectFrom('projects')
+      .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
       .innerJoin('project_members', 'project_members.projectId', 'projects.id')
-      .selectAll('projects')
+      .select([
+        'projects.id',
+        'projects.organizationId',
+        'projects.name',
+        'projects.slug',
+        'projects.description',
+        'projects.createdAt',
+        'projects.updatedAt',
+        'organizations.name as organizationName',
+        'organizations.slug as organizationSlug',
+      ])
       .where('project_members.userId', '=', userId)
       .where('projects.id', '=', projectId)
       .executeTakeFirst();

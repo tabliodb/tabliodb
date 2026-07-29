@@ -10,6 +10,8 @@ export type ProjectCreateDto = {
 export type ProjectResponseDto = {
   id: string;
   organizationId: string;
+  organizationName: string;
+  organizationSlug: string;
   name: string;
   slug: string;
   description: string | null;

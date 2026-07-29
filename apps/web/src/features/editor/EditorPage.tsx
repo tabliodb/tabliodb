@@ -32,7 +32,6 @@ import {
   Surface,
 } from '@tabliodb/ui';
 import {
-  AlertCircle,
   Database,
   GitBranch,
   History,
@@ -48,56 +47,35 @@ import {
   Share2,
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router';
+import { routes } from '@/app/routes';
+import { ErrorState, LoadingState } from '@/features/app/RouteStates';
 import { sdk } from '@/services/sdk';
 import { addTableToDiagramModel, createSeedDiagramModel, formatColumnType } from './diagram-model';
 import { SchemaCanvas } from './components/SchemaCanvas';
 
 const defaultProjectName = 'Library System';
 const defaultDiagramName = 'Main schema';
-const authDefaults = {
-  email: 'owner@tabliodb.local',
-  password: 'tabliodb-dev',
-};
-
-type AuthFormState = {
-  email: string;
-  password: string;
-};
-
-type SetupFormState = {
-  ownerEmail: string;
-  ownerName: string;
-  ownerPassword: string;
-  publicUrl: string;
-  workspaceName: string;
-};
 
 export function EditorPage() {
+  const navigate = useNavigate();
+  const params = useParams();
   const queryClient = useQueryClient();
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [activeDiagramId, setActiveDiagramId] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
-  const setupQuery = useQuery({
-    queryKey: ['setup'],
-    queryFn: sdk.setup.getStatus,
-    retry: false,
-  });
-
-  const setupStatus = setupQuery.data ?? null;
-
   const projectsQuery = useQuery({
-    enabled: setupStatus?.isSetupComplete === true,
     queryKey: ['projects'],
     queryFn: loadOrCreateProjects,
     retry: false,
   });
 
   const projects = projectsQuery.data ?? [];
-  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null;
+  const routeProjectId = params.projectId ?? null;
+  const routeDiagramId = params.diagramId ?? null;
+  const activeProject = projects.find((project) => project.id === routeProjectId) ?? projects[0] ?? null;
 
   const diagramsQuery = useQuery({
     enabled: Boolean(activeProject?.id),
@@ -107,7 +85,7 @@ export function EditorPage() {
   });
 
   const diagrams = diagramsQuery.data ?? [];
-  const activeDiagram = diagrams.find((diagram) => diagram.id === activeDiagramId) ?? diagrams[0] ?? null;
+  const activeDiagram = diagrams.find((diagram) => diagram.id === routeDiagramId) ?? diagrams[0] ?? null;
 
   const snapshotsQuery = useQuery({
     enabled: Boolean(activeDiagram?.id),
@@ -120,36 +98,6 @@ export function EditorPage() {
   const selectedTable = selectedTableId && model ? model.tables[selectedTableId] : null;
   const selectedColumns = selectedTable && model ? getTableColumns(model, selectedTable.id) : [];
   const reviewSignals = useMemo(() => (model ? getReviewSignals(model) : []), [model]);
-
-  const authMutation = useMutation({
-    mutationFn: (form: AuthFormState) => sdk.auth.login({ email: form.email, password: form.password }),
-    onSuccess: async () => {
-      setActiveDiagramId(null);
-      setActiveProjectId(null);
-      setModel(null);
-      setSelectedTableId(null);
-      await queryClient.invalidateQueries({ queryKey: ['projects'] });
-    },
-  });
-
-  const setupMutation = useMutation({
-    mutationFn: (form: SetupFormState) =>
-      sdk.setup.complete({
-        ownerEmail: form.ownerEmail,
-        ownerName: form.ownerName,
-        ownerPassword: form.ownerPassword,
-        publicUrl: form.publicUrl.trim() || undefined,
-        workspaceName: form.workspaceName,
-      }),
-    onSuccess: async () => {
-      setActiveDiagramId(null);
-      setActiveProjectId(null);
-      setModel(null);
-      setSelectedTableId(null);
-      await queryClient.invalidateQueries({ queryKey: ['setup'] });
-      await queryClient.invalidateQueries({ queryKey: ['projects'] });
-    },
-  });
 
   const saveSnapshotMutation = useMutation({
     mutationFn: async () => {
@@ -184,25 +132,39 @@ export function EditorPage() {
   const logoutMutation = useMutation({
     mutationFn: () => sdk.auth.logout(),
     onSuccess: () => {
-      setActiveDiagramId(null);
-      setActiveProjectId(null);
       setModel(null);
       setSelectedTableId(null);
       queryClient.clear();
+      navigate(routes.login.to(), { replace: true });
     },
   });
 
   useEffect(() => {
-    if (projects.length > 0 && !projects.some((project) => project.id === activeProjectId)) {
-      setActiveProjectId(projects[0].id);
+    if (projects.length > 0 && (!routeProjectId || !projects.some((project) => project.id === routeProjectId))) {
+      const project = projects[0];
+      navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }), {
+        replace: true,
+      });
     }
-  }, [activeProjectId, projects]);
+  }, [navigate, projects, routeProjectId]);
 
   useEffect(() => {
-    if (diagrams.length > 0 && !diagrams.some((diagram) => diagram.id === activeDiagramId)) {
-      setActiveDiagramId(diagrams[0].id);
+    if (
+      activeProject &&
+      diagrams.length > 0 &&
+      (!routeDiagramId || !diagrams.some((diagram) => diagram.id === routeDiagramId))
+    ) {
+      const diagram = diagrams[0];
+      navigate(
+        routes.diagram.to({
+          diagramId: diagram.id,
+          projectId: activeProject.id,
+          workspaceSlug: getWorkspaceSlug(activeProject),
+        }),
+        { replace: true },
+      );
     }
-  }, [activeDiagramId, diagrams]);
+  }, [activeProject, diagrams, navigate, routeDiagramId]);
 
   useEffect(() => {
     if (!latestSnapshot) {
@@ -235,24 +197,8 @@ export function EditorPage() {
     setSelectedTableId(nextTableId);
   }
 
-  if (setupQuery.isPending) {
-    return <LoadingState />;
-  }
-
-  if (setupQuery.error) {
-    return (
-      <ErrorState error={setupQuery.error} onRetry={() => queryClient.invalidateQueries({ queryKey: ['setup'] })} />
-    );
-  }
-
-  if (setupStatus && !setupStatus.isSetupComplete) {
-    return (
-      <SetupGate error={setupMutation.error} isSubmitting={setupMutation.isPending} onSubmit={setupMutation.mutate} />
-    );
-  }
-
   if (isUnauthorized(projectsQuery.error)) {
-    return <AuthGate error={authMutation.error} isSubmitting={authMutation.isPending} onSubmit={authMutation.mutate} />;
+    return <Navigate replace to={routes.login.to()} />;
   }
 
   const blockingError = projectsQuery.error ?? diagramsQuery.error ?? snapshotsQuery.error;
@@ -291,10 +237,9 @@ export function EditorPage() {
                 }`}
                 key={project.id}
                 onClick={() => {
-                  setActiveProjectId(project.id);
-                  setActiveDiagramId(null);
                   setModel(null);
                   setSelectedTableId(null);
+                  navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
                 }}
                 type="button"
               >
@@ -446,6 +391,10 @@ async function loadOrCreateProjects(): Promise<ProjectResponseDto[]> {
   return [project];
 }
 
+function getWorkspaceSlug(project: ProjectResponseDto): string {
+  return project.organizationSlug || project.organizationId;
+}
+
 async function loadOrCreateDiagrams(project: ProjectResponseDto): Promise<DiagramResponseDto[]> {
   const diagrams = await sdk.projects.listDiagrams(project.id);
 
@@ -531,207 +480,8 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
   );
 }
 
-function AuthGate({
-  error,
-  isSubmitting,
-  onSubmit,
-}: {
-  error: unknown;
-  isSubmitting: boolean;
-  onSubmit: (form: AuthFormState) => void;
-}) {
-  const [form, setForm] = useState<AuthFormState>({
-    email: authDefaults.email,
-    password: authDefaults.password,
-  });
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onSubmit(form);
-  }
-
-  return (
-    <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 text-[rgb(var(--tabliodb-ink))]">
-      <Surface className="w-full max-w-sm p-5" depth="md">
-        <form onSubmit={handleSubmit}>
-          <div className="mb-5 flex items-center gap-2">
-            <div className="grid size-10 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-              <Database className="size-5" />
-            </div>
-            <div>
-              <h1 className="text-base font-extrabold">Tabliodb</h1>
-              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Sign in to your workspace</p>
-            </div>
-          </div>
-          <label className="mb-3 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Email
-            </span>
-            <Input
-              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-              type="email"
-              value={form.email}
-            />
-          </label>
-          <label className="mb-4 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Password
-            </span>
-            <Input
-              onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-              type="password"
-              value={form.password}
-            />
-          </label>
-          {error ? (
-            <div className="mb-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(error)}
-            </div>
-          ) : null}
-          <Button className="w-full gap-2" disabled={isSubmitting} type="submit">
-            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
-            Continue
-          </Button>
-        </form>
-      </Surface>
-    </main>
-  );
-}
-
-function SetupGate({
-  error,
-  isSubmitting,
-  onSubmit,
-}: {
-  error: unknown;
-  isSubmitting: boolean;
-  onSubmit: (form: SetupFormState) => void;
-}) {
-  const [form, setForm] = useState<SetupFormState>({
-    ownerEmail: authDefaults.email,
-    ownerName: 'Tabliodb Owner',
-    ownerPassword: authDefaults.password,
-    publicUrl: typeof window === 'undefined' ? '' : window.location.origin,
-    workspaceName: 'Personal Workspace',
-  });
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onSubmit(form);
-  }
-
-  return (
-    <main className="grid min-h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 py-10 text-[rgb(var(--tabliodb-ink))]">
-      <Surface className="w-full max-w-lg p-5" depth="md">
-        <form onSubmit={handleSubmit}>
-          <div className="mb-5 flex items-center gap-2">
-            <div className="grid size-10 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-              <Database className="size-5" />
-            </div>
-            <div>
-              <h1 className="text-base font-extrabold">Tabliodb</h1>
-              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Set up this instance</p>
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Owner name
-              </span>
-              <Input
-                onChange={(event) => setForm((current) => ({ ...current, ownerName: event.target.value }))}
-                value={form.ownerName}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Owner email
-              </span>
-              <Input
-                onChange={(event) => setForm((current) => ({ ...current, ownerEmail: event.target.value }))}
-                type="email"
-                value={form.ownerEmail}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Password
-              </span>
-              <Input
-                onChange={(event) => setForm((current) => ({ ...current, ownerPassword: event.target.value }))}
-                type="password"
-                value={form.ownerPassword}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Workspace
-              </span>
-              <Input
-                onChange={(event) => setForm((current) => ({ ...current, workspaceName: event.target.value }))}
-                value={form.workspaceName}
-              />
-            </label>
-          </div>
-          <label className="mt-3 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Public URL
-            </span>
-            <Input
-              onChange={(event) => setForm((current) => ({ ...current, publicUrl: event.target.value }))}
-              type="url"
-              value={form.publicUrl}
-            />
-          </label>
-          {error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(error)}
-            </div>
-          ) : null}
-          <Button className="mt-5 w-full gap-2" disabled={isSubmitting} type="submit">
-            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
-            Create owner and workspace
-          </Button>
-        </form>
-      </Surface>
-    </main>
-  );
-}
-
-function LoadingState() {
-  return (
-    <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink-muted))]">
-      <Surface className="flex items-center gap-2 p-4 text-sm font-extrabold">
-        <Loader2 className="size-4 animate-spin" />
-        Loading workspace
-      </Surface>
-    </main>
-  );
-}
-
-function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => void }) {
-  return (
-    <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 text-[rgb(var(--tabliodb-ink))]">
-      <Surface className="w-full max-w-md border-red-200 p-5">
-        <div className="mb-3 flex items-center gap-2 text-red-700">
-          <AlertCircle className="size-5" />
-          <h1 className="text-sm font-extrabold">Workspace error</h1>
-        </div>
-        <p className="mb-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">{getErrorMessage(error)}</p>
-        <Button onClick={onRetry} variant="secondary">
-          Retry
-        </Button>
-      </Surface>
-    </main>
-  );
-}
-
 function isUnauthorized(error: unknown): boolean {
   return error instanceof TabliodbApiError && error.status === 401;
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown error';
 }
 
 function countTableRelationships(model: DiagramModel, table: DatabaseTable): number {
