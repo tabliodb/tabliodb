@@ -10,6 +10,10 @@ type DiagramParams = ProjectParams & {
   diagramId: string;
 };
 
+type InvitationParams = {
+  token: string;
+};
+
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
 }
@@ -26,6 +30,10 @@ export const routes = {
   login: {
     path: '/login',
     to: () => '/login',
+  },
+  invitation: {
+    path: '/invite/:token',
+    to: ({ token }: InvitationParams) => `/invite/${encodePathSegment(token)}`,
   },
   admin: {
     path: '/admin',

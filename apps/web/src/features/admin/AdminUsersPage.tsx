@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { OrganizationRole } from '@tabliodb/shared';
-import type { UserListQuery, UserResponseDto } from '@tabliodb/sdk';
+import type { InvitationCreateResponseDto, UserListQuery, UserResponseDto } from '@tabliodb/sdk';
 import {
   Badge,
   Button,
@@ -17,12 +17,13 @@ import {
   Surface,
   cn,
 } from '@tabliodb/ui';
-import { Crown, Loader2, Plus, Search, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
+import { Copy, Crown, Loader2, MailPlus, Plus, Search, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { ControlledCheckbox, ControlledInput } from '@/features/app/FormControls';
+import { ControlledCheckbox, ControlledInput, ControlledTextarea } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
+import { useCreateInvitationMutation } from '@/resources/invitations';
 import { useCreateUserMutation, usersQueries } from '@/resources/users';
 
 const createUserFormSchema = z.object({
@@ -41,6 +42,22 @@ const createUserDefaults: CreateUserFormState = {
   name: '',
   organizationRole: OrganizationRole.Member,
   password: '',
+};
+
+const inviteUserFormSchema = z.object({
+  email: z.string().trim().email('Enter a valid email.'),
+  expiresInDays: z.number().int().min(1, 'Minimum 1 day.').max(30, 'Maximum 30 days.'),
+  message: z.string().trim().max(500, 'Message is too long.').optional(),
+  organizationRole: z.enum([OrganizationRole.Admin, OrganizationRole.Member]),
+});
+
+type InviteUserFormState = z.infer<typeof inviteUserFormSchema>;
+
+const inviteUserDefaults: InviteUserFormState = {
+  email: '',
+  expiresInDays: 7,
+  message: '',
+  organizationRole: OrganizationRole.Member,
 };
 
 const roleFilters = ['all', 'owner', 'instance-admin', 'org-admin', 'member'] as const;
@@ -97,7 +114,10 @@ export function AdminUsersPage() {
             Create teammates, assign workspace roles, and grant instance admin access.
           </p>
         </div>
-        <CreateUserDialog />
+        <div className="flex flex-wrap gap-2">
+          <InviteUserDialog />
+          <CreateUserDialog />
+        </div>
       </section>
 
       <section className="grid gap-3 md:grid-cols-4">
@@ -201,6 +221,176 @@ export function AdminUsersPage() {
         </div>
       </Surface>
     </div>
+  );
+}
+
+function InviteUserDialog() {
+  const [open, setOpen] = useState(false);
+  const [createdInvite, setCreatedInvite] = useState<InvitationCreateResponseDto | null>(null);
+  const form = useForm<InviteUserFormState>({
+    defaultValues: inviteUserDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(inviteUserFormSchema),
+  });
+  const { errors } = form.formState;
+
+  const createInvitationMutation = useCreateInvitationMutation({
+    mutationConfig: {
+      onSuccess: (data) => {
+        // Token mentah hanya dikirim sekali oleh API; dialog sengaja tetap terbuka agar admin bisa menyalin link sebelum reset.
+        setCreatedInvite(data);
+      },
+    },
+  });
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+
+    if (!nextOpen && !createInvitationMutation.isPending) {
+      form.reset(inviteUserDefaults);
+      setCreatedInvite(null);
+      createInvitationMutation.reset();
+    }
+  }
+
+  function handleSubmit(values: InviteUserFormState) {
+    createInvitationMutation.mutate({
+      email: values.email,
+      expiresInDays: values.expiresInDays,
+      message: values.message?.trim() || undefined,
+      organizationRole: values.organizationRole,
+    });
+  }
+
+  async function copyAcceptUrl() {
+    if (createdInvite?.acceptUrl) {
+      await navigator.clipboard.writeText(createdInvite.acceptUrl);
+    }
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogTrigger asChild>
+        <Button className="gap-2" variant="secondary">
+          <MailPlus className="size-4" />
+          Invite user
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="w-[min(94vw,560px)]">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Invite user</DialogTitle>
+            <DialogDescription>Create a one-time invitation link for a new teammate.</DialogDescription>
+          </DialogHeader>
+
+          <label className="mt-4 block text-sm">
+            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Email
+            </span>
+            <ControlledInput
+              aria-invalid={Boolean(errors.email)}
+              autoComplete="email"
+              control={form.control}
+              disabled={createInvitationMutation.isPending}
+              name="email"
+              type="email"
+            />
+            <FieldError>{errors.email?.message}</FieldError>
+          </label>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_140px]">
+            <fieldset>
+              <legend className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Workspace role
+              </legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <RoleOption
+                  checked={form.watch('organizationRole') === OrganizationRole.Member}
+                  description="Can join workspace projects."
+                  label="Member"
+                  onClick={() => form.setValue('organizationRole', OrganizationRole.Member, { shouldDirty: true })}
+                />
+                <RoleOption
+                  checked={form.watch('organizationRole') === OrganizationRole.Admin}
+                  description="Can help manage users."
+                  label="Admin"
+                  onClick={() => form.setValue('organizationRole', OrganizationRole.Admin, { shouldDirty: true })}
+                />
+              </div>
+            </fieldset>
+            <label className="block text-sm">
+              <span className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Expires
+              </span>
+              <ControlledInput
+                aria-invalid={Boolean(errors.expiresInDays)}
+                control={form.control}
+                disabled={createInvitationMutation.isPending}
+                max={30}
+                min={1}
+                name="expiresInDays"
+                type="number"
+              />
+              <FieldError>{errors.expiresInDays?.message}</FieldError>
+            </label>
+          </div>
+
+          <label className="mt-3 block text-sm">
+            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Message
+            </span>
+            <ControlledTextarea
+              aria-invalid={Boolean(errors.message)}
+              className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
+              control={form.control}
+              disabled={createInvitationMutation.isPending}
+              name="message"
+            />
+            <FieldError>{errors.message?.message}</FieldError>
+          </label>
+
+          {createdInvite ? (
+            <div className="mt-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3">
+              <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
+                Invitation link
+              </div>
+              <div className="flex gap-2">
+                <Input readOnly value={createdInvite.acceptUrl} />
+                <Button className="shrink-0 gap-2" onClick={copyAcceptUrl} type="button" variant="secondary">
+                  <Copy className="size-4" />
+                  Copy
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {createInvitationMutation.error ? (
+            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {getErrorMessage(createInvitationMutation.error)}
+            </div>
+          ) : null}
+
+          <DialogFooter className="mt-5">
+            <Button
+              disabled={createInvitationMutation.isPending}
+              onClick={() => handleOpenChange(false)}
+              type="button"
+              variant="secondary"
+            >
+              Close
+            </Button>
+            <Button disabled={createInvitationMutation.isPending} type="submit">
+              {createInvitationMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <MailPlus className="size-4" />
+              )}
+              Create invite
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

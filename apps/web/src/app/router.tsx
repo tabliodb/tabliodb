@@ -13,6 +13,8 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { requireAuthenticated } from '@/features/auth/middleware/requireAuthenticated';
 import { editorLoader } from '@/features/editor/loaders/editorLoader';
 import { EditorPage } from '@/features/editor/EditorPage';
+import { acceptInvitationLoader } from '@/features/invitations/loaders/acceptInvitationLoader';
+import { AcceptInvitationPage } from '@/features/invitations/AcceptInvitationPage';
 import { requireSetupComplete } from '@/features/setup/middleware/requireSetupComplete';
 import { setupLoader } from '@/features/setup/loaders/setupLoader';
 import { SetupPage } from '@/features/setup/SetupPage';
@@ -42,6 +44,11 @@ export const router = createBrowserRouter([
                 element: <LoginPage />,
                 loader: loginLoader,
                 path: routes.login.path,
+              },
+              {
+                element: <AcceptInvitationPage />,
+                loader: acceptInvitationLoader,
+                path: routes.invitation.path,
               },
             ],
           },

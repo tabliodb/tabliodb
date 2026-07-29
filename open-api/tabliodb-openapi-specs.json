@@ -340,6 +340,112 @@
         ]
       }
     },
+    "/invitations": {
+      "post": {
+        "operationId": "createInvitation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationCreateResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "invitations"
+        ]
+      }
+    },
+    "/invitations/{token}": {
+      "get": {
+        "operationId": "getInvitationByToken",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPublicDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "",
+        "tags": [
+          "invitations"
+        ]
+      }
+    },
+    "/invitations/accept": {
+      "post": {
+        "operationId": "acceptInvitation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationAcceptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationAcceptResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "",
+        "tags": [
+          "invitations"
+        ]
+      }
+    },
     "/projects": {
       "get": {
         "operationId": "getProjects",
@@ -1279,6 +1385,302 @@
           "dialect",
           "createdAt",
           "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "InvitationCreateDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "organizationRole": {
+            "default": "member",
+            "type": "string",
+            "enum": [
+              "admin",
+              "member"
+            ]
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "projectRole": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "expiresInDays": {
+            "default": 7,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "InvitationDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "organizationSlug": {
+            "type": "string"
+          },
+          "organizationRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "member"
+            ]
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
+          },
+          "projectName": {
+            "type": "string",
+            "nullable": true
+          },
+          "projectRole": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ],
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "invitedById": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "invitedByName": {
+            "type": "string"
+          },
+          "acceptedById": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
+          },
+          "acceptedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "nullable": true
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "organizationId",
+          "organizationName",
+          "organizationSlug",
+          "organizationRole",
+          "projectId",
+          "projectName",
+          "projectRole",
+          "message",
+          "invitedById",
+          "invitedByName",
+          "acceptedById",
+          "acceptedAt",
+          "revokedAt",
+          "expiresAt",
+          "createdAt",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "InvitationCreateResponseDto_Output": {
+        "type": "object",
+        "properties": {
+          "invitation": {
+            "$ref": "#/components/schemas/InvitationDto_Output"
+          },
+          "token": {
+            "type": "string"
+          },
+          "acceptUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "invitation",
+          "token",
+          "acceptUrl"
+        ],
+        "additionalProperties": false
+      },
+      "InvitationPublicDto_Output": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "organizationRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "member"
+            ]
+          },
+          "projectName": {
+            "type": "string",
+            "nullable": true
+          },
+          "projectRole": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ],
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "organizationName",
+          "organizationRole",
+          "projectName",
+          "projectRole",
+          "message",
+          "expiresAt",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "InvitationAcceptDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 16
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8
+          }
+        },
+        "required": [
+          "token",
+          "name",
+          "password"
+        ]
+      },
+      "InvitationAcceptResponseDto_Output": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthUserDto_Output"
+          },
+          "invitation": {
+            "$ref": "#/components/schemas/InvitationPublicDto_Output"
+          }
+        },
+        "required": [
+          "accessToken",
+          "user",
+          "invitation"
         ],
         "additionalProperties": false
       },

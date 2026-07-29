@@ -105,6 +105,60 @@ export type DiagramResponseDtoOutput = {
   createdAt: string;
   updatedAt: string;
 };
+export type InvitationCreateDto = {
+  email: string;
+  organizationId?: string;
+  organizationRole?: OrganizationRole;
+  projectId?: string;
+  projectRole?: ProjectRole;
+  message?: string;
+  expiresInDays?: number;
+};
+export type InvitationDtoOutput = {
+  id: string;
+  email: string;
+  organizationId: string;
+  organizationName: string;
+  organizationSlug: string;
+  organizationRole: OrganizationRole;
+  projectId: string | null;
+  projectName: string | null;
+  projectRole: ProjectRole | null;
+  message: string | null;
+  invitedById: string;
+  invitedByName: string;
+  acceptedById: string | null;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+  status: Status;
+};
+export type InvitationCreateResponseDtoOutput = {
+  invitation: InvitationDtoOutput;
+  token: string;
+  acceptUrl: string;
+};
+export type InvitationPublicDtoOutput = {
+  email: string;
+  organizationName: string;
+  organizationRole: OrganizationRole;
+  projectName: string | null;
+  projectRole: ProjectRole | null;
+  message: string | null;
+  expiresAt: string;
+  status: Status;
+};
+export type InvitationAcceptDto = {
+  token: string;
+  name: string;
+  password: string;
+};
+export type InvitationAcceptResponseDtoOutput = {
+  accessToken: string;
+  user: AuthUserDtoOutput;
+  invitation: InvitationPublicDtoOutput;
+};
 export type ProjectResponseDtoOutput = {
   id: string;
   organizationId: string;
@@ -646,6 +700,67 @@ export function createDiagram(
     ),
   );
 }
+export function createInvitation(
+  {
+    invitationCreateDto,
+  }: {
+    invitationCreateDto: InvitationCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: InvitationCreateResponseDtoOutput;
+    }>(
+      '/invitations',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: invitationCreateDto,
+      }),
+    ),
+  );
+}
+export function getInvitationByToken(
+  {
+    token,
+  }: {
+    token: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: InvitationPublicDtoOutput;
+    }>(`/invitations/${encodeURIComponent(token)}`, {
+      ...opts,
+    }),
+  );
+}
+export function acceptInvitation(
+  {
+    invitationAcceptDto,
+  }: {
+    invitationAcceptDto: InvitationAcceptDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: InvitationAcceptResponseDtoOutput;
+    }>(
+      '/invitations/accept',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: invitationAcceptDto,
+      }),
+    ),
+  );
+}
 export function getProjects(
   {
     cursor,
@@ -894,6 +1009,21 @@ export enum Dialect {
   Mariadb = 'mariadb',
   Sqlserver = 'sqlserver',
 }
+export enum OrganizationRole {
+  Admin = 'admin',
+  Member = 'member',
+}
+export enum ProjectRole {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum Status {
+  Pending = 'pending',
+  Accepted = 'accepted',
+  Revoked = 'revoked',
+  Expired = 'expired',
+}
 export enum SignupPolicy {
   SignupDisabled = 'signup_disabled',
   InviteOnly = 'invite_only',
@@ -968,10 +1098,6 @@ export enum RelationshipRouting {
 export enum InstanceRole {
   Owner = 'owner',
   Admin = 'admin',
-}
-export enum OrganizationRole {
-  Admin = 'admin',
-  Member = 'member',
 }
 export enum InstanceRole2 {
   Admin = 'admin',
