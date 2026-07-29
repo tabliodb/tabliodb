@@ -20,7 +20,7 @@ Tabliodb adalah open-source collaborative database schema designer: AntV X6 untu
 ```bash
 npm install
 cp docker/example.env .env
-docker compose --env-file .env -f docker/docker-compose.dev.yml up -d database redis
+docker compose --env-file .env -f docker/docker-compose.dev.yml up -d database redis db_ui
 npm run db:migrate
 npm run dev:server
 npm run dev:web
@@ -30,6 +30,15 @@ Server default: `http://localhost:4000`
 Web default: `http://localhost:5173`  
 Realtime default: `ws://localhost:1234`  
 PostgreSQL Docker default: `localhost:5433`
+Database UI default: `http://localhost:8080`
+
+Login Adminer:
+
+- System: `PostgreSQL`
+- Server: `database`
+- Username: `postgres`
+- Password: `postgres`
+- Database: `tabliodb`
 
 Di PowerShell, salin env dengan:
 

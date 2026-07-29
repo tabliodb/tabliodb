@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import type { DiagramModel } from '@tabliodb/schema-core';
 import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, JsonValue } from '../schema/index.js';
+import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
+
+export type SnapshotListOptions = {
+  cursor?: string;
+  limit: number;
+};
 
 @Injectable()
 export class SnapshotRepository {
@@ -29,12 +36,31 @@ export class SnapshotRepository {
     });
   }
 
-  getByDiagram(diagramId: string) {
-    return this.db
+  async getByDiagram(diagramId: string, options: SnapshotListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await this.db
       .selectFrom('diagram_snapshots')
-      .selectAll()
+      .select(['id', 'diagramId', 'version', 'message', 'snapshot', 'createdAt'])
       .where('diagramId', '=', diagramId)
       .orderBy('version', 'desc')
+      .limit(options.limit + 1)
+      .offset(offset)
       .execute();
+    const totalRow = await this.db
+      .selectFrom('diagram_snapshots')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('diagramId', '=', diagramId)
+      .executeTakeFirstOrThrow();
+
+    return {
+      // Snapshot history cenderung panjang, jadi page pertama cukup untuk editor mengambil snapshot terbaru.
+      items: rows.slice(0, options.limit).map((row) => ({
+        ...row,
+        // Snapshot ditulis dari DiagramModelSchema, sementara kolom database bertipe JSON generik.
+        snapshot: row.snapshot as DiagramModel,
+      })),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
   }
 }

@@ -1,4 +1,5 @@
 import type { DiagramModel } from '@tabliodb/schema-core';
+import type { Paginated, PaginationQuery } from '@tabliodb/shared';
 import type { TabliodbClient } from '../fetch-client.js';
 
 export type SnapshotCreateDto = {
@@ -16,9 +17,12 @@ export type SnapshotResponseDto = {
   createdAt: string;
 };
 
+export type SnapshotListResponseDto = Paginated<SnapshotResponseDto>;
+
 export function createSnapshotsResource(client: TabliodbClient) {
   return {
     create: (body: SnapshotCreateDto) => client.request<SnapshotResponseDto>('/snapshots', { body, method: 'POST' }),
-    listByDiagram: (diagramId: string) => client.request<SnapshotResponseDto[]>(`/snapshots/diagram/${diagramId}`),
+    listByDiagram: (diagramId: string, query: PaginationQuery = {}) =>
+      client.request<SnapshotListResponseDto>(`/snapshots/diagram/${diagramId}`, { query }),
   };
 }

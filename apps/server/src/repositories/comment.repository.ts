@@ -2,6 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB } from '../schema/index.js';
+import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
+
+export type CommentThreadListOptions = {
+  cursor?: string;
+  limit: number;
+};
 
 @Injectable()
 export class CommentRepository {
@@ -40,12 +46,27 @@ export class CommentRepository {
     });
   }
 
-  getThreads(diagramId: string) {
-    return this.db
+  async getThreads(diagramId: string, options: CommentThreadListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await this.db
       .selectFrom('comment_threads')
-      .selectAll()
+      .select(['id', 'diagramId', 'targetType', 'targetId', 'status', 'resolvedAt', 'createdAt', 'updatedAt'])
       .where('diagramId', '=', diagramId)
       .orderBy('updatedAt', 'desc')
+      .limit(options.limit + 1)
+      .offset(offset)
       .execute();
+    const totalRow = await this.db
+      .selectFrom('comment_threads')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('diagramId', '=', diagramId)
+      .executeTakeFirstOrThrow();
+
+    return {
+      // Thread komentar bisa panjang pada review besar, jadi API-nya sudah disiapkan paginated.
+      items: rows.slice(0, options.limit),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
   }
 }

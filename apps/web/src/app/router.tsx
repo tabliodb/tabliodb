@@ -1,9 +1,12 @@
 import { createBrowserRouter, Navigate } from 'react-router';
+import { AdminLayout } from './layouts/AdminLayout';
 import { AuthLayout } from './layouts/AuthLayout';
 import { EditorLayout } from './layouts/EditorLayout';
 import { RootLayout } from './layouts/RootLayout';
 import { SystemLayout } from './layouts/SystemLayout';
 import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
+import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
+import { AdminUsersPage } from '@/features/admin/AdminUsersPage';
 import { LoadingState } from '@/features/app/RouteStates';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
 import { LoginPage } from '@/features/auth/LoginPage';
@@ -39,6 +42,22 @@ export const router = createBrowserRouter([
                 element: <LoginPage />,
                 loader: loginLoader,
                 path: routes.login.path,
+              },
+            ],
+          },
+          {
+            element: <AdminLayout />,
+            errorElement: <RouteErrorBoundary />,
+            middleware: [requireSetupComplete, requireAuthenticated],
+            children: [
+              {
+                element: <Navigate replace to={routes.adminUsers.to()} />,
+                path: routes.admin.path,
+              },
+              {
+                element: <AdminUsersPage />,
+                loader: adminUsersLoader,
+                path: routes.adminUsers.path,
               },
             ],
           },

@@ -3,6 +3,12 @@ import { ProjectRole } from '@tabliodb/shared';
 import { Insertable, Kysely } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, ProjectTable } from '../schema/index.js';
+import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
+
+export type ProjectListOptions = {
+  cursor?: string;
+  limit: number;
+};
 
 @Injectable()
 export class ProjectRepository {
@@ -37,8 +43,9 @@ export class ProjectRepository {
     });
   }
 
-  getVisibleToUser(userId: string) {
-    return this.db
+  async getVisibleToUser(userId: string, options: ProjectListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await this.db
       .selectFrom('projects')
       .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
       .innerJoin('project_members', 'project_members.projectId', 'projects.id')
@@ -55,7 +62,22 @@ export class ProjectRepository {
       ])
       .where('project_members.userId', '=', userId)
       .orderBy('projects.updatedAt', 'desc')
+      .limit(options.limit + 1)
+      .offset(offset)
       .execute();
+    const totalRow = await this.db
+      .selectFrom('projects')
+      .innerJoin('project_members', 'project_members.projectId', 'projects.id')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('project_members.userId', '=', userId)
+      .executeTakeFirstOrThrow();
+
+    return {
+      // List project dipaginasi walau editor saat ini hanya memakai page pertama untuk starter workspace.
+      items: rows.slice(0, options.limit),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
   }
 
   getByIdForUser(userId: string, projectId: string) {

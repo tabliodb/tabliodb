@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AuthContext } from '../database.js';
-import { DiagramCreateDto } from '../dtos/diagram.dto.js';
+import { DiagramCreateDto, DiagramListQueryDto } from '../dtos/diagram.dto.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
+import { clampPaginationLimit } from '../utils/pagination.js';
 
 @Injectable()
 export class DiagramService {
@@ -25,13 +26,16 @@ export class DiagramService {
     });
   }
 
-  async getByProject(auth: AuthContext, projectId: string) {
+  async getByProject(auth: AuthContext, projectId: string, query: DiagramListQueryDto) {
     const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
     if (!project) {
       throw new NotFoundException('Project not found');
     }
 
-    return this.diagramRepository.getByProject(projectId);
+    return this.diagramRepository.getByProject(projectId, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+    });
   }
 
   async requireDiagram(auth: AuthContext, diagramId: string) {

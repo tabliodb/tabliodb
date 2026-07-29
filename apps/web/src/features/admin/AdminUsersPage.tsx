@@ -1,0 +1,520 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
+import { OrganizationRole } from '@tabliodb/shared';
+import type { UserListQuery, UserResponseDto } from '@tabliodb/sdk';
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  FieldError,
+  Input,
+  Surface,
+  cn,
+} from '@tabliodb/ui';
+import { Crown, Loader2, Plus, Search, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { getErrorMessage } from '@/features/app/RouteStates';
+import { useCreateUserMutation, usersQueries } from '@/resources/users';
+
+const createUserFormSchema = z.object({
+  email: z.string().trim().email('Enter a valid email.'),
+  grantInstanceAdmin: z.boolean(),
+  name: z.string().trim().min(1, 'Name is required.'),
+  organizationRole: z.enum([OrganizationRole.Admin, OrganizationRole.Member]),
+  password: z.string().min(8, 'Password must be at least 8 characters.'),
+});
+
+type CreateUserFormState = z.infer<typeof createUserFormSchema>;
+
+const createUserDefaults: CreateUserFormState = {
+  email: '',
+  grantInstanceAdmin: false,
+  name: '',
+  organizationRole: OrganizationRole.Member,
+  password: '',
+};
+
+const roleFilters = ['all', 'owner', 'instance-admin', 'org-admin', 'member'] as const;
+type RoleFilter = (typeof roleFilters)[number];
+const userPageSize = 20;
+
+export function AdminUsersPage() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [pageCursor, setPageCursor] = useState<string | undefined>();
+  const [cursorHistory, setCursorHistory] = useState<Array<string | undefined>>([]);
+  const userListQuery = useMemo<UserListQuery>(
+    () => ({
+      cursor: pageCursor,
+      limit: userPageSize,
+      role: roleFilter === 'all' ? undefined : roleFilter,
+      search: searchTerm.trim() || undefined,
+    }),
+    [pageCursor, roleFilter, searchTerm],
+  );
+  const usersQuery = useQuery(usersQueries.list(userListQuery));
+  const users = usersQuery.data?.items ?? [];
+
+  const stats = useMemo(
+    () => ({
+      active: users.filter((user) => !user.isDisabled).length,
+      instanceAdmins: users.filter((user) => user.instanceRole === 'owner' || user.instanceRole === 'admin').length,
+      organizationAdmins: users.filter((user) =>
+        user.organizations.some((organization) => organization.role === OrganizationRole.Admin),
+      ).length,
+      total: users.length,
+    }),
+    [users],
+  );
+  const totalCount = usersQuery.data?.totalCount ?? 0;
+  const nextCursor = usersQuery.data?.nextCursor ?? null;
+
+  function resetPagination() {
+    // Search dan role filter mengubah dataset server, jadi cursor lama tidak boleh dipakai lagi.
+    setPageCursor(undefined);
+    setCursorHistory([]);
+  }
+
+  return (
+    <div className="mx-auto grid w-full max-w-7xl gap-5 px-5 py-5">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="mb-2 inline-flex items-center gap-2 rounded-full border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-3 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
+            <UsersRound className="size-4" />
+            User directory
+          </p>
+          <h2 className="text-2xl font-extrabold tracking-normal text-[rgb(var(--tabliodb-ink))]">Manage users</h2>
+          <p className="mt-1 max-w-2xl text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+            Create teammates, assign workspace roles, and grant instance admin access.
+          </p>
+        </div>
+        <CreateUserDialog />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-4">
+        <StatCard label="Matching users" value={totalCount} />
+        <StatCard label="Showing now" value={stats.total} tone="green" />
+        <StatCard label="Page admins" value={stats.instanceAdmins} tone="blue" />
+        <StatCard label="Page org admins" value={stats.organizationAdmins} tone="yellow" />
+      </section>
+
+      <Surface className="overflow-hidden" depth="md">
+        <div className="flex flex-col gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+            <Input
+              className="pl-9"
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                resetPagination();
+              }}
+              placeholder="Search users"
+              value={searchTerm}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {roleFilters.map((filter) => (
+              <button
+                className={cn(
+                  'h-9 cursor-pointer rounded-full border-2 px-3 text-xs font-extrabold transition',
+                  roleFilter === filter
+                    ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
+                    : 'border-[rgb(var(--tabliodb-border))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
+                )}
+                key={filter}
+                onClick={() => {
+                  setRoleFilter(filter);
+                  resetPagination();
+                }}
+                type="button"
+              >
+                {formatRoleFilter(filter)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {usersQuery.isPending ? (
+          <div className="flex items-center gap-2 p-6 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+            <Loader2 className="size-4 animate-spin" />
+            Loading users
+          </div>
+        ) : usersQuery.error ? (
+          <div className="p-4">
+            <div className="rounded-[16px] border-2 border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              {getErrorMessage(usersQuery.error)}
+            </div>
+          </div>
+        ) : users.length === 0 ? (
+          <div className="p-8 text-center">
+            <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+              <UsersRound className="size-6" />
+            </div>
+            <div className="text-sm font-extrabold">No users found</div>
+            <div className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Try a different search.</div>
+          </div>
+        ) : (
+          <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+            {users.map((user) => (
+              <UserRow key={user.id} user={user} />
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 border-t-2 border-[rgb(var(--tabliodb-border))] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+            Showing {users.length} of {totalCount} matching users
+          </p>
+          <div className="flex gap-2">
+            <Button
+              disabled={cursorHistory.length === 0 || usersQuery.isFetching}
+              onClick={() => {
+                const previousCursor = cursorHistory[cursorHistory.length - 1];
+                setCursorHistory((history) => history.slice(0, -1));
+                setPageCursor(previousCursor);
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Previous
+            </Button>
+            <Button
+              disabled={!nextCursor || usersQuery.isFetching}
+              onClick={() => {
+                setCursorHistory((history) => [...history, pageCursor]);
+                setPageCursor(nextCursor ?? undefined);
+              }}
+              size="sm"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      </Surface>
+    </div>
+  );
+}
+
+function CreateUserDialog() {
+  const [open, setOpen] = useState(false);
+  const form = useForm<CreateUserFormState>({
+    defaultValues: createUserDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(createUserFormSchema),
+  });
+  const { errors } = form.formState;
+
+  const createUserMutation = useCreateUserMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        // Success menutup dialog dan reset form agar submit berikutnya selalu mulai dari state bersih.
+        form.reset(createUserDefaults);
+        setOpen(false);
+      },
+    },
+  });
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+
+    if (!nextOpen && !createUserMutation.isPending) {
+      form.reset(createUserDefaults);
+      createUserMutation.reset();
+    }
+  }
+
+  function handleSubmit(values: CreateUserFormState) {
+    createUserMutation.mutate({
+      email: values.email,
+      instanceRole: values.grantInstanceAdmin ? 'admin' : undefined,
+      name: values.name,
+      organizationRole: values.organizationRole,
+      password: values.password,
+    });
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogTrigger asChild>
+        <Button className="gap-2">
+          <UserPlus className="size-4" />
+          Add user
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="w-[min(94vw,560px)]">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Create user</DialogTitle>
+            <DialogDescription>Add a teammate to the current workspace.</DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Name
+              </span>
+              <Input
+                aria-invalid={Boolean(errors.name)}
+                autoComplete="name"
+                disabled={createUserMutation.isPending}
+                {...form.register('name')}
+              />
+              <FieldError>{errors.name?.message}</FieldError>
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Email
+              </span>
+              <Input
+                aria-invalid={Boolean(errors.email)}
+                autoComplete="email"
+                disabled={createUserMutation.isPending}
+                type="email"
+                {...form.register('email')}
+              />
+              <FieldError>{errors.email?.message}</FieldError>
+            </label>
+          </div>
+
+          <label className="mt-3 block text-sm">
+            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Temporary password
+            </span>
+            <Input
+              aria-invalid={Boolean(errors.password)}
+              autoComplete="new-password"
+              disabled={createUserMutation.isPending}
+              type="password"
+              {...form.register('password')}
+            />
+            <FieldError>{errors.password?.message}</FieldError>
+          </label>
+
+          <fieldset className="mt-4">
+            <legend className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Workspace role
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <RoleOption
+                checked={form.watch('organizationRole') === OrganizationRole.Member}
+                description="Can create and edit accessible projects."
+                label="Member"
+                onClick={() => form.setValue('organizationRole', OrganizationRole.Member, { shouldDirty: true })}
+              />
+              <RoleOption
+                checked={form.watch('organizationRole') === OrganizationRole.Admin}
+                description="Can help manage workspace members."
+                label="Admin"
+                onClick={() => form.setValue('organizationRole', OrganizationRole.Admin, { shouldDirty: true })}
+              />
+            </div>
+          </fieldset>
+
+          <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
+            <input
+              className="size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))]"
+              disabled={createUserMutation.isPending}
+              type="checkbox"
+              {...form.register('grantInstanceAdmin')}
+            />
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <ShieldCheck className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+              Instance admin
+            </span>
+          </label>
+
+          {createUserMutation.error ? (
+            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {getErrorMessage(createUserMutation.error)}
+            </div>
+          ) : null}
+
+          <DialogFooter className="mt-5">
+            <Button
+              disabled={createUserMutation.isPending}
+              onClick={() => handleOpenChange(false)}
+              type="button"
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button disabled={createUserMutation.isPending} type="submit">
+              {createUserMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              Create user
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RoleOption({
+  checked,
+  description,
+  label,
+  onClick,
+}: {
+  checked: boolean;
+  description: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={cn(
+        'cursor-pointer rounded-[16px] border-2 p-3 text-left transition',
+        checked
+          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
+          : 'border-[rgb(var(--tabliodb-border))] bg-white hover:bg-[rgb(var(--tabliodb-surface))]',
+      )}
+      onClick={onClick}
+      type="button"
+    >
+      <div className="text-sm font-extrabold">{label}</div>
+      <div className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{description}</div>
+    </button>
+  );
+}
+
+function UserRow({ user }: { user: UserResponseDto }) {
+  const bucket = getUserRoleBucket(user);
+  const initials = getInitials(user.name);
+
+  return (
+    <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] lg:grid-cols-[minmax(0,1.2fr)_minmax(180px,0.8fr)_auto] lg:items-center">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid size-11 shrink-0 place-items-center rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+          {initials}
+        </div>
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-extrabold">{user.name}</h3>
+          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{user.email}</p>
+        </div>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          {formatOrganizations(user)}
+        </p>
+        <p className="mt-1 truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+          Joined {formatDate(user.createdAt)}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+        <RoleBadge bucket={bucket} />
+        {user.isDisabled ? <Badge>Disabled</Badge> : <Badge variant="green">Active</Badge>}
+      </div>
+    </article>
+  );
+}
+
+function RoleBadge({ bucket }: { bucket: RoleFilter }) {
+  if (bucket === 'owner') {
+    return (
+      <Badge variant="yellow">
+        <Crown className="mr-1 size-3" />
+        Owner
+      </Badge>
+    );
+  }
+
+  if (bucket === 'instance-admin') {
+    return (
+      <Badge variant="blue">
+        <ShieldCheck className="mr-1 size-3" />
+        Instance admin
+      </Badge>
+    );
+  }
+
+  if (bucket === 'org-admin') {
+    return <Badge variant="blue">Org admin</Badge>;
+  }
+
+  return <Badge>Member</Badge>;
+}
+
+function StatCard({
+  label,
+  tone = 'neutral',
+  value,
+}: {
+  label: string;
+  tone?: 'blue' | 'green' | 'neutral' | 'yellow';
+  value: number;
+}) {
+  const toneClassName = {
+    blue: 'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+    green:
+      'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+    neutral: 'border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))]',
+    yellow:
+      'border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] text-[rgb(var(--tabliodb-gold-text))]',
+  }[tone];
+
+  return (
+    <Surface className={cn('p-4', toneClassName)} depth="sm">
+      <div className="text-2xl font-extrabold">{value}</div>
+      <div className="mt-1 text-xs font-extrabold uppercase tracking-wide opacity-75">{label}</div>
+    </Surface>
+  );
+}
+
+function getUserRoleBucket(user: UserResponseDto): RoleFilter {
+  if (user.instanceRole === 'owner') {
+    return 'owner';
+  }
+
+  if (user.instanceRole === 'admin') {
+    return 'instance-admin';
+  }
+
+  if (user.organizations.some((organization) => organization.role === OrganizationRole.Admin)) {
+    return 'org-admin';
+  }
+
+  return 'member';
+}
+
+function formatRoleFilter(filter: RoleFilter): string {
+  return {
+    all: 'All',
+    member: 'Members',
+    owner: 'Owners',
+    'instance-admin': 'Instance admins',
+    'org-admin': 'Org admins',
+  }[filter];
+}
+
+function formatOrganizations(user: UserResponseDto): string {
+  if (user.organizations.length === 0) {
+    return 'No workspace';
+  }
+
+  return user.organizations.map((organization) => organization.name).join(', ');
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value));
+}

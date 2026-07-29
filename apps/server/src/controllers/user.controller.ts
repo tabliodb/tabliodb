@@ -1,7 +1,7 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { AuthContext } from '../database.js';
-import { UserCreateDto, UserResponseDto } from '../dtos/user.dto.js';
+import { UserCreateDto, UserListQueryDto, UserListResponseDto, UserResponseDto } from '../dtos/user.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { UserService } from '../services/user.service.js';
 
@@ -12,8 +12,8 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
-  getUsers(@Auth() auth: AuthContext): Promise<UserResponseDto[]> {
-    return this.userService.getAll(auth);
+  getUsers(@Auth() auth: AuthContext, @Query() query: UserListQueryDto): Promise<UserListResponseDto> {
+    return this.userService.getAll(auth, query);
   }
 
   @Post()

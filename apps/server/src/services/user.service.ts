@@ -2,10 +2,11 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException } 
 import { OrganizationRole } from '@tabliodb/shared';
 import { SALT_ROUNDS } from '../constants.js';
 import type { AuthContext } from '../database.js';
-import { UserCreateDto } from '../dtos/user.dto.js';
+import { UserCreateDto, UserListQueryDto, UserListResponseDto } from '../dtos/user.dto.js';
 import { CryptoRepository } from '../repositories/crypto.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
+import { clampPaginationLimit } from '../utils/pagination.js';
 
 @Injectable()
 export class UserService {
@@ -15,9 +16,16 @@ export class UserService {
     private readonly userRepository: UserRepository,
   ) {}
 
-  async getAll(auth: AuthContext) {
+  async getAll(auth: AuthContext, query: UserListQueryDto): Promise<UserListResponseDto> {
     await this.requireInstanceManager(auth);
-    return this.userRepository.listManagedUsers();
+
+    return this.userRepository.listManagedUsers({
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+      role: query.role,
+      // Empty search diperlakukan seperti tanpa search agar query index-friendly saat field kosong.
+      search: query.search?.trim() || undefined,
+    });
   }
 
   async create(auth: AuthContext, dto: UserCreateDto) {

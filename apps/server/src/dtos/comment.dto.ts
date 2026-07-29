@@ -31,5 +31,35 @@ const CommentThreadResponseSchema = z
   })
   .meta({ id: 'CommentThreadResponseDto' });
 
+const CommentThreadListItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    diagramId: z.string().uuid(),
+    targetType: z.string(),
+    targetId: z.string().nullable(),
+    status: z.string(),
+    resolvedAt: z.date().nullable(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+  })
+  .meta({ id: 'CommentThreadListItemDto' });
+
+const CommentThreadListQuerySchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .meta({ id: 'CommentThreadListQueryDto' });
+
+const CommentThreadListResponseSchema = z
+  .object({
+    items: z.array(CommentThreadListItemSchema),
+    nextCursor: z.string().nullable(),
+    totalCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'CommentThreadListResponseDto' });
+
 export class CommentThreadCreateDto extends createZodDto(CommentThreadCreateSchema) {}
+export class CommentThreadListQueryDto extends createZodDto(CommentThreadListQuerySchema) {}
+export class CommentThreadListResponseDto extends createZodDto(CommentThreadListResponseSchema) {}
 export class CommentThreadResponseDto extends createZodDto(CommentThreadResponseSchema) {}

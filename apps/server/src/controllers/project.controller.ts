@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { AuthContext } from '../database.js';
-import { ProjectCreateDto } from '../dtos/project.dto.js';
+import { DiagramListQueryDto } from '../dtos/diagram.dto.js';
+import { ProjectCreateDto, ProjectListQueryDto } from '../dtos/project.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { DiagramService } from '../services/diagram.service.js';
 import { ProjectService } from '../services/project.service.js';
@@ -16,8 +17,8 @@ export class ProjectController {
   ) {}
 
   @Get()
-  getProjects(@Auth() auth: AuthContext) {
-    return this.projectService.getAll(auth);
+  getProjects(@Auth() auth: AuthContext, @Query() query: ProjectListQueryDto) {
+    return this.projectService.getAll(auth, query);
   }
 
   @Post()
@@ -26,7 +27,11 @@ export class ProjectController {
   }
 
   @Get(':projectId/diagrams')
-  getProjectDiagrams(@Auth() auth: AuthContext, @Param('projectId') projectId: string) {
-    return this.diagramService.getByProject(auth, projectId);
+  getProjectDiagrams(
+    @Auth() auth: AuthContext,
+    @Param('projectId') projectId: string,
+    @Query() query: DiagramListQueryDto,
+  ) {
+    return this.diagramService.getByProject(auth, projectId, query);
   }
 }

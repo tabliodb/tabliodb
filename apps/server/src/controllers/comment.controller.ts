@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { AuthContext } from '../database.js';
-import { CommentThreadCreateDto } from '../dtos/comment.dto.js';
+import { CommentThreadCreateDto, CommentThreadListQueryDto } from '../dtos/comment.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { CommentService } from '../services/comment.service.js';
 
@@ -17,7 +17,11 @@ export class CommentController {
   }
 
   @Get('diagram/:diagramId/threads')
-  getThreads(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string) {
-    return this.service.getThreads(auth, diagramId);
+  getThreads(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Query() query: CommentThreadListQueryDto,
+  ) {
+    return this.service.getThreads(auth, diagramId, query);
   }
 }

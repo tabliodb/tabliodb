@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AuthContext } from '../database.js';
-import { ProjectCreateDto } from '../dtos/project.dto.js';
+import { ProjectCreateDto, ProjectListQueryDto, ProjectListResponseDto } from '../dtos/project.dto.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
+import { clampPaginationLimit } from '../utils/pagination.js';
 import { slugify } from '../utils/slug.js';
 
 @Injectable()
@@ -12,8 +13,11 @@ export class ProjectService {
     private readonly projectRepository: ProjectRepository,
   ) {}
 
-  getAll(auth: AuthContext) {
-    return this.projectRepository.getVisibleToUser(auth.user.id);
+  getAll(auth: AuthContext, query: ProjectListQueryDto): Promise<ProjectListResponseDto> {
+    return this.projectRepository.getVisibleToUser(auth.user.id, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+    });
   }
 
   async create(auth: AuthContext, dto: ProjectCreateDto) {

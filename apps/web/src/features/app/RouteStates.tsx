@@ -12,13 +12,21 @@ export function LoadingState() {
   );
 }
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+export function ErrorState({
+  error,
+  onRetry,
+  title = 'Application error',
+}: {
+  error: unknown;
+  onRetry: () => void;
+  title?: string;
+}) {
   return (
     <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 text-[rgb(var(--tabliodb-ink))]">
       <Surface className="w-full max-w-md border-red-200 p-5">
         <div className="mb-3 flex items-center gap-2 text-red-700">
           <AlertCircle className="size-5" />
-          <h1 className="text-sm font-extrabold">Workspace error</h1>
+          <h1 className="text-sm font-extrabold">{title}</h1>
         </div>
         <p className="mb-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">{getErrorMessage(error)}</p>
         <Button onClick={onRetry} variant="secondary">

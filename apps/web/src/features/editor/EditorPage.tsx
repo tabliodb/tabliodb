@@ -42,6 +42,7 @@ import {
   Save,
   Search,
   Share2,
+  ShieldCheck,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -285,6 +286,10 @@ export function EditorPage() {
                 <DropdownMenuItem>
                   <Share2 className="size-4" />
                   Share workspace
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate(routes.adminUsers.to())}>
+                  <ShieldCheck className="size-4" />
+                  Admin users
                 </DropdownMenuItem>
                 <DropdownMenuSeparatorItem />
                 <DropdownMenuItem disabled={logoutMutation.isPending} onSelect={() => logoutMutation.mutate(undefined)}>

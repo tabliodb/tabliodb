@@ -67,6 +67,27 @@ describe(UserService.name, () => {
     });
   });
 
+  it('lists managed users with a clamped pagination contract', async () => {
+    userRepository.listManagedUsers.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+      totalCount: 0,
+    });
+
+    await expect(service.getAll(auth, { limit: 500 })).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+      totalCount: 0,
+    });
+
+    expect(userRepository.listManagedUsers).toHaveBeenCalledWith({
+      cursor: undefined,
+      limit: 100,
+      role: undefined,
+      search: undefined,
+    });
+  });
+
   it('blocks instance admin creation from a non-owner instance admin', async () => {
     userRepository.getInstanceRole.mockResolvedValue({ role: 'admin' });
 

@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { AuthContext } from '../database.js';
-import { SnapshotCreateDto } from '../dtos/snapshot.dto.js';
+import { SnapshotCreateDto, SnapshotListQueryDto } from '../dtos/snapshot.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { SnapshotService } from '../services/snapshot.service.js';
 
@@ -17,7 +17,11 @@ export class SnapshotController {
   }
 
   @Get('diagram/:diagramId')
-  getDiagramSnapshots(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string) {
-    return this.service.getByDiagram(auth, diagramId);
+  getDiagramSnapshots(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Query() query: SnapshotListQueryDto,
+  ) {
+    return this.service.getByDiagram(auth, diagramId, query);
   }
 }

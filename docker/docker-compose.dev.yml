@@ -29,5 +29,17 @@ services:
       timeout: 3s
       retries: 20
 
+  db_ui:
+    image: adminer:latest
+    container_name: tabliodb_adminer
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      # Adminer berjalan di network Docker yang sama, jadi default server harus nama service Postgres, bukan localhost.
+      ADMINER_DEFAULT_SERVER: database
+    ports:
+      - '${ADMINER_PORT:-8080}:8080'
+
 volumes:
   tabliodb_postgres:

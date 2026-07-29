@@ -1,4 +1,4 @@
-import type { OrganizationRole } from '@tabliodb/shared';
+import type { OrganizationRole, Paginated, PaginationQuery } from '@tabliodb/shared';
 import type { TabliodbClient } from '../fetch-client.js';
 
 export type UserCreateDto = {
@@ -28,10 +28,19 @@ export type UserResponseDto = {
   updatedAt: string;
 };
 
+export type UserRoleFilter = 'owner' | 'instance-admin' | 'org-admin' | 'member';
+
+export type UserListQuery = PaginationQuery & {
+  role?: UserRoleFilter;
+  search?: string;
+};
+
+export type UserListResponseDto = Paginated<UserResponseDto>;
+
 export function createUsersResource(client: TabliodbClient) {
   return {
     // Admin console memakai list ini sebagai satu source of truth untuk user, instance role, dan membership ringkas.
-    list: () => client.request<UserResponseDto[]>('/users'),
+    list: (query: UserListQuery = {}) => client.request<UserListResponseDto>('/users', { query }),
     // Manual creation tetap lewat server agar hashing password, membership, dan instance role dibuat atomik di satu transaksi.
     create: (body: UserCreateDto) => client.request<UserResponseDto>('/users', { body, method: 'POST' }),
   };

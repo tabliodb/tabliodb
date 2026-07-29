@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 const UserOrganizationRoleSchema = z.enum([OrganizationRole.Admin, OrganizationRole.Member]);
 const InstanceRoleSchema = z.enum(['owner', 'admin']);
+const UserRoleFilterSchema = z.enum(['owner', 'instance-admin', 'org-admin', 'member']);
 
 const UserCreateSchema = z
   .object({
@@ -38,5 +39,24 @@ const UserResponseSchema = z
   })
   .meta({ id: 'UserResponseDto' });
 
+const UserListQuerySchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    role: UserRoleFilterSchema.optional(),
+    search: z.string().trim().max(120).optional(),
+  })
+  .meta({ id: 'UserListQueryDto' });
+
+const UserListResponseSchema = z
+  .object({
+    items: z.array(UserResponseSchema),
+    nextCursor: z.string().nullable(),
+    totalCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'UserListResponseDto' });
+
 export class UserCreateDto extends createZodDto(UserCreateSchema) {}
+export class UserListQueryDto extends createZodDto(UserListQuerySchema) {}
+export class UserListResponseDto extends createZodDto(UserListResponseSchema) {}
 export class UserResponseDto extends createZodDto(UserResponseSchema) {}
