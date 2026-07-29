@@ -1,15 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  getRelationshipColumnPairs,
-  getTableColumns,
-  type DatabaseTable,
-  type DiagramModel,
-} from '@tabliodb/schema-core';
+import type { DiagramModel } from '@tabliodb/schema-core';
 import { TabliodbApiError, type ProjectResponseDto } from '@tabliodb/sdk';
 import { generateCreateSchemaSql } from '@tabliodb/sql';
 import {
-  Badge,
   Button,
   Dialog,
   DialogContent,
@@ -26,7 +20,6 @@ import {
   DropdownMenuTrigger,
   IconButton,
   Input,
-  Surface,
 } from '@tabliodb/ui';
 import {
   Database,
@@ -44,7 +37,7 @@ import {
   Share2,
   ShieldCheck,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
@@ -54,8 +47,9 @@ import { useLogoutMutation } from '@/resources/auth';
 import { defaultDiagramName, diagramsQueries } from '@/resources/diagrams';
 import { defaultProjectName, projectsQueries } from '@/resources/projects';
 import { snapshotsQueries, useCreateSnapshotMutation } from '@/resources/snapshots';
-import { addTableToDiagramModel, createSeedDiagramModel, formatColumnType } from './diagram-model';
+import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
 import { SchemaCanvas } from './components/SchemaCanvas';
+import { SchemaInspector } from './components/SchemaInspector';
 
 const addTableFormSchema = z.object({
   tableName: z.string().trim().max(64, 'Keep the table name under 64 characters.'),
@@ -89,9 +83,6 @@ export function EditorPage() {
   );
 
   const latestSnapshot = snapshotsQuery.data?.[0] ?? null;
-  const selectedTable = selectedTableId && model ? model.tables[selectedTableId] : null;
-  const selectedColumns = selectedTable && model ? getTableColumns(model, selectedTable.id) : [];
-  const reviewSignals = useMemo(() => (model ? getReviewSignals(model) : []), [model]);
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -310,60 +301,12 @@ export function EditorPage() {
         />
       </section>
 
-      <aside className="border-l-2 border-[rgb(var(--tabliodb-border))] bg-white">
-        <div className="flex h-16 items-center border-b-2 border-[rgb(var(--tabliodb-border))] px-5 text-sm font-extrabold">
-          Inspector
-        </div>
-        <div className="space-y-5 p-5">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="green">{model.dialect}</Badge>
-            <Badge variant="blue">v{latestSnapshot?.version ?? 0}</Badge>
-          </div>
-          <section>
-            <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Selected table
-            </h2>
-            {selectedTable ? (
-              <Surface className="mt-2 p-4">
-                <div className="text-sm font-extrabold">{selectedTable.name}</div>
-                <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                  {selectedColumns.length} columns / {selectedTable.indexIds.length} indexes /{' '}
-                  {countTableRelationships(model, selectedTable)} relationships
-                </div>
-                <div className="mt-3 divide-y divide-[rgb(var(--tabliodb-border))]">
-                  {selectedColumns.map((column) => (
-                    <div className="grid grid-cols-[1fr_auto] gap-2 py-2 text-xs" key={column.id}>
-                      <span className="truncate font-extrabold text-[rgb(var(--tabliodb-ink))]">{column.name}</span>
-                      <span className="font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                        {formatColumnType(column.type)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </Surface>
-            ) : (
-              <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                No table selected
-              </Surface>
-            )}
-          </section>
-          <section>
-            <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Review signals
-            </h2>
-            <div className="mt-2 space-y-2 text-sm">
-              {reviewSignals.map((signal) => (
-                <Surface
-                  className="border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 font-bold text-[rgb(var(--tabliodb-gold-text))] shadow-[0_3px_0_rgb(var(--tabliodb-gold-border))]"
-                  key={signal}
-                >
-                  {signal}
-                </Surface>
-              ))}
-            </div>
-          </section>
-        </div>
-      </aside>
+      <SchemaInspector
+        latestSnapshotVersion={latestSnapshot?.version ?? 0}
+        model={model}
+        onModelChange={setModel}
+        selectedTableId={selectedTableId}
+      />
     </main>
   );
 }
@@ -441,28 +384,4 @@ function AddTableDialog({ onCreate }: { onCreate: (tableName?: string) => void }
 
 function isUnauthorized(error: unknown): boolean {
   return error instanceof TabliodbApiError && error.status === 401;
-}
-
-function countTableRelationships(model: DiagramModel, table: DatabaseTable): number {
-  return Object.values(model.relationships).filter(
-    (relationship) => relationship.sourceTableId === table.id || relationship.targetTableId === table.id,
-  ).length;
-}
-
-function getReviewSignals(model: DiagramModel): string[] {
-  const relationshipsByTargetColumn = new Set(
-    Object.values(model.relationships).flatMap((relationship) =>
-      getRelationshipColumnPairs(relationship).map((pair) => pair.targetColumnId),
-    ),
-  );
-
-  const missingRelationshipIndexes = Object.values(model.columns)
-    .filter((column) => column.name.endsWith('_id') && !relationshipsByTargetColumn.has(column.id))
-    .map((column) => `${model.tables[column.tableId]?.name ?? column.tableId}.${column.name} has no relationship`);
-
-  if (missingRelationshipIndexes.length > 0) {
-    return missingRelationshipIndexes.slice(0, 2);
-  }
-
-  return ['Foreign keys are mapped', 'Unique columns are visible'];
 }
