@@ -7,8 +7,10 @@ import {
   type ColumnTypeFamily,
   type ColumnTypeSpec,
   type DatabaseColumn,
+  type DatabaseRelationship,
   type DatabaseTable,
   type DiagramModel,
+  type ReferentialAction,
 } from '@tabliodb/schema-core';
 import {
   Badge,
@@ -75,6 +77,41 @@ const columnFormSchema = z.object({
 type EditTableFormState = z.infer<typeof editTableFormSchema>;
 type ColumnFormState = z.infer<typeof columnFormSchema>;
 
+const unsetSelectValue = '__unset' as const;
+
+const relationshipCardinalityOptions = [
+  'one_to_one',
+  'one_to_many',
+  'many_to_many',
+] as const satisfies readonly DatabaseRelationship['cardinality'][];
+
+const referentialActionOptions = [
+  unsetSelectValue,
+  'cascade',
+  'restrict',
+  'set_null',
+  'set_default',
+  'no_action',
+] as const;
+
+const matchTypeOptions = [unsetSelectValue, 'simple', 'full', 'partial'] as const;
+
+const relationshipFormSchema = z.object({
+  cardinality: z.enum(relationshipCardinalityOptions),
+  comment: z.string().trim().max(240, 'Keep the comment under 240 characters.'),
+  deferrable: z.boolean(),
+  matchType: z.enum(matchTypeOptions),
+  name: z.string().trim().max(96, 'Keep the relationship name under 96 characters.'),
+  onDelete: z.enum(referentialActionOptions),
+  onUpdate: z.enum(referentialActionOptions),
+  sourceColumnId: z.string().min(1, 'Choose a primary-key column.'),
+  sourceTableId: z.string().min(1, 'Choose a primary-key table.'),
+  targetColumnId: z.string().min(1, 'Choose a foreign-key column.'),
+  targetTableId: z.string().min(1, 'Choose a foreign-key table.'),
+});
+
+type RelationshipFormState = z.infer<typeof relationshipFormSchema>;
+
 export type SchemaInspectorProps = {
   latestSnapshotVersion: number;
   model: DiagramModel;
@@ -90,9 +127,14 @@ export function SchemaInspector({
 }: SchemaInspectorProps) {
   const selectedTable = selectedTableId ? model.tables[selectedTableId] : null;
   const selectedColumns = selectedTable ? getTableColumns(model, selectedTable.id) : [];
+  const selectedRelationships = selectedTable ? getTableRelationships(model, selectedTable.id) : [];
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
+  const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const selectedColumnIds = selectedColumns.map((column) => column.id).join('|');
+  const selectedRelationshipIds = selectedRelationships.map((relationship) => relationship.id).join('|');
   const selectedColumn = selectedColumns.find((column) => column.id === selectedColumnId) ?? null;
+  const selectedRelationship =
+    selectedRelationships.find((relationship) => relationship.id === selectedRelationshipId) ?? null;
   const reviewSignals = useMemo(() => getReviewSignals(model), [model]);
 
   useEffect(() => {
@@ -107,8 +149,27 @@ export function SchemaInspector({
     }
   }, [selectedColumnId, selectedColumnIds, selectedColumns, selectedTable]);
 
+  useEffect(() => {
+    if (!selectedTable) {
+      setSelectedRelationshipId(null);
+      return;
+    }
+
+    if (
+      !selectedRelationshipId ||
+      !selectedRelationships.some((relationship) => relationship.id === selectedRelationshipId)
+    ) {
+      const relationshipForColumn = selectedColumnId
+        ? selectedRelationships.find((relationship) => relationshipTouchesColumn(relationship, selectedColumnId))
+        : null;
+
+      // Relationship selection follows the active table and prefers the active column when there is a direct wire.
+      setSelectedRelationshipId(relationshipForColumn?.id ?? selectedRelationships[0]?.id ?? null);
+    }
+  }, [selectedColumnId, selectedRelationshipId, selectedRelationshipIds, selectedRelationships, selectedTable]);
+
   return (
-    <aside className="border-l-2 border-[rgb(var(--tabliodb-border))] bg-white">
+    <aside className="overflow-y-auto border-l-2 border-[rgb(var(--tabliodb-border))] bg-white">
       <div className="flex h-16 items-center border-b-2 border-[rgb(var(--tabliodb-border))] px-5 text-sm font-extrabold">
         Inspector
       </div>
@@ -175,6 +236,14 @@ export function SchemaInspector({
           )}
         </section>
         <ColumnInspector column={selectedColumn} model={model} onModelChange={onModelChange} table={selectedTable} />
+        <RelationshipInspector
+          model={model}
+          onModelChange={onModelChange}
+          onRelationshipSelect={setSelectedRelationshipId}
+          relationship={selectedRelationship}
+          relationships={selectedRelationships}
+          selectedRelationshipId={selectedRelationshipId}
+        />
         <section>
           <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Review signals
@@ -619,6 +688,348 @@ function EditColumnDialog({
   );
 }
 
+function RelationshipInspector({
+  model,
+  onModelChange,
+  onRelationshipSelect,
+  relationship,
+  relationships,
+  selectedRelationshipId,
+}: {
+  model: DiagramModel;
+  onModelChange: (model: DiagramModel) => void;
+  onRelationshipSelect: (relationshipId: string) => void;
+  relationship: DatabaseRelationship | null;
+  relationships: DatabaseRelationship[];
+  selectedRelationshipId: string | null;
+}) {
+  return (
+    <section>
+      <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+        Relationships
+      </h2>
+      {relationships.length > 0 ? (
+        <Surface className="mt-2 p-4">
+          <div className="space-y-1">
+            {relationships.map((currentRelationship) => (
+              <button
+                aria-pressed={selectedRelationshipId === currentRelationship.id}
+                className={cn(
+                  'w-full cursor-pointer rounded-xl px-2 py-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+                  selectedRelationshipId === currentRelationship.id &&
+                    'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                )}
+                key={currentRelationship.id}
+                onClick={() => onRelationshipSelect(currentRelationship.id)}
+                type="button"
+              >
+                <div className="truncate text-xs font-extrabold">
+                  {getRelationshipTitle(model, currentRelationship)}
+                </div>
+                <div className="mt-1 truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {getRelationshipEndpointLabel(model, currentRelationship, 'source')}
+                  {' -> '}
+                  {getRelationshipEndpointLabel(model, currentRelationship, 'target')}
+                </div>
+              </button>
+            ))}
+          </div>
+          {relationship ? (
+            <div className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-extrabold">{getRelationshipTitle(model, relationship)}</div>
+                  <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {formatRelationshipCardinality(relationship.cardinality)}
+                  </div>
+                </div>
+                <EditRelationshipDialog model={model} onModelChange={onModelChange} relationship={relationship} />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <ColumnFact label="On delete" value={formatReferentialAction(relationship.onDelete)} />
+                <ColumnFact label="On update" value={formatReferentialAction(relationship.onUpdate)} />
+                <ColumnFact label="Match" value={relationship.matchType ?? '-'} />
+                <ColumnFact label="Deferred" value={relationship.deferrable ? 'Yes' : 'No'} />
+              </div>
+              {relationship.comment ? (
+                <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {relationship.comment}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </Surface>
+      ) : (
+        <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+          No relationship on this table
+        </Surface>
+      )}
+    </section>
+  );
+}
+
+function EditRelationshipDialog({
+  model,
+  onModelChange,
+  relationship,
+}: {
+  model: DiagramModel;
+  onModelChange: (model: DiagramModel) => void;
+  relationship: DatabaseRelationship;
+}) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<RelationshipFormState>({
+    defaultValues: getRelationshipDefaults(relationship),
+    resolver: zodResolver(relationshipFormSchema),
+  });
+  const { errors } = form.formState;
+  const tables = Object.values(model.tables);
+  const sourceTableId = form.watch('sourceTableId');
+  const targetTableId = form.watch('targetTableId');
+  const sourceColumns = useMemo(
+    () => (sourceTableId ? getTableColumns(model, sourceTableId) : []),
+    [model, sourceTableId],
+  );
+  const targetColumns = useMemo(
+    () => (targetTableId ? getTableColumns(model, targetTableId) : []),
+    [model, targetTableId],
+  );
+  const sourceColumnIds = sourceColumns.map((column) => column.id).join('|');
+  const targetColumnIds = targetColumns.map((column) => column.id).join('|');
+
+  useEffect(() => {
+    if (open) {
+      form.reset(getRelationshipDefaults(relationship));
+    }
+  }, [form, open, relationship]);
+
+  useEffect(() => {
+    const sourceColumnId = form.getValues('sourceColumnId');
+
+    if (!sourceColumns.some((column) => column.id === sourceColumnId)) {
+      // When the source table changes, pick the first valid column so the form never submits a stale endpoint.
+      form.setValue('sourceColumnId', sourceColumns[0]?.id ?? '', { shouldDirty: true, shouldValidate: true });
+    }
+  }, [form, sourceColumnIds, sourceColumns]);
+
+  useEffect(() => {
+    const targetColumnId = form.getValues('targetColumnId');
+
+    if (!targetColumns.some((column) => column.id === targetColumnId)) {
+      // Foreign-key endpoint follows the selected target table for the same stale-id protection as the source side.
+      form.setValue('targetColumnId', targetColumns[0]?.id ?? '', { shouldDirty: true, shouldValidate: true });
+    }
+  }, [form, targetColumnIds, targetColumns]);
+
+  function handleSubmit(values: RelationshipFormState) {
+    onModelChange(
+      applyDiagramCommand(model, {
+        type: 'relationship.update',
+        relationshipId: relationship.id,
+        changes: {
+          cardinality: values.cardinality,
+          comment: normalizeOptionalString(values.comment),
+          deferrable: values.deferrable ? true : undefined,
+          matchType: normalizeMatchType(values.matchType),
+          name: normalizeOptionalString(values.name),
+          onDelete: normalizeReferentialAction(values.onDelete),
+          onUpdate: normalizeReferentialAction(values.onUpdate),
+          sourceColumnIds: [values.sourceColumnId],
+          sourceTableId: values.sourceTableId,
+          targetColumnIds: [values.targetColumnId],
+          targetTableId: values.targetTableId,
+        },
+      }),
+    );
+    setOpen(false);
+  }
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="secondary">
+          <Pencil className="size-4" />
+          Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Edit relationship</DialogTitle>
+            <DialogDescription>Adjust endpoints and referential behavior.</DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 grid gap-4">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Relationship name
+              </span>
+              <Input autoFocus placeholder="orders_user_id_fkey" {...form.register('name')} />
+              <FieldError>{errors.name?.message}</FieldError>
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Primary table
+                </span>
+                <select
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  {...form.register('sourceTableId')}
+                >
+                  {tables.map((table) => (
+                    <option key={table.id} value={table.id}>
+                      {table.name}
+                    </option>
+                  ))}
+                </select>
+                <FieldError>{errors.sourceTableId?.message}</FieldError>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Primary column
+                </span>
+                <select
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  {...form.register('sourceColumnId')}
+                >
+                  {sourceColumns.length > 0 ? (
+                    sourceColumns.map((column) => (
+                      <option key={column.id} value={column.id}>
+                        {column.name} ({formatColumnType(column.type)})
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No columns</option>
+                  )}
+                </select>
+                <FieldError>{errors.sourceColumnId?.message}</FieldError>
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Foreign table
+                </span>
+                <select
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  {...form.register('targetTableId')}
+                >
+                  {tables.map((table) => (
+                    <option key={table.id} value={table.id}>
+                      {table.name}
+                    </option>
+                  ))}
+                </select>
+                <FieldError>{errors.targetTableId?.message}</FieldError>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Foreign column
+                </span>
+                <select
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  {...form.register('targetColumnId')}
+                >
+                  {targetColumns.length > 0 ? (
+                    targetColumns.map((column) => (
+                      <option key={column.id} value={column.id}>
+                        {column.name} ({formatColumnType(column.type)})
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No columns</option>
+                  )}
+                </select>
+                <FieldError>{errors.targetColumnId?.message}</FieldError>
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Cardinality
+                </span>
+                <select
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  {...form.register('cardinality')}
+                >
+                  {relationshipCardinalityOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {formatRelationshipCardinality(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Match type
+                </span>
+                <select
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  {...form.register('matchType')}
+                >
+                  {matchTypeOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === unsetSelectValue ? 'Not set' : option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  On delete
+                </span>
+                <select
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  {...form.register('onDelete')}
+                >
+                  {referentialActionOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === unsetSelectValue ? 'Not set' : formatReferentialAction(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  On update
+                </span>
+                <select
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  {...form.register('onUpdate')}
+                >
+                  {referentialActionOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === unsetSelectValue ? 'Not set' : formatReferentialAction(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <CheckboxField label="Deferrable" {...form.register('deferrable')} />
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Comment
+              </span>
+              <Input placeholder="Relationship note" {...form.register('comment')} />
+              <FieldError>{errors.comment?.message}</FieldError>
+            </label>
+          </div>
+          <DialogFooter className="mt-5">
+            <Button onClick={() => setOpen(false)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button type="submit">
+              <Save className="size-4" />
+              Save relationship
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CheckboxField({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] px-3 py-2 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))]">
@@ -717,11 +1128,96 @@ function countTableRelationships(model: DiagramModel, table: DatabaseTable): num
   ).length;
 }
 
+function getTableRelationships(model: DiagramModel, tableId: string): DatabaseRelationship[] {
+  return Object.values(model.relationships).filter(
+    (relationship) => relationship.sourceTableId === tableId || relationship.targetTableId === tableId,
+  );
+}
+
 function countColumnRelationships(model: DiagramModel, column: DatabaseColumn): number {
   return Object.values(model.relationships).filter(
     (relationship) =>
       relationship.sourceColumnIds.includes(column.id) || relationship.targetColumnIds.includes(column.id),
   ).length;
+}
+
+function relationshipTouchesColumn(relationship: DatabaseRelationship, columnId: string): boolean {
+  return relationship.sourceColumnIds.includes(columnId) || relationship.targetColumnIds.includes(columnId);
+}
+
+function getRelationshipDefaults(relationship: DatabaseRelationship): RelationshipFormState {
+  return {
+    cardinality: relationship.cardinality,
+    comment: relationship.comment ?? '',
+    deferrable: relationship.deferrable ?? false,
+    matchType: relationship.matchType ?? unsetSelectValue,
+    name: relationship.name ?? '',
+    onDelete: relationship.onDelete ?? unsetSelectValue,
+    onUpdate: relationship.onUpdate ?? unsetSelectValue,
+    sourceColumnId: relationship.sourceColumnIds[0] ?? '',
+    sourceTableId: relationship.sourceTableId,
+    targetColumnId: relationship.targetColumnIds[0] ?? '',
+    targetTableId: relationship.targetTableId,
+  };
+}
+
+function normalizeReferentialAction(value: RelationshipFormState['onDelete']): ReferentialAction | undefined {
+  return value === unsetSelectValue ? undefined : value;
+}
+
+function normalizeMatchType(value: RelationshipFormState['matchType']): DatabaseRelationship['matchType'] | undefined {
+  return value === unsetSelectValue ? undefined : value;
+}
+
+function getRelationshipTitle(model: DiagramModel, relationship: DatabaseRelationship): string {
+  if (relationship.name) {
+    return relationship.name;
+  }
+
+  return `${getRelationshipEndpointLabel(model, relationship, 'source')} -> ${getRelationshipEndpointLabel(
+    model,
+    relationship,
+    'target',
+  )}`;
+}
+
+function getRelationshipEndpointLabel(
+  model: DiagramModel,
+  relationship: DatabaseRelationship,
+  role: 'source' | 'target',
+): string {
+  const tableId = role === 'source' ? relationship.sourceTableId : relationship.targetTableId;
+  const columnIds = role === 'source' ? relationship.sourceColumnIds : relationship.targetColumnIds;
+  const table = model.tables[tableId];
+  const columns = columnIds.map((columnId) => model.columns[columnId]?.name ?? columnId).join(', ');
+
+  return `${table?.name ?? tableId}.${columns || '?'}`;
+}
+
+function formatRelationshipCardinality(cardinality: DatabaseRelationship['cardinality']): string {
+  const labels: Record<DatabaseRelationship['cardinality'], string> = {
+    many_to_many: 'Many to many',
+    one_to_many: 'One to many',
+    one_to_one: 'One to one',
+  };
+
+  return labels[cardinality];
+}
+
+function formatReferentialAction(action: ReferentialAction | undefined): string {
+  if (!action) {
+    return '-';
+  }
+
+  const labels: Record<ReferentialAction, string> = {
+    cascade: 'Cascade',
+    no_action: 'No action',
+    restrict: 'Restrict',
+    set_default: 'Set default',
+    set_null: 'Set null',
+  };
+
+  return labels[action];
 }
 
 function getReviewSignals(model: DiagramModel): string[] {

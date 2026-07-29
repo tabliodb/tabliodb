@@ -212,6 +212,85 @@ describe('schema-core diagram commands', () => {
     expect(getTableColumns(nextModel, 'borrowings')).toHaveLength(1);
   });
 
+  it('updates a relationship without mutating the previous model', () => {
+    const modelWithUsers = applyDiagramCommand(
+      createEmptyDiagramModel('Relationship update test'),
+      {
+        type: 'table.create',
+        tableId: 'users',
+        name: 'users',
+        columns: [{ id: 'users-id', name: 'id', type: { family: 'uuid' }, primaryKey: true, nullable: false }],
+      },
+      { now: fixedNow },
+    );
+    const modelWithBorrowings = applyDiagramCommand(
+      modelWithUsers,
+      {
+        type: 'table.create',
+        tableId: 'borrowings',
+        name: 'borrowings',
+        columns: [
+          { id: 'borrowings-user-id', name: 'user_id', type: { family: 'uuid' }, nullable: false },
+          { id: 'borrowings-owner-id', name: 'owner_id', type: { family: 'uuid' }, nullable: false },
+        ],
+      },
+      { now: fixedNow },
+    );
+    const model = applyDiagramCommand(
+      modelWithBorrowings,
+      {
+        type: 'relationship.create',
+        relationshipId: 'users-borrowings',
+        sourceTableId: 'users',
+        sourceColumnIds: ['users-id'],
+        targetTableId: 'borrowings',
+        targetColumnIds: ['borrowings-user-id'],
+        cardinality: 'one_to_many',
+        onDelete: 'cascade',
+      },
+      { now: fixedNow },
+    );
+    const nextModel = applyDiagramCommand(
+      model,
+      {
+        type: 'relationship.update',
+        relationshipId: 'users-borrowings',
+        changes: {
+          cardinality: 'one_to_one',
+          comment: 'Primary borrower ownership',
+          deferrable: true,
+          matchType: 'full',
+          name: 'borrowings_owner_id_fkey',
+          onDelete: 'restrict',
+          onUpdate: 'cascade',
+          sourceColumnIds: ['users-id'],
+          sourceTableId: 'users',
+          targetColumnIds: ['borrowings-owner-id'],
+          targetTableId: 'borrowings',
+        },
+      },
+      { now: () => '2026-07-29T02:00:00.000Z' },
+    );
+
+    // Relationship updates preserve old snapshots so collaboration and undo can replay diagram changes predictably.
+    expect(model.relationships['users-borrowings']).toMatchObject({
+      cardinality: 'one_to_many',
+      onDelete: 'cascade',
+      targetColumnIds: ['borrowings-user-id'],
+    });
+    expect(nextModel.relationships['users-borrowings']).toMatchObject({
+      cardinality: 'one_to_one',
+      comment: 'Primary borrower ownership',
+      deferrable: true,
+      matchType: 'full',
+      name: 'borrowings_owner_id_fkey',
+      onDelete: 'restrict',
+      onUpdate: 'cascade',
+      targetColumnIds: ['borrowings-owner-id'],
+    });
+    expect(nextModel.metadata.updatedAt).toBe('2026-07-29T02:00:00.000Z');
+  });
+
   it('throws a domain error when a relationship points to the wrong table column', () => {
     const model = applyDiagramCommand(
       applyDiagramCommand(
