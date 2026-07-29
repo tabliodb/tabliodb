@@ -1,5 +1,10 @@
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { AuditLogListResponseDto, OrganizationListResponseDto, OrganizationSettingsDto } from '@tabliodb/sdk';
+import type {
+  AuditLogListResponseDto,
+  OrganizationListResponseDto,
+  OrganizationMemberListResponseDto,
+  OrganizationSettingsDto,
+} from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { organizationsKeys } from './organization.keys';
@@ -12,6 +17,10 @@ type OrganizationsQueries = {
   list: (
     query?: PaginationQuery,
   ) => AppQueryOptions<OrganizationListResponseDto, ReturnType<typeof organizationsKeys.list>>;
+  members: (
+    organizationId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<OrganizationMemberListResponseDto, ReturnType<typeof organizationsKeys.members>>;
   settings: (
     organizationId: string,
   ) => AppQueryOptions<OrganizationSettingsDto, ReturnType<typeof organizationsKeys.settings>>;
@@ -29,6 +38,13 @@ export const organizationsQueries: OrganizationsQueries = {
     appQueryOptions({
       queryFn: () => sdk.organizations.list(query),
       queryKey: organizationsKeys.list(query),
+    }),
+
+  members: (organizationId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(organizationId),
+      queryFn: () => sdk.organizations.listMembers(organizationId, query),
+      queryKey: organizationsKeys.members(organizationId, query),
     }),
 
   settings: (organizationId: string) =>

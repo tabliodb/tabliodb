@@ -189,6 +189,28 @@ export type OrganizationSettingsUpdateDto = {
   defaultProjectRole?: DefaultProjectRole | null;
   allowMemberProjectCreate?: boolean;
 };
+export type OrganizationMemberDtoOutput = {
+  avatarColor: string | null;
+  createdAt: string;
+  email: string;
+  joinedAt: string | null;
+  name: string;
+  role: Role;
+  status: Status2;
+  updatedAt: string;
+  userId: string;
+};
+export type OrganizationMemberListResponseDtoOutput = {
+  items: OrganizationMemberDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type OrganizationMemberUpdateDto = {
+  role: Role;
+};
+export type OrganizationMemberRemoveResponseDtoOutput = {
+  successful: boolean;
+};
 export type AuditLogDtoOutput = {
   id: string;
   organizationId: string | null;
@@ -914,6 +936,81 @@ export function updateOrganizationSettings(
     ),
   );
 }
+export function getOrganizationMembers(
+  {
+    cursor,
+    limit,
+    organizationId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    organizationId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: OrganizationMemberListResponseDtoOutput;
+    }>(
+      `/organizations/${encodeURIComponent(organizationId)}/members${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function updateOrganizationMember(
+  {
+    userId,
+    organizationId,
+    organizationMemberUpdateDto,
+  }: {
+    userId: string;
+    organizationId: string;
+    organizationMemberUpdateDto: OrganizationMemberUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: OrganizationMemberDtoOutput;
+    }>(
+      `/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(userId)}`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: organizationMemberUpdateDto,
+      }),
+    ),
+  );
+}
+export function removeOrganizationMember(
+  {
+    userId,
+    organizationId,
+  }: {
+    userId: string;
+    organizationId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: OrganizationMemberRemoveResponseDtoOutput;
+    }>(`/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(userId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
 export function getOrganizationAuditLogs(
   {
     cursor,
@@ -1352,12 +1449,17 @@ export enum Role {
   Owner = 'owner',
   Admin = 'admin',
   Member = 'member',
-  Viewer = 'viewer',
+  Guest = 'guest',
 }
 export enum DefaultProjectRole {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
+}
+export enum Status2 {
+  Pending = 'pending',
+  Active = 'active',
+  Suspended = 'suspended',
 }
 export enum Role2 {
   Owner = 'owner',

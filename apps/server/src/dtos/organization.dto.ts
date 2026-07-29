@@ -8,7 +8,7 @@ const OrganizationRoleSchema = z.enum([
   OrganizationRole.Owner,
   OrganizationRole.Admin,
   OrganizationRole.Member,
-  OrganizationRole.Viewer,
+  OrganizationRole.Guest,
 ]);
 
 const OrganizationSchema = z
@@ -40,6 +40,47 @@ const OrganizationListResponseSchema = z
   })
   .meta({ id: 'OrganizationListResponseDto' });
 
+const OrganizationMemberSchema = z
+  .object({
+    avatarColor: z.string().nullable(),
+    createdAt: DateTimeSchema,
+    email: z.string().email(),
+    joinedAt: DateTimeSchema.nullable(),
+    name: z.string(),
+    role: OrganizationRoleSchema,
+    status: z.enum(['pending', 'active', 'suspended']),
+    updatedAt: DateTimeSchema,
+    userId: z.string().uuid(),
+  })
+  .meta({ id: 'OrganizationMemberDto' });
+
+const OrganizationMemberListQuerySchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .meta({ id: 'OrganizationMemberListQueryDto' });
+
+const OrganizationMemberListResponseSchema = z
+  .object({
+    items: z.array(OrganizationMemberSchema),
+    nextCursor: z.string().nullable(),
+    totalCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'OrganizationMemberListResponseDto' });
+
+const OrganizationMemberUpdateSchema = z
+  .object({
+    role: OrganizationRoleSchema,
+  })
+  .meta({ id: 'OrganizationMemberUpdateDto' });
+
+const OrganizationMemberRemoveResponseSchema = z
+  .object({
+    successful: z.boolean(),
+  })
+  .meta({ id: 'OrganizationMemberRemoveResponseDto' });
+
 const OrganizationSettingsSchema = z
   .object({
     id: z.string().uuid(),
@@ -63,5 +104,10 @@ const OrganizationSettingsUpdateSchema = z
 export class OrganizationDto extends createZodDto(OrganizationSchema) {}
 export class OrganizationListQueryDto extends createZodDto(OrganizationListQuerySchema) {}
 export class OrganizationListResponseDto extends createZodDto(OrganizationListResponseSchema) {}
+export class OrganizationMemberDto extends createZodDto(OrganizationMemberSchema) {}
+export class OrganizationMemberListQueryDto extends createZodDto(OrganizationMemberListQuerySchema) {}
+export class OrganizationMemberListResponseDto extends createZodDto(OrganizationMemberListResponseSchema) {}
+export class OrganizationMemberRemoveResponseDto extends createZodDto(OrganizationMemberRemoveResponseSchema) {}
+export class OrganizationMemberUpdateDto extends createZodDto(OrganizationMemberUpdateSchema) {}
 export class OrganizationSettingsDto extends createZodDto(OrganizationSettingsSchema) {}
 export class OrganizationSettingsUpdateDto extends createZodDto(OrganizationSettingsUpdateSchema) {}

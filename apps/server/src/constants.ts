@@ -21,6 +21,8 @@ export enum AuthType {
 }
 
 export enum AuditAction {
+  OrganizationMemberRemoved = 'organization.member_removed',
+  OrganizationMemberRoleUpdated = 'organization.member_role_updated',
   OrganizationSettingsUpdated = 'organization.settings_updated',
   ProjectArchived = 'project.archived',
   ProjectCreated = 'project.created',

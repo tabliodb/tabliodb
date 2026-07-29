@@ -1,10 +1,16 @@
 import type { OrganizationRole, Paginated, PaginationQuery, ProjectRole } from '@tabliodb/shared';
 import type { RequestOpts } from '@oazapfts/runtime';
-import type { OrganizationSettingsUpdateDto as GeneratedOrganizationSettingsUpdateDto } from '../fetch-client.js';
+import type {
+  OrganizationMemberUpdateDto as GeneratedOrganizationMemberUpdateDto,
+  OrganizationSettingsUpdateDto as GeneratedOrganizationSettingsUpdateDto,
+} from '../fetch-client.js';
 import {
   getOrganizations,
   getOrganizationAuditLogs,
+  getOrganizationMembers,
   getOrganizationSettings,
+  removeOrganizationMember as removeOrganizationMemberRequest,
+  updateOrganizationMember as updateOrganizationMemberRequest,
   updateOrganizationSettings as updateOrganizationSettingsRequest,
 } from '../fetch-client.js';
 
@@ -21,6 +27,30 @@ export type OrganizationDto = {
 };
 
 export type OrganizationListResponseDto = Paginated<OrganizationDto>;
+
+export type OrganizationMemberStatus = 'active' | 'pending' | 'suspended';
+
+export type OrganizationMemberDto = {
+  avatarColor: string | null;
+  createdAt: string;
+  email: string;
+  joinedAt: string | null;
+  name: string;
+  role: OrganizationRole;
+  status: OrganizationMemberStatus;
+  updatedAt: string;
+  userId: string;
+};
+
+export type OrganizationMemberListResponseDto = Paginated<OrganizationMemberDto>;
+
+export type OrganizationMemberUpdateDto = {
+  role: OrganizationRole;
+};
+
+export type OrganizationMemberRemoveResponseDto = {
+  successful: boolean;
+};
 
 export type OrganizationSettingsDto = {
   allowMemberProjectCreate: boolean;
@@ -62,6 +92,13 @@ export type OrganizationsResource = {
   getAuditLogs: (organizationId: string, query?: PaginationQuery) => Promise<AuditLogListResponseDto>;
   getSettings: (organizationId: string) => Promise<OrganizationSettingsDto>;
   list: (query?: PaginationQuery) => Promise<OrganizationListResponseDto>;
+  listMembers: (organizationId: string, query?: PaginationQuery) => Promise<OrganizationMemberListResponseDto>;
+  removeMember: (organizationId: string, userId: string) => Promise<OrganizationMemberRemoveResponseDto>;
+  updateMember: (
+    organizationId: string,
+    userId: string,
+    body: OrganizationMemberUpdateDto,
+  ) => Promise<OrganizationMemberDto>;
   updateSettings: (organizationId: string, body: OrganizationSettingsUpdateDto) => Promise<OrganizationSettingsDto>;
 };
 
@@ -73,6 +110,23 @@ export function createOrganizationsResource(opts?: RequestOpts): OrganizationsRe
       getOrganizationAuditLogs({ organizationId, ...query }, opts) as unknown as Promise<AuditLogListResponseDto>,
     getSettings: (organizationId: string) =>
       getOrganizationSettings({ organizationId }, opts) as unknown as Promise<OrganizationSettingsDto>,
+    listMembers: (organizationId: string, query: PaginationQuery = {}) =>
+      getOrganizationMembers(
+        { organizationId, ...query },
+        opts,
+      ) as unknown as Promise<OrganizationMemberListResponseDto>,
+    updateMember: (organizationId: string, userId: string, body: OrganizationMemberUpdateDto) =>
+      // Generated OpenAPI role enum stays private to the resource boundary; app code uses shared OrganizationRole.
+      updateOrganizationMemberRequest(
+        {
+          organizationId,
+          userId,
+          organizationMemberUpdateDto: body as unknown as GeneratedOrganizationMemberUpdateDto,
+        },
+        opts,
+      ) as unknown as Promise<OrganizationMemberDto>,
+    removeMember: (organizationId: string, userId: string) =>
+      removeOrganizationMemberRequest({ organizationId, userId }, opts) as Promise<OrganizationMemberRemoveResponseDto>,
     updateSettings: (organizationId: string, body: OrganizationSettingsUpdateDto) =>
       // Shared ProjectRole remains the app-facing enum; generated OpenAPI enum stays private to this boundary.
       updateOrganizationSettingsRequest(

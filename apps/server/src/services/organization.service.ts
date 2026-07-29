@@ -7,6 +7,11 @@ import {
   OrganizationDto,
   OrganizationListQueryDto,
   OrganizationListResponseDto,
+  OrganizationMemberDto,
+  OrganizationMemberListQueryDto,
+  OrganizationMemberListResponseDto,
+  OrganizationMemberRemoveResponseDto,
+  OrganizationMemberUpdateDto,
   OrganizationSettingsDto,
   OrganizationSettingsUpdateDto,
 } from '../dtos/organization.dto.js';
@@ -88,6 +93,89 @@ export class OrganizationService {
     return this.serializeSettings(organization);
   }
 
+  async getMembers(
+    _auth: AuthContext,
+    organizationId: string,
+    query: OrganizationMemberListQueryDto,
+  ): Promise<OrganizationMemberListResponseDto> {
+    const members = await this.organizationRepository.getMembers(organizationId, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+    });
+
+    return {
+      ...members,
+      items: members.items.map((member) => this.serializeMember(member)),
+    };
+  }
+
+  async updateMemberRole(
+    auth: AuthContext,
+    organizationId: string,
+    userId: string,
+    dto: OrganizationMemberUpdateDto,
+  ): Promise<OrganizationMemberDto> {
+    const currentMember = await this.assertCanChangeOwnerRole(organizationId, userId, dto.role);
+    const member = await this.organizationRepository.updateMemberRole(organizationId, userId, dto.role);
+
+    if (!member) {
+      throw new NotFoundException('Workspace member not found');
+    }
+
+    if (currentMember.role !== member.role) {
+      await this.recordOrganizationAudit(auth, {
+        action: AuditAction.OrganizationMemberRoleUpdated,
+        entityId: userId,
+        entityType: 'organization_member',
+        metadata: {
+          email: member.email,
+          name: member.name,
+          role: {
+            after: member.role,
+            before: currentMember.role,
+          },
+        },
+        organizationId,
+      });
+    }
+
+    return this.serializeMember(member);
+  }
+
+  async removeMember(
+    auth: AuthContext,
+    organizationId: string,
+    userId: string,
+  ): Promise<OrganizationMemberRemoveResponseDto> {
+    const currentMember = await this.organizationRepository.getMember(organizationId, userId);
+    if (!currentMember) {
+      throw new NotFoundException('Workspace member not found');
+    }
+
+    if (
+      currentMember.role === OrganizationRole.Owner &&
+      (await this.organizationRepository.getOrganizationOwnerCount(organizationId)) <= 1
+    ) {
+      throw new BadRequestException('Workspace must keep at least one owner');
+    }
+
+    await this.organizationRepository.removeMember(organizationId, userId);
+
+    await this.recordOrganizationAudit(auth, {
+      action: AuditAction.OrganizationMemberRemoved,
+      entityId: userId,
+      entityType: 'organization_member',
+      metadata: {
+        email: currentMember.email,
+        name: currentMember.name,
+        role: currentMember.role,
+      },
+      organizationId,
+    });
+
+    return { successful: true };
+  }
+
   async getAuditLogs(
     _auth: AuthContext,
     organizationId: string,
@@ -136,6 +224,47 @@ export class OrganizationService {
     return { changes };
   }
 
+  private async assertCanChangeOwnerRole(organizationId: string, userId: string, nextRole: OrganizationRole) {
+    const currentMember = await this.organizationRepository.getMember(organizationId, userId);
+    if (!currentMember) {
+      throw new NotFoundException('Workspace member not found');
+    }
+
+    if (currentMember.role === OrganizationRole.Owner && nextRole !== OrganizationRole.Owner) {
+      const ownerCount = await this.organizationRepository.getOrganizationOwnerCount(organizationId);
+
+      if (ownerCount <= 1) {
+        throw new BadRequestException('Workspace must keep at least one owner');
+      }
+    }
+
+    return currentMember;
+  }
+
+  private recordOrganizationAudit(
+    auth: AuthContext,
+    options: {
+      action: AuditAction;
+      entityId: string;
+      entityType: string;
+      metadata: Record<string, JsonValue>;
+      organizationId: string;
+    },
+  ) {
+    return this.auditLogRepository.create({
+      action: options.action,
+      actorId: auth.user.id,
+      entityId: options.entityId,
+      entityType: options.entityType,
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: options.metadata,
+      organizationId: options.organizationId,
+      projectId: null,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
+  }
+
   private serializeSettings(organization: OrganizationSettingsRow): OrganizationSettingsDto {
     return {
       allowMemberProjectCreate: organization.allowMemberProjectCreate,
@@ -162,6 +291,20 @@ export class OrganizationService {
     };
   }
 
+  private serializeMember(member: OrganizationMemberRow): OrganizationMemberDto {
+    return {
+      avatarColor: member.avatarColor,
+      createdAt: toIsoDateTime(member.createdAt),
+      email: member.email,
+      joinedAt: member.joinedAt ? toIsoDateTime(member.joinedAt) : null,
+      name: member.name,
+      role: this.toOrganizationRole(member.role),
+      status: member.status,
+      updatedAt: toIsoDateTime(member.updatedAt),
+      userId: member.userId,
+    };
+  }
+
   private toDefaultProjectRole(
     role: string | null,
   ): ProjectRole.Commenter | ProjectRole.Editor | ProjectRole.Viewer | null {
@@ -177,7 +320,7 @@ export class OrganizationService {
       return role as OrganizationRole;
     }
 
-    return OrganizationRole.Member;
+    return OrganizationRole.Guest;
   }
 }
 
@@ -194,4 +337,16 @@ type OrganizationSettingsRow = {
   name: string;
   slug: string;
   updatedAt: Date | string;
+};
+
+type OrganizationMemberRow = {
+  avatarColor: string | null;
+  createdAt: Date | string;
+  email: string;
+  joinedAt: Date | string | null;
+  name: string;
+  role: string;
+  status: 'active' | 'pending' | 'suspended';
+  updatedAt: Date | string;
+  userId: string;
 };

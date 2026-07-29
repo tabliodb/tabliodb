@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DiagramModel } from '@tabliodb/schema-core';
-import { ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
 import {
   TabliodbApiError,
   type AuditLogDto,
   type OrganizationDto,
+  type OrganizationMemberDto,
   type OrganizationSettingsDto,
   type ProjectMemberDto,
   type ProjectResponseDto,
@@ -64,7 +65,12 @@ import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextar
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
 import { defaultDiagramName, diagramsQueries } from '@/resources/diagrams';
-import { organizationsQueries, useUpdateOrganizationSettingsMutation } from '@/resources/organizations';
+import {
+  organizationsQueries,
+  useRemoveOrganizationMemberMutation,
+  useUpdateOrganizationMemberMutation,
+  useUpdateOrganizationSettingsMutation,
+} from '@/resources/organizations';
 import {
   defaultProjectName,
   projectsQueries,
@@ -116,8 +122,15 @@ const memberFormDefaults: MemberFormState = {
 };
 
 const projectRoleOptions = [ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
+const organizationRoleOptions = [
+  OrganizationRole.Owner,
+  OrganizationRole.Admin,
+  OrganizationRole.Member,
+  OrganizationRole.Guest,
+] as const;
 
 const projectMemberPageQuery = { limit: 50 } as const;
+const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 
 const selectClassName =
@@ -391,7 +404,7 @@ export function EditorPage() {
             <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
             {activeProject ? (
               <>
-                <WorkspaceSettingsDialog project={activeProject} />
+                <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
                 <ProjectSettingsDialog
                   onArchived={() => {
                     setModel(null);
@@ -686,8 +699,15 @@ function CreateProjectDialog({
   );
 }
 
-function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
+function WorkspaceSettingsDialog({
+  organization,
+  project,
+}: {
+  organization: OrganizationDto;
+  project: ProjectResponseDto;
+}) {
   const [open, setOpen] = useState(false);
+  const canManageWorkspace = isOrganizationManager(organization);
   const form = useForm<WorkspaceSettingsFormState>({
     defaultValues: getWorkspaceSettingsDefaults(project),
     mode: 'onBlur',
@@ -703,9 +723,16 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
   const auditLogsQueryOptions = organizationsQueries.auditLogs(project.organizationId, workspaceAuditLogQuery);
   const auditLogsQuery = useQuery({
     ...auditLogsQueryOptions,
-    enabled: open && auditLogsQueryOptions.enabled !== false,
+    enabled: open && canManageWorkspace && auditLogsQueryOptions.enabled !== false,
+  });
+  const membersQueryOptions = organizationsQueries.members(project.organizationId, workspaceMemberPageQuery);
+  const membersQuery = useQuery({
+    ...membersQueryOptions,
+    // Workspace members are admin-only data, so the dialog becomes the fetch boundary just like audit logs.
+    enabled: open && canManageWorkspace && membersQueryOptions.enabled !== false,
   });
   const auditLogs = auditLogsQuery.data?.items ?? [];
+  const workspaceMembers = membersQuery.data?.items ?? [];
   const updateSettingsMutation = useUpdateOrganizationSettingsMutation({
     mutationConfig: {
       onSuccess: (settings) => {
@@ -714,16 +741,21 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
       },
     },
   });
+  const updateMemberMutation = useUpdateOrganizationMemberMutation();
+  const removeMemberMutation = useRemoveOrganizationMemberMutation();
+  const isWorkspaceMemberMutationPending = updateMemberMutation.isPending || removeMemberMutation.isPending;
 
   useEffect(() => {
     if (open) {
       form.reset(getWorkspaceSettingsDefaults(project, settingsQuery.data));
       updateSettingsMutation.reset();
+      updateMemberMutation.reset();
+      removeMemberMutation.reset();
     }
   }, [form, open, project, settingsQuery.data]);
 
   function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen && updateSettingsMutation.isPending) {
+    if (!nextOpen && (updateSettingsMutation.isPending || isWorkspaceMemberMutationPending)) {
       return;
     }
 
@@ -732,10 +764,16 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
     if (!nextOpen) {
       form.reset(getWorkspaceSettingsDefaults(project, settingsQuery.data));
       updateSettingsMutation.reset();
+      updateMemberMutation.reset();
+      removeMemberMutation.reset();
     }
   }
 
   function handleSubmit(values: WorkspaceSettingsFormState) {
+    if (!canManageWorkspace) {
+      return;
+    }
+
     updateSettingsMutation.mutate({
       body: {
         allowMemberProjectCreate: values.allowMemberProjectCreate,
@@ -745,6 +783,29 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
       organizationId: project.organizationId,
     });
   }
+
+  function handleUpdateWorkspaceMemberRole(member: OrganizationMemberDto, role: OrganizationRole) {
+    if (member.role === role) {
+      return;
+    }
+
+    updateMemberMutation.mutate({
+      body: { role },
+      organizationId: project.organizationId,
+      userId: member.userId,
+    });
+  }
+
+  function handleRemoveWorkspaceMember(member: OrganizationMemberDto) {
+    removeMemberMutation.mutate({
+      organizationId: project.organizationId,
+      userId: member.userId,
+    });
+  }
+
+  const memberMutationError = updateMemberMutation.error ?? removeMemberMutation.error;
+  const updatingUserId = updateMemberMutation.isPending ? updateMemberMutation.variables?.userId : null;
+  const removingUserId = removeMemberMutation.isPending ? removeMemberMutation.variables?.userId : null;
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
@@ -765,7 +826,7 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
             <ControlledInput
               aria-invalid={Boolean(errors.name)}
               control={form.control}
-              disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+              disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
               name="name"
             />
             <FieldError>{errors.name?.message}</FieldError>
@@ -779,7 +840,7 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
               <ControlledSelect
                 className={selectClassName}
                 control={form.control}
-                disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+                disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
                 name="defaultProjectRole"
               >
                 {workspaceDefaultRoleOptions.map((role) => (
@@ -793,7 +854,7 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
             <label className="mt-6 flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
               <ControlledCheckbox
                 control={form.control}
-                disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+                disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
                 name="allowMemberProjectCreate"
               />
               Members can create projects
@@ -808,14 +869,22 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
 
           <DialogFooter className="mt-5">
             <Button
-              disabled={updateSettingsMutation.isPending}
+              disabled={updateSettingsMutation.isPending || isWorkspaceMemberMutationPending}
               onClick={() => handleOpenChange(false)}
               type="button"
               variant="secondary"
             >
               Close
             </Button>
-            <Button disabled={settingsQuery.isPending || updateSettingsMutation.isPending} type="submit">
+            <Button
+              disabled={
+                settingsQuery.isPending ||
+                updateSettingsMutation.isPending ||
+                isWorkspaceMemberMutationPending ||
+                !canManageWorkspace
+              }
+              type="submit"
+            >
               {updateSettingsMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -826,40 +895,102 @@ function WorkspaceSettingsDialog({ project }: { project: ProjectResponseDto }) {
           </DialogFooter>
         </form>
 
-        <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-extrabold">Recent activity</h3>
-              <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                Project and workspace changes recorded by the server
-              </p>
-            </div>
-            <Badge variant="blue">{auditLogs.length} loaded</Badge>
-          </div>
-
-          {auditLogsQuery.isPending ? (
-            <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-              <Loader2 className="size-4 animate-spin" />
-              Loading activity
-            </div>
-          ) : auditLogsQuery.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(auditLogsQuery.error)}
-            </div>
-          ) : auditLogs.length === 0 ? (
-            <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-              No activity yet
-            </div>
-          ) : (
-            <div className="mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
-              <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                {auditLogs.map((auditLog) => (
-                  <AuditLogRow auditLog={auditLog} key={auditLog.id} />
-                ))}
+        {canManageWorkspace ? (
+          <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-extrabold">
+                  <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+                  Workspace members
+                </h3>
+                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {membersQuery.data?.totalCount ?? workspaceMembers.length} people with workspace access
+                </p>
               </div>
+              <Badge variant="green">{workspaceMembers.length} loaded</Badge>
             </div>
-          )}
-        </section>
+
+            {membersQuery.isPending ? (
+              <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <Loader2 className="size-4 animate-spin" />
+                Loading members
+              </div>
+            ) : membersQuery.error ? (
+              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {getErrorMessage(membersQuery.error)}
+              </div>
+            ) : workspaceMembers.length === 0 ? (
+              <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                No workspace members yet
+              </div>
+            ) : (
+              <div className="mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                  {workspaceMembers.map((member) => (
+                    <OrganizationMemberRow
+                      isRemoving={removingUserId === member.userId}
+                      isUpdating={updatingUserId === member.userId}
+                      key={member.userId}
+                      member={member}
+                      onRemove={handleRemoveWorkspaceMember}
+                      onRoleChange={handleUpdateWorkspaceMemberRole}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {memberMutationError ? (
+              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {getErrorMessage(memberMutationError)}
+              </div>
+            ) : null}
+          </section>
+        ) : (
+          <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+            <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+              Your workspace role is {formatOrganizationRole(organization.role)}. Owner or Admin access is required to
+              manage workspace settings and members.
+            </div>
+          </section>
+        )}
+
+        {canManageWorkspace ? (
+          <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-extrabold">Recent activity</h3>
+                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  Project and workspace changes recorded by the server
+                </p>
+              </div>
+              <Badge variant="blue">{auditLogs.length} loaded</Badge>
+            </div>
+
+            {auditLogsQuery.isPending ? (
+              <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <Loader2 className="size-4 animate-spin" />
+                Loading activity
+              </div>
+            ) : auditLogsQuery.error ? (
+              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {getErrorMessage(auditLogsQuery.error)}
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                No activity yet
+              </div>
+            ) : (
+              <div className="mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                  {auditLogs.map((auditLog) => (
+                    <AuditLogRow auditLog={auditLog} key={auditLog.id} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
@@ -1279,6 +1410,63 @@ function ProjectMemberRow({
   );
 }
 
+function OrganizationMemberRow({
+  isRemoving,
+  isUpdating,
+  member,
+  onRemove,
+  onRoleChange,
+}: {
+  isRemoving: boolean;
+  isUpdating: boolean;
+  member: OrganizationMemberDto;
+  onRemove: (member: OrganizationMemberDto) => void;
+  onRoleChange: (member: OrganizationMemberDto, role: OrganizationRole) => void;
+}) {
+  const isBusy = isRemoving || isUpdating;
+
+  return (
+    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center">
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className="grid size-10 shrink-0 place-items-center rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
+          style={member.avatarColor ? { backgroundColor: member.avatarColor } : undefined}
+        >
+          {getMemberInitials(member)}
+        </div>
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h4 className="truncate text-sm font-extrabold">{member.name}</h4>
+            <OrganizationRoleBadge role={member.role} />
+          </div>
+          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
+        </div>
+      </div>
+      <select
+        className={selectClassName}
+        disabled={isBusy}
+        onChange={(event) => onRoleChange(member, event.currentTarget.value as OrganizationRole)}
+        value={member.role}
+      >
+        {organizationRoleOptions.map((role) => (
+          <option key={role} value={role}>
+            {formatOrganizationRole(role)}
+          </option>
+        ))}
+      </select>
+      <Button
+        aria-label={`Remove ${member.name}`}
+        disabled={isBusy}
+        onClick={() => onRemove(member)}
+        size="icon"
+        variant="ghost"
+      >
+        {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+      </Button>
+    </article>
+  );
+}
+
 function ProjectRoleBadge({ role }: { role: ProjectRole }) {
   if (role === ProjectRole.Owner) {
     return <Badge variant="yellow">{formatProjectRole(role)}</Badge>;
@@ -1295,6 +1483,22 @@ function ProjectRoleBadge({ role }: { role: ProjectRole }) {
   return <Badge>{formatProjectRole(role)}</Badge>;
 }
 
+function OrganizationRoleBadge({ role }: { role: OrganizationRole }) {
+  if (role === OrganizationRole.Owner) {
+    return <Badge variant="yellow">{formatOrganizationRole(role)}</Badge>;
+  }
+
+  if (role === OrganizationRole.Admin) {
+    return <Badge variant="blue">{formatOrganizationRole(role)}</Badge>;
+  }
+
+  if (role === OrganizationRole.Member) {
+    return <Badge variant="green">{formatOrganizationRole(role)}</Badge>;
+  }
+
+  return <Badge>{formatOrganizationRole(role)}</Badge>;
+}
+
 function formatProjectRole(role: ProjectRole): string {
   return {
     [ProjectRole.Commenter]: 'Commenter',
@@ -1306,10 +1510,10 @@ function formatProjectRole(role: ProjectRole): string {
 
 function formatOrganizationRole(role: OrganizationDto['role']): string {
   return {
-    admin: 'Admin',
-    member: 'Member',
-    owner: 'Owner',
-    viewer: 'Viewer',
+    [OrganizationRole.Admin]: 'Admin',
+    [OrganizationRole.Guest]: 'Guest',
+    [OrganizationRole.Member]: 'Member',
+    [OrganizationRole.Owner]: 'Owner',
   }[role];
 }
 
@@ -1343,6 +1547,17 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     )} to ${formatProjectRoleValue(readMetadataString(role, 'after', ProjectRole.Viewer))}`;
   }
 
+  if (auditLog.action === 'organization.member_removed') {
+    return `Removed ${readMetadataString(auditLog.metadata, 'email', 'member')} from workspace access`;
+  }
+
+  if (auditLog.action === 'organization.member_role_updated') {
+    const role = readMetadataRecord(auditLog.metadata, 'role');
+    return `Changed ${readMetadataString(auditLog.metadata, 'email', 'member')} from ${formatOrganizationRoleValue(
+      readMetadataString(role, 'before', OrganizationRole.Guest),
+    )} to ${formatOrganizationRoleValue(readMetadataString(role, 'after', OrganizationRole.Guest))}`;
+  }
+
   if (auditLog.action === 'organization.settings_updated') {
     const changes = readMetadataRecord(auditLog.metadata, 'changes');
     const changedFields = Object.keys(changes);
@@ -1356,6 +1571,8 @@ function formatAuditLogAction(action: string): string {
   return (
     {
       'organization.settings_updated': 'Workspace',
+      'organization.member_removed': 'Removed',
+      'organization.member_role_updated': 'Role',
       'project.archived': 'Archived',
       'project.created': 'Created',
       'project.member_added': 'Member',
@@ -1370,11 +1587,19 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     return 'green';
   }
 
-  if (action === 'project.archived' || action === 'project.member_removed') {
+  if (
+    action === 'organization.member_removed' ||
+    action === 'project.archived' ||
+    action === 'project.member_removed'
+  ) {
     return 'yellow';
   }
 
-  if (action === 'organization.settings_updated' || action === 'project.member_role_updated') {
+  if (
+    action === 'organization.member_role_updated' ||
+    action === 'organization.settings_updated' ||
+    action === 'project.member_role_updated'
+  ) {
     return 'blue';
   }
 
@@ -1399,6 +1624,14 @@ function formatProjectRoleValue(role: string): string {
   return role;
 }
 
+function formatOrganizationRoleValue(role: string): string {
+  if (Object.values(OrganizationRole).includes(role as OrganizationRole)) {
+    return formatOrganizationRole(role as OrganizationRole);
+  }
+
+  return role;
+}
+
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     day: '2-digit',
@@ -1408,7 +1641,7 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
-function getMemberInitials(member: ProjectMemberDto): string {
+function getMemberInitials(member: Pick<ProjectMemberDto, 'email' | 'name'>): string {
   const source = member.name.trim() || member.email;
 
   return source

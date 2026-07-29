@@ -2,7 +2,7 @@ export enum OrganizationRole {
   Owner = 'owner',
   Admin = 'admin',
   Member = 'member',
-  Viewer = 'viewer',
+  Guest = 'guest',
 }
 
 export enum ProjectRole {
@@ -57,7 +57,7 @@ const organizationRolePermissions: Record<OrganizationRole, Permission[]> = {
   [OrganizationRole.Owner]: [Permission.All],
   [OrganizationRole.Admin]: [Permission.OrganizationRead, Permission.OrganizationManage, Permission.ProjectCreate],
   [OrganizationRole.Member]: [Permission.OrganizationRead, Permission.ProjectCreate],
-  [OrganizationRole.Viewer]: [Permission.OrganizationRead],
+  [OrganizationRole.Guest]: [Permission.OrganizationRead],
 };
 
 export function permissionsForOrganizationRole(role: OrganizationRole): Permission[] {

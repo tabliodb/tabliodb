@@ -11,6 +11,11 @@ export type OrganizationListOptions = {
   limit: number;
 };
 
+export type OrganizationMemberListOptions = {
+  cursor?: string;
+  limit: number;
+};
+
 @Injectable()
 export class OrganizationRepository {
   constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
@@ -147,6 +152,100 @@ export class OrganizationRepository {
       .executeTakeFirst();
 
     return organization ? this.getSettingsById(organization.id) : undefined;
+  }
+
+  async getMembers(organizationId: string, options: OrganizationMemberListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await this.db
+      .selectFrom('organization_members')
+      .innerJoin('users', 'users.id', 'organization_members.userId')
+      .select([
+        'organization_members.userId',
+        'users.email',
+        'users.name',
+        'users.avatarColor',
+        'organization_members.role',
+        'organization_members.status',
+        'organization_members.joinedAt',
+        'organization_members.createdAt',
+        'organization_members.updatedAt',
+      ])
+      .where('organization_members.organizationId', '=', organizationId)
+      .where('users.deletedAt', 'is', null)
+      .orderBy('organization_members.createdAt', 'asc')
+      .orderBy('organization_members.userId', 'asc')
+      .limit(options.limit + 1)
+      .offset(offset)
+      .execute();
+    const totalRow = await this.db
+      .selectFrom('organization_members')
+      .innerJoin('users', 'users.id', 'organization_members.userId')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('organization_members.organizationId', '=', organizationId)
+      .where('users.deletedAt', 'is', null)
+      .executeTakeFirstOrThrow();
+
+    return {
+      // Workspace member list is paginated from day one so internal company workspaces can grow without an API break.
+      items: rows.slice(0, options.limit),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
+  }
+
+  getMember(organizationId: string, userId: string) {
+    return this.db
+      .selectFrom('organization_members')
+      .innerJoin('users', 'users.id', 'organization_members.userId')
+      .select([
+        'organization_members.userId',
+        'users.email',
+        'users.name',
+        'users.avatarColor',
+        'organization_members.role',
+        'organization_members.status',
+        'organization_members.joinedAt',
+        'organization_members.createdAt',
+        'organization_members.updatedAt',
+      ])
+      .where('organization_members.organizationId', '=', organizationId)
+      .where('organization_members.userId', '=', userId)
+      .where('users.deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  async updateMemberRole(organizationId: string, userId: string, role: OrganizationRole) {
+    const member = await this.db
+      .updateTable('organization_members')
+      .set({ role, updatedAt: new Date() })
+      .where('organizationId', '=', organizationId)
+      .where('userId', '=', userId)
+      .returning('userId')
+      .executeTakeFirst();
+
+    return member ? this.getMember(organizationId, member.userId) : undefined;
+  }
+
+  async removeMember(organizationId: string, userId: string): Promise<boolean> {
+    const result = await this.db
+      .deleteFrom('organization_members')
+      .where('organizationId', '=', organizationId)
+      .where('userId', '=', userId)
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows) > 0;
+  }
+
+  async getOrganizationOwnerCount(organizationId: string): Promise<number> {
+    const row = await this.db
+      .selectFrom('organization_members')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('organizationId', '=', organizationId)
+      .where('role', '=', OrganizationRole.Owner)
+      .where('status', '=', 'active')
+      .executeTakeFirstOrThrow();
+
+    return Number(row.count);
   }
 
   createPersonalOrganization(options: { userId: string; name: string }) {

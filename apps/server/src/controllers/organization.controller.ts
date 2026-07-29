@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
@@ -7,6 +7,11 @@ import { AuditLogListQueryDto, AuditLogListResponseDto } from '../dtos/audit-log
 import {
   OrganizationListQueryDto,
   OrganizationListResponseDto,
+  OrganizationMemberDto,
+  OrganizationMemberListQueryDto,
+  OrganizationMemberListResponseDto,
+  OrganizationMemberRemoveResponseDto,
+  OrganizationMemberUpdateDto,
   OrganizationSettingsDto,
   OrganizationSettingsUpdateDto,
 } from '../dtos/organization.dto.js';
@@ -57,6 +62,50 @@ export class OrganizationController {
     @Body() dto: OrganizationSettingsUpdateDto,
   ): Promise<OrganizationSettingsDto> {
     return this.organizationService.updateSettings(auth, organizationId, dto);
+  }
+
+  @Get(':organizationId/members')
+  @RequirePermission(Permission.OrganizationManage, { key: 'organizationId', source: 'param', type: 'organization' })
+  @ApiParam({ name: 'organizationId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getOrganizationMembers' })
+  @ZodResponse({ type: OrganizationMemberListResponseDto })
+  getOrganizationMembers(
+    @Auth() auth: AuthContext,
+    @Param('organizationId') organizationId: string,
+    @Query() query: OrganizationMemberListQueryDto,
+  ): Promise<OrganizationMemberListResponseDto> {
+    return this.organizationService.getMembers(auth, organizationId, query);
+  }
+
+  @Patch(':organizationId/members/:userId')
+  @RequirePermission(Permission.OrganizationManage, { key: 'organizationId', source: 'param', type: 'organization' })
+  @ApiParam({ name: 'organizationId', type: String })
+  @ApiParam({ name: 'userId', type: String })
+  @ApiBody({ type: OrganizationMemberUpdateDto })
+  @ApiOperation({ operationId: 'updateOrganizationMember' })
+  @ZodResponse({ type: OrganizationMemberDto })
+  updateOrganizationMember(
+    @Auth() auth: AuthContext,
+    @Param('organizationId') organizationId: string,
+    @Param('userId') userId: string,
+    @Body() dto: OrganizationMemberUpdateDto,
+  ): Promise<OrganizationMemberDto> {
+    return this.organizationService.updateMemberRole(auth, organizationId, userId, dto);
+  }
+
+  @Delete(':organizationId/members/:userId')
+  @RequirePermission(Permission.OrganizationManage, { key: 'organizationId', source: 'param', type: 'organization' })
+  @ApiParam({ name: 'organizationId', type: String })
+  @ApiParam({ name: 'userId', type: String })
+  @ApiOperation({ operationId: 'removeOrganizationMember' })
+  @ZodResponse({ type: OrganizationMemberRemoveResponseDto })
+  removeOrganizationMember(
+    @Auth() auth: AuthContext,
+    @Param('organizationId') organizationId: string,
+    @Param('userId') userId: string,
+  ): Promise<OrganizationMemberRemoveResponseDto> {
+    return this.organizationService.removeMember(auth, organizationId, userId);
   }
 
   @Get(':organizationId/audit-logs')
