@@ -1,6 +1,6 @@
 import { createStarterDiagramModel, type DiagramModel } from '@tabliodb/schema-core';
 import { describe, expect, it } from 'vitest';
-import { generateCreateSchemaSql, generateCreateSchemaSqlWithWarnings } from './index.js';
+import { generateCreateSchemaSql, generateCreateSchemaSqlWithWarnings, parseCreateSchemaSql } from './index.js';
 
 describe('generateCreateSchemaSql', () => {
   it('renders PostgreSQL enum types before dependent tables', () => {
@@ -102,6 +102,97 @@ describe('generateCreateSchemaSql', () => {
     expect(result.warnings.map((warning) => warning.code)).toEqual(
       expect.arrayContaining(['schema_not_supported', 'enum_fallback_to_text', 'index_include_not_supported']),
     );
+  });
+});
+
+describe('parseCreateSchemaSql', () => {
+  it('imports PostgreSQL tables, enum columns, foreign keys, and indexes', () => {
+    const result = parseCreateSchemaSql(
+      `
+        CREATE TYPE "order_status" AS ENUM ('draft', 'paid');
+
+        CREATE TABLE "users" (
+          "id" UUID PRIMARY KEY NOT NULL,
+          "email" VARCHAR(190) NOT NULL UNIQUE
+        );
+
+        CREATE TABLE "orders" (
+          "id" UUID PRIMARY KEY,
+          "user_id" UUID NOT NULL,
+          "status" "order_status" NOT NULL DEFAULT 'draft',
+          CONSTRAINT "orders_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX "orders_user_id_idx" ON "orders" ("user_id");
+      `,
+      { diagramName: 'Imported SQL', dialect: 'postgresql' },
+    );
+
+    const users = Object.values(result.model.tables).find((table) => table.name === 'users');
+    const orders = Object.values(result.model.tables).find((table) => table.name === 'orders');
+    const status = Object.values(result.model.columns).find((column) => column.name === 'status');
+    const relationship = Object.values(result.model.relationships)[0];
+    const index = Object.values(result.model.indexes).find(
+      (databaseIndex) => databaseIndex.name === 'orders_user_id_idx',
+    );
+
+    expect(result.warnings).toEqual([]);
+    expect(users).toBeDefined();
+    expect(orders).toBeDefined();
+    expect(status?.type.family).toBe('enum');
+    expect(status?.defaultValue).toBe("'draft'");
+    expect(relationship?.sourceTableId).toBe(users?.id);
+    expect(relationship?.targetTableId).toBe(orders?.id);
+    expect(relationship?.onDelete).toBe('cascade');
+    expect(index?.columns).toHaveLength(1);
+  });
+
+  it('imports MySQL inline enum values and inline foreign keys', () => {
+    const result = parseCreateSchemaSql(
+      `
+        CREATE TABLE \`users\` (
+          \`id\` CHAR(36) PRIMARY KEY
+        );
+
+        CREATE TABLE \`posts\` (
+          \`id\` CHAR(36) PRIMARY KEY,
+          \`status\` ENUM('draft', 'published') NOT NULL,
+          \`author_id\` CHAR(36) REFERENCES \`users\` (\`id\`),
+          KEY \`posts_author_idx\` (\`author_id\`)
+        );
+      `,
+      { dialect: 'mysql' },
+    );
+
+    const status = Object.values(result.model.columns).find((column) => column.name === 'status');
+    const databaseEnum = status?.type.enumId ? result.model.enums[status.type.enumId] : undefined;
+
+    expect(result.warnings).toEqual([]);
+    expect(result.model.dialect).toBe('mysql');
+    expect(status?.type.family).toBe('enum');
+    expect(databaseEnum?.values).toEqual(['draft', 'published']);
+    expect(Object.values(result.model.indexes).find((index) => index.name === 'posts_author_idx')).toBeDefined();
+    expect(Object.values(result.model.relationships)).toHaveLength(1);
+  });
+
+  it('warns when a SQL statement is outside the basic DDL importer scope', () => {
+    const result = parseCreateSchemaSql(
+      `
+        CREATE TABLE users (
+          id UUID PRIMARY KEY
+        );
+
+        INSERT INTO users (id) VALUES ('abc');
+      `,
+      { dialect: 'postgresql' },
+    );
+
+    expect(result.model.tables).toMatchObject({
+      'table-users': {
+        name: 'users',
+      },
+    });
+    expect(result.warnings.map((warning) => warning.code)).toEqual(['unsupported_statement']);
   });
 });
 
