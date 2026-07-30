@@ -1500,14 +1500,7 @@ function CommentsDialog({
                       key={comment.id}
                     >
                       <div className="flex items-start gap-3">
-                        <div
-                          className="grid size-9 shrink-0 place-items-center rounded-[13px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
-                          style={
-                            comment.author.cursorColor ? { backgroundColor: comment.author.cursorColor } : undefined
-                          }
-                        >
-                          {getMemberInitials(comment.author)}
-                        </div>
+                        <UserAvatar className="size-9 rounded-[13px] text-xs" user={comment.author} />
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-[13px] font-extrabold">{comment.author.name}</span>
@@ -3559,12 +3552,7 @@ function ProjectMemberRow({
   return (
     <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center">
       <div className="flex min-w-0 items-center gap-3">
-        <div
-          className="grid size-10 shrink-0 place-items-center rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
-          style={member.cursorColor ? { backgroundColor: member.cursorColor } : undefined}
-        >
-          {getMemberInitials(member)}
-        </div>
+        <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h4 className="truncate text-sm font-extrabold">{member.name}</h4>
@@ -3616,12 +3604,7 @@ function OrganizationMemberRow({
   return (
     <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center">
       <div className="flex min-w-0 items-center gap-3">
-        <div
-          className="grid size-10 shrink-0 place-items-center rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
-          style={member.cursorColor ? { backgroundColor: member.cursorColor } : undefined}
-        >
-          {getMemberInitials(member)}
-        </div>
+        <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h4 className="truncate text-sm font-extrabold">{member.name}</h4>
@@ -3867,6 +3850,31 @@ function formatDateTime(value: string): string {
     minute: '2-digit',
     month: 'short',
   }).format(new Date(value));
+}
+
+type AvatarIdentity = {
+  avatarUrl?: string | null;
+  cursorColor?: string | null;
+  email: string;
+  name: string;
+};
+
+function UserAvatar({ className, user }: { className?: string; user: AvatarIdentity }) {
+  return (
+    <div
+      className={cn(
+        'grid shrink-0 place-items-center overflow-hidden border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] font-extrabold text-[rgb(var(--tabliodb-primary-text))]',
+        className,
+      )}
+      style={user.cursorColor ? { backgroundColor: user.cursorColor } : undefined}
+    >
+      {user.avatarUrl ? (
+        <img alt="" className="size-full object-cover" src={user.avatarUrl} />
+      ) : (
+        getMemberInitials(user)
+      )}
+    </div>
+  );
 }
 
 function getMemberInitials(member: Pick<ProjectMemberDto, 'email' | 'name'>): string {

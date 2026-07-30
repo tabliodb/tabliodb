@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB } from '../schema/index.js';
 import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
@@ -136,6 +136,7 @@ export class CommentRepository {
         'users.id as authorId',
         'users.email as authorEmail',
         'users.name as authorName',
+        sql<string | null>`null`.as('authorAvatarUrl'),
         'users.cursorColor as authorCursorColor',
       ])
       .where('comments.threadId', '=', threadId)

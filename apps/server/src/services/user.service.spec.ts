@@ -6,6 +6,7 @@ import { UserService } from './user.service.js';
 
 const auth: AuthContext = {
   user: {
+    avatarUrl: null,
     cursorColor: '#58cc02',
     email: 'owner@tabliodb.local',
     id: 'owner-id',
@@ -225,6 +226,7 @@ function createManagedUserRow(
   }> = {},
 ) {
   return {
+    avatarUrl: null,
     cursorColor: overrides.cursorColor ?? '#1cb0f6',
     createdAt: overrides.createdAt ?? new Date('2026-07-29T10:00:00.000Z'),
     email: overrides.email ?? 'target@tabliodb.local',

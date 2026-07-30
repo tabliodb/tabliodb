@@ -2596,6 +2596,11 @@
           "name": {
             "type": "string"
           },
+          "avatarUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
           "cursorColor": {
             "type": "string"
           }
@@ -2604,6 +2609,7 @@
           "id",
           "email",
           "name",
+          "avatarUrl",
           "cursorColor"
         ],
         "additionalProperties": false
@@ -2896,6 +2902,11 @@
           "author": {
             "type": "object",
             "properties": {
+              "avatarUrl": {
+                "type": "string",
+                "format": "uri",
+                "nullable": true
+              },
               "cursorColor": {
                 "type": "string"
               },
@@ -2914,6 +2925,7 @@
               }
             },
             "required": [
+              "avatarUrl",
               "cursorColor",
               "email",
               "id",
@@ -4625,6 +4637,11 @@
       "OrganizationMemberDto_Output": {
         "type": "object",
         "properties": {
+          "avatarUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
           "cursorColor": {
             "type": "string"
           },
@@ -4676,6 +4693,7 @@
           }
         },
         "required": [
+          "avatarUrl",
           "cursorColor",
           "createdAt",
           "email",
@@ -5011,6 +5029,11 @@
           "name": {
             "type": "string"
           },
+          "avatarUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
           "cursorColor": {
             "type": "string"
           },
@@ -5038,6 +5061,7 @@
           "userId",
           "email",
           "name",
+          "avatarUrl",
           "cursorColor",
           "role",
           "createdAt",
@@ -5452,6 +5476,11 @@
           "user": {
             "type": "object",
             "properties": {
+              "avatarUrl": {
+                "type": "string",
+                "format": "uri",
+                "nullable": true
+              },
               "cursorColor": {
                 "type": "string"
               },
@@ -5470,6 +5499,7 @@
               }
             },
             "required": [
+              "avatarUrl",
               "cursorColor",
               "email",
               "id",
@@ -6796,6 +6826,11 @@
           "name": {
             "type": "string"
           },
+          "avatarUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
           "cursorColor": {
             "type": "string"
           },
@@ -6858,6 +6893,7 @@
           "id",
           "email",
           "name",
+          "avatarUrl",
           "cursorColor",
           "isDisabled",
           "instanceRole",

@@ -250,7 +250,13 @@ export class AuthService {
     };
   }
 
-  async createLoginResponse(user: { id: string; email: string; name: string; cursorColor: string }) {
+  async createLoginResponse(user: {
+    avatarUrl?: string | null;
+    cursorColor: string;
+    email: string;
+    id: string;
+    name: string;
+  }) {
     const accessToken = this.cryptoRepository.randomBytesAsText(32);
     const token = this.cryptoRepository.hashSha256(accessToken);
 
@@ -270,6 +276,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
+        avatarUrl: user.avatarUrl ?? null,
         cursorColor: user.cursorColor,
       },
     };

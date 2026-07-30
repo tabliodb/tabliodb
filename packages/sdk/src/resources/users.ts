@@ -23,6 +23,7 @@ export type UserCreateDto = {
 };
 
 export type UserResponseDto = {
+  avatarUrl: string | null;
   cursorColor: string;
   createdAt: string;
   email: string;

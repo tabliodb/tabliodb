@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Insertable, Kysely } from 'kysely';
+import { Insertable, Kysely, sql } from 'kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, SessionTable } from '../schema/index.js';
@@ -21,7 +21,13 @@ export class SessionRepository {
         jsonObjectFrom(
           eb
             .selectFrom('users')
-            .select(['users.id', 'users.email', 'users.name', 'users.cursorColor'])
+            .select([
+              'users.id',
+              'users.email',
+              'users.name',
+              'users.cursorColor',
+              sql<string | null>`null`.as('avatarUrl'),
+            ])
             .whereRef('users.id', '=', 'sessions.userId')
             .where('users.isDisabled', '=', false)
             .where('users.deletedAt', 'is', null),

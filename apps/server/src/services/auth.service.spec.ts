@@ -10,6 +10,7 @@ const authWithLimitedApiKey: AuthContext = {
     permissions: [Permission.ApiKeyManage],
   },
   user: {
+    avatarUrl: null,
     cursorColor: '#58cc02',
     email: 'automation@tabliodb.local',
     id: 'user-id',
@@ -95,6 +96,7 @@ describe(AuthService.name, () => {
     userRepository.getAnyByEmail.mockResolvedValue(undefined);
     userRepository.getByEmail.mockResolvedValue(undefined);
     userRepository.create.mockResolvedValue({
+      avatarUrl: null,
       cursorColor: '#58cc02',
       email: 'new@company.test',
       id: 'created-user-id',

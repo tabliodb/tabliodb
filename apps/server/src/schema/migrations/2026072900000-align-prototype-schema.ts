@@ -120,6 +120,53 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ALTER COLUMN cursor_color SET DEFAULT '#58cc02',
       ALTER COLUMN cursor_color SET NOT NULL;
 
+    CREATE TABLE IF NOT EXISTS files (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      owner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind text NOT NULL CHECK (kind IN ('avatar', 'comment_attachment')),
+      storage_key text NOT NULL UNIQUE,
+      original_name text,
+      mime_type text NOT NULL,
+      byte_size bigint NOT NULL CHECK (byte_size >= 0),
+      checksum_sha256 text,
+      width integer,
+      height integer,
+      status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'rejected')),
+      metadata jsonb NOT NULL DEFAULT '{}',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      deleted_at timestamptz
+    );
+
+    CREATE TABLE IF NOT EXISTS file_variants (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      file_id uuid NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      variant text NOT NULL,
+      storage_key text NOT NULL UNIQUE,
+      mime_type text NOT NULL,
+      byte_size bigint NOT NULL CHECK (byte_size >= 0),
+      width integer,
+      height integer,
+      metadata jsonb NOT NULL DEFAULT '{}',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (file_id, variant)
+    );
+
+    ALTER TABLE IF EXISTS users
+      ADD COLUMN IF NOT EXISTS avatar_file_id uuid;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'users_avatar_file_id_fk'
+      ) THEN
+        ALTER TABLE users
+          ADD CONSTRAINT users_avatar_file_id_fk
+          FOREIGN KEY (avatar_file_id) REFERENCES files(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
+
     ALTER TABLE IF EXISTS sessions
       ADD COLUMN IF NOT EXISTS user_agent text,
       ADD COLUMN IF NOT EXISTS ip_address inet,
@@ -278,6 +325,9 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS files_owner_kind_created_at_idx ON files(owner_id, kind, created_at DESC);
+    CREATE INDEX IF NOT EXISTS files_status_created_at_idx ON files(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS file_variants_file_id_idx ON file_variants(file_id);
     CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys(user_id);
     CREATE INDEX IF NOT EXISTS api_keys_project_id_idx ON api_keys(project_id);
     CREATE INDEX IF NOT EXISTS organization_members_user_id_idx ON organization_members(user_id);

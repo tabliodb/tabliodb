@@ -7,6 +7,7 @@ import { DiagramService } from './diagram.service.js';
 
 const auth: AuthContext = {
   user: {
+    avatarUrl: null,
     cursorColor: '#58cc02',
     email: 'editor@tabliodb.local',
     id: 'user-id',

@@ -367,6 +367,7 @@ export class ProjectService {
   }
 
   private serializeMember(member: {
+    avatarUrl?: string | null;
     cursorColor: string;
     createdAt: Date | string;
     email: string;
@@ -377,6 +378,7 @@ export class ProjectService {
   }): ProjectMemberDto {
     return {
       ...member,
+      avatarUrl: member.avatarUrl ?? null,
       // Member timestamps follow the rest of the API contract: ISO strings, never Date objects over JSON.
       createdAt: toIsoDateTime(member.createdAt),
       updatedAt: toIsoDateTime(member.updatedAt),

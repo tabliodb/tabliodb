@@ -24,6 +24,44 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       deleted_at timestamptz
     );
 
+    CREATE TABLE IF NOT EXISTS files (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      owner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind text NOT NULL CHECK (kind IN ('avatar', 'comment_attachment')),
+      storage_key text NOT NULL UNIQUE,
+      original_name text,
+      mime_type text NOT NULL,
+      byte_size bigint NOT NULL CHECK (byte_size >= 0),
+      checksum_sha256 text,
+      width integer,
+      height integer,
+      status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'rejected')),
+      metadata jsonb NOT NULL DEFAULT '{}',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      deleted_at timestamptz
+    );
+
+    CREATE TABLE IF NOT EXISTS file_variants (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      file_id uuid NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      variant text NOT NULL,
+      storage_key text NOT NULL UNIQUE,
+      mime_type text NOT NULL,
+      byte_size bigint NOT NULL CHECK (byte_size >= 0),
+      width integer,
+      height integer,
+      metadata jsonb NOT NULL DEFAULT '{}',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (file_id, variant)
+    );
+
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS avatar_file_id uuid,
+      ADD CONSTRAINT users_avatar_file_id_fk
+      FOREIGN KEY (avatar_file_id) REFERENCES files(id) ON DELETE SET NULL;
+
     CREATE TABLE IF NOT EXISTS system_settings (
       key text PRIMARY KEY,
       value jsonb NOT NULL,
@@ -258,6 +296,9 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS files_owner_kind_created_at_idx ON files(owner_id, kind, created_at DESC);
+    CREATE INDEX IF NOT EXISTS files_status_created_at_idx ON files(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS file_variants_file_id_idx ON file_variants(file_id);
     CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys(user_id);
     CREATE INDEX IF NOT EXISTS api_keys_project_id_idx ON api_keys(project_id);
     CREATE INDEX IF NOT EXISTS organization_members_user_id_idx ON organization_members(user_id);
@@ -278,6 +319,8 @@ export async function down(db: Kysely<unknown>): Promise<void> {
   await sql`
     ALTER TABLE IF EXISTS diagrams DROP CONSTRAINT IF EXISTS diagrams_current_snapshot_id_fk;
     ALTER TABLE IF EXISTS invitations DROP CONSTRAINT IF EXISTS invitations_project_id_fk;
+    ALTER TABLE IF EXISTS users DROP CONSTRAINT IF EXISTS users_avatar_file_id_fk;
+    ALTER TABLE IF EXISTS users DROP COLUMN IF EXISTS avatar_file_id;
 
     DROP TABLE IF EXISTS audit_logs;
     DROP TABLE IF EXISTS comments;
@@ -296,6 +339,8 @@ export async function down(db: Kysely<unknown>): Promise<void> {
     DROP TABLE IF EXISTS sessions;
     DROP TABLE IF EXISTS instance_members;
     DROP TABLE IF EXISTS system_settings;
+    DROP TABLE IF EXISTS file_variants;
+    DROP TABLE IF EXISTS files;
     DROP TABLE IF EXISTS users;
   `.execute(db);
 }

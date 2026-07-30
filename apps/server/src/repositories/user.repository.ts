@@ -50,7 +50,7 @@ export class UserRepository {
   getAuthUserById(id: string) {
     return this.db
       .selectFrom('users')
-      .select(['id', 'email', 'name', 'cursorColor'])
+      .select(['id', 'email', 'name', 'cursorColor', sql<string | null>`null`.as('avatarUrl')])
       .where('id', '=', id)
       .where('isDisabled', '=', false)
       .where('deletedAt', 'is', null)
@@ -243,6 +243,7 @@ export class UserRepository {
         'users.id',
         'users.email',
         'users.name',
+        sql<string | null>`null`.as('avatarUrl'),
         'users.cursorColor',
         'users.isDisabled',
         'users.createdAt',

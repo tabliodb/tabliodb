@@ -293,6 +293,7 @@ export class OrganizationService {
 
   private serializeMember(member: OrganizationMemberRow): OrganizationMemberDto {
     return {
+      avatarUrl: member.avatarUrl ?? null,
       cursorColor: member.cursorColor,
       createdAt: toIsoDateTime(member.createdAt),
       email: member.email,
@@ -340,6 +341,7 @@ type OrganizationSettingsRow = {
 };
 
 type OrganizationMemberRow = {
+  avatarUrl?: string | null;
   cursorColor: string;
   createdAt: Date | string;
   email: string;

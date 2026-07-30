@@ -788,14 +788,11 @@ function UserRow({
   user: UserResponseDto;
 }) {
   const bucket = getUserRoleBucket(user);
-  const initials = getInitials(user.name);
 
   return (
     <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] lg:grid-cols-[minmax(0,1.2fr)_minmax(180px,0.8fr)_auto_auto] lg:items-center">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="grid size-11 shrink-0 place-items-center rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
-          {initials}
-        </div>
+        <UserAvatar user={user} />
         <div className="min-w-0">
           <h3 className="truncate text-sm font-extrabold">{user.name}</h3>
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{user.email}</p>
@@ -931,6 +928,14 @@ function formatOrganizations(user: UserResponseDto): string {
   }
 
   return user.organizations.map((organization) => organization.name).join(', ');
+}
+
+function UserAvatar({ user }: { user: Pick<UserResponseDto, 'avatarUrl' | 'name'> }) {
+  return (
+    <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+      {user.avatarUrl ? <img alt="" className="size-full object-cover" src={user.avatarUrl} /> : getInitials(user.name)}
+    </div>
+  );
 }
 
 function getInitials(name: string): string {

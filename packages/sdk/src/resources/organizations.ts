@@ -31,6 +31,7 @@ export type OrganizationListResponseDto = Paginated<OrganizationDto>;
 export type OrganizationMemberStatus = 'active' | 'pending' | 'suspended';
 
 export type OrganizationMemberDto = {
+  avatarUrl: string | null;
   cursorColor: string;
   createdAt: string;
   email: string;

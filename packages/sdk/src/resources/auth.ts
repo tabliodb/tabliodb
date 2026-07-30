@@ -27,6 +27,7 @@ export type SignUpDto = {
 };
 
 export type AuthUserDto = {
+  avatarUrl: string | null;
   cursorColor: string;
   email: string;
   id: string;

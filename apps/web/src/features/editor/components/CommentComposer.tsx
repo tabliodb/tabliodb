@@ -23,7 +23,7 @@ import {
 } from 'lexical';
 import { useEffect, useMemo, useState } from 'react';
 
-export type CommentMentionUser = Pick<ProjectMemberDto, 'cursorColor' | 'email' | 'name' | 'userId'>;
+export type CommentMentionUser = Pick<ProjectMemberDto, 'avatarUrl' | 'cursorColor' | 'email' | 'name' | 'userId'>;
 
 export type CommentComposerProps = {
   'aria-invalid'?: boolean;
@@ -271,10 +271,14 @@ function CommentMentionPlugin({
           type="button"
         >
           <span
-            className="grid size-8 shrink-0 place-items-center rounded-[12px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[11px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
+            className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-[12px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[11px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
             style={user.cursorColor ? { backgroundColor: user.cursorColor } : undefined}
           >
-            {getMentionInitials(user)}
+            {user.avatarUrl ? (
+              <img alt="" className="size-full object-cover" src={user.avatarUrl} />
+            ) : (
+              getMentionInitials(user)
+            )}
           </span>
           <span className="min-w-0">
             <span className="block truncate text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">

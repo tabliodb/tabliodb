@@ -11,6 +11,7 @@ export type NullableBinaryColumn = ColumnType<
   Buffer | Uint8Array | null | undefined,
   Buffer | Uint8Array | null
 >;
+export type BigIntTextColumn = ColumnType<string, number | string, number | string>;
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type JsonColumn<T extends JsonValue = JsonValue> = ColumnType<T, T | string | undefined, T | string>;
 export type NullableJsonColumn<T extends JsonValue = JsonValue> = ColumnType<
@@ -26,6 +27,7 @@ export interface UserTable {
   email: string;
   name: string;
   passwordHash: NullableColumn<string>;
+  avatarFileId: NullableColumn<string>;
   cursorColor: Defaulted<string>;
   locale: NullableColumn<string>;
   timezone: NullableColumn<string>;
@@ -37,6 +39,38 @@ export interface UserTable {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   deletedAt: NullableTimestamp;
+}
+
+export interface FileTable {
+  id: Generated<string>;
+  ownerId: string;
+  kind: 'avatar' | 'comment_attachment';
+  storageKey: string;
+  originalName: NullableColumn<string>;
+  mimeType: string;
+  byteSize: BigIntTextColumn;
+  checksumSha256: NullableColumn<string>;
+  width: NullableColumn<number>;
+  height: NullableColumn<number>;
+  status: Defaulted<'pending' | 'ready' | 'rejected'>;
+  metadata: JsonColumn;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  deletedAt: NullableTimestamp;
+}
+
+export interface FileVariantTable {
+  id: Generated<string>;
+  fileId: string;
+  variant: string;
+  storageKey: string;
+  mimeType: string;
+  byteSize: BigIntTextColumn;
+  width: NullableColumn<number>;
+  height: NullableColumn<number>;
+  metadata: JsonColumn;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface SystemSettingTable {
@@ -269,6 +303,8 @@ export interface AuditLogTable {
 
 export interface DB {
   users: UserTable;
+  files: FileTable;
+  file_variants: FileVariantTable;
   system_settings: SystemSettingTable;
   instance_members: InstanceMemberTable;
   sessions: SessionTable;
