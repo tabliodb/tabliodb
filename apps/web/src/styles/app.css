@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 @source '../../../../packages/ui/src';
 
+@theme {
+  /* Fontsource exposes the variable family as "Nunito Variable", so Tailwind utilities and body fallback must use that exact name. */
+  --font-sans: 'Nunito Variable', 'Nunito', sans-serif;
+}
+
 :root {
   --tabliodb-primary: 88 204 2;
   --tabliodb-primary-hover: 70 179 0;
@@ -42,7 +47,8 @@ body {
   color: rgb(var(--tabliodb-ink));
   margin: 0;
   font-family:
-    Inter,
+    'Nunito Variable',
+    Nunito,
     ui-sans-serif,
     system-ui,
     -apple-system,
