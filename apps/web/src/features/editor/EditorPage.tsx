@@ -1426,16 +1426,16 @@ function CommentsDialog({
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogContent className="h-[min(92dvh,760px)] w-[min(94vw,1040px)]">
-        <DialogHeader>
+      <DialogContent className="h-[min(92dvh,780px)] w-[min(96vw,1120px)]">
+        <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-4">
           <DialogTitle>Comments</DialogTitle>
           <DialogDescription>
             Discuss the diagram, table, column, and schema details without losing editor context.
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="grid min-h-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden">
-          <section className="flex min-h-0 flex-col gap-4 lg:overflow-hidden">
+        <DialogBody className="grid min-h-0 flex-1 grid-rows-[minmax(220px,0.85fr)_minmax(320px,1.15fr)] gap-4 overflow-hidden px-4 py-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:grid-rows-none">
+          <section className="flex min-h-0 flex-col gap-3 overflow-hidden">
             <form
               className="shrink-0 rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3"
               onSubmit={createForm.handleSubmit(handleCreateThread)}
@@ -1486,7 +1486,7 @@ function CommentsDialog({
               </Button>
             </form>
 
-            <div className="flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-3 py-2">
                 <div>
                   <div className="text-[13px] font-extrabold">Threads</div>
@@ -1546,7 +1546,7 @@ function CommentsDialog({
             </div>
           </section>
 
-          <section className="flex min-h-[420px] flex-col overflow-hidden rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-white lg:min-h-0">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4 py-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-extrabold">{activeThreadTargetLabel ?? 'Select a thread'}</div>
@@ -1574,45 +1574,58 @@ function CommentsDialog({
               ) : null}
             </div>
 
-            <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable]">
-              {!activeThread ? (
-                <div className="grid h-full place-items-center rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  Comments stay anchored to the diagram objects your team is reviewing.
-                </div>
-              ) : threadCommentsQuery.isPending ? (
-                <div className="flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  <Loader2 className="size-4 animate-spin" />
-                  Loading replies
-                </div>
-              ) : threadCommentsQuery.error ? (
-                <div className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(threadCommentsQuery.error)}
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {comments.map((comment) => (
-                    <article
-                      className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3"
-                      key={comment.id}
-                    >
-                      <div className="flex items-start gap-3">
-                        <UserAvatar className="size-9 rounded-[13px] text-xs" user={comment.author} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[13px] font-extrabold">{comment.author.name}</span>
-                            <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {formatDateTime(comment.createdAt)}
-                            </span>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between gap-3 bg-[rgb(var(--tabliodb-surface))] px-4 py-2">
+                <span className="text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">Messages</span>
+                <Badge variant="neutral">
+                  {threadCommentsQuery.data?.totalCount ?? comments.length}
+                  {comments.length === 1 ? ' message' : ' messages'}
+                </Badge>
+              </div>
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable]">
+                {!activeThread ? (
+                  <div className="grid h-full place-items-center rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    Comments stay anchored to the diagram objects your team is reviewing.
+                  </div>
+                ) : threadCommentsQuery.isPending ? (
+                  <div className="flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading replies
+                  </div>
+                ) : threadCommentsQuery.error ? (
+                  <div className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                    {getErrorMessage(threadCommentsQuery.error)}
+                  </div>
+                ) : comments.length === 0 ? (
+                  <div className="grid h-full place-items-center rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    This thread is ready for the first reply.
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {comments.map((comment) => (
+                      <article
+                        className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3"
+                        key={comment.id}
+                      >
+                        <div className="flex items-start gap-3">
+                          <UserAvatar className="size-9 rounded-[13px] text-xs" user={comment.author} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[13px] font-extrabold">{comment.author.name}</span>
+                              <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                {formatDateTime(comment.createdAt)}
+                              </span>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
+                              {comment.body}
+                            </p>
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
-                            {comment.body}
-                          </p>
                         </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <form
