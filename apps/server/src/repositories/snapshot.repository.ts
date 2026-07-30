@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { DiagramModel } from '@tabliodb/schema-core';
+import { encodeDiagramModelAsYjsUpdate, type DiagramModel } from '@tabliodb/schema-core';
 import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, JsonValue } from '../schema/index.js';
@@ -22,7 +22,7 @@ export class SnapshotRepository {
         .where('diagramId', '=', options.diagramId)
         .executeTakeFirstOrThrow();
 
-      return tx
+      const snapshot = await tx
         .insertInto('diagram_snapshots')
         .values({
           diagramId: options.diagramId,
@@ -33,6 +33,41 @@ export class SnapshotRepository {
         })
         .returningAll()
         .executeTakeFirstOrThrow();
+
+      const now = new Date();
+      const snapshotModel = snapshot.snapshot as DiagramModel;
+
+      await tx
+        .updateTable('diagrams')
+        .set({
+          currentSnapshotId: snapshot.id,
+          lastSnapshotVersion: snapshot.version,
+          updatedAt: now,
+        })
+        .where('id', '=', options.diagramId)
+        .execute();
+
+      await tx
+        .insertInto('diagram_documents')
+        .values({
+          diagramId: options.diagramId,
+          schemaCache: snapshot.snapshot,
+          updatedById: options.createdById,
+          yjsState: Buffer.from(encodeDiagramModelAsYjsUpdate(snapshotModel)),
+        })
+        .onConflict((oc) =>
+          oc.column('diagramId').doUpdateSet((eb) => ({
+            schemaCache: snapshot.snapshot,
+            updatedAt: now,
+            updatedById: options.createdById,
+            // Snapshot creation becomes the persisted draft boundary, so realtime hydration sees the same model the user saved.
+            version: eb('diagram_documents.version', '+', 1),
+            yjsState: Buffer.from(encodeDiagramModelAsYjsUpdate(snapshotModel)),
+          })),
+        )
+        .execute();
+
+      return snapshot;
     });
   }
 

@@ -14,6 +14,9 @@ import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForPro
 import {
   TabliodbApiError,
   type AuditLogDto,
+  type DiagramExportQuery,
+  type DiagramExportResponseDto,
+  type DiagramImportDto,
   type DiagramResponseDto,
   type OrganizationDto,
   type OrganizationMemberDto,
@@ -104,7 +107,13 @@ import { routes } from '@/app/routes';
 import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
-import { defaultDiagramName, diagramsQueries, useUpdateDiagramMutation } from '@/resources/diagrams';
+import {
+  defaultDiagramName,
+  diagramsQueries,
+  useExportDiagramMutation,
+  useImportDiagramMutation,
+  useUpdateDiagramMutation,
+} from '@/resources/diagrams';
 import {
   organizationsQueries,
   useRemoveOrganizationMemberMutation,
@@ -153,6 +162,18 @@ const importSqlFormSchema = z.object({
 });
 
 type ImportSqlFormState = z.infer<typeof importSqlFormSchema>;
+
+type EditorImportRequest = Pick<DiagramImportDto, 'content' | 'dialect' | 'source'>;
+
+type DiagramExportWarningInput = {
+  code: string;
+  message: string;
+  statement?: string;
+  target?: {
+    id: string;
+    type: string;
+  };
+};
 
 const projectFormSchema = z.object({
   description: z.string().trim().max(240, 'Keep the description under 240 characters.').optional(),
@@ -216,6 +237,7 @@ export function EditorPage() {
   const [fitSignal, setFitSignal] = useState(0);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
+  const persistedDraftSignatureRef = useRef<string | null>(null);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -277,7 +299,23 @@ export function EditorPage() {
       onSuccess: (snapshot) => {
         // Snapshot creation returns the canonical versioned model while live editing remains a separate persistence concern.
         modelRef.current = snapshot.snapshot;
+        persistedDraftSignatureRef.current = createDiagramModelSignature(snapshot.snapshot);
         setModel(snapshot.snapshot);
+      },
+    },
+  });
+
+  const exportDiagramMutation = useExportDiagramMutation();
+  const importDiagramMutation = useImportDiagramMutation({
+    mutationConfig: {
+      onSuccess: (response) => {
+        const importedModel = parseDiagramModel(response.model);
+
+        // Server import writes the same model into diagram_documents, so this signature marks the local draft as persisted.
+        modelRef.current = importedModel;
+        persistedDraftSignatureRef.current = createDiagramModelSignature(importedModel);
+        setModel(importedModel);
+        setSelectedTableId(null);
       },
     },
   });
@@ -286,6 +324,7 @@ export function EditorPage() {
     mutationConfig: {
       onSuccess: () => {
         modelRef.current = null;
+        persistedDraftSignatureRef.current = null;
         setModel(null);
         setSelectedTableId(null);
         navigate(routes.login.to(), { replace: true });
@@ -368,6 +407,7 @@ export function EditorPage() {
     }
 
     modelRef.current = latestSnapshot.snapshot;
+    persistedDraftSignatureRef.current = createDiagramModelSignature(latestSnapshot.snapshot);
     setModel(latestSnapshot.snapshot);
     setSelectedTableId(null);
   }, [latestSnapshot]);
@@ -380,6 +420,7 @@ export function EditorPage() {
     // Empty read-only diagrams cannot create an initial snapshot, so the editor renders an unsaved empty model instead of spinning forever.
     const seedModel = createSeedDiagramModel(activeDiagram.name);
     modelRef.current = seedModel;
+    persistedDraftSignatureRef.current = null;
     setModel(seedModel);
     setSelectedTableId(null);
   }, [activeDiagram, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
@@ -389,56 +430,127 @@ export function EditorPage() {
       return;
     }
 
-    const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
+    const payload = await resolveDiagramExport(
+      {
+        dialect: model.dialect,
+        format: 'sql',
+      },
+      () => {
+        const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
 
-    // Copy cepat dan preview dialog memakai generator yang sama supaya user tidak melihat SQL berbeda dari yang disalin.
-    await navigator.clipboard.writeText(generatedSql.sql);
+        return {
+          content: generatedSql.sql,
+          filename: `${getExportFileStem()}.${model.dialect}.sql`,
+          format: 'sql',
+          mediaType: 'application/sql',
+          warnings: toDiagramExportWarnings(generatedSql.warnings),
+        };
+      },
+    );
+
+    // Copy SQL selalu memakai payload final, baik dari server maupun fallback lokal saat ada perubahan yang belum tersimpan.
+    await navigator.clipboard.writeText(payload.content);
     setCopiedSql(true);
     window.setTimeout(() => setCopiedSql(false), 1600);
   }
 
-  function handleDownloadSql() {
+  async function handleDownloadSql() {
     if (!model) {
       return;
     }
 
-    const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
+    const payload = await resolveDiagramExport(
+      {
+        dialect: model.dialect,
+        format: 'sql',
+      },
+      () => {
+        const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
 
-    // SQL download memakai output yang sama dengan preview/copy supaya semua jalur export tetap konsisten.
-    downloadTextFile(`${getExportFileStem()}.${model.dialect}.sql`, generatedSql.sql, 'application/sql;charset=utf-8');
-  }
-
-  function handleExportJson() {
-    if (!model) {
-      return;
-    }
-
-    // JSON Tabliodb adalah format portable paling aman karena melewati serializer schema-core sebelum diunduh.
-    downloadTextFile(
-      `${getExportFileStem()}.tabliodb.json`,
-      `${stringifyDiagramModel(model)}\n`,
-      'application/json;charset=utf-8',
+        return {
+          content: generatedSql.sql,
+          filename: `${getExportFileStem()}.${model.dialect}.sql`,
+          format: 'sql',
+          mediaType: 'application/sql',
+          warnings: toDiagramExportWarnings(generatedSql.warnings),
+        };
+      },
     );
+
+    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
   }
 
-  function handleExportMarkdown() {
+  async function handleExportJson() {
     if (!model) {
       return;
     }
 
-    // Markdown docs sengaja dibuat client-side agar user bisa langsung membawa dokumentasi schema tanpa background job.
-    downloadTextFile(`${getExportFileStem()}.schema.md`, generateDiagramMarkdown(model), 'text/markdown;charset=utf-8');
+    const payload = await resolveDiagramExport({ format: 'tabliodb_json' }, () => ({
+      content: `${stringifyDiagramModel(model)}\n`,
+      filename: `${getExportFileStem()}.tabliodb.json`,
+      format: 'tabliodb_json',
+      mediaType: 'application/json',
+      warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
+    }));
+
+    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
   }
 
-  function handleExportSvg() {
+  async function handleExportMarkdown() {
     if (!model) {
       return;
     }
 
-    // SVG export memakai renderer model canonical agar hasilnya tidak bergantung pada zoom dan viewport canvas saat ini.
-    downloadTextFile(`${getExportFileStem()}.diagram.svg`, generateDiagramSvg(model), 'image/svg+xml;charset=utf-8');
+    const payload = await resolveDiagramExport({ format: 'markdown' }, () => ({
+      content: generateDiagramMarkdown(model),
+      filename: `${getExportFileStem()}.schema.md`,
+      format: 'markdown',
+      mediaType: 'text/markdown',
+      warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
+    }));
+
+    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
   }
 
+  async function handleExportSvg() {
+    if (!model) {
+      return;
+    }
+
+    const payload = await resolveDiagramExport({ format: 'svg' }, () => ({
+      content: generateDiagramSvg(model),
+      filename: `${getExportFileStem()}.diagram.svg`,
+      format: 'svg',
+      mediaType: 'image/svg+xml',
+      warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
+    }));
+
+    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
+  }
+
+  async function resolveDiagramExport(
+    query: DiagramExportQuery,
+    createLocalPayload: () => DiagramExportResponseDto,
+  ): Promise<DiagramExportResponseDto> {
+    if (model && activeDiagram && isCurrentDraftPersisted(model)) {
+      try {
+        // Draft yang sudah tersimpan memakai endpoint resmi supaya UI export dan SDK publik berbagi kontrak yang sama.
+        return await exportDiagramMutation.mutateAsync({
+          diagramId: activeDiagram.id,
+          query,
+        });
+      } catch (error) {
+        window.alert(`Server export failed, using the current local draft instead. ${getErrorMessage(error)}`);
+      }
+    }
+
+    // Draft lokal yang belum tersimpan harus tetap mengekspor persis diagram yang sedang dilihat user di canvas.
+    return createLocalPayload();
+  }
+
+  function isCurrentDraftPersisted(currentModel: DiagramModel): boolean {
+    return persistedDraftSignatureRef.current === createDiagramModelSignature(currentModel);
+  }
   async function handleExportPng() {
     if (!model) {
       return;
@@ -456,23 +568,19 @@ export function EditorPage() {
     }
   }
 
-  function handleImportDraftModel(importedModel: DiagramModel) {
-    if (!canEditDiagram) {
+  async function handleImportDraftModel(importRequest: EditorImportRequest) {
+    if (!activeDiagram || !canEditDiagram) {
       return;
     }
 
-    const nextModel = parseDiagramModel({
-      ...importedModel,
-      metadata: {
-        ...importedModel.metadata,
-        // Import replaces the current draft, so updatedAt reflects the moment this workspace accepted the file.
-        updatedAt: new Date().toISOString(),
+    // Import melewati backend agar validasi, update diagram_documents, dan bentuk response-nya sama dengan SDK publik.
+    await importDiagramMutation.mutateAsync({
+      body: {
+        ...importRequest,
+        mode: 'replace',
       },
+      diagramId: activeDiagram.id,
     });
-
-    modelRef.current = nextModel;
-    setModel(nextModel);
-    setSelectedTableId(null);
   }
 
   function getExportFileStem() {
@@ -602,6 +710,7 @@ export function EditorPage() {
               <ProjectSettingsDialog
                 onArchived={() => {
                   modelRef.current = null;
+                  persistedDraftSignatureRef.current = null;
                   setModel(null);
                   setSelectedTableId(null);
                   navigate(routes.home.to(), { replace: true });
@@ -640,32 +749,44 @@ export function EditorPage() {
                 <LocateFixed className="size-4" />
                 Fit diagram
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={!canEditDiagram} onSelect={() => setImportJsonOpen(true)}>
+              <DropdownMenuItem
+                disabled={!canEditDiagram || importDiagramMutation.isPending}
+                onSelect={() => {
+                  importDiagramMutation.reset();
+                  setImportJsonOpen(true);
+                }}
+              >
                 <FileUp className="size-4" />
                 Import Tabliodb JSON
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={!canEditDiagram} onSelect={() => setImportSqlOpen(true)}>
+              <DropdownMenuItem
+                disabled={!canEditDiagram || importDiagramMutation.isPending}
+                onSelect={() => {
+                  importDiagramMutation.reset();
+                  setImportSqlOpen(true);
+                }}
+              >
                 <Code2 className="size-4" />
                 Import SQL DDL
               </DropdownMenuItem>
               <DropdownMenuSeparatorItem />
-              <DropdownMenuItem onSelect={handleExportSql}>
+              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportSql()}>
                 <Copy className="size-4" />
                 Copy SQL
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleDownloadSql}>
+              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleDownloadSql()}>
                 <Download className="size-4" />
                 Download SQL
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleExportJson}>
+              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportJson()}>
                 <FileJson className="size-4" />
                 Export Tabliodb JSON
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleExportMarkdown}>
+              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportMarkdown()}>
                 <FileText className="size-4" />
                 Export Markdown docs
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleExportSvg}>
+              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportSvg()}>
                 <FileImage className="size-4" />
                 Export SVG diagram
               </DropdownMenuItem>
@@ -695,8 +816,8 @@ export function EditorPage() {
       <SqlPreviewDialog
         copied={copiedSql}
         dialect={model.dialect}
-        onCopy={handleExportSql}
-        onDownload={handleDownloadSql}
+        onCopy={() => void handleExportSql()}
+        onDownload={() => void handleDownloadSql()}
         onOpenChange={setSqlPreviewOpen}
         open={sqlPreviewOpen}
         sql={sqlPreview.sql}
@@ -705,18 +826,36 @@ export function EditorPage() {
 
       <ImportJsonDialog
         currentDiagramName={activeDiagram.name}
-        disabled={!canEditDiagram}
+        disabled={!canEditDiagram || importDiagramMutation.isPending}
+        importError={importDiagramMutation.error}
+        isImporting={importDiagramMutation.isPending}
         onImport={handleImportDraftModel}
-        onOpenChange={setImportJsonOpen}
+        onOpenChange={(open) => {
+          // Membuka ulang dialog membersihkan error mutation lama supaya user tidak melihat error stale dari import sebelumnya.
+          if (open) {
+            importDiagramMutation.reset();
+          }
+
+          setImportJsonOpen(open);
+        }}
         open={importJsonOpen}
       />
 
       <ImportSqlDialog
         currentDiagramName={activeDiagram.name}
         defaultDialect={model.dialect}
-        disabled={!canEditDiagram}
+        disabled={!canEditDiagram || importDiagramMutation.isPending}
+        importError={importDiagramMutation.error}
+        isImporting={importDiagramMutation.isPending}
         onImport={handleImportDraftModel}
-        onOpenChange={setImportSqlOpen}
+        onOpenChange={(open) => {
+          // Error import SQL dan JSON berbagi mutation yang sama, jadi reset saat dialog dibuka menjaga konteks pesan tetap tepat.
+          if (open) {
+            importDiagramMutation.reset();
+          }
+
+          setImportSqlOpen(open);
+        }}
         open={importSqlOpen}
       />
 
@@ -755,6 +894,7 @@ export function EditorPage() {
                   activeOrganization={activeOrganization}
                   onSelect={(organization) => {
                     modelRef.current = null;
+                    persistedDraftSignatureRef.current = null;
                     setModel(null);
                     setSelectedTableId(null);
                     setProjectSearchTerm('');
@@ -770,6 +910,7 @@ export function EditorPage() {
                     organizationId={activeOrganization?.id ?? null}
                     onCreated={(project) => {
                       modelRef.current = null;
+                      persistedDraftSignatureRef.current = null;
                       setModel(null);
                       setSelectedTableId(null);
                       navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
@@ -801,6 +942,7 @@ export function EditorPage() {
                         key={project.id}
                         onClick={() => {
                           modelRef.current = null;
+                          persistedDraftSignatureRef.current = null;
                           setModel(null);
                           setSelectedTableId(null);
                           navigate(
@@ -991,13 +1133,17 @@ function SqlPreviewDialog({
 function ImportJsonDialog({
   currentDiagramName,
   disabled,
+  importError,
+  isImporting,
   onImport,
   onOpenChange,
   open,
 }: {
   currentDiagramName: string;
   disabled: boolean;
-  onImport: (model: DiagramModel) => void;
+  importError: Error | null;
+  isImporting: boolean;
+  onImport: (input: EditorImportRequest) => Promise<void>;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
@@ -1038,7 +1184,7 @@ function ImportJsonDialog({
     event.currentTarget.value = '';
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (preview.status !== 'valid') {
       form.setError('json', {
         message: preview.status === 'invalid' ? preview.error : 'Paste exported Tabliodb JSON or upload a .json file.',
@@ -1047,8 +1193,16 @@ function ImportJsonDialog({
       return;
     }
 
-    onImport(preview.model);
-    handleOpenChange(false);
+    try {
+      // Server menerima konten mentah agar jalur UI identik dengan jalur SDK/API untuk import file JSON.
+      await onImport({
+        content: rawJson,
+        source: 'tabliodb_json',
+      });
+      handleOpenChange(false);
+    } catch {
+      // Error mutation ditampilkan dari prop importError, jadi catch ini hanya menjaga dialog tetap terbuka untuk koreksi user.
+    }
   }
 
   return (
@@ -1098,14 +1252,20 @@ function ImportJsonDialog({
             </label>
 
             <ImportJsonPreview preview={preview} />
+
+            {importError ? (
+              <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                {getErrorMessage(importError)}
+              </section>
+            ) : null}
           </DialogBody>
 
           <DialogFooter>
             <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
-            <Button disabled={disabled || preview.status !== 'valid'} type="submit">
-              <FileUp className="size-4" />
+            <Button disabled={disabled || isImporting || preview.status !== 'valid'} type="submit">
+              {isImporting ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}
               Apply import
             </Button>
           </DialogFooter>
@@ -1177,6 +1337,8 @@ function ImportSqlDialog({
   currentDiagramName,
   defaultDialect,
   disabled,
+  importError,
+  isImporting,
   onImport,
   onOpenChange,
   open,
@@ -1184,7 +1346,9 @@ function ImportSqlDialog({
   currentDiagramName: string;
   defaultDialect: DatabaseDialect;
   disabled: boolean;
-  onImport: (model: DiagramModel) => void;
+  importError: Error | null;
+  isImporting: boolean;
+  onImport: (input: EditorImportRequest) => Promise<void>;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
@@ -1234,7 +1398,7 @@ function ImportSqlDialog({
     event.currentTarget.value = '';
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (preview.status !== 'valid') {
       form.setError('sql', {
         message: preview.status === 'invalid' ? preview.error : 'Paste SQL DDL or upload a .sql file.',
@@ -1243,8 +1407,17 @@ function ImportSqlDialog({
       return;
     }
 
-    onImport(preview.model);
-    handleOpenChange(false);
+    try {
+      // Dialect ikut dikirim supaya parser backend tidak menebak-nebak sintaks DDL yang ditempel user.
+      await onImport({
+        content: rawSql,
+        dialect,
+        source: 'sql',
+      });
+      handleOpenChange(false);
+    } catch {
+      // Error mutation ditampilkan di bawah preview dan dialog tetap terbuka agar user bisa memperbaiki SQL.
+    }
   }
 
   return (
@@ -1313,14 +1486,20 @@ function ImportSqlDialog({
             </label>
 
             <ImportSqlPreview preview={preview} />
+
+            {importError ? (
+              <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                {getErrorMessage(importError)}
+              </section>
+            ) : null}
           </DialogBody>
 
           <DialogFooter>
             <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
-            <Button disabled={disabled || preview.status !== 'valid'} type="submit" variant="sky">
-              <FileUp className="size-4" />
+            <Button disabled={disabled || isImporting || preview.status !== 'valid'} type="submit" variant="sky">
+              {isImporting ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}
               Apply SQL import
             </Button>
           </DialogFooter>
@@ -2927,6 +3106,25 @@ function getImportSqlErrorMessage(error: unknown): string {
   }
 
   return 'SQL could not be imported.';
+}
+
+function createDiagramModelSignature(model: DiagramModel): string {
+  // Signature memakai serializer canonical schema-core, sehingga urutan key dan bentuk JSON konsisten antar render.
+  return stringifyDiagramModel(model);
+}
+
+function toDiagramExportWarnings(warnings: readonly DiagramExportWarningInput[]): DiagramExportResponseDto['warnings'] {
+  return warnings.map((warning) => ({
+    code: warning.code,
+    message: warning.message,
+    statement: warning.statement,
+    target: warning.target
+      ? {
+          id: warning.target.id,
+          type: warning.target.type,
+        }
+      : undefined,
+  }));
 }
 
 function downloadTextFile(fileName: string, content: string, mimeType: string) {

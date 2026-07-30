@@ -1,5 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
-import type { DiagramImportDto, DiagramListResponseDto, DiagramResponseDto, DiagramUpdateDto } from '@tabliodb/sdk';
+import type {
+  DiagramExportQuery,
+  DiagramImportDto,
+  DiagramListResponseDto,
+  DiagramResponseDto,
+  DiagramUpdateDto,
+} from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { diagramsKeys } from './diagram.keys';
@@ -8,6 +14,8 @@ const updateDiagramMutationFn = (input: { body: DiagramUpdateDto; diagramId: str
   sdk.diagrams.update(input.diagramId, input.body);
 const importDiagramMutationFn = (input: { body: DiagramImportDto; diagramId: string }) =>
   sdk.diagrams.import(input.diagramId, input.body);
+const exportDiagramMutationFn = (input: { diagramId: string; query?: DiagramExportQuery }) =>
+  sdk.diagrams.export(input.diagramId, input.query);
 
 type UseUpdateDiagramMutationParams = {
   mutationConfig?: MutationConfig<typeof updateDiagramMutationFn>;
@@ -25,6 +33,17 @@ export function useUpdateDiagramMutation(params: UseUpdateDiagramMutationParams 
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
+  });
+}
+
+type UseExportDiagramMutationParams = {
+  mutationConfig?: MutationConfig<typeof exportDiagramMutationFn>;
+};
+
+export function useExportDiagramMutation(params: UseExportDiagramMutationParams = {}) {
+  return useMutation({
+    mutationFn: exportDiagramMutationFn,
+    ...params.mutationConfig,
   });
 }
 
