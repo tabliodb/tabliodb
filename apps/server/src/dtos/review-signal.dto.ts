@@ -1,3 +1,4 @@
+import { diagramReviewSignalCodes } from '@tabliodb/schema-core';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -44,6 +45,24 @@ const ReviewSignalListResponseSchema = z
   })
   .meta({ id: 'ReviewSignalListResponseDto' });
 
+const ReviewSignalRuleKeySchema = z.enum(diagramReviewSignalCodes);
+
+const ReviewSignalSettingsSchema = z
+  .object({
+    disabledRuleKeys: z.array(ReviewSignalRuleKeySchema).default([]),
+  })
+  .meta({ id: 'ReviewSignalSettingsDto' });
+
+const ReviewSignalEffectiveSettingsSchema = z
+  .object({
+    diagram: ReviewSignalSettingsSchema,
+    effective: ReviewSignalSettingsSchema,
+    project: ReviewSignalSettingsSchema,
+  })
+  .meta({ id: 'ReviewSignalEffectiveSettingsDto' });
+
+export class ReviewSignalEffectiveSettingsDto extends createZodDto(ReviewSignalEffectiveSettingsSchema) {}
 export class ReviewSignalListQueryDto extends createZodDto(ReviewSignalListQuerySchema) {}
 export class ReviewSignalListResponseDto extends createZodDto(ReviewSignalListResponseSchema) {}
 export class ReviewSignalResponseDto extends createZodDto(ReviewSignalResponseSchema) {}
+export class ReviewSignalSettingsDto extends createZodDto(ReviewSignalSettingsSchema) {}

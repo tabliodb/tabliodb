@@ -288,6 +288,26 @@ describe('schema-core diagram commands', () => {
     expect(signalCodes).not.toContain('relationship_column_type_mismatch');
   });
 
+  it('respects disabled review rules', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Disabled lint rule test'),
+      {
+        columns: [{ id: 'events-name', name: 'name', nullable: false, type: { family: 'varchar', length: 120 } }],
+        name: 'events',
+        tableId: 'events',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+
+    const signalCodes = getDiagramReviewSignals(model, {
+      // Project/diagram settings disable rule keys before persistence, not after UI filtering, so server and frontend fallback agree.
+      disabledRuleKeys: ['table_missing_primary_key'],
+    }).map((signal) => signal.code);
+
+    expect(signalCodes).not.toContain('table_missing_primary_key');
+  });
+
   it('removes stale Yjs entities when the canonical model deletes them', () => {
     const document = new Y.Doc();
     const model = applyDiagramCommand(

@@ -1503,6 +1503,182 @@
         "tags": ["review-signals"]
       }
     },
+    "/review-signals/project/{projectId}/settings": {
+      "get": {
+        "operationId": "getProjectReviewSignalSettings",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": ["review-signals"]
+      },
+      "patch": {
+        "operationId": "updateProjectReviewSignalSettings",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewSignalSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": ["review-signals"]
+      }
+    },
+    "/review-signals/diagram/{diagramId}/settings": {
+      "get": {
+        "operationId": "getDiagramReviewSignalSettings",
+        "parameters": [
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSignalEffectiveSettingsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": ["review-signals"]
+      },
+      "patch": {
+        "operationId": "updateDiagramReviewSignalSettings",
+        "parameters": [
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewSignalSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSignalEffectiveSettingsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": ["review-signals"]
+      }
+    },
     "/review-signals/{signalId}/ignore": {
       "post": {
         "operationId": "ignoreReviewSignal",
@@ -4100,6 +4276,68 @@
           }
         },
         "required": ["items", "nextCursor", "totalCount"],
+        "additionalProperties": false
+      },
+      "ReviewSignalSettingsDto_Output": {
+        "type": "object",
+        "properties": {
+          "disabledRuleKeys": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "duplicate_column_name",
+                "duplicate_table_name",
+                "email_column_not_unique",
+                "foreign_key_missing_index",
+                "money_column_uses_float",
+                "relationship_column_type_mismatch",
+                "table_missing_primary_key",
+                "unused_enum"
+              ]
+            }
+          }
+        },
+        "required": ["disabledRuleKeys"],
+        "additionalProperties": false
+      },
+      "ReviewSignalSettingsDto": {
+        "type": "object",
+        "properties": {
+          "disabledRuleKeys": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "duplicate_column_name",
+                "duplicate_table_name",
+                "email_column_not_unique",
+                "foreign_key_missing_index",
+                "money_column_uses_float",
+                "relationship_column_type_mismatch",
+                "table_missing_primary_key",
+                "unused_enum"
+              ]
+            }
+          }
+        }
+      },
+      "ReviewSignalEffectiveSettingsDto_Output": {
+        "type": "object",
+        "properties": {
+          "diagram": {
+            "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
+          },
+          "effective": {
+            "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
+          }
+        },
+        "required": ["diagram", "effective", "project"],
         "additionalProperties": false
       },
       "SetupStatusResponseDto_Output": {

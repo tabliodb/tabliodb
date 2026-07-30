@@ -4,6 +4,7 @@ import { generateDiagramSvg } from '@tabliodb/render';
 import {
   createEmptyDiagramModel,
   decodeDiagramModelFromYjsUpdate,
+  defaultDiagramReviewSettings,
   getDiagramModelIntegrityWarnings,
   getDiagramReviewSignals,
   parseDiagramModel,
@@ -200,8 +201,13 @@ export class DiagramService {
       throw new NotFoundException('Diagram not found');
     }
 
-    // Import mengganti live document langsung, jadi review cache ikut disync agar endpoint review tidak membaca signal lama.
-    await this.reviewSignalRepository.syncGeneratedSignals(diagramId, getDiagramReviewSignals(model));
+    const reviewSettings = await this.reviewSignalRepository.getSettingsForDiagram(diagramId);
+
+    // Import mengganti live document langsung, jadi review cache ikut disync dengan effective lint settings diagram saat ini.
+    await this.reviewSignalRepository.syncGeneratedSignals(
+      diagramId,
+      getDiagramReviewSignals(model, reviewSettings?.effective ?? defaultDiagramReviewSettings),
+    );
 
     return {
       diagram: this.serializeDiagram(diagramRow),

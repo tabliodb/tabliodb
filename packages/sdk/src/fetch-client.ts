@@ -503,6 +503,17 @@ export type ReviewSignalListResponseDtoOutput = {
   nextCursor: string | null;
   totalCount: number;
 };
+export type ReviewSignalSettingsDtoOutput = {
+  disabledRuleKeys: DisabledRuleKeys[];
+};
+export type ReviewSignalSettingsDto = {
+  disabledRuleKeys?: DisabledRuleKeys[];
+};
+export type ReviewSignalEffectiveSettingsDtoOutput = {
+  diagram: ReviewSignalSettingsDtoOutput;
+  effective: ReviewSignalSettingsDtoOutput;
+  project: ReviewSignalSettingsDtoOutput;
+};
 export type SetupStatusResponseDtoOutput = {
   completedAt: string | null;
   hasOrganization: boolean;
@@ -1648,6 +1659,88 @@ export function getDiagramReviewSignals(
     ),
   );
 }
+export function getProjectReviewSignalSettings(
+  {
+    projectId,
+  }: {
+    projectId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: ReviewSignalSettingsDtoOutput;
+    }>(`/review-signals/project/${encodeURIComponent(projectId)}/settings`, {
+      ...opts,
+    }),
+  );
+}
+export function updateProjectReviewSignalSettings(
+  {
+    projectId,
+    reviewSignalSettingsDto,
+  }: {
+    projectId: string;
+    reviewSignalSettingsDto: ReviewSignalSettingsDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: ReviewSignalSettingsDtoOutput;
+    }>(
+      `/review-signals/project/${encodeURIComponent(projectId)}/settings`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: reviewSignalSettingsDto,
+      }),
+    ),
+  );
+}
+export function getDiagramReviewSignalSettings(
+  {
+    diagramId,
+  }: {
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: ReviewSignalEffectiveSettingsDtoOutput;
+    }>(`/review-signals/diagram/${encodeURIComponent(diagramId)}/settings`, {
+      ...opts,
+    }),
+  );
+}
+export function updateDiagramReviewSignalSettings(
+  {
+    diagramId,
+    reviewSignalSettingsDto,
+  }: {
+    diagramId: string;
+    reviewSignalSettingsDto: ReviewSignalSettingsDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: ReviewSignalEffectiveSettingsDtoOutput;
+    }>(
+      `/review-signals/diagram/${encodeURIComponent(diagramId)}/settings`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: reviewSignalSettingsDto,
+      }),
+    ),
+  );
+}
 export function ignoreReviewSignal(
   {
     signalId,
@@ -2078,6 +2171,16 @@ export enum Severity {
   Warning = 'warning',
   Error = 'error',
   Success = 'success',
+}
+export enum DisabledRuleKeys {
+  DuplicateColumnName = 'duplicate_column_name',
+  DuplicateTableName = 'duplicate_table_name',
+  EmailColumnNotUnique = 'email_column_not_unique',
+  ForeignKeyMissingIndex = 'foreign_key_missing_index',
+  MoneyColumnUsesFloat = 'money_column_uses_float',
+  RelationshipColumnTypeMismatch = 'relationship_column_type_mismatch',
+  TableMissingPrimaryKey = 'table_missing_primary_key',
+  UnusedEnum = 'unused_enum',
 }
 export enum SignupPolicy {
   SignupDisabled = 'signup_disabled',

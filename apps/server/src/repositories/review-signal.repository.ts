@@ -1,4 +1,8 @@
-import type { DiagramReviewSignal } from '@tabliodb/schema-core';
+import {
+  parseDiagramReviewSettings,
+  type DiagramReviewSettings,
+  type DiagramReviewSignal,
+} from '@tabliodb/schema-core';
 import { Injectable } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
@@ -87,6 +91,72 @@ export class ReviewSignalRepository {
     };
   }
 
+  async getSettingsForDiagram(diagramId: string) {
+    const row = await this.db
+      .selectFrom('diagrams')
+      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .select(['diagrams.reviewSettings as diagramSettings', 'projects.reviewSettings as projectSettings'])
+      .where('diagrams.id', '=', diagramId)
+      .where('diagrams.archivedAt', 'is', null)
+      .where('projects.archivedAt', 'is', null)
+      .executeTakeFirst();
+
+    if (!row) {
+      return undefined;
+    }
+
+    const project = parseDiagramReviewSettings(row.projectSettings);
+    const diagram = parseDiagramReviewSettings(row.diagramSettings);
+
+    return {
+      diagram,
+      // Effective settings adalah union: project memberi baseline, diagram boleh menambah pengecualian tanpa menghapus default project.
+      effective: mergeReviewSettings(project, diagram),
+      project,
+    };
+  }
+
+  async getProjectSettings(projectId: string) {
+    const row = await this.db
+      .selectFrom('projects')
+      .select('reviewSettings')
+      .where('id', '=', projectId)
+      .where('archivedAt', 'is', null)
+      .executeTakeFirst();
+
+    return row ? parseDiagramReviewSettings(row.reviewSettings) : undefined;
+  }
+
+  async updateProjectSettings(projectId: string, settings: DiagramReviewSettings) {
+    const row = await this.db
+      .updateTable('projects')
+      .set({
+        reviewSettings: settings,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', projectId)
+      .where('archivedAt', 'is', null)
+      .returning('reviewSettings')
+      .executeTakeFirst();
+
+    return row ? parseDiagramReviewSettings(row.reviewSettings) : undefined;
+  }
+
+  async updateDiagramSettings(diagramId: string, settings: DiagramReviewSettings) {
+    const row = await this.db
+      .updateTable('diagrams')
+      .set({
+        reviewSettings: settings,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', diagramId)
+      .where('archivedAt', 'is', null)
+      .returning('reviewSettings')
+      .executeTakeFirst();
+
+    return row ? parseDiagramReviewSettings(row.reviewSettings) : undefined;
+  }
+
   getById(signalId: string) {
     return this.db.selectFrom('diagram_review_signals').selectAll().where('id', '=', signalId).executeTakeFirst();
   }
@@ -126,4 +196,12 @@ function createReviewSignalKey(signal: DiagramReviewSignal): string {
 
 function createStoredSignalKey(input: { ruleKey: string; targetId: string | null; targetType: string }): string {
   return `${input.ruleKey}:${input.targetType}:${input.targetId ?? ''}`;
+}
+
+function mergeReviewSettings(project: DiagramReviewSettings, diagram: DiagramReviewSettings): DiagramReviewSettings {
+  return {
+    disabledRuleKeys: Array.from(
+      new Set([...project.disabledRuleKeys, ...diagram.disabledRuleKeys]),
+    ) as DiagramReviewSettings['disabledRuleKeys'],
+  };
 }

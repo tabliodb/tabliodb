@@ -1,12 +1,14 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import {
+  ReviewSignalEffectiveSettingsDto,
   ReviewSignalListQueryDto,
   ReviewSignalListResponseDto,
   ReviewSignalResponseDto,
+  ReviewSignalSettingsDto,
 } from '../dtos/review-signal.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
@@ -32,6 +34,52 @@ export class ReviewSignalController {
     @Query() query: ReviewSignalListQueryDto,
   ) {
     return this.service.getByDiagram(auth, diagramId, query);
+  }
+
+  @Get('project/:projectId/settings')
+  @RequirePermission(Permission.ProjectRead, { key: 'projectId', source: 'param', type: 'project' })
+  @ApiParam({ name: 'projectId', type: String })
+  @ApiOperation({ operationId: 'getProjectReviewSignalSettings' })
+  @ZodResponse({ type: ReviewSignalSettingsDto })
+  getProjectReviewSignalSettings(@Auth() auth: AuthContext, @Param('projectId') projectId: string) {
+    return this.service.getProjectSettings(auth, projectId);
+  }
+
+  @Patch('project/:projectId/settings')
+  @RequirePermission(Permission.ProjectUpdate, { key: 'projectId', source: 'param', type: 'project' })
+  @ApiParam({ name: 'projectId', type: String })
+  @ApiBody({ type: ReviewSignalSettingsDto })
+  @ApiOperation({ operationId: 'updateProjectReviewSignalSettings' })
+  @ZodResponse({ type: ReviewSignalSettingsDto })
+  updateProjectReviewSignalSettings(
+    @Auth() auth: AuthContext,
+    @Param('projectId') projectId: string,
+    @Body() dto: ReviewSignalSettingsDto,
+  ) {
+    return this.service.updateProjectSettings(auth, projectId, dto);
+  }
+
+  @Get('diagram/:diagramId/settings')
+  @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiOperation({ operationId: 'getDiagramReviewSignalSettings' })
+  @ZodResponse({ type: ReviewSignalEffectiveSettingsDto })
+  getDiagramReviewSignalSettings(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string) {
+    return this.service.getDiagramSettings(auth, diagramId);
+  }
+
+  @Patch('diagram/:diagramId/settings')
+  @RequirePermission(Permission.DiagramUpdate, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiBody({ type: ReviewSignalSettingsDto })
+  @ApiOperation({ operationId: 'updateDiagramReviewSignalSettings' })
+  @ZodResponse({ type: ReviewSignalEffectiveSettingsDto })
+  updateDiagramReviewSignalSettings(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Body() dto: ReviewSignalSettingsDto,
+  ) {
+    return this.service.updateDiagramSettings(auth, diagramId, dto);
   }
 
   @Post(':signalId/ignore')

@@ -194,15 +194,105 @@ export type DiagramModelIntegrityWarning = {
 
 export type DiagramReviewSignalSeverity = 'info' | 'warning' | 'error';
 
-export type DiagramReviewSignalCode =
-  | 'duplicate_column_name'
-  | 'duplicate_table_name'
-  | 'email_column_not_unique'
-  | 'foreign_key_missing_index'
-  | 'money_column_uses_float'
-  | 'relationship_column_type_mismatch'
-  | 'table_missing_primary_key'
-  | 'unused_enum';
+export const diagramReviewSignalCodes = [
+  'duplicate_column_name',
+  'duplicate_table_name',
+  'email_column_not_unique',
+  'foreign_key_missing_index',
+  'money_column_uses_float',
+  'relationship_column_type_mismatch',
+  'table_missing_primary_key',
+  'unused_enum',
+] as const;
+
+export type DiagramReviewSignalCode = (typeof diagramReviewSignalCodes)[number];
+
+export type DiagramReviewSettings = {
+  disabledRuleKeys: DiagramReviewSignalCode[];
+};
+
+export type DiagramReviewRuleDefinition = {
+  code: DiagramReviewSignalCode;
+  description: string;
+  severity: DiagramReviewSignalSeverity;
+  title: string;
+};
+
+export const defaultDiagramReviewSettings: DiagramReviewSettings = {
+  disabledRuleKeys: [],
+};
+
+export const DiagramReviewSignalCodeSchema = z.enum(diagramReviewSignalCodes);
+
+export const DiagramReviewSettingsSchema = z
+  .object({
+    disabledRuleKeys: z.array(DiagramReviewSignalCodeSchema).default(defaultDiagramReviewSettings.disabledRuleKeys),
+  })
+  .default(defaultDiagramReviewSettings);
+
+export const diagramReviewRuleDefinitions = [
+  {
+    code: 'duplicate_column_name',
+    description: 'Warn when a table has two columns with the same SQL name.',
+    severity: 'error',
+    title: 'Duplicate column names',
+  },
+  {
+    code: 'duplicate_table_name',
+    description: 'Warn when a schema has two tables with the same SQL name.',
+    severity: 'error',
+    title: 'Duplicate table names',
+  },
+  {
+    code: 'relationship_column_type_mismatch',
+    description: 'Warn when a relationship connects columns with incompatible types.',
+    severity: 'error',
+    title: 'Relationship type mismatch',
+  },
+  {
+    code: 'foreign_key_missing_index',
+    description: 'Warn when a foreign-key column is not covered by a leading index.',
+    severity: 'warning',
+    title: 'Foreign keys need indexes',
+  },
+  {
+    code: 'table_missing_primary_key',
+    description: 'Warn when a table has no primary key.',
+    severity: 'warning',
+    title: 'Tables need primary keys',
+  },
+  {
+    code: 'email_column_not_unique',
+    description: 'Warn when an email-like column is not uniquely constrained.',
+    severity: 'warning',
+    title: 'Email columns should be unique',
+  },
+  {
+    code: 'money_column_uses_float',
+    description: 'Warn when a money-like column uses float instead of decimal.',
+    severity: 'warning',
+    title: 'Money columns should avoid float',
+  },
+  {
+    code: 'unused_enum',
+    description: 'Show enums that are defined but not used by any column.',
+    severity: 'info',
+    title: 'Unused enums',
+  },
+] as const satisfies readonly DiagramReviewRuleDefinition[];
+
+export function parseDiagramReviewSettings(value: unknown): DiagramReviewSettings {
+  const parsed = DiagramReviewSettingsSchema.safeParse(value);
+
+  if (!parsed.success) {
+    return defaultDiagramReviewSettings;
+  }
+
+  return {
+    // Settings JSON bisa diedit oleh versi lama/automation, jadi rule duplicate dinormalisasi sebelum dipakai lint engine.
+    disabledRuleKeys: Array.from(new Set(parsed.data.disabledRuleKeys)),
+  };
+}
 
 export type DiagramReviewSignalTarget = {
   id: string;
@@ -922,16 +1012,37 @@ export function getDiagramModelIntegrityWarnings(model: DiagramModel): DiagramMo
   return warnings;
 }
 
-export function getDiagramReviewSignals(model: DiagramModel): DiagramReviewSignal[] {
+export function getDiagramReviewSignals(
+  model: DiagramModel,
+  settings: DiagramReviewSettings = defaultDiagramReviewSettings,
+): DiagramReviewSignal[] {
   const normalizedModel = serializeDiagramModel(model);
   const signals: DiagramReviewSignal[] = [];
+  const enabledRules = getEnabledReviewRules(settings);
 
-  pushDuplicateNameReviewSignals(normalizedModel, signals);
-  pushMissingPrimaryKeyReviewSignals(normalizedModel, signals);
-  pushForeignKeyIndexReviewSignals(normalizedModel, signals);
-  pushRelationshipTypeReviewSignals(normalizedModel, signals);
-  pushColumnHeuristicReviewSignals(normalizedModel, signals);
-  pushUnusedEnumReviewSignals(normalizedModel, signals);
+  if (enabledRules.has('duplicate_column_name') || enabledRules.has('duplicate_table_name')) {
+    pushDuplicateNameReviewSignals(normalizedModel, signals, enabledRules);
+  }
+
+  if (enabledRules.has('table_missing_primary_key')) {
+    pushMissingPrimaryKeyReviewSignals(normalizedModel, signals);
+  }
+
+  if (enabledRules.has('foreign_key_missing_index')) {
+    pushForeignKeyIndexReviewSignals(normalizedModel, signals);
+  }
+
+  if (enabledRules.has('relationship_column_type_mismatch')) {
+    pushRelationshipTypeReviewSignals(normalizedModel, signals);
+  }
+
+  if (enabledRules.has('email_column_not_unique') || enabledRules.has('money_column_uses_float')) {
+    pushColumnHeuristicReviewSignals(normalizedModel, signals, enabledRules);
+  }
+
+  if (enabledRules.has('unused_enum')) {
+    pushUnusedEnumReviewSignals(normalizedModel, signals);
+  }
 
   // Review signals are ordered by severity first so the inspector starts with the risks that most deserve attention.
   return signals.sort((left, right) => {
@@ -941,14 +1052,18 @@ export function getDiagramReviewSignals(model: DiagramModel): DiagramReviewSigna
   });
 }
 
-function pushDuplicateNameReviewSignals(model: DiagramModel, signals: DiagramReviewSignal[]) {
+function pushDuplicateNameReviewSignals(
+  model: DiagramModel,
+  signals: DiagramReviewSignal[],
+  enabledRules: Set<DiagramReviewSignalCode>,
+) {
   const tableNames = new Map<string, string>();
 
   for (const table of Object.values(model.tables)) {
     const tableKey = `${table.schema ?? ''}.${table.name}`.toLowerCase();
     const existingTableId = tableNames.get(tableKey);
 
-    if (existingTableId) {
+    if (existingTableId && enabledRules.has('duplicate_table_name')) {
       signals.push(
         createDiagramReviewSignal({
           code: 'duplicate_table_name',
@@ -968,7 +1083,7 @@ function pushDuplicateNameReviewSignals(model: DiagramModel, signals: DiagramRev
       const columnKey = column.name.toLowerCase();
       const existingColumnId = columnNames.get(columnKey);
 
-      if (existingColumnId) {
+      if (existingColumnId && enabledRules.has('duplicate_column_name')) {
         signals.push(
           createDiagramReviewSignal({
             code: 'duplicate_column_name',
@@ -1058,7 +1173,11 @@ function pushRelationshipTypeReviewSignals(model: DiagramModel, signals: Diagram
   }
 }
 
-function pushColumnHeuristicReviewSignals(model: DiagramModel, signals: DiagramReviewSignal[]) {
+function pushColumnHeuristicReviewSignals(
+  model: DiagramModel,
+  signals: DiagramReviewSignal[],
+  enabledRules: Set<DiagramReviewSignalCode>,
+) {
   for (const column of Object.values(model.columns)) {
     const normalizedName = column.name.toLowerCase();
     const table = model.tables[column.tableId];
@@ -1067,7 +1186,11 @@ function pushColumnHeuristicReviewSignals(model: DiagramModel, signals: DiagramR
       continue;
     }
 
-    if (isEmailColumnName(normalizedName) && !isColumnUniquelyConstrained(model, table, column)) {
+    if (
+      enabledRules.has('email_column_not_unique') &&
+      isEmailColumnName(normalizedName) &&
+      !isColumnUniquelyConstrained(model, table, column)
+    ) {
       signals.push(
         createDiagramReviewSignal({
           code: 'email_column_not_unique',
@@ -1079,7 +1202,11 @@ function pushColumnHeuristicReviewSignals(model: DiagramModel, signals: DiagramR
       );
     }
 
-    if (isMoneyLikeColumnName(normalizedName) && column.type.family === 'float') {
+    if (
+      enabledRules.has('money_column_uses_float') &&
+      isMoneyLikeColumnName(normalizedName) &&
+      column.type.family === 'float'
+    ) {
       signals.push(
         createDiagramReviewSignal({
           code: 'money_column_uses_float',
@@ -1123,6 +1250,13 @@ function createDiagramReviewSignal(input: Omit<DiagramReviewSignal, 'id'>): Diag
     // ID stabil berbasis rule dan target membuat list React/backend mudah melakukan dedupe tanpa menyimpan state tambahan.
     id: `${input.code}:${input.target.type}:${input.target.id}`,
   };
+}
+
+function getEnabledReviewRules(settings: DiagramReviewSettings): Set<DiagramReviewSignalCode> {
+  const disabledRules = new Set(settings.disabledRuleKeys);
+
+  // Unknown values cannot exist in the public type, but filtering through the canonical code list keeps runtime JSON settings defensive.
+  return new Set(diagramReviewSignalCodes.filter((code) => !disabledRules.has(code)));
 }
 
 function getReviewSignalSeverityRank(severity: DiagramReviewSignalSeverity): number {

@@ -128,6 +128,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 
     ALTER TABLE IF EXISTS projects
       ADD COLUMN IF NOT EXISTS default_dialect text NOT NULL DEFAULT 'postgresql',
+      ADD COLUMN IF NOT EXISTS review_settings jsonb NOT NULL DEFAULT '{"disabledRuleKeys":[]}'::jsonb,
       ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'private',
       ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 
@@ -147,6 +148,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'draft',
       ADD COLUMN IF NOT EXISTS current_snapshot_id uuid,
       ADD COLUMN IF NOT EXISTS last_snapshot_version integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS review_settings jsonb NOT NULL DEFAULT '{"disabledRuleKeys":[]}'::jsonb,
       ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 
     ALTER TABLE IF EXISTS diagram_documents

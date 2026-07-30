@@ -1,4 +1,5 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
+import type { DiagramReviewSettings } from '@tabliodb/schema-core';
 import type { Permission, ProjectRole } from '@tabliodb/shared';
 
 export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>;
@@ -127,6 +128,7 @@ export interface ProjectTable {
   slug: string;
   description: NullableColumn<string>;
   defaultDialect: Defaulted<string>;
+  reviewSettings: JsonColumn<DiagramReviewSettings>;
   visibility: Defaulted<'private' | 'organization'>;
   createdById: string;
   archivedAt: NullableTimestamp;
@@ -167,6 +169,7 @@ export interface DiagramTable {
   status: Defaulted<'draft' | 'reviewed' | 'approved' | 'changes_requested'>;
   currentSnapshotId: NullableColumn<string>;
   lastSnapshotVersion: Defaulted<number>;
+  reviewSettings: JsonColumn<DiagramReviewSettings>;
   createdById: string;
   archivedAt: NullableTimestamp;
   createdAt: Timestamp;

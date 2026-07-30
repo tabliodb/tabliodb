@@ -14,6 +14,7 @@ import {
   type DatabaseRelationship,
   type DatabaseTable,
   type DiagramModel,
+  type DiagramReviewSettings,
   type DiagramReviewSignal,
   type ReferentialAction,
 } from '@tabliodb/schema-core';
@@ -231,6 +232,7 @@ export type SchemaInspectorProps = {
   onReviewSignalIgnore?: (signalId: string) => void;
   onTableSelect?: (tableId: string) => void;
   readOnly?: boolean;
+  reviewSettings?: DiagramReviewSettings;
   reviewSignals?: DiagramReviewSignal[] | null;
   selectedTableId: string | null;
 };
@@ -246,6 +248,7 @@ export function SchemaInspector({
   onReviewSignalIgnore,
   onTableSelect,
   readOnly = false,
+  reviewSettings,
   reviewSignals: serverReviewSignals,
   selectedTableId,
 }: SchemaInspectorProps) {
@@ -272,8 +275,8 @@ export function SchemaInspector({
   const selectedRelationship =
     selectedRelationships.find((relationship) => relationship.id === selectedRelationshipId) ?? null;
   const reviewSignals = useMemo(
-    () => serverReviewSignals ?? getDiagramReviewSignals(model),
-    [model, serverReviewSignals],
+    () => serverReviewSignals ?? getDiagramReviewSignals(model, reviewSettings),
+    [model, reviewSettings, serverReviewSignals],
   );
 
   useEffect(() => {

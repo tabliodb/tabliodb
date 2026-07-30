@@ -37,6 +37,7 @@ const diagram = {
   lastSnapshotVersion: 0,
   name: 'Main schema',
   projectId: 'project-id',
+  reviewSettings: { disabledRuleKeys: [] },
   slug: null,
   status: 'draft',
   updatedAt: new Date('2026-07-29T11:00:00.000Z'),
@@ -58,6 +59,7 @@ describe(DiagramService.name, () => {
     getDiagramRole: vi.fn(),
   };
   const reviewSignalRepository = {
+    getSettingsForDiagram: vi.fn(),
     syncGeneratedSignals: vi.fn(),
   };
 
