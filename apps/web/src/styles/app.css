@@ -59,6 +59,31 @@ body {
   cursor: grabbing;
 }
 
+.tabliodb-scrollbar {
+  scrollbar-color: rgb(var(--tabliodb-border-strong)) transparent;
+  scrollbar-width: thin;
+}
+
+.tabliodb-scrollbar::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.tabliodb-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabliodb-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(var(--tabliodb-border-strong));
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+.tabliodb-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--tabliodb-ink-subtle));
+}
+
 .tabliodb-table-node {
   --table-accent: rgb(var(--tabliodb-primary));
   height: 100%;

@@ -32,7 +32,7 @@ export const DialogContent = forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,440px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[22px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-5 text-[rgb(var(--tabliodb-ink))] shadow-[0_8px_0_rgb(var(--tabliodb-border-strong)),0_18px_48px_rgb(0_0_0/0.16)] outline-none',
+        'tabliodb-scrollbar fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[min(92vw,440px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-[22px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-5 text-[rgb(var(--tabliodb-ink))] shadow-[0_8px_0_rgb(var(--tabliodb-border-strong)),0_18px_48px_rgb(0_0_0/0.16)] outline-none [scrollbar-gutter:stable]',
         className,
       )}
       ref={ref}
@@ -49,7 +49,15 @@ export function DialogHeader({ className, ...props }: ComponentPropsWithoutRef<'
 }
 
 export function DialogFooter({ className, ...props }: ComponentPropsWithoutRef<'div'>) {
-  return <div className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        'sticky bottom-0 z-10 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t-2 border-[rgb(var(--tabliodb-border))] bg-white px-5 py-4 sm:flex-row sm:justify-end',
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export const DialogTitle = forwardRef<

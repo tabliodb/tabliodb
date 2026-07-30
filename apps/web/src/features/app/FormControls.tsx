@@ -1,4 +1,4 @@
-import { Input, cn, type InputProps } from '@tabliodb/ui';
+import { Input, Select, cn, type InputProps, type SelectOption, type SelectProps } from '@tabliodb/ui';
 import type { ComponentPropsWithoutRef } from 'react';
 import { Controller, type Control, type FieldPath, type FieldValues, type PathValue } from 'react-hook-form';
 
@@ -76,26 +76,45 @@ export type ControlledSelectProps<TFieldValues extends FieldValues> = Omit<
 > & {
   control: Control<TFieldValues>;
   name: FieldPath<TFieldValues>;
+  options?: SelectOption[];
+  placeholder?: SelectProps['placeholder'];
 };
 
 export function ControlledSelect<TFieldValues extends FieldValues>({
+  children,
   control,
   name,
+  options,
+  placeholder,
   ...props
 }: ControlledSelectProps<TFieldValues>) {
   return (
     <Controller
       control={control}
       name={name}
-      render={({ field }) => (
-        <select
-          {...props}
-          name={field.name}
-          onBlur={field.onBlur}
-          onChange={(event) => field.onChange(event.currentTarget.value)}
-          value={field.value ?? ''}
-        />
-      )}
+      render={({ field }) =>
+        options ? (
+          <Select
+            {...toControlledSelectProps(props)}
+            name={field.name}
+            onBlur={field.onBlur}
+            onValueChange={field.onChange}
+            options={options}
+            placeholder={placeholder}
+            value={field.value ?? undefined}
+          />
+        ) : (
+          <select
+            {...props}
+            name={field.name}
+            onBlur={field.onBlur}
+            onChange={(event) => field.onChange(event.currentTarget.value)}
+            value={field.value ?? ''}
+          >
+            {children}
+          </select>
+        )
+      }
     />
   );
 }
@@ -139,4 +158,18 @@ function readInputValue<TFieldValues extends FieldValues>(
   }
 
   return input.value;
+}
+
+function toControlledSelectProps(props: Omit<ControlledSelectProps<FieldValues>, 'control' | 'name'>) {
+  const { className, disabled, id, required } = props;
+
+  // Radix Select is single-value only; native-only props are stripped when the shadcn-style select path is used.
+  return {
+    'aria-invalid': props['aria-invalid'],
+    'aria-label': props['aria-label'],
+    className,
+    disabled,
+    id,
+    required,
+  };
 }

@@ -5,5 +5,6 @@ export * from './components/DropdownMenu.js';
 export * from './components/FieldError.js';
 export * from './components/IconButton.js';
 export * from './components/Input.js';
+export * from './components/Select.js';
 export * from './components/Surface.js';
 export * from './lib/utils.js';

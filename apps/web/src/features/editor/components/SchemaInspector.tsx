@@ -27,6 +27,7 @@ import {
   DialogTitle,
   DialogTrigger,
   FieldError,
+  Select,
   Surface,
   cn,
 } from '@tabliodb/ui';
@@ -181,19 +182,37 @@ const referentialActionOptions = [
 
 const matchTypeOptions = [unsetSelectValue, 'simple', 'full', 'partial'] as const;
 
-const relationshipFormSchema = z.object({
-  cardinality: z.enum(relationshipCardinalityOptions),
-  comment: z.string().trim().max(240, 'Keep the comment under 240 characters.'),
-  deferrable: z.boolean(),
-  matchType: z.enum(matchTypeOptions),
-  name: z.string().trim().max(96, 'Keep the relationship name under 96 characters.'),
-  onDelete: z.enum(referentialActionOptions),
-  onUpdate: z.enum(referentialActionOptions),
-  sourceColumnId: z.string().min(1, 'Choose a primary-key column.'),
-  sourceTableId: z.string().min(1, 'Choose a primary-key table.'),
-  targetColumnId: z.string().min(1, 'Choose a foreign-key column.'),
-  targetTableId: z.string().min(1, 'Choose a foreign-key table.'),
-});
+const relationshipFormSchema = z
+  .object({
+    cardinality: z.enum(relationshipCardinalityOptions),
+    comment: z.string().trim().max(240, 'Keep the comment under 240 characters.'),
+    deferrable: z.boolean(),
+    matchType: z.enum(matchTypeOptions),
+    name: z.string().trim().max(96, 'Keep the relationship name under 96 characters.'),
+    onDelete: z.enum(referentialActionOptions),
+    onUpdate: z.enum(referentialActionOptions),
+    sourceColumnId: z.string(),
+    sourceTableId: z.string().min(1, 'Choose a primary-key table.'),
+    targetColumnId: z.string(),
+    targetTableId: z.string().min(1, 'Choose a foreign-key table.'),
+  })
+  .superRefine((values, context) => {
+    if (values.sourceColumnId === unsetSelectValue) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Choose a primary-key column.',
+        path: ['sourceColumnId'],
+      });
+    }
+
+    if (values.targetColumnId === unsetSelectValue) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Choose a foreign-key column.',
+        path: ['targetColumnId'],
+      });
+    }
+  });
 
 type RelationshipFormState = z.infer<typeof relationshipFormSchema>;
 
@@ -907,13 +926,8 @@ function AddColumnDialog({
                 className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                 control={form.control}
                 name="family"
-              >
-                {columnTypeFamilyOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </ControlledSelect>
+                options={columnTypeFamilyOptions.map((option) => ({ label: option, value: option }))}
+              />
             </label>
             {family === 'varchar' ? (
               <label className="block text-sm">
@@ -1094,13 +1108,8 @@ function EditColumnDialog({
                 className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                 control={form.control}
                 name="family"
-              >
-                {columnTypeFamilyOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </ControlledSelect>
+                options={columnTypeFamilyOptions.map((option) => ({ label: option, value: option }))}
+              />
             </label>
             {family === 'varchar' ? (
               <label className="block text-sm">
@@ -1480,13 +1489,11 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
             className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
             control={form.control}
             name="method"
-          >
-            {indexMethodOptions.map((option) => (
-              <option key={option} value={option}>
-                {option === unsetSelectValue ? 'Default' : option}
-              </option>
-            ))}
-          </ControlledSelect>
+            options={indexMethodOptions.map((option) => ({
+              label: option === unsetSelectValue ? 'Default' : option,
+              value: option,
+            }))}
+          />
         </label>
         <div className="pt-6">
           <CheckboxField control={form.control} label="Unique index" name="unique" />
@@ -1524,41 +1531,31 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <label className="block text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                       Order
-                      <select
+                      <Select
                         className="mt-1 h-10 w-full cursor-pointer rounded-xl border-2 border-[rgb(var(--tabliodb-border))] bg-white px-2 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))]"
-                        onChange={(event) =>
-                          handleOrderChange(
-                            column.id,
-                            event.currentTarget.value as IndexFormState['orderByColumnId'][string],
-                          )
+                        onValueChange={(value) =>
+                          handleOrderChange(column.id, value as IndexFormState['orderByColumnId'][string])
                         }
+                        options={indexOrderOptions.map((option) => ({
+                          label: option === unsetSelectValue ? 'Default' : option.toUpperCase(),
+                          value: option,
+                        }))}
                         value={orderByColumnId[column.id] ?? unsetSelectValue}
-                      >
-                        {indexOrderOptions.map((option) => (
-                          <option key={option} value={option}>
-                            {option === unsetSelectValue ? 'Default' : option.toUpperCase()}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </label>
                     <label className="block text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                       Nulls
-                      <select
+                      <Select
                         className="mt-1 h-10 w-full cursor-pointer rounded-xl border-2 border-[rgb(var(--tabliodb-border))] bg-white px-2 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))]"
-                        onChange={(event) =>
-                          handleNullsChange(
-                            column.id,
-                            event.currentTarget.value as IndexFormState['nullsByColumnId'][string],
-                          )
+                        onValueChange={(value) =>
+                          handleNullsChange(column.id, value as IndexFormState['nullsByColumnId'][string])
                         }
+                        options={indexNullsOptions.map((option) => ({
+                          label: option === unsetSelectValue ? 'Default' : option,
+                          value: option,
+                        }))}
                         value={nullsByColumnId[column.id] ?? unsetSelectValue}
-                      >
-                        {indexNullsOptions.map((option) => (
-                          <option key={option} value={option}>
-                            {option === unsetSelectValue ? 'Default' : option}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </label>
                   </div>
                 ) : null}
@@ -1908,14 +1905,14 @@ function CheckFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
           className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
           control={form.control}
           name="columnId"
-        >
-          <option value={unsetSelectValue}>Table-level constraint</option>
-          {columns.map((column) => (
-            <option key={column.id} value={column.id}>
-              {column.name} ({formatColumnType(column.type)})
-            </option>
-          ))}
-        </ControlledSelect>
+          options={[
+            { label: 'Table-level constraint', value: unsetSelectValue },
+            ...columns.map((column) => ({
+              label: `${column.name} (${formatColumnType(column.type)})`,
+              value: column.id,
+            })),
+          ]}
+        />
       </label>
       <label className="block text-sm">
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
@@ -1952,14 +1949,17 @@ function EnumSelectField({ enumOptions, form }: { enumOptions: DatabaseEnum[]; f
         className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
         control={form.control}
         name="enumId"
-      >
-        <option value={unsetSelectValue}>{enumOptions.length > 0 ? 'Choose enum' : 'Create enum first'}</option>
-        {enumOptions.map((databaseEnum) => (
-          <option key={databaseEnum.id} value={databaseEnum.id}>
-            {databaseEnum.name}
-          </option>
-        ))}
-      </ControlledSelect>
+        options={[
+          {
+            label: enumOptions.length > 0 ? 'Choose enum' : 'Create enum first',
+            value: unsetSelectValue,
+          },
+          ...enumOptions.map((databaseEnum) => ({
+            label: databaseEnum.name,
+            value: databaseEnum.id,
+          })),
+        ]}
+      />
       <FieldError>{errors.enumId?.message}</FieldError>
     </label>
   );
@@ -2089,7 +2089,10 @@ function EditRelationshipDialog({
 
     if (!sourceColumns.some((column) => column.id === sourceColumnId)) {
       // When the source table changes, pick the first valid column so the form never submits a stale endpoint.
-      form.setValue('sourceColumnId', sourceColumns[0]?.id ?? '', { shouldDirty: true, shouldValidate: true });
+      form.setValue('sourceColumnId', sourceColumns[0]?.id ?? unsetSelectValue, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
   }, [form, sourceColumnIds, sourceColumns]);
 
@@ -2098,7 +2101,10 @@ function EditRelationshipDialog({
 
     if (!targetColumns.some((column) => column.id === targetColumnId)) {
       // Foreign-key endpoint follows the selected target table for the same stale-id protection as the source side.
-      form.setValue('targetColumnId', targetColumns[0]?.id ?? '', { shouldDirty: true, shouldValidate: true });
+      form.setValue('targetColumnId', targetColumns[0]?.id ?? unsetSelectValue, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
   }, [form, targetColumnIds, targetColumns]);
 
@@ -2156,13 +2162,8 @@ function EditRelationshipDialog({
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                   control={form.control}
                   name="sourceTableId"
-                >
-                  {tables.map((table) => (
-                    <option key={table.id} value={table.id}>
-                      {table.name}
-                    </option>
-                  ))}
-                </ControlledSelect>
+                  options={tables.map((table) => ({ label: table.name, value: table.id }))}
+                />
                 <FieldError>{errors.sourceTableId?.message}</FieldError>
               </label>
               <label className="block text-sm">
@@ -2173,17 +2174,15 @@ function EditRelationshipDialog({
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                   control={form.control}
                   name="sourceColumnId"
-                >
-                  {sourceColumns.length > 0 ? (
-                    sourceColumns.map((column) => (
-                      <option key={column.id} value={column.id}>
-                        {column.name} ({formatColumnType(column.type)})
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">No columns</option>
-                  )}
-                </ControlledSelect>
+                  options={
+                    sourceColumns.length > 0
+                      ? sourceColumns.map((column) => ({
+                          label: `${column.name} (${formatColumnType(column.type)})`,
+                          value: column.id,
+                        }))
+                      : [{ disabled: true, label: 'No columns', value: unsetSelectValue }]
+                  }
+                />
                 <FieldError>{errors.sourceColumnId?.message}</FieldError>
               </label>
             </div>
@@ -2196,13 +2195,8 @@ function EditRelationshipDialog({
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                   control={form.control}
                   name="targetTableId"
-                >
-                  {tables.map((table) => (
-                    <option key={table.id} value={table.id}>
-                      {table.name}
-                    </option>
-                  ))}
-                </ControlledSelect>
+                  options={tables.map((table) => ({ label: table.name, value: table.id }))}
+                />
                 <FieldError>{errors.targetTableId?.message}</FieldError>
               </label>
               <label className="block text-sm">
@@ -2213,17 +2207,15 @@ function EditRelationshipDialog({
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                   control={form.control}
                   name="targetColumnId"
-                >
-                  {targetColumns.length > 0 ? (
-                    targetColumns.map((column) => (
-                      <option key={column.id} value={column.id}>
-                        {column.name} ({formatColumnType(column.type)})
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">No columns</option>
-                  )}
-                </ControlledSelect>
+                  options={
+                    targetColumns.length > 0
+                      ? targetColumns.map((column) => ({
+                          label: `${column.name} (${formatColumnType(column.type)})`,
+                          value: column.id,
+                        }))
+                      : [{ disabled: true, label: 'No columns', value: unsetSelectValue }]
+                  }
+                />
                 <FieldError>{errors.targetColumnId?.message}</FieldError>
               </label>
             </div>
@@ -2236,13 +2228,11 @@ function EditRelationshipDialog({
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                   control={form.control}
                   name="cardinality"
-                >
-                  {relationshipCardinalityOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {formatRelationshipCardinality(option)}
-                    </option>
-                  ))}
-                </ControlledSelect>
+                  options={relationshipCardinalityOptions.map((option) => ({
+                    label: formatRelationshipCardinality(option),
+                    value: option,
+                  }))}
+                />
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
@@ -2252,13 +2242,11 @@ function EditRelationshipDialog({
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                   control={form.control}
                   name="matchType"
-                >
-                  {matchTypeOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option === unsetSelectValue ? 'Not set' : option}
-                    </option>
-                  ))}
-                </ControlledSelect>
+                  options={matchTypeOptions.map((option) => ({
+                    label: option === unsetSelectValue ? 'Not set' : option,
+                    value: option,
+                  }))}
+                />
               </label>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -2270,13 +2258,11 @@ function EditRelationshipDialog({
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                   control={form.control}
                   name="onDelete"
-                >
-                  {referentialActionOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option === unsetSelectValue ? 'Not set' : formatReferentialAction(option)}
-                    </option>
-                  ))}
-                </ControlledSelect>
+                  options={referentialActionOptions.map((option) => ({
+                    label: option === unsetSelectValue ? 'Not set' : formatReferentialAction(option),
+                    value: option,
+                  }))}
+                />
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
@@ -2286,13 +2272,11 @@ function EditRelationshipDialog({
                   className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
                   control={form.control}
                   name="onUpdate"
-                >
-                  {referentialActionOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option === unsetSelectValue ? 'Not set' : formatReferentialAction(option)}
-                    </option>
-                  ))}
-                </ControlledSelect>
+                  options={referentialActionOptions.map((option) => ({
+                    label: option === unsetSelectValue ? 'Not set' : formatReferentialAction(option),
+                    value: option,
+                  }))}
+                />
               </label>
             </div>
             <CheckboxField control={form.control} label="Deferrable" name="deferrable" />
@@ -2658,9 +2642,9 @@ function getRelationshipDefaults(relationship: DatabaseRelationship): Relationsh
     name: relationship.name ?? '',
     onDelete: relationship.onDelete ?? unsetSelectValue,
     onUpdate: relationship.onUpdate ?? unsetSelectValue,
-    sourceColumnId: relationship.sourceColumnIds[0] ?? '',
+    sourceColumnId: relationship.sourceColumnIds[0] ?? unsetSelectValue,
     sourceTableId: relationship.sourceTableId,
-    targetColumnId: relationship.targetColumnIds[0] ?? '',
+    targetColumnId: relationship.targetColumnIds[0] ?? unsetSelectValue,
     targetTableId: relationship.targetTableId,
   };
 }

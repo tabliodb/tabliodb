@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
   IconButton,
   Input,
+  Select,
 } from '@tabliodb/ui';
 import {
   Archive,
@@ -923,13 +924,11 @@ function WorkspaceSettingsDialog({
                 control={form.control}
                 disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
                 name="defaultProjectRole"
-              >
-                {workspaceDefaultRoleOptions.map((role) => (
-                  <option key={role} value={role}>
-                    {role === 'none' ? 'No automatic project role' : formatProjectRole(role)}
-                  </option>
-                ))}
-              </ControlledSelect>
+                options={workspaceDefaultRoleOptions.map((role) => ({
+                  label: role === 'none' ? 'No automatic project role' : formatProjectRole(role),
+                  value: role,
+                }))}
+              />
             </label>
 
             <label className="mt-6 flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
@@ -1301,13 +1300,11 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
                 control={memberForm.control}
                 disabled={isMemberMutationPending}
                 name="role"
-              >
-                {projectRoleOptions.map((role) => (
-                  <option key={role} value={role}>
-                    {formatProjectRole(role)}
-                  </option>
-                ))}
-              </ControlledSelect>
+                options={projectRoleOptions.map((role) => ({
+                  label: formatProjectRole(role),
+                  value: role,
+                }))}
+              />
             </label>
             <Button className="self-start sm:mt-6" disabled={isMemberMutationPending} type="submit">
               {addProjectMemberMutation.isPending ? (
@@ -1499,13 +1496,11 @@ function DiagramSettingsDialog({
               control={form.control}
               disabled={isPending || !canEdit}
               name="dialect"
-            >
-              {diagramDialectOptions.map((dialect) => (
-                <option key={dialect} value={dialect}>
-                  {formatDiagramDialect(dialect)}
-                </option>
-              ))}
-            </ControlledSelect>
+              options={diagramDialectOptions.map((dialect) => ({
+                label: formatDiagramDialect(dialect),
+                value: dialect,
+              }))}
+            />
             <FieldError>{errors.dialect?.message}</FieldError>
           </label>
 
@@ -1619,18 +1614,16 @@ function ProjectMemberRow({
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
         </div>
       </div>
-      <select
+      <Select
         className={selectClassName}
         disabled={isBusy}
-        onChange={(event) => onRoleChange(member, event.currentTarget.value as ProjectRole)}
+        onValueChange={(role) => onRoleChange(member, role as ProjectRole)}
+        options={projectRoleOptions.map((role) => ({
+          label: formatProjectRole(role),
+          value: role,
+        }))}
         value={member.role}
-      >
-        {projectRoleOptions.map((role) => (
-          <option key={role} value={role}>
-            {formatProjectRole(role)}
-          </option>
-        ))}
-      </select>
+      />
       <Button
         aria-label={`Remove ${member.name}`}
         disabled={isBusy}
@@ -1676,18 +1669,16 @@ function OrganizationMemberRow({
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
         </div>
       </div>
-      <select
+      <Select
         className={selectClassName}
         disabled={isBusy}
-        onChange={(event) => onRoleChange(member, event.currentTarget.value as OrganizationRole)}
+        onValueChange={(role) => onRoleChange(member, role as OrganizationRole)}
+        options={organizationRoleOptions.map((role) => ({
+          label: formatOrganizationRole(role),
+          value: role,
+        }))}
         value={member.role}
-      >
-        {organizationRoleOptions.map((role) => (
-          <option key={role} value={role}>
-            {formatOrganizationRole(role)}
-          </option>
-        ))}
-      </select>
+      />
       <Button
         aria-label={`Remove ${member.name}`}
         disabled={isBusy}
