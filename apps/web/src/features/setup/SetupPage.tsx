@@ -154,7 +154,7 @@ export function SetupPage() {
             <FieldError>{errors.publicUrl?.message}</FieldError>
           </label>
           {setupMutation.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+            <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
               {getErrorMessage(setupMutation.error)}
             </div>
           ) : null}

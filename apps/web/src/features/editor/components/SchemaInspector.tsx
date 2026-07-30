@@ -46,8 +46,7 @@ import {
   type ControlledCheckboxProps,
 } from '@/features/app/FormControls';
 import { formatColumnType } from '../diagram-model';
-
-const tableColorOptions = ['#58cc02', '#1cb0f6', '#ffc800', '#ff4b4b', '#8b5cf6', '#0f766e'] as const;
+import { getDisplayTableColor, tableColorOptions } from '../table-colors';
 const unsetSelectValue = '__unset' as const;
 
 const editTableFormSchema = z.object({
@@ -373,7 +372,7 @@ export function SchemaInspector({
                 </div>
                 <span
                   className="mt-1 size-3.5 shrink-0 rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(var(--tabliodb-border-strong))]"
-                  style={{ backgroundColor: selectedTable.color ?? '#0f766e' }}
+                  style={{ backgroundColor: getDisplayTableColor(selectedTable.color) }}
                 />
               </div>
               <div className="mt-3 space-y-1">
@@ -383,7 +382,7 @@ export function SchemaInspector({
                     className={cn(
                       'grid w-full cursor-pointer grid-cols-[1fr_auto] gap-2 rounded-xl px-2 py-2 text-left text-xs transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
                       selectedColumnId === column.id &&
-                        'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                        'bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))]',
                     )}
                     key={column.id}
                     onClick={() => setSelectedColumnId(column.id)}
@@ -500,7 +499,7 @@ function EnumEditorPanel({
                 className={cn(
                   'w-full cursor-pointer rounded-xl px-2 py-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
                   selectedEnumId === currentEnum.id &&
-                    'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                    'bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))]',
                 )}
                 key={currentEnum.id}
                 onClick={() => onEnumSelect(currentEnum.id)}
@@ -717,7 +716,7 @@ function EnumFormFields({ form }: { form: UseFormReturn<EnumFormState> }) {
           Values
         </span>
         <ControlledTextarea
-          className="min-h-28 w-full resize-y rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 py-2 text-sm font-semibold text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+          className="min-h-28 w-full resize-y rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 py-2 text-sm font-semibold text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
           control={form.control}
           name="valuesText"
           placeholder={'draft\npublished\narchived'}
@@ -814,13 +813,16 @@ function EditTableDialog({
                   {tableColorOptions.map((color) => (
                     <button
                       aria-label={`Use ${color}`}
-                      className={cn(
-                        'size-9 cursor-pointer rounded-full border-2 border-white shadow-[0_0_0_2px_rgb(var(--tabliodb-border-strong))] transition hover:scale-105',
-                        selectedColor === color && 'shadow-[0_0_0_3px_rgb(var(--tabliodb-primary))]',
-                      )}
+                      className="size-9 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
                       key={color}
                       onClick={() => form.setValue('color', color, { shouldDirty: true, shouldValidate: true })}
-                      style={{ backgroundColor: color }}
+                      style={{
+                        backgroundColor: color,
+                        boxShadow:
+                          selectedColor === color
+                            ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
+                            : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
+                      }}
                       type="button"
                     />
                   ))}
@@ -928,7 +930,7 @@ function AddColumnDialog({
                   Type
                 </span>
                 <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                   control={form.control}
                   name="family"
                   options={columnTypeFamilyOptions.map((option) => ({ label: option, value: option }))}
@@ -1107,7 +1109,7 @@ function EditColumnDialog({
                   Type
                 </span>
                 <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                   control={form.control}
                   name="family"
                   options={columnTypeFamilyOptions.map((option) => ({ label: option, value: option }))}
@@ -1212,7 +1214,7 @@ function IndexBuilderPanel({
                   className={cn(
                     'w-full cursor-pointer rounded-xl px-2 py-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
                     selectedIndexId === currentIndex.id &&
-                      'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                      'bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))]',
                   )}
                   key={currentIndex.id}
                   onClick={() => onIndexSelect(currentIndex.id)}
@@ -1493,7 +1495,7 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
             Method
           </span>
           <ControlledSelect
-            className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+            className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
             control={form.control}
             name="method"
             options={indexMethodOptions.map((option) => ({
@@ -1518,7 +1520,8 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
               <div
                 className={cn(
                   'rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3',
-                  selected && 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))]',
+                  selected &&
+                    'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))]',
                 )}
                 key={column.id}
               >
@@ -1668,7 +1671,7 @@ function CheckConstraintPanel({
                   className={cn(
                     'w-full cursor-pointer rounded-xl px-2 py-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
                     selectedCheckId === currentCheck.id &&
-                      'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                      'bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))]',
                   )}
                   key={currentCheck.id}
                   onClick={() => onCheckSelect(currentCheck.id)}
@@ -1909,7 +1912,7 @@ function CheckFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
           Scope
         </span>
         <ControlledSelect
-          className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+          className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
           control={form.control}
           name="columnId"
           options={[
@@ -1926,7 +1929,7 @@ function CheckFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
           Expression
         </span>
         <ControlledTextarea
-          className="min-h-28 w-full resize-y rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 py-2 text-sm font-semibold text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+          className="min-h-28 w-full resize-y rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 py-2 text-sm font-semibold text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
           control={form.control}
           name="expression"
           placeholder="total >= 0"
@@ -1953,7 +1956,7 @@ function EnumSelectField({ enumOptions, form }: { enumOptions: DatabaseEnum[]; f
         Enum type
       </span>
       <ControlledSelect
-        className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+        className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
         control={form.control}
         name="enumId"
         options={[
@@ -2003,7 +2006,7 @@ function RelationshipInspector({
                 className={cn(
                   'w-full cursor-pointer rounded-xl px-2 py-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
                   selectedRelationshipId === currentRelationship.id &&
-                    'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                    'bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))]',
                 )}
                 key={currentRelationship.id}
                 onClick={() => onRelationshipSelect(currentRelationship.id)}
@@ -2169,7 +2172,7 @@ function EditRelationshipDialog({
                     Primary table
                   </span>
                   <ControlledSelect
-                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                     control={form.control}
                     name="sourceTableId"
                     options={tables.map((table) => ({ label: table.name, value: table.id }))}
@@ -2181,7 +2184,7 @@ function EditRelationshipDialog({
                     Primary column
                   </span>
                   <ControlledSelect
-                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                     control={form.control}
                     name="sourceColumnId"
                     options={
@@ -2202,7 +2205,7 @@ function EditRelationshipDialog({
                     Foreign table
                   </span>
                   <ControlledSelect
-                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                     control={form.control}
                     name="targetTableId"
                     options={tables.map((table) => ({ label: table.name, value: table.id }))}
@@ -2214,7 +2217,7 @@ function EditRelationshipDialog({
                     Foreign column
                   </span>
                   <ControlledSelect
-                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                     control={form.control}
                     name="targetColumnId"
                     options={
@@ -2235,7 +2238,7 @@ function EditRelationshipDialog({
                     Cardinality
                   </span>
                   <ControlledSelect
-                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                     control={form.control}
                     name="cardinality"
                     options={relationshipCardinalityOptions.map((option) => ({
@@ -2249,7 +2252,7 @@ function EditRelationshipDialog({
                     Match type
                   </span>
                   <ControlledSelect
-                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                     control={form.control}
                     name="matchType"
                     options={matchTypeOptions.map((option) => ({
@@ -2265,7 +2268,7 @@ function EditRelationshipDialog({
                     On delete
                   </span>
                   <ControlledSelect
-                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                     control={form.control}
                     name="onDelete"
                     options={referentialActionOptions.map((option) => ({
@@ -2279,7 +2282,7 @@ function EditRelationshipDialog({
                     On update
                   </span>
                   <ControlledSelect
-                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                     control={form.control}
                     name="onUpdate"
                     options={referentialActionOptions.map((option) => ({
@@ -2347,7 +2350,7 @@ function ColumnBadge({ children }: { children: string }) {
 
 function getEditTableDefaults(table: DatabaseTable): EditTableFormState {
   return {
-    color: table.color ?? '#0f766e',
+    color: getDisplayTableColor(table.color),
     name: table.name,
     width: table.width,
   };

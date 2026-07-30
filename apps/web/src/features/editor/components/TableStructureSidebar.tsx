@@ -11,8 +11,7 @@ import { Button, Checkbox, IconButton, Input, Popover, PopoverContent, PopoverTr
 import { Columns3, GripVertical, MoreHorizontal, PanelLeftClose, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatColumnType } from '../diagram-model';
-
-const tableColorOptions = ['#58cc02', '#1cb0f6', '#ffc800', '#ff4b4b', '#8b5cf6', '#0f766e'] as const;
+import { getDisplayTableColor, tableColorOptions } from '../table-colors';
 const columnTypeFamilyOptions = [
   'bigint',
   'boolean',
@@ -30,7 +29,7 @@ const columnTypeFamilyOptions = [
 ] as const satisfies readonly ColumnTypeFamily[];
 
 const inlineInputClassName =
-  'h-[var(--tabliodb-control-sm)] rounded-[var(--tabliodb-radius-sm)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-2.5 text-[13px] font-bold shadow-none outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-primary)/0.14)] disabled:cursor-not-allowed disabled:opacity-60';
+  'h-[var(--tabliodb-control-sm)] rounded-[var(--tabliodb-radius-sm)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-2.5 text-[13px] font-bold shadow-none outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60';
 
 const compactSelectClassName =
   'h-[var(--tabliodb-control-sm)] rounded-[var(--tabliodb-radius-sm)] border border-[rgb(var(--tabliodb-border-strong))] px-2.5 text-[13px] shadow-none';
@@ -158,7 +157,7 @@ export function TableStructureSidebar({
       <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] px-3">
         <div
           className="grid size-8 shrink-0 place-items-center rounded-[13px] text-white shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
-          style={{ backgroundColor: table.color ?? '#0f766e' }}
+          style={{ backgroundColor: getDisplayTableColor(table.color) }}
         >
           <Columns3 className="size-4" />
         </div>
@@ -197,21 +196,24 @@ export function TableStructureSidebar({
               {tableColorOptions.map((color) => (
                 <button
                   aria-label={`Use ${color}`}
-                  className={cn(
-                    'size-7 cursor-pointer rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(var(--tabliodb-border-strong))] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60',
-                    table.color === color && 'shadow-[0_0_0_3px_rgb(var(--tabliodb-primary))]',
-                  )}
+                  className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={readOnly}
                   key={color}
                   onClick={() => handleColorChange(color)}
-                  style={{ backgroundColor: color }}
+                  style={{
+                    backgroundColor: color,
+                    boxShadow:
+                      getDisplayTableColor(table.color) === color
+                        ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
+                        : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
+                  }}
                   type="button"
                 />
               ))}
             </div>
           </div>
           <Button
-            className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_#b91c1c]"
+            className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-danger-shadow))]"
             disabled={readOnly}
             onClick={handleDeleteTable}
             size="sm"
@@ -312,7 +314,7 @@ function ColumnEditorRow({
       className={cn(
         'rounded-[var(--tabliodb-radius-lg)] border bg-white p-2 transition',
         selected
-          ? 'border-[rgb(var(--tabliodb-primary))] bg-white shadow-[inset_3px_0_0_rgb(var(--tabliodb-primary)),0_2px_0_rgb(var(--tabliodb-primary-border))]'
+          ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))] shadow-[inset_3px_0_0_rgb(var(--tabliodb-primary)),0_2px_0_rgb(var(--tabliodb-border))]'
           : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
       )}
       onFocus={() => onSelect(column.id)}
@@ -433,7 +435,7 @@ function ColumnAttributesPopoverContent({
             {column.name} / {formatColumnType(column.type)}
           </p>
         </div>
-        <span className="rounded-full bg-[rgb(var(--tabliodb-primary-soft))] px-2 py-1 text-[10px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+        <span className="rounded-full border border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] px-2 py-1 text-[10px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
           Active
         </span>
       </div>
@@ -532,7 +534,7 @@ function ColumnToggle({
       className={cn(
         'inline-flex h-8 w-full cursor-pointer items-center justify-center rounded-[10px] border px-1 text-[11px] font-extrabold leading-none transition disabled:cursor-not-allowed disabled:opacity-60',
         active
-          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
+          ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_1px_0_rgb(var(--tabliodb-active-chip-border))]'
           : 'border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
       )}
       disabled={disabled}
@@ -666,7 +668,7 @@ function InlineTextarea({
   return (
     <textarea
       className={cn(
-        'min-h-16 w-full resize-none rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-[13px] font-semibold outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-primary)/0.14)] disabled:cursor-not-allowed disabled:opacity-60',
+        'min-h-16 w-full resize-none rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-[13px] font-semibold outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60',
         className,
       )}
       disabled={disabled}

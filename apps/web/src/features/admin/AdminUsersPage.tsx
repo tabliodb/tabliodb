@@ -171,7 +171,7 @@ export function AdminUsersPage() {
           </div>
         ) : usersQuery.error ? (
           <div className="p-4">
-            <div className="rounded-[16px] border-2 border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+            <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
               {getErrorMessage(usersQuery.error)}
             </div>
           </div>
@@ -344,7 +344,7 @@ function InviteUserDialog() {
                 </span>
                 <ControlledTextarea
                   aria-invalid={Boolean(errors.message)}
-                  className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
+                  className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                   control={form.control}
                   disabled={createInvitationMutation.isPending}
                   name="message"
@@ -368,7 +368,7 @@ function InviteUserDialog() {
               ) : null}
 
               {createInvitationMutation.error ? (
-                <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(createInvitationMutation.error)}
                 </div>
               ) : null}
@@ -532,7 +532,7 @@ function CreateUserDialog() {
               </label>
 
               {createUserMutation.error ? (
-                <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(createUserMutation.error)}
                 </div>
               ) : null}

@@ -40,7 +40,7 @@ export function Select({
         aria-label={ariaLabel}
         id={id}
         className={cn(
-          'flex h-[var(--tabliodb-control-md)] w-full cursor-pointer items-center justify-between gap-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left text-[13px] font-extrabold leading-none text-[rgb(var(--tabliodb-ink))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] outline-none transition hover:bg-[rgb(var(--tabliodb-surface-raised))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-[rgb(var(--tabliodb-ink-subtle))]',
+          'flex h-[var(--tabliodb-control-md)] w-full cursor-pointer items-center justify-between gap-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left text-[13px] font-extrabold leading-none text-[rgb(var(--tabliodb-ink))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] outline-none transition hover:bg-[rgb(var(--tabliodb-surface-raised))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-[rgb(var(--tabliodb-ink-subtle))]',
           className,
         )}
         onBlur={onBlur}
@@ -84,7 +84,7 @@ export const SelectItem = forwardRef<
 >(({ children, className, ...props }, ref) => (
   <SelectPrimitive.Item
     className={cn(
-      'relative flex min-h-9 cursor-pointer select-none items-center rounded-[var(--tabliodb-radius-sm)] px-8 py-1.5 text-[13px] font-bold outline-none transition data-[disabled]:pointer-events-none data-[highlighted]:bg-[rgb(var(--tabliodb-primary-soft))] data-[highlighted]:text-[rgb(var(--tabliodb-primary-text))] data-[state=checked]:bg-[rgb(var(--tabliodb-primary-soft))] data-[state=checked]:text-[rgb(var(--tabliodb-primary-text))] data-[disabled]:opacity-50',
+      'relative flex min-h-9 cursor-pointer select-none items-center rounded-[var(--tabliodb-radius-sm)] px-8 py-1.5 text-[13px] font-bold outline-none transition data-[disabled]:pointer-events-none data-[highlighted]:bg-[rgb(var(--tabliodb-selected-surface))] data-[highlighted]:text-[rgb(var(--tabliodb-primary-text))] data-[state=checked]:bg-[rgb(var(--tabliodb-active-chip-bg))] data-[state=checked]:text-[rgb(var(--tabliodb-primary-text))] data-[disabled]:opacity-50',
       className,
     )}
     ref={ref}

@@ -158,7 +158,7 @@ const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 
 const selectClassName =
-  'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-50';
+  'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50';
 
 export function EditorPage() {
   const navigate = useNavigate();
@@ -873,7 +873,7 @@ function CreateProjectDialog({
                 </span>
                 <ControlledTextarea
                   aria-invalid={Boolean(errors.description)}
-                  className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
+                  className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                   control={form.control}
                   disabled={!organizationId || createProjectMutation.isPending}
                   name="description"
@@ -883,7 +883,7 @@ function CreateProjectDialog({
               </label>
 
               {createProjectMutation.error ? (
-                <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(createProjectMutation.error)}
                 </div>
               ) : null}
@@ -1076,7 +1076,7 @@ function WorkspaceSettingsDialog({
             </div>
 
             {settingsQuery.error || updateSettingsMutation.error ? (
-              <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                 {getErrorMessage(settingsQuery.error ?? updateSettingsMutation.error)}
               </div>
             ) : null}
@@ -1103,7 +1103,7 @@ function WorkspaceSettingsDialog({
                   Loading members
                 </div>
               ) : membersQuery.error ? (
-                <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(membersQuery.error)}
                 </div>
               ) : workspaceMembers.length === 0 ? (
@@ -1128,7 +1128,7 @@ function WorkspaceSettingsDialog({
               )}
 
               {memberMutationError ? (
-                <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(memberMutationError)}
                 </div>
               ) : null}
@@ -1160,7 +1160,7 @@ function WorkspaceSettingsDialog({
                   Loading activity
                 </div>
               ) : auditLogsQuery.error ? (
-                <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(auditLogsQuery.error)}
                 </div>
               ) : auditLogs.length === 0 ? (
@@ -1380,7 +1380,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
               </span>
               <ControlledTextarea
                 aria-invalid={Boolean(errors.description)}
-                className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
+                className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                 control={form.control}
                 disabled={isProjectMutationPending}
                 name="description"
@@ -1389,7 +1389,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
             </label>
 
             {mutationError ? (
-              <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                 {getErrorMessage(mutationError)}
               </div>
             ) : null}
@@ -1459,7 +1459,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
                 Loading members
               </div>
             ) : membersQuery.error ? (
-              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                 {getErrorMessage(membersQuery.error)}
               </div>
             ) : members.length === 0 ? (
@@ -1484,7 +1484,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
             )}
 
             {memberMutationError ? (
-              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                 {getErrorMessage(memberMutationError)}
               </div>
             ) : null}
@@ -1658,7 +1658,7 @@ function DiagramSettingsDialog({
               ) : null}
 
               {updateDiagramMutation.error ? (
-                <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(updateDiagramMutation.error)}
                 </div>
               ) : null}

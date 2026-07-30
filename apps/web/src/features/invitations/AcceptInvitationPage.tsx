@@ -111,7 +111,7 @@ export function AcceptInvitationPage() {
                 <FieldError>{errors.password?.message}</FieldError>
               </label>
               {acceptInvitationMutation.error ? (
-                <div className="mb-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="mb-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(acceptInvitationMutation.error)}
                 </div>
               ) : null}
@@ -126,7 +126,7 @@ export function AcceptInvitationPage() {
             </form>
           ) : (
             <div>
-              <div className="mb-4 rounded-[14px] border-2 border-yellow-200 bg-yellow-50 p-3 text-sm font-bold text-yellow-800">
+              <div className="mb-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-gold-text))]">
                 This invitation is {invitation?.status ?? 'unavailable'}.
               </div>
               <Button className="w-full gap-2" onClick={() => navigate(routes.login.to())} variant="secondary">

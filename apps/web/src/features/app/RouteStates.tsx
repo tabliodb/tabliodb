@@ -23,8 +23,8 @@ export function ErrorState({
 }) {
   return (
     <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 text-[rgb(var(--tabliodb-ink))]">
-      <Surface className="w-full max-w-md border-red-200 p-5">
-        <div className="mb-3 flex items-center gap-2 text-red-700">
+      <Surface className="w-full max-w-md border-[rgb(var(--tabliodb-danger-border))] p-5">
+        <div className="mb-3 flex items-center gap-2 text-[rgb(var(--tabliodb-danger-text))]">
           <AlertCircle className="size-5" />
           <h1 className="text-sm font-extrabold">{title}</h1>
         </div>

@@ -81,7 +81,7 @@ export function LoginPage() {
             <FieldError>{errors.password?.message}</FieldError>
           </label>
           {loginMutation.error ? (
-            <div className="mb-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+            <div className="mb-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
               {getErrorMessage(loginMutation.error)}
             </div>
           ) : null}

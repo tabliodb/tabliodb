@@ -9,7 +9,11 @@ export function FieldError({ children, className, ...props }: FieldErrorProps) {
   }
 
   return (
-    <p className={cn('mt-1 text-xs font-extrabold text-red-600', className)} role="alert" {...props}>
+    <p
+      className={cn('mt-1 text-xs font-extrabold text-[rgb(var(--tabliodb-danger-text))]', className)}
+      role="alert"
+      {...props}
+    >
       {children}
     </p>
   );

@@ -19,6 +19,7 @@ import {
 } from '@tabliodb/schema-core';
 import { useEffect, useRef } from 'react';
 import { formatColumnType } from '../diagram-model';
+import { getDisplayTableColor } from '../table-colors';
 
 const tableNodeShape = 'tabliodb-table';
 const tableNodeWidth = 288;
@@ -29,11 +30,14 @@ const tableResizeMaxWidth = 720;
 const tableResizeMinWidth = 240;
 const diagramVisualGridSize = 24;
 const diagramDragGridSize = 1;
+// Canvas colors are fixed hex values because X6 receives them outside CSS class resolution.
+const canvasBackgroundColor = '#fbfdff';
+const canvasGridColor = '#e1e8f0';
 const relationshipActiveColor = '#58cc02';
 const relationshipConnectorRadius = 10;
 const relationshipEndpointLaneGap = 8;
 const relationshipMinimumBridgeGap = 24;
-const relationshipNeutralColor = '#9ca3af';
+const relationshipNeutralColor = '#9aa8b6';
 const relationshipPortRadius = 4;
 const relationshipRouteGap = 40;
 const relationshipRouteLaneGap = 8;
@@ -122,7 +126,7 @@ export function SchemaCanvas({
       async: false,
       autoResize: true,
       background: {
-        color: '#f8fafc',
+        color: canvasBackgroundColor,
       },
       connecting: {
         allowBlank: false,
@@ -141,7 +145,7 @@ export function SchemaCanvas({
         size: diagramVisualGridSize,
         type: 'dot',
         args: {
-          color: '#e7ebf0',
+          color: canvasGridColor,
           thickness: 1,
         },
       },
@@ -297,7 +301,7 @@ export function SchemaCanvas({
   }, [fitSignal]);
 
   return (
-    <div className="relative min-h-0 flex-1 overflow-hidden bg-slate-50">
+    <div className="relative min-h-0 flex-1 overflow-hidden bg-[rgb(var(--tabliodb-canvas))]">
       <div className="tabliodb-x6-canvas absolute inset-0" ref={containerRef} />
     </div>
   );
@@ -472,7 +476,7 @@ function createTableNodeMetadata(
   return {
     id: table.id,
     data: {
-      color: table.color ?? '#0f766e',
+      color: getDisplayTableColor(table.color),
       columns,
       readOnly,
       selected: table.id === selectedTableId,
