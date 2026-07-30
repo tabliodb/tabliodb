@@ -7,7 +7,18 @@ import {
   type DatabaseColumn,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import { Button, Checkbox, IconButton, Input, Select, cn } from '@tabliodb/ui';
+import {
+  Button,
+  Checkbox,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  IconButton,
+  Input,
+  Select,
+  cn,
+} from '@tabliodb/ui';
 import {
   Columns3,
   GripVertical,
@@ -40,10 +51,10 @@ const columnTypeFamilyOptions = [
 ] as const satisfies readonly ColumnTypeFamily[];
 
 const inlineInputClassName =
-  'h-10 rounded-[12px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-2 text-sm font-extrabold shadow-none outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-60';
+  'h-8 rounded-[12px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-2 text-sm font-extrabold shadow-none outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-60';
 
 const compactSelectClassName =
-  'h-10 rounded-[12px] border-2 border-[rgb(var(--tabliodb-border-strong))] px-2 text-xs shadow-none';
+  'h-8 rounded-[12px] border-2 border-[rgb(var(--tabliodb-border-strong))] px-2 text-xs shadow-none';
 
 export type TableStructureSidebarProps = {
   model: DiagramModel;
@@ -65,6 +76,7 @@ export function TableStructureSidebar({
   const table = model.tables[selectedTableId] ?? null;
   const columns = useMemo(() => (table ? getTableColumns(model, table.id) : []), [model, table]);
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
+  const [confirmDeleteTable, setConfirmDeleteTable] = useState(false);
   const selectedColumn = columns.find((column) => column.id === selectedColumnId) ?? columns[0] ?? null;
   const columnIds = columns.map((column) => column.id).join('|');
 
@@ -79,6 +91,10 @@ export function TableStructureSidebar({
       setSelectedColumnId(columns[0]?.id ?? null);
     }
   }, [columnIds, columns, selectedColumnId, table]);
+
+  useEffect(() => {
+    setConfirmDeleteTable(false);
+  }, [selectedTableId]);
 
   if (!table) {
     return (
@@ -141,6 +157,21 @@ export function TableStructureSidebar({
     setSelectedColumnId(nextColumnId);
   }
 
+  function handleDeleteTable() {
+    if (readOnly) {
+      return;
+    }
+
+    if (!confirmDeleteTable) {
+      setConfirmDeleteTable(true);
+      return;
+    }
+
+    // Deleting the table also removes its columns, indexes, checks, and relationships through schema-core normalization.
+    apply(applyDiagramCommand(model, { type: 'table.delete', tableId: table.id }));
+    onClearTableSelection();
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] px-4">
@@ -160,14 +191,14 @@ export function TableStructureSidebar({
         <IconButton icon={X} label="Back to projects" onClick={onClearTableSelection} variant="ghost" />
       </div>
 
-      <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
         {readOnly ? (
           <div className="mb-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-xs font-extrabold text-[rgb(var(--tabliodb-gold-text))]">
             Your role can inspect this table but cannot edit schema details.
           </div>
         ) : null}
 
-        <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
+        <section className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
           <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Table name
           </label>
@@ -191,6 +222,15 @@ export function TableStructureSidebar({
               ))}
             </div>
           </div>
+          <Button
+            className="mt-3 h-11 w-full justify-start text-sm"
+            disabled={readOnly}
+            onClick={handleDeleteTable}
+            variant="danger"
+          >
+            <Trash2 className="size-4" />
+            {confirmDeleteTable ? 'Confirm delete table' : 'Delete table'}
+          </Button>
         </section>
 
         <section className="mt-4">
@@ -215,6 +255,7 @@ export function TableStructureSidebar({
                 enumsAvailable={Object.keys(model.enums).length > 0}
                 key={column.id}
                 model={model}
+                onDelete={handleDeleteColumn}
                 onSelect={setSelectedColumnId}
                 onUpdate={updateColumn}
                 selected={selectedColumn?.id === column.id}
@@ -223,13 +264,7 @@ export function TableStructureSidebar({
           </div>
         </section>
 
-        <ColumnAttributesPanel
-          column={selectedColumn}
-          disabled={readOnly}
-          model={model}
-          onDelete={handleDeleteColumn}
-          onUpdate={updateColumn}
-        />
+        <ColumnAttributesPanel column={selectedColumn} disabled={readOnly} model={model} onUpdate={updateColumn} />
       </div>
     </div>
   );
@@ -240,6 +275,7 @@ function ColumnEditorRow({
   disabled,
   enumsAvailable,
   model,
+  onDelete,
   onSelect,
   onUpdate,
   selected,
@@ -248,6 +284,7 @@ function ColumnEditorRow({
   disabled: boolean;
   enumsAvailable: boolean;
   model: DiagramModel;
+  onDelete: (column: DatabaseColumn) => void;
   onSelect: (columnId: string) => void;
   onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
   selected: boolean;
@@ -255,7 +292,7 @@ function ColumnEditorRow({
   return (
     <div
       className={cn(
-        'grid grid-cols-[14px_minmax(0,1fr)_92px_26px_26px_26px_30px] items-center gap-1 rounded-[16px] border-2 bg-white p-2 transition',
+        'rounded-[14px] border-2 bg-white p-2 transition',
         selected
           ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
           : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
@@ -263,71 +300,87 @@ function ColumnEditorRow({
       onFocus={() => onSelect(column.id)}
       onMouseDown={() => onSelect(column.id)}
     >
-      <GripVertical className="size-4 text-[rgb(var(--tabliodb-ink-subtle))]" />
-      <InlineTextInput
-        className="min-w-0"
-        disabled={disabled}
-        onCommit={(value) => {
-          const name = value.trim();
+      <div className="grid grid-cols-[12px_minmax(0,1fr)_28px] items-center gap-1">
+        <GripVertical className="size-4 text-[rgb(var(--tabliodb-ink-subtle))]" />
+        <InlineTextInput
+          className="min-w-0"
+          disabled={disabled}
+          onCommit={(value) => {
+            const name = value.trim();
 
-          if (name && name !== column.name) {
-            onUpdate(column, { name });
-          }
-        }}
-        value={column.name}
-      />
-      <Select
-        className={compactSelectClassName}
-        disabled={disabled}
-        onValueChange={(family) => {
-          const nextType = createColumnTypeForFamily(family as ColumnTypeFamily, model, column.type);
+            if (name && name !== column.name) {
+              onUpdate(column, { name });
+            }
+          }}
+          value={column.name}
+        />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              aria-label={`Column actions for ${column.name}`}
+              className="grid size-7 cursor-pointer place-items-center rounded-[12px] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={disabled}
+              type="button"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuItem
+              className="text-red-700 focus:bg-red-50 focus:text-red-700"
+              onSelect={() => onDelete(column)}
+            >
+              <Trash2 className="size-4" />
+              Delete column
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_26px_26px_32px] items-center gap-1">
+        <Select
+          className={compactSelectClassName}
+          disabled={disabled}
+          onValueChange={(family) => {
+            const nextType = createColumnTypeForFamily(family as ColumnTypeFamily, model, column.type);
 
-          if (nextType) {
-            onUpdate(column, { type: nextType });
+            if (nextType) {
+              onUpdate(column, { type: nextType });
+            }
+          }}
+          options={columnTypeFamilyOptions.map((family) => ({
+            disabled: family === 'enum' && !enumsAvailable,
+            label: family,
+            value: family,
+          }))}
+          value={column.type.family}
+        />
+        <ColumnToggle
+          active={!column.nullable}
+          disabled={disabled || column.primaryKey}
+          label="Not nullable"
+          onClick={() => onUpdate(column, { nullable: column.primaryKey ? false : !column.nullable })}
+        >
+          N
+        </ColumnToggle>
+        <ColumnToggle
+          active={column.primaryKey}
+          disabled={disabled}
+          label="Primary key"
+          onClick={() =>
+            onUpdate(column, { nullable: column.primaryKey ? column.nullable : false, primaryKey: !column.primaryKey })
           }
-        }}
-        options={columnTypeFamilyOptions.map((family) => ({
-          disabled: family === 'enum' && !enumsAvailable,
-          label: family,
-          value: family,
-        }))}
-        value={column.type.family}
-      />
-      <ColumnToggle
-        active={!column.nullable}
-        disabled={disabled || column.primaryKey}
-        label="Not nullable"
-        onClick={() => onUpdate(column, { nullable: column.primaryKey ? false : !column.nullable })}
-      >
-        N
-      </ColumnToggle>
-      <ColumnToggle
-        active={column.primaryKey}
-        disabled={disabled}
-        label="Primary key"
-        onClick={() =>
-          onUpdate(column, { nullable: column.primaryKey ? column.nullable : false, primaryKey: !column.primaryKey })
-        }
-      >
-        <KeyRound className="size-3.5" />
-      </ColumnToggle>
-      <ColumnToggle
-        active={column.unique}
-        disabled={disabled}
-        label="Unique"
-        onClick={() => onUpdate(column, { unique: !column.unique })}
-      >
-        UQ
-      </ColumnToggle>
-      <button
-        aria-label={`Select ${column.name} attributes`}
-        className="grid size-8 cursor-pointer place-items-center rounded-[12px] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={disabled}
-        onClick={() => onSelect(column.id)}
-        type="button"
-      >
-        <MoreHorizontal className="size-4" />
-      </button>
+        >
+          <KeyRound className="size-3.5" />
+        </ColumnToggle>
+        <ColumnToggle
+          active={column.unique}
+          disabled={disabled}
+          label="Unique"
+          onClick={() => onUpdate(column, { unique: !column.unique })}
+        >
+          UQ
+        </ColumnToggle>
+      </div>
     </div>
   );
 }
@@ -336,13 +389,11 @@ function ColumnAttributesPanel({
   column,
   disabled,
   model,
-  onDelete,
   onUpdate,
 }: {
   column: DatabaseColumn | null;
   disabled: boolean;
   model: DiagramModel;
-  onDelete: (column: DatabaseColumn) => void;
   onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
 }) {
   if (!column) {
@@ -356,7 +407,7 @@ function ColumnAttributesPanel({
   const enumOptions = Object.values(model.enums);
 
   return (
-    <section className="mt-4 rounded-[18px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-4 shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))]">
+    <section className="mt-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-3 shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))]">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-extrabold">Column attributes</h2>
@@ -431,11 +482,6 @@ function ColumnAttributesPanel({
           />
           Auto increment
         </label>
-
-        <Button disabled={disabled} onClick={() => onDelete(column)} variant="danger">
-          <Trash2 className="size-4" />
-          Delete column
-        </Button>
       </div>
     </section>
   );
@@ -459,7 +505,7 @@ function ColumnToggle({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        'grid size-8 cursor-pointer place-items-center rounded-[12px] border-2 text-[10px] font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60',
+        'grid h-8 w-full cursor-pointer place-items-center rounded-[12px] border-2 text-[10px] font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60',
         active
           ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_2px_0_rgb(var(--tabliodb-primary-shadow))]'
           : 'border-[rgb(var(--tabliodb-border))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
@@ -595,7 +641,7 @@ function InlineTextarea({
   return (
     <textarea
       className={cn(
-        'min-h-24 w-full resize-none rounded-[14px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-60',
+        'min-h-20 w-full resize-none rounded-[14px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-60',
         className,
       )}
       disabled={disabled}

@@ -29,11 +29,12 @@ import {
   DialogTitle,
   DialogTrigger,
   FieldError,
+  IconButton,
   Select,
   Surface,
   cn,
 } from '@tabliodb/ui';
-import { Pencil, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { PanelRightClose, Pencil, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
@@ -222,6 +223,7 @@ export type SchemaInspectorProps = {
   className?: string;
   latestSnapshotVersion: number;
   model: DiagramModel;
+  onHide?: () => void;
   onModelChange: (model: DiagramModel) => void;
   readOnly?: boolean;
   selectedTableId: string | null;
@@ -231,6 +233,7 @@ export function SchemaInspector({
   className,
   latestSnapshotVersion,
   model,
+  onHide,
   onModelChange,
   readOnly = false,
   selectedTableId,
@@ -328,14 +331,15 @@ export function SchemaInspector({
   return (
     <aside
       className={cn(
-        'tabliodb-scrollbar min-w-0 overflow-y-auto border-l-2 border-[rgb(var(--tabliodb-border))] bg-white',
+        'flex min-h-0 min-w-0 flex-col border-l-2 border-[rgb(var(--tabliodb-border))] bg-white',
         className,
       )}
     >
-      <div className="flex h-16 items-center border-b-2 border-[rgb(var(--tabliodb-border))] px-5 text-sm font-extrabold">
-        Inspector
+      <div className="flex h-16 shrink-0 items-center justify-between border-b-2 border-[rgb(var(--tabliodb-border))] px-5 text-sm font-extrabold">
+        <span>Inspector</span>
+        {onHide ? <IconButton icon={PanelRightClose} label="Hide inspector" onClick={onHide} variant="ghost" /> : null}
       </div>
-      <div className="space-y-5 p-5">
+      <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
         <div className="flex flex-wrap gap-2">
           <Badge variant="green">{model.dialect}</Badge>
           <Badge variant="blue">v{latestSnapshotVersion}</Badge>

@@ -51,7 +51,6 @@ import {
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
-  PanelRightClose,
   PanelRightOpen,
   Play,
   Plus,
@@ -65,7 +64,7 @@ import {
   UserPlus,
   UsersRound,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type SVGProps } from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
@@ -394,246 +393,249 @@ export function EditorPage() {
   }
 
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
-  const leftSidebarWidth = leftSidebarOpen ? (selectedTable ? '392px' : '272px') : '0px';
-  const rightSidebarWidth = rightSidebarOpen ? '332px' : '0px';
+  // Sidebars live below the global toolbar so the navbar stays continuous; compact controls inside each panel preserve canvas space.
+  const leftSidebarWidth = leftSidebarOpen ? '272px' : '48px';
+  const rightSidebarWidth = rightSidebarOpen ? '332px' : '48px';
 
   return (
-    <main
-      className="grid h-screen bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))] transition-[grid-template-columns] duration-200"
-      style={{ gridTemplateColumns: `${leftSidebarWidth} minmax(0,1fr) ${rightSidebarWidth}` }}
-    >
-      <aside
-        className={cn(
-          'min-w-0 overflow-hidden border-r-2 border-[rgb(var(--tabliodb-border))] bg-white',
-          !leftSidebarOpen && 'pointer-events-none invisible',
-        )}
-      >
-        {selectedTable ? (
-          <TableStructureSidebar
-            model={model}
-            onClearTableSelection={() => setSelectedTableId(null)}
-            onHide={() => setLeftSidebarOpen(false)}
-            onModelChange={handleModelChange}
-            readOnly={!canEditDiagram}
-            selectedTableId={selectedTable.id}
-          />
-        ) : (
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] px-5">
-              <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-                <Database className="size-5" />
-              </div>
-              <span className="min-w-0 flex-1 truncate text-base font-extrabold">Tabliodb</span>
-              <IconButton icon={PanelLeftClose} label="Hide left sidebar" onClick={() => setLeftSidebarOpen(false)} />
-            </div>
-            <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
-              <WorkspaceSwitcher
-                activeOrganization={activeOrganization}
-                onSelect={(organization) => {
+    <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b-2 border-[rgb(var(--tabliodb-border))] bg-white px-5">
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-extrabold">{activeProject?.name ?? defaultProjectName}</h1>
+          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+            {activeDiagram?.name ?? defaultDiagramName} / {model.dialect} / snapshot v{latestSnapshot?.version ?? 0}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
+          <IconButton icon={MessageSquareText} label="Comments" />
+          <IconButton icon={History} label="History" />
+          <IconButton icon={GitBranch} label="Branches" />
+          <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
+          {activeProject ? (
+            <>
+              <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
+              <ProjectSettingsDialog
+                onArchived={() => {
                   setModel(null);
                   setSelectedTableId(null);
-                  setProjectSearchTerm('');
-                  navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+                  navigate(routes.home.to(), { replace: true });
                 }}
-                organizations={organizations}
+                project={activeProject}
               />
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <span className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Projects
-                </span>
-                <CreateProjectDialog
-                  organizationId={activeOrganization?.id ?? null}
-                  onCreated={(project) => {
-                    setModel(null);
-                    setSelectedTableId(null);
-                    navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
-                  }}
-                />
-              </div>
-              <div className="relative mb-4">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
-                <Input
-                  className="pl-9"
-                  onChange={(event) => setProjectSearchTerm(event.target.value)}
-                  placeholder="Search projects"
-                  value={projectSearchTerm}
-                />
-              </div>
-              {filteredProjects.length === 0 ? (
-                <div className="rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  No matching projects
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {filteredProjects.map((project) => (
-                    <button
-                      className={`flex w-full cursor-pointer items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
-                        project.id === activeProject?.id
-                          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
-                          : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
-                      }`}
-                      key={project.id}
-                      onClick={() => {
-                        setModel(null);
-                        setSelectedTableId(null);
-                        navigate(
-                          routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }),
-                        );
-                      }}
-                      type="button"
-                    >
-                      <span className="min-w-0 truncate">{project.name}</span>
-                      <span className="text-xs opacity-70">{project.slug}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </aside>
+              <DiagramSettingsDialog
+                canEdit={canEditDiagram}
+                diagram={activeDiagram}
+                model={model}
+                onUpdated={(diagram) => {
+                  setModel((current) =>
+                    current
+                      ? {
+                          ...current,
+                          dialect: diagram.dialect,
+                          metadata: {
+                            ...current.metadata,
+                            // Diagram metadata follows the server record immediately; snapshot persistence still happens on Save.
+                            name: diagram.name,
+                            updatedAt: new Date().toISOString(),
+                          },
+                        }
+                      : current,
+                  );
+                }}
+              />
+            </>
+          ) : null}
+          <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} />
+          <Button
+            className="gap-2"
+            disabled={saveSnapshotMutation.isPending || !canCreateSnapshot}
+            onClick={() => {
+              if (!activeDiagram || !model || !canCreateSnapshot) {
+                return;
+              }
 
-      <section className="flex min-w-0 flex-col">
-        <header className="flex h-16 items-center justify-between border-b-2 border-[rgb(var(--tabliodb-border))] bg-white px-5">
-          <div className="min-w-0">
-            <h1 className="truncate text-base font-extrabold">{activeProject?.name ?? defaultProjectName}</h1>
-            <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-              {activeDiagram?.name ?? defaultDiagramName} / {model.dialect} / snapshot v{latestSnapshot?.version ?? 0}
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            <IconButton
-              icon={leftSidebarOpen ? PanelLeftClose : PanelLeftOpen}
-              label={leftSidebarOpen ? 'Hide left sidebar' : 'Show left sidebar'}
-              onClick={() => setLeftSidebarOpen((value) => !value)}
-            />
-            <IconButton
-              icon={rightSidebarOpen ? PanelRightClose : PanelRightOpen}
-              label={rightSidebarOpen ? 'Hide inspector' : 'Show inspector'}
-              onClick={() => setRightSidebarOpen((value) => !value)}
-            />
-            <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
-            <IconButton icon={MessageSquareText} label="Comments" />
-            <IconButton icon={History} label="History" />
-            <IconButton icon={GitBranch} label="Branches" />
-            <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
-            {activeProject ? (
-              <>
-                <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
-                <ProjectSettingsDialog
-                  onArchived={() => {
-                    setModel(null);
-                    setSelectedTableId(null);
-                    navigate(routes.home.to(), { replace: true });
-                  }}
-                  project={activeProject}
-                />
-                <DiagramSettingsDialog
-                  canEdit={canEditDiagram}
-                  diagram={activeDiagram}
-                  model={model}
-                  onUpdated={(diagram) => {
-                    setModel((current) =>
-                      current
-                        ? {
-                            ...current,
-                            dialect: diagram.dialect,
-                            metadata: {
-                              ...current.metadata,
-                              // Diagram metadata follows the server record immediately; snapshot persistence still happens on Save.
-                              name: diagram.name,
-                              updatedAt: new Date().toISOString(),
-                            },
-                          }
-                        : current,
-                    );
-                  }}
-                />
-              </>
-            ) : null}
-            <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} />
-            <Button
-              className="gap-2"
-              disabled={saveSnapshotMutation.isPending || !canCreateSnapshot}
-              onClick={() => {
-                if (!activeDiagram || !model || !canCreateSnapshot) {
-                  return;
-                }
-
-                saveSnapshotMutation.mutate({
-                  diagramId: activeDiagram.id,
-                  message: 'Manual save',
-                  snapshot: {
-                    ...model,
-                    metadata: {
-                      ...model.metadata,
-                      // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
-                      updatedAt: new Date().toISOString(),
-                    },
+              saveSnapshotMutation.mutate({
+                diagramId: activeDiagram.id,
+                message: 'Manual save',
+                snapshot: {
+                  ...model,
+                  metadata: {
+                    ...model.metadata,
+                    // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
+                    updatedAt: new Date().toISOString(),
                   },
-                });
-              }}
-            >
-              {saveSnapshotMutation.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Save className="size-4" />
-              )}
-              Save
-            </Button>
-            <Button className="gap-2" onClick={handleExportSql} variant="sky">
-              <Play className="size-4" />
-              {copiedSql ? 'Copied' : 'SQL'}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <IconButton icon={MoreHorizontal} label="More actions" variant="secondary" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setFitSignal((value) => value + 1)}>
-                  <LocateFixed className="size-4" />
-                  Fit diagram
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={handleExportSql}>
-                  <Play className="size-4" />
-                  Copy SQL
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Share2 className="size-4" />
-                  Share workspace
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => navigate(routes.adminUsers.to())}>
-                  <ShieldCheck className="size-4" />
-                  Admin users
-                </DropdownMenuItem>
-                <DropdownMenuSeparatorItem />
-                <DropdownMenuItem disabled={logoutMutation.isPending} onSelect={() => logoutMutation.mutate(undefined)}>
-                  <LogOut className="size-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
-        <SchemaCanvas
-          fitKey={activeDiagram?.id ?? 'empty'}
-          fitSignal={fitSignal}
-          model={model}
-          onModelChange={handleModelChange}
-          onSelectedTableChange={handleSelectedTableChange}
-          readOnly={!canEditDiagram}
-          selectedTableId={selectedTableId}
-        />
-      </section>
+                },
+              });
+            }}
+          >
+            {saveSnapshotMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            Save
+          </Button>
+          <Button className="gap-2" onClick={handleExportSql} variant="sky">
+            <Play className="size-4" />
+            {copiedSql ? 'Copied' : 'SQL'}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <IconButton icon={MoreHorizontal} label="More actions" variant="secondary" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setFitSignal((value) => value + 1)}>
+                <LocateFixed className="size-4" />
+                Fit diagram
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleExportSql}>
+                <Play className="size-4" />
+                Copy SQL
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Share2 className="size-4" />
+                Share workspace
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate(routes.adminUsers.to())}>
+                <ShieldCheck className="size-4" />
+                Admin users
+              </DropdownMenuItem>
+              <DropdownMenuSeparatorItem />
+              <DropdownMenuItem disabled={logoutMutation.isPending} onSelect={() => logoutMutation.mutate(undefined)}>
+                <LogOut className="size-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
 
-      <SchemaInspector
-        className={cn(!rightSidebarOpen && 'pointer-events-none invisible overflow-hidden')}
-        latestSnapshotVersion={latestSnapshot?.version ?? 0}
-        model={model}
-        onModelChange={handleModelChange}
-        readOnly={!canEditDiagram}
-        selectedTableId={selectedTableId}
-      />
+      <div
+        className="grid min-h-0 flex-1 transition-[grid-template-columns] duration-200"
+        style={{ gridTemplateColumns: `${leftSidebarWidth} minmax(0,1fr) ${rightSidebarWidth}` }}
+      >
+        <aside className="min-w-0 overflow-hidden border-r-2 border-[rgb(var(--tabliodb-border))] bg-white">
+          {!leftSidebarOpen ? (
+            <SidebarRail
+              icon={PanelLeftOpen}
+              label="Show left sidebar"
+              onClick={() => setLeftSidebarOpen(true)}
+              side="left"
+            />
+          ) : selectedTable ? (
+            <TableStructureSidebar
+              model={model}
+              onClearTableSelection={() => setSelectedTableId(null)}
+              onHide={() => setLeftSidebarOpen(false)}
+              onModelChange={handleModelChange}
+              readOnly={!canEditDiagram}
+              selectedTableId={selectedTable.id}
+            />
+          ) : (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] px-5">
+                <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+                  <Database className="size-5" />
+                </div>
+                <span className="min-w-0 flex-1 truncate text-base font-extrabold">Tabliodb</span>
+                <IconButton icon={PanelLeftClose} label="Hide left sidebar" onClick={() => setLeftSidebarOpen(false)} />
+              </div>
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+                <WorkspaceSwitcher
+                  activeOrganization={activeOrganization}
+                  onSelect={(organization) => {
+                    setModel(null);
+                    setSelectedTableId(null);
+                    setProjectSearchTerm('');
+                    navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+                  }}
+                  organizations={organizations}
+                />
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <span className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Projects
+                  </span>
+                  <CreateProjectDialog
+                    organizationId={activeOrganization?.id ?? null}
+                    onCreated={(project) => {
+                      setModel(null);
+                      setSelectedTableId(null);
+                      navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+                    }}
+                  />
+                </div>
+                <div className="relative mb-4">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+                  <Input
+                    className="pl-9"
+                    onChange={(event) => setProjectSearchTerm(event.target.value)}
+                    placeholder="Search projects"
+                    value={projectSearchTerm}
+                  />
+                </div>
+                {filteredProjects.length === 0 ? (
+                  <div className="rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    No matching projects
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {filteredProjects.map((project) => (
+                      <button
+                        className={`flex w-full cursor-pointer items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
+                          project.id === activeProject?.id
+                            ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
+                            : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
+                        }`}
+                        key={project.id}
+                        onClick={() => {
+                          setModel(null);
+                          setSelectedTableId(null);
+                          navigate(
+                            routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }),
+                          );
+                        }}
+                        type="button"
+                      >
+                        <span className="min-w-0 truncate">{project.name}</span>
+                        <span className="text-xs opacity-70">{project.slug}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </aside>
+
+        <section className="flex min-h-0 min-w-0">
+          <SchemaCanvas
+            fitKey={activeDiagram?.id ?? 'empty'}
+            fitSignal={fitSignal}
+            model={model}
+            onModelChange={handleModelChange}
+            onSelectedTableChange={handleSelectedTableChange}
+            readOnly={!canEditDiagram}
+            selectedTableId={selectedTableId}
+          />
+        </section>
+
+        {rightSidebarOpen ? (
+          <SchemaInspector
+            latestSnapshotVersion={latestSnapshot?.version ?? 0}
+            model={model}
+            onHide={() => setRightSidebarOpen(false)}
+            onModelChange={handleModelChange}
+            readOnly={!canEditDiagram}
+            selectedTableId={selectedTableId}
+          />
+        ) : (
+          <aside className="min-w-0 overflow-hidden border-l-2 border-[rgb(var(--tabliodb-border))] bg-white">
+            <SidebarRail
+              icon={PanelRightOpen}
+              label="Show inspector"
+              onClick={() => setRightSidebarOpen(true)}
+              side="right"
+            />
+          </aside>
+        )}
+      </div>
     </main>
   );
 }
@@ -648,6 +650,29 @@ function getOrganizationSlug(organization: OrganizationDto): string {
 
 function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: string | null): boolean {
   return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
+}
+
+function SidebarRail({
+  icon,
+  label,
+  onClick,
+  side,
+}: {
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  label: string;
+  onClick: () => void;
+  side: 'left' | 'right';
+}) {
+  return (
+    <div
+      className={cn(
+        'flex h-full min-h-0 items-start justify-center pt-3',
+        side === 'left' ? 'border-r-0' : 'border-l-0',
+      )}
+    >
+      <IconButton icon={icon} label={label} onClick={onClick} variant="ghost" />
+    </div>
+  );
 }
 
 function WorkspaceSwitcher({
