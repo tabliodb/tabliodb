@@ -3,9 +3,9 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import sharp from 'sharp';
+import { AVATAR_SERVE_VARIANT } from '../repositories/file.repository.js';
 import { FileService } from './file.service.js';
-
-const pngBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
 
 describe(FileService.name, () => {
   const configRepository = {
@@ -18,10 +18,21 @@ describe(FileService.name, () => {
   };
 
   let storageRoot: string;
+  let pngBuffer: Buffer;
   let service: FileService;
 
   beforeEach(async () => {
     vi.resetAllMocks();
+    pngBuffer = await sharp({
+      create: {
+        background: { alpha: 1, b: 58, g: 199, r: 88 },
+        channels: 4,
+        height: 4,
+        width: 4,
+      },
+    })
+      .png()
+      .toBuffer();
     storageRoot = await mkdtemp(path.join(tmpdir(), 'tabliodb-avatar-test-'));
     configRepository.getEnv.mockReturnValue({
       storage: {
@@ -36,7 +47,7 @@ describe(FileService.name, () => {
     await rm(storageRoot, { force: true, recursive: true });
   });
 
-  it('stores a validated avatar file and records ready metadata', async () => {
+  it('processes avatar uploads into safe WebP objects and records a served variant', async () => {
     await service.uploadUserAvatar('user-id', {
       buffer: pngBuffer,
       mimetype: 'image/png',
@@ -44,16 +55,40 @@ describe(FileService.name, () => {
       size: pngBuffer.length,
     });
 
-    const storedFile = fileRepository.replaceUserAvatar.mock.calls[0][0];
+    const storedFile = fileRepository.replaceUserAvatar.mock.calls[0][0].file;
+    const [storedVariant] = fileRepository.replaceUserAvatar.mock.calls[0][0].variants;
+
     expect(storedFile).toMatchObject({
-      byteSize: pngBuffer.length,
       kind: 'avatar',
-      mimeType: 'image/png',
+      metadata: {
+        originalMimeType: 'image/png',
+        processed: true,
+        strippedMetadata: true,
+      },
+      mimeType: 'image/webp',
       ownerId: 'user-id',
       status: 'ready',
     });
-    expect(storedFile.storageKey).toMatch(/^avatars\/user-id\/.+\.png$/);
-    await expect(readFile(path.join(storageRoot, storedFile.storageKey))).resolves.toEqual(pngBuffer);
+    expect(storedFile.byteSize).toBeGreaterThan(0);
+    expect(storedFile.checksumSha256).toHaveLength(64);
+    expect(storedFile.storageKey).toMatch(/^avatars\/user-id\/.+\/original\.webp$/);
+    await expect(readFile(path.join(storageRoot, storedFile.storageKey))).resolves.not.toEqual(pngBuffer);
+
+    expect(storedVariant).toMatchObject({
+      fileId: storedFile.id,
+      height: 128,
+      metadata: {
+        generatedFrom: 'avatar-upload',
+        strippedMetadata: true,
+      },
+      mimeType: 'image/webp',
+      variant: AVATAR_SERVE_VARIANT,
+      width: 128,
+    });
+    expect(storedVariant.byteSize).toBeGreaterThan(0);
+    expect(storedVariant.metadata.checksumSha256).toHaveLength(64);
+    expect(storedVariant.storageKey).toMatch(/^avatars\/user-id\/.+\/avatar_128\.webp$/);
+    await expect(readFile(path.join(storageRoot, storedVariant.storageKey))).resolves.not.toEqual(pngBuffer);
   });
 
   it('rejects files whose MIME type and signature are not allowed', async () => {
