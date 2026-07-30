@@ -8,6 +8,7 @@ import {
   createStarterDiagramModel,
   decodeDiagramModelFromYjsUpdate,
   encodeDiagramModelAsYjsUpdate,
+  getDiagramModelIntegrityWarnings,
   getTableColumns,
   hasDiagramModelInYjsDocument,
   readDiagramModelFromYjsDocument,
@@ -81,6 +82,67 @@ describe('schema-core diagram commands', () => {
 
     expect(update.byteLength).toBeGreaterThan(0);
     expect(decodeDiagramModelFromYjsUpdate(update)).toEqual(serializeDiagramModel(model));
+  });
+
+  it('reports integrity warnings for importable but inconsistent diagrams', () => {
+    const model = createStarterDiagramModel('Import warning test');
+
+    model.tables.users.columnIds.push('missing-column');
+    model.tables['users-copy'] = {
+      ...model.tables.users,
+      columnIds: [],
+      id: 'users-copy',
+      indexIds: [],
+      position: { x: 900, y: 120 },
+    };
+    model.columns['orphan-column'] = {
+      autoIncrement: false,
+      id: 'orphan-column',
+      name: 'orphan_id',
+      nullable: false,
+      primaryKey: false,
+      tableId: 'missing-table',
+      type: { family: 'uuid' },
+      unique: false,
+    };
+    model.columns['users-status'] = {
+      autoIncrement: false,
+      id: 'users-status',
+      name: 'status',
+      nullable: false,
+      primaryKey: false,
+      tableId: 'users',
+      type: { family: 'enum', enumId: 'missing-enum' },
+      unique: false,
+    };
+    model.indexes['broken-index'] = {
+      columns: [{ columnId: 'missing-column' }],
+      id: 'broken-index',
+      name: 'broken_idx',
+      tableId: 'users',
+      unique: false,
+    };
+    model.relationships['broken-relationship'] = {
+      cardinality: 'one_to_many',
+      id: 'broken-relationship',
+      sourceColumnIds: ['users-id'],
+      sourceTableId: 'users',
+      targetColumnIds: ['missing-column'],
+      targetTableId: 'missing-table',
+    };
+
+    // Import preview can accept a structurally valid model while still warning about unresolved references.
+    expect(getDiagramModelIntegrityWarnings(model).map((warning) => warning.code)).toEqual(
+      expect.arrayContaining([
+        'duplicate_table_name',
+        'missing_column',
+        'missing_enum',
+        'missing_index_column',
+        'missing_relationship_column',
+        'missing_relationship_table',
+        'orphan_column',
+      ]),
+    );
   });
 
   it('removes stale Yjs entities when the canonical model deletes them', () => {

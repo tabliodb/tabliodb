@@ -172,6 +172,26 @@ export const DiagramModelSchema = z.object({
 });
 export type DiagramModel = z.infer<typeof DiagramModelSchema>;
 
+export type DiagramModelIntegrityWarning = {
+  code:
+    | 'duplicate_column_name'
+    | 'duplicate_table_name'
+    | 'missing_check_column'
+    | 'missing_check_table'
+    | 'missing_column'
+    | 'missing_enum'
+    | 'missing_index_column'
+    | 'missing_index_table'
+    | 'missing_relationship_column'
+    | 'missing_relationship_table'
+    | 'orphan_column';
+  message: string;
+  target?: {
+    id: string;
+    type: 'check' | 'column' | 'index' | 'relationship' | 'table';
+  };
+};
+
 export const yjsCollections = {
   document: 'document',
   tables: 'tables',
@@ -749,6 +769,159 @@ export function serializeDiagramModel(model: DiagramModel): DiagramModel {
 
 export function stringifyDiagramModel(model: DiagramModel, space = 2): string {
   return JSON.stringify(serializeDiagramModel(model), null, space);
+}
+
+export function getDiagramModelIntegrityWarnings(model: DiagramModel): DiagramModelIntegrityWarning[] {
+  const normalizedModel = serializeDiagramModel(model);
+  const warnings: DiagramModelIntegrityWarning[] = [];
+  const tableNames = new Map<string, string>();
+
+  for (const table of Object.values(normalizedModel.tables)) {
+    const tableKey = `${table.schema ?? ''}.${table.name}`.toLowerCase();
+    const existingTableId = tableNames.get(tableKey);
+
+    if (existingTableId) {
+      warnings.push({
+        code: 'duplicate_table_name',
+        message: `Table "${table.name}" duplicates another table in the same schema.`,
+        target: { id: table.id, type: 'table' },
+      });
+    } else {
+      tableNames.set(tableKey, table.id);
+    }
+
+    const columnNames = new Map<string, string>();
+
+    for (const columnId of table.columnIds) {
+      const column = normalizedModel.columns[columnId];
+
+      if (!column) {
+        warnings.push({
+          code: 'missing_column',
+          message: `Table "${table.name}" references missing column "${columnId}".`,
+          target: { id: table.id, type: 'table' },
+        });
+        continue;
+      }
+
+      const columnKey = column.name.toLowerCase();
+      const existingColumnId = columnNames.get(columnKey);
+
+      if (existingColumnId) {
+        warnings.push({
+          code: 'duplicate_column_name',
+          message: `Column "${table.name}.${column.name}" duplicates another column in the same table.`,
+          target: { id: column.id, type: 'column' },
+        });
+      } else {
+        columnNames.set(columnKey, column.id);
+      }
+    }
+  }
+
+  for (const column of Object.values(normalizedModel.columns)) {
+    const table = normalizedModel.tables[column.tableId];
+
+    if (!table) {
+      warnings.push({
+        code: 'orphan_column',
+        message: `Column "${column.name}" points to missing table "${column.tableId}".`,
+        target: { id: column.id, type: 'column' },
+      });
+      continue;
+    }
+
+    if (!table.columnIds.includes(column.id)) {
+      warnings.push({
+        code: 'orphan_column',
+        message: `Column "${table.name}.${column.name}" is not listed in its table column order.`,
+        target: { id: column.id, type: 'column' },
+      });
+    }
+
+    if (column.type.family === 'enum' && column.type.enumId && !normalizedModel.enums[column.type.enumId]) {
+      warnings.push({
+        code: 'missing_enum',
+        message: `Column "${table.name}.${column.name}" references missing enum "${column.type.enumId}".`,
+        target: { id: column.id, type: 'column' },
+      });
+    }
+  }
+
+  for (const relationship of Object.values(normalizedModel.relationships)) {
+    pushMissingRelationshipSideWarnings(normalizedModel, relationship, 'source', warnings);
+    pushMissingRelationshipSideWarnings(normalizedModel, relationship, 'target', warnings);
+  }
+
+  for (const index of Object.values(normalizedModel.indexes)) {
+    const table = normalizedModel.tables[index.tableId];
+
+    if (!table) {
+      warnings.push({
+        code: 'missing_index_table',
+        message: `Index "${index.name}" points to missing table "${index.tableId}".`,
+        target: { id: index.id, type: 'index' },
+      });
+    }
+
+    for (const indexColumn of index.columns) {
+      if (!normalizedModel.columns[indexColumn.columnId]) {
+        warnings.push({
+          code: 'missing_index_column',
+          message: `Index "${index.name}" references missing column "${indexColumn.columnId}".`,
+          target: { id: index.id, type: 'index' },
+        });
+      }
+    }
+  }
+
+  for (const check of Object.values(normalizedModel.checks)) {
+    if (!normalizedModel.tables[check.tableId]) {
+      warnings.push({
+        code: 'missing_check_table',
+        message: `Check "${check.name}" points to missing table "${check.tableId}".`,
+        target: { id: check.id, type: 'check' },
+      });
+    }
+
+    if (check.columnId && !normalizedModel.columns[check.columnId]) {
+      warnings.push({
+        code: 'missing_check_column',
+        message: `Check "${check.name}" references missing column "${check.columnId}".`,
+        target: { id: check.id, type: 'check' },
+      });
+    }
+  }
+
+  return warnings;
+}
+
+function pushMissingRelationshipSideWarnings(
+  model: DiagramModel,
+  relationship: DatabaseRelationship,
+  side: 'source' | 'target',
+  warnings: DiagramModelIntegrityWarning[],
+) {
+  const tableId = side === 'source' ? relationship.sourceTableId : relationship.targetTableId;
+  const columnIds = side === 'source' ? relationship.sourceColumnIds : relationship.targetColumnIds;
+
+  if (!model.tables[tableId]) {
+    warnings.push({
+      code: 'missing_relationship_table',
+      message: `Relationship "${relationship.name ?? relationship.id}" points to missing ${side} table "${tableId}".`,
+      target: { id: relationship.id, type: 'relationship' },
+    });
+  }
+
+  for (const columnId of columnIds) {
+    if (!model.columns[columnId]) {
+      warnings.push({
+        code: 'missing_relationship_column',
+        message: `Relationship "${relationship.name ?? relationship.id}" references missing ${side} column "${columnId}".`,
+        target: { id: relationship.id, type: 'relationship' },
+      });
+    }
+  }
 }
 
 function syncYEntityCollection(collection: Y.Map<Y.Map<unknown>>, entities: Record<string, YjsRecord>): void {

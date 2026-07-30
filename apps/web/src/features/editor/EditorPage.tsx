@@ -1,6 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { stringifyDiagramModel, type DatabaseDialect, type DiagramModel } from '@tabliodb/schema-core';
+import {
+  getDiagramModelIntegrityWarnings,
+  parseDiagramModel,
+  stringifyDiagramModel,
+  type DatabaseDialect,
+  type DiagramModel,
+  type DiagramModelIntegrityWarning,
+} from '@tabliodb/schema-core';
 import { generateDiagramMarkdown } from '@tabliodb/docs';
 import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import {
@@ -47,6 +54,7 @@ import {
   Download,
   FileJson,
   FileText,
+  FileUp,
   FileWarning,
   FolderPlus,
   GitBranch,
@@ -71,7 +79,16 @@ import {
   UserPlus,
   UsersRound,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type SVGProps } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ComponentType,
+  type SVGProps,
+} from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
@@ -107,6 +124,12 @@ const addTableFormSchema = z.object({
 });
 
 type AddTableFormState = z.infer<typeof addTableFormSchema>;
+
+const importJsonFormSchema = z.object({
+  json: z.string().trim().min(1, 'Paste exported Tabliodb JSON or upload a .json file.'),
+});
+
+type ImportJsonFormState = z.infer<typeof importJsonFormSchema>;
 
 const projectFormSchema = z.object({
   description: z.string().trim().max(240, 'Keep the description under 240 characters.').optional(),
@@ -173,6 +196,7 @@ export function EditorPage() {
   const queryClient = useQueryClient();
   const [copiedSql, setCopiedSql] = useState(false);
   const [sqlPreviewOpen, setSqlPreviewOpen] = useState(false);
+  const [importJsonOpen, setImportJsonOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
@@ -390,6 +414,25 @@ export function EditorPage() {
     downloadTextFile(`${getExportFileStem()}.schema.md`, generateDiagramMarkdown(model), 'text/markdown;charset=utf-8');
   }
 
+  function handleImportJsonModel(importedModel: DiagramModel) {
+    if (!canEditDiagram) {
+      return;
+    }
+
+    const nextModel = parseDiagramModel({
+      ...importedModel,
+      metadata: {
+        ...importedModel.metadata,
+        // Import replaces the current draft, so updatedAt reflects the moment this workspace accepted the file.
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    modelRef.current = nextModel;
+    setModel(nextModel);
+    setSelectedTableId(null);
+  }
+
   function getExportFileStem() {
     return createExportFileStem(activeProject?.name, activeDiagram?.name ?? model?.metadata.name);
   }
@@ -555,6 +598,11 @@ export function EditorPage() {
                 <LocateFixed className="size-4" />
                 Fit diagram
               </DropdownMenuItem>
+              <DropdownMenuItem disabled={!canEditDiagram} onSelect={() => setImportJsonOpen(true)}>
+                <FileUp className="size-4" />
+                Import Tabliodb JSON
+              </DropdownMenuItem>
+              <DropdownMenuSeparatorItem />
               <DropdownMenuItem onSelect={handleExportSql}>
                 <Copy className="size-4" />
                 Copy SQL
@@ -599,6 +647,14 @@ export function EditorPage() {
         open={sqlPreviewOpen}
         sql={sqlPreview.sql}
         warnings={sqlPreview.warnings}
+      />
+
+      <ImportJsonDialog
+        currentDiagramName={activeDiagram.name}
+        disabled={!canEditDiagram}
+        onImport={handleImportJsonModel}
+        onOpenChange={setImportJsonOpen}
+        open={importJsonOpen}
       />
 
       <div
@@ -866,6 +922,191 @@ function SqlPreviewDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ImportJsonDialog({
+  currentDiagramName,
+  disabled,
+  onImport,
+  onOpenChange,
+  open,
+}: {
+  currentDiagramName: string;
+  disabled: boolean;
+  onImport: (model: DiagramModel) => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const form = useForm<ImportJsonFormState>({
+    defaultValues: {
+      json: '',
+    },
+    mode: 'onChange',
+    resolver: zodResolver(importJsonFormSchema),
+  });
+  const { errors } = form.formState;
+  const rawJson = form.watch('json');
+  const preview = useMemo(() => parseImportJsonDraft(rawJson), [rawJson]);
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen && disabled) {
+      return;
+    }
+
+    onOpenChange(nextOpen);
+
+    if (!nextOpen) {
+      form.reset({ json: '' });
+    }
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const content = await file.text();
+
+    // File upload hanya mengisi textarea; validasi dan preview tetap melalui jalur paste yang sama.
+    form.setValue('json', content, { shouldDirty: true, shouldValidate: true });
+    event.currentTarget.value = '';
+  }
+
+  function handleSubmit() {
+    if (preview.status !== 'valid') {
+      form.setError('json', {
+        message: preview.status === 'invalid' ? preview.error : 'Paste exported Tabliodb JSON or upload a .json file.',
+        type: 'manual',
+      });
+      return;
+    }
+
+    onImport(preview.model);
+    handleOpenChange(false);
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogContent className="w-[min(94vw,820px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileUp className="size-5 text-[rgb(var(--tabliodb-primary-text))]" />
+              Import Tabliodb JSON
+            </DialogTitle>
+            <DialogDescription>
+              Replace the current draft for {currentDiagramName}. Create a snapshot after import when the result looks
+              right.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogBody className="grid gap-4">
+            <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-[20px] border-2 border-dashed border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] px-4 py-5 text-center text-[13px] font-extrabold text-[rgb(var(--tabliodb-primary-text))] transition hover:bg-[rgb(var(--tabliodb-primary-soft-hover))]">
+              <FileJson className="size-6" />
+              Upload exported .tabliodb.json
+              <span className="text-[12px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                or paste the file contents below
+              </span>
+              <input
+                accept=".json,application/json"
+                className="sr-only"
+                disabled={disabled}
+                onChange={handleFileChange}
+                type="file"
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                JSON
+              </span>
+              <ControlledTextarea
+                aria-invalid={Boolean(errors.json) || preview.status === 'invalid'}
+                className="tabliodb-scrollbar min-h-64 w-full resize-y rounded-[18px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-3 font-mono text-[12px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:font-sans placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
+                control={form.control}
+                disabled={disabled}
+                name="json"
+                placeholder='{"schemaVersion":1,"dialect":"postgresql","tables":{...}}'
+              />
+              <FieldError>{errors.json?.message}</FieldError>
+            </label>
+
+            <ImportJsonPreview preview={preview} />
+          </DialogBody>
+
+          <DialogFooter>
+            <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button disabled={disabled || preview.status !== 'valid'} type="submit">
+              <FileUp className="size-4" />
+              Apply import
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ImportJsonPreview({ preview }: { preview: ImportJsonDraftPreview }) {
+  if (preview.status === 'empty') {
+    return (
+      <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+        Waiting for a Tabliodb JSON document.
+      </section>
+    );
+  }
+
+  if (preview.status === 'invalid') {
+    return (
+      <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-danger-text))]">
+        {preview.error}
+      </section>
+    );
+  }
+
+  const model = preview.model;
+
+  return (
+    <section className="grid gap-3 rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="green">{formatDiagramDialect(model.dialect)}</Badge>
+        <Badge>{Object.keys(model.tables).length} tables</Badge>
+        <Badge>{Object.keys(model.relationships).length} relationships</Badge>
+        <Badge>{Object.keys(model.indexes).length} indexes</Badge>
+        <Badge>{Object.keys(model.enums).length} enums</Badge>
+      </div>
+      <div>
+        <div className="text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{model.metadata.name}</div>
+        <div className="text-[12px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+          This import will replace the current unsaved draft model.
+        </div>
+      </div>
+      {preview.warnings.length > 0 ? (
+        <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
+          <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
+            <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
+            Import warnings
+          </div>
+          <ul className="grid gap-1">
+            {preview.warnings.slice(0, 6).map((warning) => (
+              <li key={`${warning.code}:${warning.target?.id ?? warning.message}`}>{warning.message}</li>
+            ))}
+          </ul>
+          {preview.warnings.length > 6 ? (
+            <div className="mt-2">+{preview.warnings.length - 6} more warnings</div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+          JSON is valid and no unresolved references were found.
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -2267,6 +2508,63 @@ function AddTableDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+type ImportJsonDraftPreview =
+  | {
+      status: 'empty';
+      warnings: [];
+    }
+  | {
+      error: string;
+      status: 'invalid';
+      warnings: [];
+    }
+  | {
+      model: DiagramModel;
+      status: 'valid';
+      warnings: DiagramModelIntegrityWarning[];
+    };
+
+function parseImportJsonDraft(value: string): ImportJsonDraftPreview {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return { status: 'empty', warnings: [] };
+  }
+
+  try {
+    const parsedValue = JSON.parse(trimmedValue) as unknown;
+    const model = parseDiagramModel(parsedValue);
+
+    return {
+      model,
+      status: 'valid',
+      warnings: getDiagramModelIntegrityWarnings(model),
+    };
+  } catch (error) {
+    return {
+      error: getImportJsonErrorMessage(error),
+      status: 'invalid',
+      warnings: [],
+    };
+  }
+}
+
+function getImportJsonErrorMessage(error: unknown): string {
+  if (error instanceof SyntaxError) {
+    return `JSON is not valid: ${error.message}`;
+  }
+
+  if (error instanceof z.ZodError) {
+    const firstIssue = error.issues[0];
+
+    return firstIssue
+      ? `JSON does not match Tabliodb schema: ${firstIssue.message}`
+      : 'JSON does not match Tabliodb schema.';
+  }
+
+  return 'JSON could not be imported.';
 }
 
 function downloadTextFile(fileName: string, content: string, mimeType: string) {
