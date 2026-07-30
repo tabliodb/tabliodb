@@ -48,6 +48,7 @@ const compactSelectClassName =
 export type TableStructureSidebarProps = {
   model: DiagramModel;
   onClearTableSelection: () => void;
+  onColumnSelect?: (columnId: string) => void;
   onHide: () => void;
   onModelChange: (model: DiagramModel) => void;
   readOnly?: boolean;
@@ -57,6 +58,7 @@ export type TableStructureSidebarProps = {
 export function TableStructureSidebar({
   model,
   onClearTableSelection,
+  onColumnSelect,
   onHide,
   onModelChange,
   readOnly = false,
@@ -135,6 +137,14 @@ export function TableStructureSidebar({
       }),
     );
     setSelectedColumnId(columnId);
+    // Column yang baru dibuat langsung menjadi anchor komentar supaya feedback tim bisa spesifik ke field baru.
+    onColumnSelect?.(columnId);
+  }
+
+  function handleColumnSelect(columnId: string) {
+    setSelectedColumnId(columnId);
+    // Interaksi eksplisit dengan row column juga memindahkan target komentar aktif ke column tersebut.
+    onColumnSelect?.(columnId);
   }
 
   function updateColumn(column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) {
@@ -146,6 +156,10 @@ export function TableStructureSidebar({
 
     apply(applyDiagramCommand(model, { type: 'column.delete', columnId: column.id }));
     setSelectedColumnId(nextColumnId);
+    if (nextColumnId) {
+      // Setelah delete, target komentar pindah ke column terdekat agar composer tidak menunjuk entity yang sudah hilang.
+      onColumnSelect?.(nextColumnId);
+    }
   }
 
   function handleDeleteTable() {
@@ -267,7 +281,7 @@ export function TableStructureSidebar({
                 model={model}
                 onAttributesOpenChange={(open) => setActiveAttributesColumnId(open ? column.id : null)}
                 onDelete={handleDeleteColumn}
-                onSelect={setSelectedColumnId}
+                onSelect={handleColumnSelect}
                 onUpdate={updateColumn}
                 selected={selectedColumn?.id === column.id}
               />

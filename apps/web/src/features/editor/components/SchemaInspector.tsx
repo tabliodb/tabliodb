@@ -221,6 +221,11 @@ const relationshipFormSchema = z
 
 type RelationshipFormState = z.infer<typeof relationshipFormSchema>;
 
+export type SchemaInspectorCommentTarget = {
+  targetId: string | null;
+  targetType: 'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
+};
+
 export type SchemaInspectorProps = {
   className?: string;
   latestSnapshotVersion: number;
@@ -228,6 +233,7 @@ export type SchemaInspectorProps = {
   canIgnoreReviewSignals?: boolean;
   isIgnoringReviewSignal?: boolean;
   onHide?: () => void;
+  onCommentTargetSelect?: (target: SchemaInspectorCommentTarget) => void;
   onModelChange: (model: DiagramModel) => void;
   onReviewSignalIgnore?: (signalId: string) => void;
   onTableSelect?: (tableId: string) => void;
@@ -244,6 +250,7 @@ export function SchemaInspector({
   canIgnoreReviewSignals = false,
   isIgnoringReviewSignal = false,
   onHide,
+  onCommentTargetSelect,
   onModelChange,
   onReviewSignalIgnore,
   onTableSelect,
@@ -345,11 +352,42 @@ export function SchemaInspector({
     }
   }, [selectedColumnId, selectedRelationshipId, selectedRelationshipIds, selectedRelationships, selectedTable]);
 
+  function handleColumnSelect(columnId: string) {
+    setSelectedColumnId(columnId);
+    // Inspector selection ikut menggeser anchor komentar agar diskusi bisa diarahkan ke field yang sedang dilihat.
+    onCommentTargetSelect?.({ targetId: columnId, targetType: 'column' });
+  }
+
+  function handleEnumSelect(enumId: string) {
+    setSelectedEnumId(enumId);
+    // Enum adalah entity global diagram, jadi target komentar tidak perlu memindahkan table selection.
+    onCommentTargetSelect?.({ targetId: enumId, targetType: 'enum' });
+  }
+
+  function handleIndexSelect(indexId: string) {
+    setSelectedIndexId(indexId);
+    // Index punya lifecycle sendiri walau dimiliki table, sehingga komentar sebaiknya tidak jatuh ke table saja.
+    onCommentTargetSelect?.({ targetId: indexId, targetType: 'index' });
+  }
+
+  function handleCheckSelect(checkId: string) {
+    setSelectedCheckId(checkId);
+    // Check constraint sering menjadi bahan review, jadi anchor detailnya disimpan sebagai check, bukan column/table.
+    onCommentTargetSelect?.({ targetId: checkId, targetType: 'check' });
+  }
+
+  function handleRelationshipSelect(relationshipId: string) {
+    setSelectedRelationshipId(relationshipId);
+    // Relationship review harus menempel ke wire/domain relationship agar percakapannya tetap jelas saat table berubah.
+    onCommentTargetSelect?.({ targetId: relationshipId, targetType: 'relationship' });
+  }
+
   function handleReviewSignalSelect(signal: DiagramReviewSignal) {
     const { id, type } = signal.target;
 
     if (type === 'table') {
       onTableSelect?.(id);
+      onCommentTargetSelect?.({ targetId: id, targetType: 'table' });
       return;
     }
 
@@ -359,14 +397,14 @@ export function SchemaInspector({
       if (column) {
         // Fokus signal column juga memilih table induknya supaya canvas dan sidebar kiri ikut memberi konteks visual.
         onTableSelect?.(column.tableId);
-        setSelectedColumnId(column.id);
+        handleColumnSelect(column.id);
       }
 
       return;
     }
 
     if (type === 'enum') {
-      setSelectedEnumId(id);
+      handleEnumSelect(id);
       return;
     }
 
@@ -375,7 +413,7 @@ export function SchemaInspector({
 
       if (index) {
         onTableSelect?.(index.tableId);
-        setSelectedIndexId(index.id);
+        handleIndexSelect(index.id);
       }
 
       return;
@@ -386,7 +424,7 @@ export function SchemaInspector({
 
       if (check) {
         onTableSelect?.(check.tableId);
-        setSelectedCheckId(check.id);
+        handleCheckSelect(check.id);
       }
 
       return;
@@ -397,7 +435,7 @@ export function SchemaInspector({
 
       if (relationship) {
         onTableSelect?.(relationship.targetTableId);
-        setSelectedRelationshipId(relationship.id);
+        handleRelationshipSelect(relationship.id);
       }
     }
   }
@@ -426,7 +464,7 @@ export function SchemaInspector({
           databaseEnum={selectedEnum}
           enums={enums}
           model={model}
-          onEnumSelect={setSelectedEnumId}
+          onEnumSelect={handleEnumSelect}
           onModelChange={onModelChange}
           readOnly={readOnly}
           selectedEnumId={selectedEnumId}
@@ -460,7 +498,7 @@ export function SchemaInspector({
                         'bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))]',
                     )}
                     key={column.id}
-                    onClick={() => setSelectedColumnId(column.id)}
+                    onClick={() => handleColumnSelect(column.id)}
                     type="button"
                   >
                     <div className="min-w-0">
@@ -490,7 +528,7 @@ export function SchemaInspector({
           index={selectedIndex}
           indexes={selectedIndexes}
           model={model}
-          onIndexSelect={setSelectedIndexId}
+          onIndexSelect={handleIndexSelect}
           onModelChange={onModelChange}
           readOnly={readOnly}
           selectedIndexId={selectedIndexId}
@@ -501,7 +539,7 @@ export function SchemaInspector({
           checks={selectedChecks}
           columns={selectedColumns}
           model={model}
-          onCheckSelect={setSelectedCheckId}
+          onCheckSelect={handleCheckSelect}
           onModelChange={onModelChange}
           readOnly={readOnly}
           selectedCheckId={selectedCheckId}
@@ -510,7 +548,7 @@ export function SchemaInspector({
         <RelationshipInspector
           model={model}
           onModelChange={onModelChange}
-          onRelationshipSelect={setSelectedRelationshipId}
+          onRelationshipSelect={handleRelationshipSelect}
           readOnly={readOnly}
           relationship={selectedRelationship}
           relationships={selectedRelationships}

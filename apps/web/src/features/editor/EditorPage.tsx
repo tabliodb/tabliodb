@@ -195,6 +195,11 @@ type ImportSqlFormState = z.infer<typeof importSqlFormSchema>;
 
 type EditorImportRequest = Pick<DiagramImportDto, 'content' | 'dialect' | 'source'>;
 
+type EditorCommentTarget = {
+  targetId: string | null;
+  targetType: CommentTargetType;
+};
+
 const commentFormSchema = z.object({
   body: z.string().trim().min(1, 'Write a comment first.').max(4000, 'Keep the comment under 4000 characters.'),
 });
@@ -287,6 +292,7 @@ export function EditorPage() {
   const persistedDraftSignatureRef = useRef<string | null>(null);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [selectedCommentTarget, setSelectedCommentTarget] = useState<EditorCommentTarget | null>(null);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   // Inspector starts collapsed so the editor opens with more canvas room while keeping the right rail discoverable.
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
@@ -381,6 +387,7 @@ export function EditorPage() {
         persistedDraftSignatureRef.current = createDiagramModelSignature(importedModel);
         setModel(importedModel);
         setSelectedTableId(null);
+        setSelectedCommentTarget(null);
         queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
@@ -393,6 +400,7 @@ export function EditorPage() {
         persistedDraftSignatureRef.current = null;
         setModel(null);
         setSelectedTableId(null);
+        setSelectedCommentTarget(null);
         navigate(routes.login.to(), { replace: true });
       },
     },
@@ -413,6 +421,7 @@ export function EditorPage() {
 
   const handleSelectedTableChange = useCallback((tableId: string | null) => {
     setSelectedTableId(tableId);
+    setSelectedCommentTarget(tableId ? { targetId: tableId, targetType: 'table' } : null);
 
     if (tableId) {
       // Selecting a table promotes the left sidebar into structure-edit mode, even if the user hid it earlier.
@@ -476,6 +485,7 @@ export function EditorPage() {
     persistedDraftSignatureRef.current = createDiagramModelSignature(latestSnapshot.snapshot);
     setModel(latestSnapshot.snapshot);
     setSelectedTableId(null);
+    setSelectedCommentTarget(null);
   }, [latestSnapshot]);
 
   useEffect(() => {
@@ -489,7 +499,19 @@ export function EditorPage() {
     persistedDraftSignatureRef.current = null;
     setModel(seedModel);
     setSelectedTableId(null);
+    setSelectedCommentTarget(null);
   }, [activeDiagram, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
+
+  useEffect(() => {
+    if (!model || !selectedCommentTarget || isCommentTargetAvailable(model, selectedCommentTarget)) {
+      return;
+    }
+
+    // Target komentar mengikuti entity yang benar-benar masih ada, sehingga import/delete tidak meninggalkan anchor stale.
+    setSelectedCommentTarget(
+      selectedTableId && model.tables[selectedTableId] ? { targetId: selectedTableId, targetType: 'table' } : null,
+    );
+  }, [model, selectedCommentTarget, selectedTableId]);
 
   async function handleExportSql() {
     if (!model) {
@@ -664,6 +686,8 @@ export function EditorPage() {
     modelRef.current = nextModel;
     setModel(nextModel);
     setSelectedTableId(nextTableId);
+    // Table baru langsung menjadi target komentar aktif agar review pertama jatuh ke entity yang baru dibuat.
+    setSelectedCommentTarget(nextTableId ? { targetId: nextTableId, targetType: 'table' } : null);
   }
 
   function handleSaveSnapshot() {
@@ -779,6 +803,7 @@ export function EditorPage() {
                   persistedDraftSignatureRef.current = null;
                   setModel(null);
                   setSelectedTableId(null);
+                  setSelectedCommentTarget(null);
                   navigate(routes.home.to(), { replace: true });
                 }}
                 project={activeProject}
@@ -930,9 +955,11 @@ export function EditorPage() {
         diagramId={activeDiagram.id}
         model={model}
         onFocusTable={handleSelectedTableChange}
+        onCommentTargetSelect={setSelectedCommentTarget}
         onOpenChange={setCommentsOpen}
         open={commentsOpen}
         projectId={activeProject.id}
+        selectedCommentTarget={selectedCommentTarget}
         selectedTableId={selectedTable?.id ?? null}
       />
 
@@ -951,8 +978,9 @@ export function EditorPage() {
           ) : selectedTable ? (
             <TableStructureSidebar
               model={model}
-              onClearTableSelection={() => setSelectedTableId(null)}
+              onClearTableSelection={() => handleSelectedTableChange(null)}
               onHide={() => setLeftSidebarOpen(false)}
+              onColumnSelect={(columnId) => setSelectedCommentTarget({ targetId: columnId, targetType: 'column' })}
               onModelChange={handleModelChange}
               readOnly={!canEditDiagram}
               selectedTableId={selectedTable.id}
@@ -974,6 +1002,7 @@ export function EditorPage() {
                     persistedDraftSignatureRef.current = null;
                     setModel(null);
                     setSelectedTableId(null);
+                    setSelectedCommentTarget(null);
                     setProjectSearchTerm('');
                     navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
                   }}
@@ -990,6 +1019,7 @@ export function EditorPage() {
                       persistedDraftSignatureRef.current = null;
                       setModel(null);
                       setSelectedTableId(null);
+                      setSelectedCommentTarget(null);
                       navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
                     }}
                   />
@@ -1022,6 +1052,7 @@ export function EditorPage() {
                           persistedDraftSignatureRef.current = null;
                           setModel(null);
                           setSelectedTableId(null);
+                          setSelectedCommentTarget(null);
                           navigate(
                             routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }),
                           );
@@ -1060,6 +1091,7 @@ export function EditorPage() {
             model={model}
             onHide={() => setRightSidebarOpen(false)}
             onModelChange={handleModelChange}
+            onCommentTargetSelect={setSelectedCommentTarget}
             onReviewSignalIgnore={(signalId) => ignoreReviewSignalMutation.mutate(signalId)}
             onTableSelect={handleSelectedTableChange}
             readOnly={!canEditDiagram}
@@ -1119,19 +1151,23 @@ function CommentsDialog({
   canComment,
   diagramId,
   model,
+  onCommentTargetSelect,
   onFocusTable,
   onOpenChange,
   open,
   projectId,
+  selectedCommentTarget,
   selectedTableId,
 }: {
   canComment: boolean;
   diagramId: string;
   model: DiagramModel;
+  onCommentTargetSelect: (target: EditorCommentTarget) => void;
   onFocusTable: (tableId: string | null) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   projectId: string;
+  selectedCommentTarget: EditorCommentTarget | null;
   selectedTableId: string | null;
 }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -1145,7 +1181,10 @@ function CommentsDialog({
     mode: 'onBlur',
     resolver: zodResolver(commentFormSchema),
   });
-  const activeTarget = useMemo(() => getActiveCommentTarget(model, selectedTableId), [model, selectedTableId]);
+  const activeTarget = useMemo(
+    () => getActiveCommentTarget(model, selectedTableId, selectedCommentTarget),
+    [model, selectedCommentTarget, selectedTableId],
+  );
   const threadQueryOptions = commentQueries.listThreads(diagramId, commentThreadPageQuery);
   const threadsQuery = useQuery({
     ...threadQueryOptions,
@@ -1261,6 +1300,13 @@ function CommentsDialog({
     resolveThreadMutation.mutate(activeThread.id);
   }
 
+  function handleThreadSelect(thread: CommentThreadListItemDto) {
+    setActiveThreadId(thread.id);
+    focusCommentTarget(model, thread, onFocusTable);
+    // Fokus canvas dapat memilih table induk; target komentar dipasang setelahnya agar anchor detail tidak tertimpa fallback table.
+    onCommentTargetSelect({ targetId: thread.targetId, targetType: thread.targetType });
+  }
+
   const mutationError =
     createThreadMutation.error ?? replyMutation.error ?? resolveThreadMutation.error ?? unresolveThreadMutation.error;
   const activeThreadTargetLabel = activeThread ? getCommentThreadTargetLabel(model, activeThread) : null;
@@ -1271,7 +1317,7 @@ function CommentsDialog({
         <DialogHeader>
           <DialogTitle>Comments</DialogTitle>
           <DialogDescription>
-            Discuss the diagram or the selected table without losing schema context.
+            Discuss the diagram, table, column, and schema details without losing editor context.
           </DialogDescription>
         </DialogHeader>
 
@@ -1363,10 +1409,7 @@ function CommentsDialog({
                             : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]',
                         )}
                         key={thread.id}
-                        onClick={() => {
-                          setActiveThreadId(thread.id);
-                          focusCommentTarget(model, thread, onFocusTable);
-                        }}
+                        onClick={() => handleThreadSelect(thread)}
                         title={`Open ${getCommentThreadTargetLabel(model, thread)}`}
                         type="button"
                       >
@@ -1555,7 +1598,19 @@ function CommentComposerFallback({ invalid, placeholder }: { invalid: boolean; p
 function getActiveCommentTarget(
   model: DiagramModel,
   selectedTableId: string | null,
+  selectedCommentTarget: EditorCommentTarget | null,
 ): { detail: string; label: string; targetId: string | null; targetType: CommentTargetType } {
+  if (selectedCommentTarget && isCommentTargetAvailable(model, selectedCommentTarget)) {
+    const targetLabel = getCommentTargetName(model, selectedCommentTarget);
+
+    return {
+      detail: formatCommentTargetType(selectedCommentTarget.targetType),
+      label: targetLabel ?? selectedCommentTarget.targetId ?? model.metadata.name,
+      targetId: selectedCommentTarget.targetId,
+      targetType: selectedCommentTarget.targetType,
+    };
+  }
+
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
 
   if (selectedTable) {
@@ -1575,6 +1630,91 @@ function getActiveCommentTarget(
   };
 }
 
+function isCommentTargetAvailable(
+  model: DiagramModel,
+  target: Pick<CommentThreadListItemDto, 'targetId' | 'targetType'>,
+) {
+  if (target.targetType === 'diagram') {
+    return true;
+  }
+
+  if (!target.targetId) {
+    return false;
+  }
+
+  // Availability memakai map normalized dari schema-core agar komentar detail ikut gugur saat entity dihapus/import ulang.
+  switch (target.targetType) {
+    case 'check':
+      return Boolean(model.checks[target.targetId]);
+    case 'column':
+      return Boolean(model.columns[target.targetId]);
+    case 'enum':
+      return Boolean(model.enums[target.targetId]);
+    case 'group':
+      return Boolean(model.groups[target.targetId]);
+    case 'index':
+      return Boolean(model.indexes[target.targetId]);
+    case 'note':
+      return Boolean(model.notes[target.targetId]);
+    case 'relationship':
+      return Boolean(model.relationships[target.targetId]);
+    case 'table':
+      return Boolean(model.tables[target.targetId]);
+    default:
+      return false;
+  }
+}
+
+function getCommentTargetName(
+  model: DiagramModel,
+  target: Pick<CommentThreadListItemDto, 'targetId' | 'targetType'>,
+): string | null {
+  if (target.targetType === 'diagram') {
+    return model.metadata.name;
+  }
+
+  if (!target.targetId) {
+    return null;
+  }
+
+  if (target.targetType === 'table') {
+    return model.tables[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'column') {
+    const column = model.columns[target.targetId];
+    const table = column ? model.tables[column.tableId] : null;
+
+    return column ? `${table?.name ?? 'table'}.${column.name}` : null;
+  }
+
+  if (target.targetType === 'relationship') {
+    return model.relationships[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'index') {
+    return model.indexes[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'check') {
+    return model.checks[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'enum') {
+    return model.enums[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'note') {
+    return model.notes[target.targetId]?.text.slice(0, 32) ?? null;
+  }
+
+  if (target.targetType === 'group') {
+    return model.groups[target.targetId]?.name ?? null;
+  }
+
+  return null;
+}
+
 function getCommentThreadTargetLabel(model: DiagramModel, thread: CommentThreadListItemDto): string {
   if (thread.targetType === 'diagram') {
     return `Diagram: ${model.metadata.name}`;
@@ -1584,24 +1724,7 @@ function getCommentThreadTargetLabel(model: DiagramModel, thread: CommentThreadL
     return formatCommentTargetType(thread.targetType);
   }
 
-  const targetName =
-    thread.targetType === 'table'
-      ? model.tables[thread.targetId]?.name
-      : thread.targetType === 'column'
-        ? model.columns[thread.targetId]?.name
-        : thread.targetType === 'relationship'
-          ? model.relationships[thread.targetId]?.name
-          : thread.targetType === 'index'
-            ? model.indexes[thread.targetId]?.name
-            : thread.targetType === 'check'
-              ? model.checks[thread.targetId]?.name
-              : thread.targetType === 'enum'
-                ? model.enums[thread.targetId]?.name
-                : thread.targetType === 'note'
-                  ? model.notes[thread.targetId]?.text.slice(0, 32)
-                  : thread.targetType === 'group'
-                    ? model.groups[thread.targetId]?.name
-                    : null;
+  const targetName = getCommentTargetName(model, thread);
 
   return `${formatCommentTargetType(thread.targetType)}: ${targetName ?? thread.targetId}`;
 }
