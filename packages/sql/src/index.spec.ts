@@ -24,6 +24,25 @@ describe('generateCreateSchemaSql', () => {
       "`status` ENUM('draft', 'needs''review') NOT NULL",
     );
   });
+
+  it('renders table check constraints', () => {
+    const model = createEnumSqlTestModel({
+      enumValues: ['draft', 'published'],
+    });
+    model.checks = {
+      'orders-status-check': {
+        columnId: 'orders-status',
+        expression: "status IN ('draft', 'published')",
+        id: 'orders-status-check',
+        name: 'orders_status_check',
+        tableId: 'orders',
+      },
+    };
+
+    expect(generateCreateSchemaSql(model, { dialect: 'postgresql' })).toContain(
+      `CONSTRAINT "orders_status_check" CHECK (status IN ('draft', 'published'))`,
+    );
+  });
 });
 
 function createEnumSqlTestModel({ enumValues }: { enumValues: string[] }): DiagramModel {

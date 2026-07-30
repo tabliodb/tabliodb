@@ -444,6 +444,27 @@ export type DeleteEnumCommand = {
   enumId: string;
 };
 
+export type CreateCheckCommand = {
+  type: 'check.create';
+  checkId?: string;
+  tableId: string;
+  columnId?: string;
+  name: string;
+  expression: string;
+  comment?: string;
+};
+
+export type UpdateCheckCommand = {
+  type: 'check.update';
+  checkId: string;
+  changes: Partial<Omit<DatabaseCheck, 'id' | 'tableId'>>;
+};
+
+export type DeleteCheckCommand = {
+  type: 'check.delete';
+  checkId: string;
+};
+
 export type DiagramCommand =
   | CreateTableCommand
   | RenameTableCommand
@@ -463,7 +484,10 @@ export type DiagramCommand =
   | DeleteIndexCommand
   | CreateEnumCommand
   | UpdateEnumCommand
-  | DeleteEnumCommand;
+  | DeleteEnumCommand
+  | CreateCheckCommand
+  | UpdateCheckCommand
+  | DeleteCheckCommand;
 
 export function applyDiagramCommands(
   model: DiagramModel,
@@ -519,6 +543,12 @@ export function applyDiagramCommand(
       return finalizeDiagramModel(updateEnum(model, command), options);
     case 'enum.delete':
       return finalizeDiagramModel(deleteEnum(model, command.enumId), options);
+    case 'check.create':
+      return finalizeDiagramModel(createCheck(model, command, idFactory), options);
+    case 'check.update':
+      return finalizeDiagramModel(updateCheck(model, command), options);
+    case 'check.delete':
+      return finalizeDiagramModel(deleteCheck(model, command.checkId), options);
   }
 }
 
@@ -933,6 +963,59 @@ function deleteEnum(model: DiagramModel, enumId: string): DiagramModel {
   };
 }
 
+function createCheck(model: DiagramModel, command: CreateCheckCommand, idFactory: DiagramIdFactory): DiagramModel {
+  const table = requireTable(model, command.tableId);
+  const checkId = command.checkId ?? idFactory('check');
+  assertMissingEntity(model.checks[checkId], `Check "${checkId}" already exists`);
+  assertOptionalTableColumn(table, command.columnId);
+
+  const check = DatabaseCheckSchema.parse({
+    id: checkId,
+    tableId: table.id,
+    columnId: command.columnId,
+    name: command.name,
+    expression: command.expression,
+    comment: command.comment,
+  });
+
+  return {
+    ...model,
+    checks: {
+      ...model.checks,
+      [check.id]: check,
+    },
+  };
+}
+
+function updateCheck(model: DiagramModel, command: UpdateCheckCommand): DiagramModel {
+  const check = requireCheck(model, command.checkId);
+  const table = requireTable(model, check.tableId);
+  const nextCheck = DatabaseCheckSchema.parse({
+    ...check,
+    ...command.changes,
+    id: check.id,
+    tableId: check.tableId,
+  });
+  assertOptionalTableColumn(table, nextCheck.columnId);
+
+  return {
+    ...model,
+    checks: {
+      ...model.checks,
+      [check.id]: nextCheck,
+    },
+  };
+}
+
+function deleteCheck(model: DiagramModel, checkId: string): DiagramModel {
+  requireCheck(model, checkId);
+
+  return {
+    ...model,
+    checks: omitKey(model.checks, checkId),
+  };
+}
+
 function createColumnEntity(
   tableId: string,
   input: CreateTableColumnInput & { id?: string },
@@ -1058,6 +1141,15 @@ function requireEnum(model: DiagramModel, enumId: string): DatabaseEnum {
   return databaseEnum;
 }
 
+function requireCheck(model: DiagramModel, checkId: string): DatabaseCheck {
+  const check = model.checks[checkId];
+  if (!check) {
+    throw new DiagramCommandError(`Check "${checkId}" does not exist`);
+  }
+
+  return check;
+}
+
 function assertMissingEntity(entity: unknown, message: string): void {
   if (entity) {
     throw new DiagramCommandError(message);
@@ -1079,6 +1171,12 @@ function assertColumnTypeReferences(model: DiagramModel, type: ColumnTypeSpec): 
 function assertTableOwnsColumn(table: DatabaseTable, columnId: string): void {
   if (!table.columnIds.includes(columnId)) {
     throw new DiagramCommandError(`Column "${columnId}" does not belong to table "${table.id}"`);
+  }
+}
+
+function assertOptionalTableColumn(table: DatabaseTable, columnId: string | undefined): void {
+  if (columnId) {
+    assertTableOwnsColumn(table, columnId);
   }
 }
 

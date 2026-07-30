@@ -3,6 +3,7 @@ import {
   getTableColumns,
   type ColumnTypeSpec,
   type DatabaseColumn,
+  type DatabaseCheck,
   type DatabaseDialect,
 } from '@tabliodb/schema-core';
 
@@ -17,7 +18,13 @@ export function generateCreateSchemaSql(model: DiagramModel, options: GenerateSq
   const enumStatements = renderEnumStatements(model, options.dialect);
   const tableStatements = Object.values(model.tables).map((table) => {
     const columns = getTableColumns(model, table.id);
-    const body = columns.map((column) => `  ${renderColumn(column, model, options.dialect)}`).join(',\n');
+    const checks = Object.values(model.checks).filter((check) => check.tableId === table.id);
+    const body = [
+      ...columns.map((column) => renderColumn(column, model, options.dialect)),
+      ...checks.map((check) => renderCheckConstraint(check, options.dialect)),
+    ]
+      .map((line) => `  ${line}`)
+      .join(',\n');
     const tableName = table.schema
       ? `${quoteIdentifier(table.schema, options.dialect)}.${quoteIdentifier(table.name, options.dialect)}`
       : quoteIdentifier(table.name, options.dialect);
@@ -40,6 +47,11 @@ function renderColumn(column: DatabaseColumn, model: DiagramModel, dialect: SqlD
 
   // Undefined fragments are filtered so new constraints can be appended without rewriting this renderer.
   return parts.filter(Boolean).join(' ');
+}
+
+function renderCheckConstraint(check: DatabaseCheck, dialect: SqlDialect): string {
+  // Checks are table constraints so a later expression can reference multiple columns without changing the model shape.
+  return `CONSTRAINT ${quoteIdentifier(check.name, dialect)} CHECK (${check.expression})`;
 }
 
 function renderType(type: ColumnTypeSpec, model: DiagramModel, dialect: SqlDialect): string {

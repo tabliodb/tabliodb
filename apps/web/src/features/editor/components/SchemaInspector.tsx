@@ -6,6 +6,7 @@ import {
   getTableColumns,
   type ColumnTypeFamily,
   type ColumnTypeSpec,
+  type DatabaseCheck,
   type DatabaseColumn,
   type DatabaseEnum,
   type DatabaseIndex,
@@ -29,7 +30,7 @@ import {
   Surface,
   cn,
 } from '@tabliodb/ui';
-import { Pencil, Plus, Save, SlidersHorizontal } from 'lucide-react';
+import { Pencil, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
@@ -145,6 +146,24 @@ const indexFormSchema = z.object({
 
 type IndexFormState = z.infer<typeof indexFormSchema>;
 
+const checkFormSchema = z.object({
+  columnId: z.string(),
+  comment: z.string().trim().max(240, 'Keep the comment under 240 characters.'),
+  expression: z
+    .string()
+    .trim()
+    .min(1, 'Check expression is required.')
+    .max(320, 'Keep the expression under 320 characters.'),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Check name is required.')
+    .max(96, 'Keep the check name under 96 characters.')
+    .regex(/^[a-z][a-z0-9_]*$/, 'Use lowercase letters, numbers, and underscores.'),
+});
+
+type CheckFormState = z.infer<typeof checkFormSchema>;
+
 const relationshipCardinalityOptions = [
   'one_to_one',
   'one_to_many',
@@ -197,18 +216,22 @@ export function SchemaInspector({
   const selectedTable = selectedTableId ? model.tables[selectedTableId] : null;
   const selectedColumns = selectedTable ? getTableColumns(model, selectedTable.id) : [];
   const selectedIndexes = selectedTable ? getTableIndexes(model, selectedTable) : [];
+  const selectedChecks = selectedTable ? getTableChecks(model, selectedTable.id) : [];
   const selectedRelationships = selectedTable ? getTableRelationships(model, selectedTable.id) : [];
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [selectedEnumId, setSelectedEnumId] = useState<string | null>(null);
   const [selectedIndexId, setSelectedIndexId] = useState<string | null>(null);
+  const [selectedCheckId, setSelectedCheckId] = useState<string | null>(null);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
   const selectedColumnIds = selectedColumns.map((column) => column.id).join('|');
   const selectedEnumIds = enums.map((databaseEnum) => databaseEnum.id).join('|');
   const selectedIndexIds = selectedIndexes.map((index) => index.id).join('|');
+  const selectedCheckIds = selectedChecks.map((check) => check.id).join('|');
   const selectedRelationshipIds = selectedRelationships.map((relationship) => relationship.id).join('|');
   const selectedColumn = selectedColumns.find((column) => column.id === selectedColumnId) ?? null;
   const selectedEnum = enums.find((databaseEnum) => databaseEnum.id === selectedEnumId) ?? null;
   const selectedIndex = selectedIndexes.find((index) => index.id === selectedIndexId) ?? null;
+  const selectedCheck = selectedChecks.find((check) => check.id === selectedCheckId) ?? null;
   const selectedRelationship =
     selectedRelationships.find((relationship) => relationship.id === selectedRelationshipId) ?? null;
   const reviewSignals = useMemo(() => getReviewSignals(model), [model]);
@@ -243,6 +266,22 @@ export function SchemaInspector({
       setSelectedIndexId(selectedIndexes[0]?.id ?? null);
     }
   }, [selectedIndexId, selectedIndexIds, selectedIndexes, selectedTable]);
+
+  useEffect(() => {
+    if (!selectedTable) {
+      setSelectedCheckId(null);
+      return;
+    }
+
+    if (!selectedCheckId || !selectedChecks.some((check) => check.id === selectedCheckId)) {
+      const checkForColumn = selectedColumnId
+        ? selectedChecks.find((check) => check.columnId === selectedColumnId)
+        : null;
+
+      // Check selection follows the active table and prefers a constraint bound to the selected column.
+      setSelectedCheckId(checkForColumn?.id ?? selectedChecks[0]?.id ?? null);
+    }
+  }, [selectedCheckId, selectedCheckIds, selectedChecks, selectedColumnId, selectedTable]);
 
   useEffect(() => {
     if (!selectedTable) {
@@ -299,8 +338,8 @@ export function SchemaInspector({
                 <div className="min-w-0">
                   <div className="truncate text-sm font-extrabold">{selectedTable.name}</div>
                   <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                    {selectedColumns.length} columns / {selectedTable.indexIds.length} indexes /{' '}
-                    {countTableRelationships(model, selectedTable)} relationships
+                    {selectedColumns.length} columns / {selectedIndexes.length} indexes / {selectedChecks.length} checks
+                    / {countTableRelationships(model, selectedTable)} relationships
                   </div>
                 </div>
                 <span
@@ -364,6 +403,17 @@ export function SchemaInspector({
           onModelChange={onModelChange}
           readOnly={readOnly}
           selectedIndexId={selectedIndexId}
+          table={selectedTable}
+        />
+        <CheckConstraintPanel
+          check={selectedCheck}
+          checks={selectedChecks}
+          columns={selectedColumns}
+          model={model}
+          onCheckSelect={setSelectedCheckId}
+          onModelChange={onModelChange}
+          readOnly={readOnly}
+          selectedCheckId={selectedCheckId}
           table={selectedTable}
         />
         <RelationshipInspector
@@ -1565,6 +1615,331 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
   );
 }
 
+function CheckConstraintPanel({
+  check,
+  checks,
+  columns,
+  model,
+  onCheckSelect,
+  onModelChange,
+  readOnly,
+  selectedCheckId,
+  table,
+}: {
+  check: DatabaseCheck | null;
+  checks: DatabaseCheck[];
+  columns: DatabaseColumn[];
+  model: DiagramModel;
+  onCheckSelect: (checkId: string) => void;
+  onModelChange: (model: DiagramModel) => void;
+  readOnly: boolean;
+  selectedCheckId: string | null;
+  table: DatabaseTable | null;
+}) {
+  return (
+    <section>
+      <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+        Check constraints
+      </h2>
+      {table ? (
+        <Surface className="mt-2 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold">{checks.length} checks</div>
+              <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                Validate table and column-level business rules
+              </div>
+            </div>
+            {!readOnly ? (
+              <AddCheckDialog
+                checks={checks}
+                columns={columns}
+                model={model}
+                onModelChange={onModelChange}
+                table={table}
+              />
+            ) : null}
+          </div>
+          {checks.length > 0 ? (
+            <div className="mt-3 space-y-1">
+              {checks.map((currentCheck) => (
+                <button
+                  aria-pressed={selectedCheckId === currentCheck.id}
+                  className={cn(
+                    'w-full cursor-pointer rounded-xl px-2 py-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+                    selectedCheckId === currentCheck.id &&
+                      'bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]',
+                  )}
+                  key={currentCheck.id}
+                  onClick={() => onCheckSelect(currentCheck.id)}
+                  type="button"
+                >
+                  <div className="truncate text-xs font-extrabold">{currentCheck.name}</div>
+                  <div className="mt-1 truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {currentCheck.expression}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              No check constraints yet
+            </div>
+          )}
+          {check ? (
+            <div className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-extrabold">{check.name}</div>
+                  <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {formatCheckScope(model, check)}
+                  </div>
+                </div>
+                {!readOnly ? (
+                  <EditCheckDialog check={check} columns={columns} model={model} onModelChange={onModelChange} />
+                ) : null}
+              </div>
+              <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                CHECK ({check.expression})
+              </p>
+              {check.comment ? (
+                <p className="mt-2 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {check.comment}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </Surface>
+      ) : (
+        <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+          No table selected
+        </Surface>
+      )}
+    </section>
+  );
+}
+
+function AddCheckDialog({
+  checks,
+  columns,
+  model,
+  onModelChange,
+  table,
+}: {
+  checks: DatabaseCheck[];
+  columns: DatabaseColumn[];
+  model: DiagramModel;
+  onModelChange: (model: DiagramModel) => void;
+  table: DatabaseTable;
+}) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<CheckFormState>({
+    defaultValues: getNewCheckDefaults(table, checks),
+    resolver: zodResolver(checkFormSchema),
+  });
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      form.reset(getNewCheckDefaults(table, checks));
+    }
+  }
+
+  function handleSubmit(values: CheckFormState) {
+    onModelChange(
+      applyDiagramCommand(model, {
+        type: 'check.create',
+        tableId: table.id,
+        columnId: normalizeCheckColumnId(values.columnId),
+        name: values.name.trim(),
+        expression: values.expression.trim(),
+        comment: normalizeOptionalString(values.comment),
+      }),
+    );
+    handleOpenChange(false);
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="soft">
+          <Plus className="size-4" />
+          Check
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>New check constraint</DialogTitle>
+            <DialogDescription>Define a SQL CHECK expression for the selected table.</DialogDescription>
+          </DialogHeader>
+          <CheckFormFields columns={columns} form={form} />
+          <DialogFooter className="mt-5">
+            <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button type="submit">
+              <Plus className="size-4" />
+              Add check
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditCheckDialog({
+  check,
+  columns,
+  model,
+  onModelChange,
+}: {
+  check: DatabaseCheck;
+  columns: DatabaseColumn[];
+  model: DiagramModel;
+  onModelChange: (model: DiagramModel) => void;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [open, setOpen] = useState(false);
+  const form = useForm<CheckFormState>({
+    defaultValues: getCheckDefaults(check),
+    resolver: zodResolver(checkFormSchema),
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset(getCheckDefaults(check));
+      setConfirmDelete(false);
+    }
+  }, [check, form, open]);
+
+  function handleSubmit(values: CheckFormState) {
+    onModelChange(
+      applyDiagramCommand(model, {
+        type: 'check.update',
+        checkId: check.id,
+        changes: {
+          columnId: normalizeCheckColumnId(values.columnId),
+          comment: normalizeOptionalString(values.comment),
+          expression: values.expression.trim(),
+          name: values.name.trim(),
+        },
+      }),
+    );
+    setOpen(false);
+  }
+
+  function handleDelete() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+
+    onModelChange(
+      applyDiagramCommand(model, {
+        type: 'check.delete',
+        checkId: check.id,
+      }),
+    );
+    setOpen(false);
+  }
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="secondary">
+          <Pencil className="size-4" />
+          Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Edit check constraint</DialogTitle>
+            <DialogDescription>Update the constraint expression, scope, or metadata.</DialogDescription>
+          </DialogHeader>
+          <CheckFormFields columns={columns} form={form} />
+          <DialogFooter className="mt-5 justify-between sm:justify-between">
+            <Button onClick={handleDelete} type="button" variant={confirmDelete ? 'danger' : 'secondary'}>
+              <Trash2 className="size-4" />
+              {confirmDelete ? 'Confirm delete' : 'Delete'}
+            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setOpen(false)} type="button" variant="secondary">
+                Cancel
+              </Button>
+              <Button type="submit">
+                <Save className="size-4" />
+                Save check
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CheckFormFields({ columns, form }: { columns: DatabaseColumn[]; form: UseFormReturn<CheckFormState> }) {
+  const { errors } = form.formState;
+
+  return (
+    <div className="mt-4 grid gap-4">
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Check name
+        </span>
+        <ControlledInput
+          autoFocus
+          aria-invalid={Boolean(errors.name)}
+          control={form.control}
+          name="name"
+          placeholder="orders_total_positive"
+        />
+        <FieldError>{errors.name?.message}</FieldError>
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Scope
+        </span>
+        <ControlledSelect
+          className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+          control={form.control}
+          name="columnId"
+        >
+          <option value={unsetSelectValue}>Table-level constraint</option>
+          {columns.map((column) => (
+            <option key={column.id} value={column.id}>
+              {column.name} ({formatColumnType(column.type)})
+            </option>
+          ))}
+        </ControlledSelect>
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Expression
+        </span>
+        <ControlledTextarea
+          className="min-h-28 w-full resize-y rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 py-2 text-sm font-semibold text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+          control={form.control}
+          name="expression"
+          placeholder="total >= 0"
+        />
+        <FieldError>{errors.expression?.message}</FieldError>
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Comment
+        </span>
+        <ControlledInput control={form.control} name="comment" placeholder="Constraint note" />
+        <FieldError>{errors.comment?.message}</FieldError>
+      </label>
+    </div>
+  );
+}
+
 function EnumSelectField({ enumOptions, form }: { enumOptions: DatabaseEnum[]; form: UseFormReturn<ColumnFormState> }) {
   const { errors } = form.formState;
 
@@ -2098,6 +2473,10 @@ function getTableIndexes(model: DiagramModel, table: DatabaseTable): DatabaseInd
   });
 }
 
+function getTableChecks(model: DiagramModel, tableId: string): DatabaseCheck[] {
+  return Object.values(model.checks).filter((check) => check.tableId === tableId);
+}
+
 function getTableRelationships(model: DiagramModel, tableId: string): DatabaseRelationship[] {
   return Object.values(model.relationships).filter(
     (relationship) => relationship.sourceTableId === tableId || relationship.targetTableId === tableId,
@@ -2161,6 +2540,28 @@ function getIndexDefaults(index: DatabaseIndex, columns: DatabaseColumn[]): Inde
     unique: index.unique,
     where: index.where ?? '',
   };
+}
+
+function getNewCheckDefaults(table: DatabaseTable, checks: DatabaseCheck[]): CheckFormState {
+  return {
+    columnId: unsetSelectValue,
+    comment: '',
+    expression: '',
+    name: normalizeIdentifier(`${table.name}_check_${checks.length + 1}`),
+  };
+}
+
+function getCheckDefaults(check: DatabaseCheck): CheckFormState {
+  return {
+    columnId: check.columnId ?? unsetSelectValue,
+    comment: check.comment ?? '',
+    expression: check.expression,
+    name: check.name,
+  };
+}
+
+function normalizeCheckColumnId(value: CheckFormState['columnId']): string | undefined {
+  return value === unsetSelectValue ? undefined : value;
 }
 
 function createIndexColumns(values: IndexFormState): DatabaseIndexColumn[] {
@@ -2237,6 +2638,15 @@ function formatIndexColumn(model: DiagramModel, indexColumn: DatabaseIndexColumn
 
 function formatIndexMethod(method: DatabaseIndex['method']): string {
   return method ?? 'default';
+}
+
+function formatCheckScope(model: DiagramModel, check: DatabaseCheck): string {
+  if (!check.columnId) {
+    return 'Table-level constraint';
+  }
+
+  const column = model.columns[check.columnId];
+  return column ? `Column ${column.name}` : `Column ${check.columnId}`;
 }
 
 function getRelationshipDefaults(relationship: DatabaseRelationship): RelationshipFormState {

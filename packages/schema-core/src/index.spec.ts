@@ -180,6 +180,104 @@ describe('schema-core diagram commands', () => {
     expect(nextModel.metadata.updatedAt).toBe('2026-07-29T03:00:00.000Z');
   });
 
+  it('creates, updates, and deletes check constraints immutably', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Check constraint test'),
+      {
+        type: 'table.create',
+        tableId: 'orders',
+        name: 'orders',
+        columns: [
+          { id: 'orders-id', name: 'id', type: { family: 'uuid' }, primaryKey: true, nullable: false },
+          { id: 'orders-total', name: 'total', type: { family: 'decimal', precision: 12, scale: 2 }, nullable: false },
+        ],
+      },
+      { now: fixedNow },
+    );
+    const checkedModel = applyDiagramCommand(
+      model,
+      {
+        type: 'check.create',
+        checkId: 'orders-total-positive',
+        tableId: 'orders',
+        columnId: 'orders-total',
+        name: 'orders_total_positive',
+        expression: 'total >= 0',
+      },
+      { now: fixedNow },
+    );
+    const nextModel = applyDiagramCommand(
+      checkedModel,
+      {
+        type: 'check.update',
+        checkId: 'orders-total-positive',
+        changes: {
+          comment: 'Revenue totals cannot be negative',
+          expression: 'total >= 0 AND total < 1000000',
+          name: 'orders_total_range',
+        },
+      },
+      { now: () => '2026-07-29T05:00:00.000Z' },
+    );
+    const deletedModel = applyDiagramCommand(
+      nextModel,
+      { type: 'check.delete', checkId: 'orders-total-positive' },
+      { now: fixedNow },
+    );
+
+    // Check constraints live in the canonical model so SQL export, snapshots, and realtime sync share one source.
+    expect(model.checks['orders-total-positive']).toBeUndefined();
+    expect(checkedModel.checks['orders-total-positive']).toMatchObject({
+      columnId: 'orders-total',
+      expression: 'total >= 0',
+      name: 'orders_total_positive',
+      tableId: 'orders',
+    });
+    expect(nextModel.checks['orders-total-positive']).toMatchObject({
+      comment: 'Revenue totals cannot be negative',
+      expression: 'total >= 0 AND total < 1000000',
+      name: 'orders_total_range',
+    });
+    expect(nextModel.metadata.updatedAt).toBe('2026-07-29T05:00:00.000Z');
+    expect(deletedModel.checks['orders-total-positive']).toBeUndefined();
+  });
+
+  it('throws a domain error when a check constraint points to another table column', () => {
+    const model = applyDiagramCommand(
+      applyDiagramCommand(
+        createEmptyDiagramModel('Invalid check test'),
+        {
+          type: 'table.create',
+          tableId: 'orders',
+          name: 'orders',
+          columns: [{ id: 'orders-total', name: 'total', type: { family: 'decimal' }, nullable: false }],
+        },
+        { now: fixedNow },
+      ),
+      {
+        type: 'table.create',
+        tableId: 'users',
+        name: 'users',
+        columns: [{ id: 'users-age', name: 'age', type: { family: 'integer' }, nullable: false }],
+      },
+      { now: fixedNow },
+    );
+
+    expect(() =>
+      applyDiagramCommand(
+        model,
+        {
+          type: 'check.create',
+          tableId: 'orders',
+          columnId: 'users-age',
+          name: 'orders_bad_check',
+          expression: 'age > 0',
+        },
+        { now: fixedNow },
+      ),
+    ).toThrow(DiagramCommandError);
+  });
+
   it('creates and updates enums while protecting used enum types', () => {
     const model = createEmptyDiagramModel('Enum editor test');
     const modelWithEnum = applyDiagramCommand(
