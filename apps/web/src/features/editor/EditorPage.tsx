@@ -9,6 +9,7 @@ import {
   type DiagramModelIntegrityWarning,
 } from '@tabliodb/schema-core';
 import { generateDiagramMarkdown } from '@tabliodb/docs';
+import { generateDiagramSvg } from '@tabliodb/render';
 import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import {
   TabliodbApiError,
@@ -52,6 +53,7 @@ import {
   Copy,
   Database,
   Download,
+  FileImage,
   FileJson,
   FileText,
   FileUp,
@@ -59,6 +61,7 @@ import {
   FolderPlus,
   GitBranch,
   History,
+  ImageDown,
   Loader2,
   LocateFixed,
   LogOut,
@@ -414,6 +417,32 @@ export function EditorPage() {
     downloadTextFile(`${getExportFileStem()}.schema.md`, generateDiagramMarkdown(model), 'text/markdown;charset=utf-8');
   }
 
+  function handleExportSvg() {
+    if (!model) {
+      return;
+    }
+
+    // SVG export memakai renderer model canonical agar hasilnya tidak bergantung pada zoom dan viewport canvas saat ini.
+    downloadTextFile(`${getExportFileStem()}.diagram.svg`, generateDiagramSvg(model), 'image/svg+xml;charset=utf-8');
+  }
+
+  async function handleExportPng() {
+    if (!model) {
+      return;
+    }
+
+    try {
+      const svg = generateDiagramSvg(model);
+      const pngBlob = await createPngBlobFromSvg(svg);
+
+      // PNG dibuat dari SVG yang sama supaya export image punya visual dan bounds yang konsisten.
+      downloadBlobFile(`${getExportFileStem()}.diagram.png`, pngBlob);
+    } catch (error) {
+      console.error(error);
+      window.alert('PNG export failed. Please try exporting SVG instead.');
+    }
+  }
+
   function handleImportJsonModel(importedModel: DiagramModel) {
     if (!canEditDiagram) {
       return;
@@ -618,6 +647,14 @@ export function EditorPage() {
               <DropdownMenuItem onSelect={handleExportMarkdown}>
                 <FileText className="size-4" />
                 Export Markdown docs
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleExportSvg}>
+                <FileImage className="size-4" />
+                Export SVG diagram
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void handleExportPng()}>
+                <ImageDown className="size-4" />
+                Export PNG diagram
               </DropdownMenuItem>
               <DropdownMenuSeparatorItem />
               <DropdownMenuItem disabled>
@@ -2568,7 +2605,10 @@ function getImportJsonErrorMessage(error: unknown): string {
 }
 
 function downloadTextFile(fileName: string, content: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
+  downloadBlobFile(fileName, new Blob([content], { type: mimeType }));
+}
+
+function downloadBlobFile(fileName: string, blob: Blob) {
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
 
@@ -2580,6 +2620,69 @@ function downloadTextFile(fileName: string, content: string, mimeType: string) {
   link.click();
   link.remove();
   URL.revokeObjectURL(objectUrl);
+}
+
+async function createPngBlobFromSvg(svg: string): Promise<Blob> {
+  const { height, width } = readSvgSize(svg);
+  const image = new Image();
+  const objectUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('SVG image could not be decoded for PNG export.'));
+      image.src = objectUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.ceil(width * pixelRatio);
+    canvas.height = Math.ceil(height * pixelRatio);
+
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      throw new Error('Canvas is not available for PNG export.');
+    }
+
+    // Scaling the context keeps text and relationship strokes crisp on high-density displays without huge files.
+    context.scale(pixelRatio, pixelRatio);
+    context.drawImage(image, 0, 0, width, height);
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+
+        reject(new Error('PNG export produced an empty blob.'));
+      }, 'image/png');
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function readSvgSize(svg: string): { height: number; width: number } {
+  const document = new DOMParser().parseFromString(svg, 'image/svg+xml');
+  const svgElement = document.documentElement;
+  const width = Number(svgElement.getAttribute('width'));
+  const height = Number(svgElement.getAttribute('height'));
+
+  if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
+    return { height, width };
+  }
+
+  const viewBox = svgElement.getAttribute('viewBox')?.split(/\s+/).map(Number) ?? [];
+  const viewBoxWidth = viewBox[2];
+  const viewBoxHeight = viewBox[3];
+
+  // Renderer always emits width/height, but viewBox fallback keeps the browser helper resilient to future SVG sources.
+  return {
+    height: Number.isFinite(viewBoxHeight) && viewBoxHeight > 0 ? viewBoxHeight : 720,
+    width: Number.isFinite(viewBoxWidth) && viewBoxWidth > 0 ? viewBoxWidth : 1280,
+  };
 }
 
 function createExportFileStem(projectName?: string, diagramName?: string): string {

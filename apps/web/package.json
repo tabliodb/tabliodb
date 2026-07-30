@@ -17,6 +17,7 @@
     "@hocuspocus/provider": "^4.4.0",
     "@hookform/resolvers": "^5.5.7",
     "@tabliodb/docs": "file:../../packages/docs",
+    "@tabliodb/render": "file:../../packages/render",
     "@tabliodb/schema-core": "file:../../packages/schema-core",
     "@tabliodb/sdk": "file:../../packages/sdk",
     "@tabliodb/shared": "file:../../packages/shared",
