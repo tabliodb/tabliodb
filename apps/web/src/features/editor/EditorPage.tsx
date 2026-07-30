@@ -64,7 +64,7 @@ import {
   UserPlus,
   UsersRound,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ComponentType, type SVGProps } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type SVGProps } from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
@@ -168,6 +168,7 @@ export function EditorPage() {
   const [fitSignal, setFitSignal] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [model, setModel] = useState<DiagramModel | null>(null);
+  const modelRef = useRef<DiagramModel | null>(null);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -229,6 +230,7 @@ export function EditorPage() {
       onSuccess: (snapshot) => {
         // A successful snapshot write makes the server version canonical again, so the floating save affordance can disappear.
         setHasUnsavedChanges(false);
+        modelRef.current = snapshot.snapshot;
         setModel(snapshot.snapshot);
       },
     },
@@ -238,6 +240,7 @@ export function EditorPage() {
     mutationConfig: {
       onSuccess: () => {
         setHasUnsavedChanges(false);
+        modelRef.current = null;
         setModel(null);
         setSelectedTableId(null);
         navigate(routes.login.to(), { replace: true });
@@ -251,6 +254,8 @@ export function EditorPage() {
         return;
       }
 
+      // Keep the latest draft model synchronously available for Save clicks that happen immediately after an input blur.
+      modelRef.current = nextModel;
       setModel(nextModel);
       setHasUnsavedChanges(true);
     },
@@ -318,9 +323,10 @@ export function EditorPage() {
       return;
     }
 
+    modelRef.current = latestSnapshot.snapshot;
     setModel(latestSnapshot.snapshot);
     setHasUnsavedChanges(false);
-    setSelectedTableId((current) => current ?? Object.keys(latestSnapshot.snapshot.tables)[0] ?? null);
+    setSelectedTableId(null);
   }, [latestSnapshot]);
 
   useEffect(() => {
@@ -329,7 +335,9 @@ export function EditorPage() {
     }
 
     // Empty read-only diagrams cannot create an initial snapshot, so the editor renders an unsaved empty model instead of spinning forever.
-    setModel(createSeedDiagramModel(activeDiagram.name));
+    const seedModel = createSeedDiagramModel(activeDiagram.name);
+    modelRef.current = seedModel;
+    setModel(seedModel);
     setHasUnsavedChanges(canCreateSnapshot);
     setSelectedTableId(null);
   }, [activeDiagram, canCreateSnapshot, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
@@ -352,28 +360,46 @@ export function EditorPage() {
     const nextModel = addTableToDiagramModel(model, tableName);
     const nextTableId = Object.keys(nextModel.tables).find((tableId) => !model.tables[tableId]) ?? null;
 
+    modelRef.current = nextModel;
     setModel(nextModel);
     setHasUnsavedChanges(true);
     setSelectedTableId(nextTableId);
   }
 
   function handleSaveSnapshot() {
-    if (!activeDiagram || !model || !canCreateSnapshot) {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    window.setTimeout(() => {
+      const modelToSave = modelRef.current;
+
+      if (!activeDiagram || !modelToSave || !canCreateSnapshot || saveSnapshotMutation.isPending) {
+        return;
+      }
+
+      saveSnapshotMutation.mutate({
+        diagramId: activeDiagram.id,
+        message: 'Manual save',
+        snapshot: {
+          ...modelToSave,
+          metadata: {
+            ...modelToSave.metadata,
+            // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+    }, 0);
+  }
+
+  function markDraftChanged() {
+    if (!canEditDiagram) {
       return;
     }
 
-    saveSnapshotMutation.mutate({
-      diagramId: activeDiagram.id,
-      message: 'Manual save',
-      snapshot: {
-        ...model,
-        metadata: {
-          ...model.metadata,
-          // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
-          updatedAt: new Date().toISOString(),
-        },
-      },
-    });
+    // Draft text edits mark the diagram dirty immediately, even before blur commits the parsed schema model.
+    setHasUnsavedChanges(true);
   }
 
   if (isUnauthorized(projectsQuery.error)) {
@@ -430,11 +456,19 @@ export function EditorPage() {
   return (
     <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
       <header className="flex h-16 shrink-0 items-center justify-between border-b-2 border-[rgb(var(--tabliodb-border))] bg-white px-5">
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-extrabold">{activeProject?.name ?? defaultProjectName}</h1>
-          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-            {activeDiagram?.name ?? defaultDiagramName} / {model.dialect} / snapshot v{latestSnapshot?.version ?? 0}
-          </p>
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+              <Database className="size-5" />
+            </div>
+            <span className="text-base font-extrabold">Tabliodb</span>
+          </div>
+          <div className="min-w-0 border-l-2 border-[rgb(var(--tabliodb-border))] pl-4">
+            <h1 className="truncate text-base font-extrabold">{activeProject?.name ?? defaultProjectName}</h1>
+            <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+              {activeDiagram?.name ?? defaultDiagramName} / {model.dialect} / snapshot v{latestSnapshot?.version ?? 0}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
@@ -448,6 +482,7 @@ export function EditorPage() {
               <ProjectSettingsDialog
                 onArchived={() => {
                   setHasUnsavedChanges(false);
+                  modelRef.current = null;
                   setModel(null);
                   setSelectedTableId(null);
                   navigate(routes.home.to(), { replace: true });
@@ -460,20 +495,7 @@ export function EditorPage() {
                 model={model}
                 onUpdated={(diagram) => {
                   setHasUnsavedChanges(true);
-                  setModel((current) =>
-                    current
-                      ? {
-                          ...current,
-                          dialect: diagram.dialect,
-                          metadata: {
-                            ...current.metadata,
-                            // Diagram metadata follows the server record immediately; snapshot persistence still happens on Save.
-                            name: diagram.name,
-                            updatedAt: new Date().toISOString(),
-                          },
-                        }
-                      : current,
-                  );
+                  setModel((current) => (current ? updateLiveModelFromDiagram(current, diagram, modelRef) : current));
                 }}
               />
             </>
@@ -538,6 +560,7 @@ export function EditorPage() {
             <TableStructureSidebar
               model={model}
               onClearTableSelection={() => setSelectedTableId(null)}
+              onDraftChange={markDraftChanged}
               onHide={() => setLeftSidebarOpen(false)}
               onModelChange={handleModelChange}
               readOnly={!canEditDiagram}
@@ -549,13 +572,14 @@ export function EditorPage() {
                 <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
                   <Database className="size-5" />
                 </div>
-                <span className="min-w-0 flex-1 truncate text-base font-extrabold">Tabliodb</span>
+                <span className="min-w-0 flex-1 truncate text-base font-extrabold">Workspace</span>
                 <IconButton icon={PanelLeftClose} label="Hide left sidebar" onClick={() => setLeftSidebarOpen(false)} />
               </div>
               <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4 pb-28">
                 <WorkspaceSwitcher
                   activeOrganization={activeOrganization}
                   onSelect={(organization) => {
+                    modelRef.current = null;
                     setModel(null);
                     setSelectedTableId(null);
                     setProjectSearchTerm('');
@@ -570,6 +594,7 @@ export function EditorPage() {
                   <CreateProjectDialog
                     organizationId={activeOrganization?.id ?? null}
                     onCreated={(project) => {
+                      modelRef.current = null;
                       setModel(null);
                       setSelectedTableId(null);
                       navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
@@ -600,6 +625,7 @@ export function EditorPage() {
                         }`}
                         key={project.id}
                         onClick={() => {
+                          modelRef.current = null;
                           setModel(null);
                           setSelectedTableId(null);
                           navigate(
@@ -668,6 +694,27 @@ function getOrganizationSlug(organization: OrganizationDto): string {
 
 function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: string | null): boolean {
   return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
+}
+
+function updateLiveModelFromDiagram(
+  currentModel: DiagramModel,
+  diagram: DiagramResponseDto,
+  modelRef: { current: DiagramModel | null },
+): DiagramModel {
+  const nextModel = {
+    ...currentModel,
+    dialect: diagram.dialect,
+    metadata: {
+      ...currentModel.metadata,
+      // Diagram metadata follows the server record immediately; snapshot persistence still happens on Save.
+      name: diagram.name,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+
+  modelRef.current = nextModel;
+
+  return nextModel;
 }
 
 function SidebarRail({

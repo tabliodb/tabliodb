@@ -48,6 +48,7 @@ const compactSelectClassName =
 export type TableStructureSidebarProps = {
   model: DiagramModel;
   onClearTableSelection: () => void;
+  onDraftChange: () => void;
   onHide: () => void;
   onModelChange: (model: DiagramModel) => void;
   readOnly?: boolean;
@@ -57,6 +58,7 @@ export type TableStructureSidebarProps = {
 export function TableStructureSidebar({
   model,
   onClearTableSelection,
+  onDraftChange,
   onHide,
   onModelChange,
   readOnly = false,
@@ -64,6 +66,7 @@ export function TableStructureSidebar({
 }: TableStructureSidebarProps) {
   const table = model.tables[selectedTableId] ?? null;
   const columns = useMemo(() => (table ? getTableColumns(model, table.id) : []), [model, table]);
+  const [activeAttributesColumnId, setActiveAttributesColumnId] = useState<string | null>(null);
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [confirmDeleteTable, setConfirmDeleteTable] = useState(false);
   const selectedColumn = columns.find((column) => column.id === selectedColumnId) ?? columns[0] ?? null;
@@ -82,6 +85,7 @@ export function TableStructureSidebar({
   }, [columnIds, columns, selectedColumnId, table]);
 
   useEffect(() => {
+    setActiveAttributesColumnId(null);
     setConfirmDeleteTable(false);
   }, [selectedTableId]);
 
@@ -180,7 +184,12 @@ export function TableStructureSidebar({
         <IconButton icon={X} label="Back to projects" onClick={onClearTableSelection} variant="ghost" />
       </div>
 
-      <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4 pb-28">
+      <div
+        className={cn(
+          'tabliodb-scrollbar min-h-0 flex-1 p-4 pb-28',
+          activeAttributesColumnId ? 'overflow-hidden' : 'overflow-y-auto',
+        )}
+      >
         {readOnly ? (
           <div className="mb-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-xs font-extrabold text-[rgb(var(--tabliodb-gold-text))]">
             Your role can inspect this table but cannot edit schema details.
@@ -191,7 +200,13 @@ export function TableStructureSidebar({
           <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Table name
           </label>
-          <InlineTextInput className="mt-2" disabled={readOnly} onCommit={handleTableNameCommit} value={table.name} />
+          <InlineTextInput
+            className="mt-2"
+            disabled={readOnly}
+            onCommit={handleTableNameCommit}
+            onDraftChange={onDraftChange}
+            value={table.name}
+          />
           <div className="mt-3 flex items-center gap-2.5">
             <Palette className="size-4 text-[rgb(var(--tabliodb-ink-muted))]" />
             <div className="flex flex-wrap gap-2.5">
@@ -239,12 +254,15 @@ export function TableStructureSidebar({
           <div className="space-y-2">
             {columns.map((column) => (
               <ColumnEditorRow
+                attributesOpen={activeAttributesColumnId === column.id}
                 column={column}
                 disabled={readOnly}
                 enumsAvailable={Object.keys(model.enums).length > 0}
                 key={column.id}
                 model={model}
+                onAttributesOpenChange={(open) => setActiveAttributesColumnId(open ? column.id : null)}
                 onDelete={handleDeleteColumn}
+                onDraftChange={onDraftChange}
                 onSelect={setSelectedColumnId}
                 onUpdate={updateColumn}
                 selected={selectedColumn?.id === column.id}
@@ -258,29 +276,34 @@ export function TableStructureSidebar({
 }
 
 function ColumnEditorRow({
+  attributesOpen,
   column,
   disabled,
   enumsAvailable,
   model,
+  onAttributesOpenChange,
   onDelete,
+  onDraftChange,
   onSelect,
   onUpdate,
   selected,
 }: {
+  attributesOpen: boolean;
   column: DatabaseColumn;
   disabled: boolean;
   enumsAvailable: boolean;
   model: DiagramModel;
+  onAttributesOpenChange: (open: boolean) => void;
   onDelete: (column: DatabaseColumn) => void;
+  onDraftChange: () => void;
   onSelect: (columnId: string) => void;
   onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
   selected: boolean;
 }) {
-  const [attributesOpen, setAttributesOpen] = useState(false);
   const [confirmDeleteColumn, setConfirmDeleteColumn] = useState(false);
 
   function handleOpenChange(open: boolean) {
-    setAttributesOpen(open);
+    onAttributesOpenChange(open);
 
     if (!open) {
       setConfirmDeleteColumn(false);
@@ -299,7 +322,7 @@ function ColumnEditorRow({
 
     // The second click confirms the destructive column action while keeping the primary attribute popover in one place.
     onDelete(column);
-    setAttributesOpen(false);
+    onAttributesOpenChange(false);
   }
 
   return (
@@ -325,6 +348,7 @@ function ColumnEditorRow({
               onUpdate(column, { name });
             }
           }}
+          onDraftChange={onDraftChange}
           value={column.name}
         />
         <Popover onOpenChange={handleOpenChange} open={attributesOpen}>
@@ -337,13 +361,18 @@ function ColumnEditorRow({
               <MoreHorizontal className="size-4" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-[340px]" side="right">
+          <PopoverContent
+            align="start"
+            className="tabliodb-scrollbar max-h-[min(78dvh,560px)] w-[340px] overflow-y-auto overscroll-contain"
+            side="right"
+          >
             <ColumnAttributesPopoverContent
               column={column}
               confirmDeleteColumn={confirmDeleteColumn}
               disabled={disabled}
               model={model}
               onDelete={handleDeleteColumn}
+              onDraftChange={onDraftChange}
               onUpdate={onUpdate}
             />
           </PopoverContent>
@@ -404,6 +433,7 @@ function ColumnAttributesPopoverContent({
   disabled,
   model,
   onDelete,
+  onDraftChange,
   onUpdate,
 }: {
   column: DatabaseColumn;
@@ -411,6 +441,7 @@ function ColumnAttributesPopoverContent({
   disabled: boolean;
   model: DiagramModel;
   onDelete: () => void;
+  onDraftChange: () => void;
   onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
 }) {
   const enumOptions = Object.values(model.enums);
@@ -439,6 +470,7 @@ function ColumnAttributesPopoverContent({
               max={2048}
               min={1}
               onCommit={(length) => onUpdate(column, { type: { ...column.type, length, raw: undefined } })}
+              onDraftChange={onDraftChange}
               value={column.type.length ?? 160}
             />
           </label>
@@ -467,6 +499,7 @@ function ColumnAttributesPopoverContent({
             className="mt-1"
             disabled={disabled}
             onCommit={(defaultValue) => onUpdate(column, { defaultValue: normalizeOptionalString(defaultValue) })}
+            onDraftChange={onDraftChange}
             placeholder="Default value"
             value={column.defaultValue ?? ''}
           />
@@ -478,6 +511,7 @@ function ColumnAttributesPopoverContent({
             className="mt-1"
             disabled={disabled}
             onCommit={(comment) => onUpdate(column, { comment: normalizeOptionalString(comment) })}
+            onDraftChange={onDraftChange}
             placeholder="Optional description for this column"
             value={column.comment ?? ''}
           />
@@ -540,12 +574,14 @@ function InlineTextInput({
   className,
   disabled,
   onCommit,
+  onDraftChange,
   placeholder,
   value,
 }: {
   className?: string;
   disabled?: boolean;
   onCommit: (value: string) => void;
+  onDraftChange?: () => void;
   placeholder?: string;
   value: string;
 }) {
@@ -561,12 +597,21 @@ function InlineTextInput({
     }
   }
 
+  function handleChange(nextValue: string) {
+    setDraft(nextValue);
+
+    if (nextValue !== value) {
+      // Dirty feedback should appear while the user types, not only after blur commits the field.
+      onDraftChange?.();
+    }
+  }
+
   return (
     <Input
       className={cn(inlineInputClassName, className)}
       disabled={disabled}
       onBlur={commit}
-      onChange={(event) => setDraft(event.currentTarget.value)}
+      onChange={(event) => handleChange(event.currentTarget.value)}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
           event.currentTarget.blur();
@@ -584,6 +629,7 @@ function InlineNumberInput({
   max,
   min,
   onCommit,
+  onDraftChange,
   value,
 }: {
   className?: string;
@@ -591,6 +637,7 @@ function InlineNumberInput({
   max: number;
   min: number;
   onCommit: (value: number) => void;
+  onDraftChange?: () => void;
   value: number;
 }) {
   const [draft, setDraft] = useState(String(value));
@@ -623,7 +670,16 @@ function InlineNumberInput({
       max={max}
       min={min}
       onBlur={commit}
-      onChange={(event) => setDraft(event.currentTarget.value)}
+      onChange={(event) => {
+        const nextValue = event.currentTarget.value;
+
+        setDraft(nextValue);
+
+        if (nextValue !== String(value)) {
+          // Number drafts can be temporarily invalid while typing, but they still signal that the editor has pending work.
+          onDraftChange?.();
+        }
+      }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
           event.currentTarget.blur();
@@ -639,12 +695,14 @@ function InlineTextarea({
   className,
   disabled,
   onCommit,
+  onDraftChange,
   placeholder,
   value,
 }: {
   className?: string;
   disabled?: boolean;
   onCommit: (value: string) => void;
+  onDraftChange?: () => void;
   placeholder?: string;
   value: string;
 }) {
@@ -666,7 +724,16 @@ function InlineTextarea({
           onCommit(draft);
         }
       }}
-      onChange={(event) => setDraft(event.currentTarget.value)}
+      onChange={(event) => {
+        const nextValue = event.currentTarget.value;
+
+        setDraft(nextValue);
+
+        if (nextValue !== value) {
+          // Textarea edits use the same immediate dirty feedback as compact inline inputs.
+          onDraftChange?.();
+        }
+      }}
       placeholder={placeholder}
       value={draft}
     />

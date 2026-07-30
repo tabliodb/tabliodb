@@ -1,16 +1,44 @@
-import type { ComponentPropsWithoutRef } from 'react';
+import type { ComponentPropsWithoutRef, FocusEvent } from 'react';
 import { cn } from '../lib/utils.js';
 
 export type InputProps = ComponentPropsWithoutRef<'input'>;
 
-export function Input({ className, ...props }: InputProps) {
+export function Input({ className, onFocus, ...props }: InputProps) {
+  function handleFocus(event: FocusEvent<HTMLInputElement>) {
+    onFocus?.(event);
+
+    if (!canCollapseSelection(event.currentTarget)) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const input = event.currentTarget;
+
+      if (!document.contains(input)) {
+        return;
+      }
+
+      const wholeValueIsSelected = input.selectionStart === 0 && input.selectionEnd === input.value.length;
+
+      if (wholeValueIsSelected) {
+        // Auto-focused dialog/popover inputs should place the caret at the end without selecting the current value.
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    });
+  }
+
   return (
     <input
       className={cn(
         'flex h-11 w-full rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-semibold text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)] disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
+      onFocus={handleFocus}
       {...props}
     />
   );
+}
+
+function canCollapseSelection(input: HTMLInputElement): boolean {
+  return ['email', 'password', 'search', 'tel', 'text', 'url'].includes(input.type);
 }
