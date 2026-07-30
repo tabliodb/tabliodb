@@ -7,7 +7,7 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
     .setTitle('Tabliodb API')
     .setDescription('Collaborative database schema designer API')
     .setVersion('0.1.0')
-    // Pemanggil generated SDK cukup memakai base URL ".../api", mengikuti ergonomi SDK Immich.
+    // Pemanggil generated SDK cukup memakai base URL ".../api".
     .addServer('/api')
     .addBearerAuth()
     .addCookieAuth('tabliodb_access_token')
