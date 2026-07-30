@@ -33,6 +33,7 @@ import {
   IconButton,
   Select,
   Surface,
+  WithTooltip,
   cn,
 } from '@tabliodb/ui';
 import { PanelRightClose, Pencil, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
@@ -47,7 +48,7 @@ import {
   type ControlledCheckboxProps,
 } from '@/features/app/FormControls';
 import { formatColumnType } from '../diagram-model';
-import { getDisplayTableColor, tableColorOptions } from '../table-colors';
+import { getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
 const unsetSelectValue = '__unset' as const;
 
 const editTableFormSchema = z.object({
@@ -555,40 +556,47 @@ function ReviewSignalsPanel({
               )}
               key={signal.id}
             >
-              <button
-                className="block w-full cursor-pointer rounded-[calc(var(--tabliodb-radius-md)-4px)] text-left outline-none transition focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
-                onClick={() => onSignalSelect(signal)}
-                type="button"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
-                      {signal.title}
+              <WithTooltip content={`Focus ${signal.target.type} related to this signal`} side="left">
+                <button
+                  className="block w-full cursor-pointer rounded-[calc(var(--tabliodb-radius-md)-4px)] text-left outline-none transition focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
+                  onClick={() => onSignalSelect(signal)}
+                  // Native title tetap memberi metadata singkat jika user membuka browser tanpa custom tooltip.
+                  title={`Focus ${signal.target.type}`}
+                  type="button"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
+                        {signal.title}
+                      </div>
+                      <p className="mt-1 text-[12px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                        {signal.message}
+                      </p>
                     </div>
-                    <p className="mt-1 text-[12px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                      {signal.message}
-                    </p>
+                    <span className="shrink-0 rounded-full border border-current px-2 py-0.5 text-[10px] font-extrabold uppercase">
+                      {signal.severity}
+                    </span>
                   </div>
-                  <span className="shrink-0 rounded-full border border-current px-2 py-0.5 text-[10px] font-extrabold uppercase">
-                    {signal.severity}
-                  </span>
-                </div>
-              </button>
+                </button>
+              </WithTooltip>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-subtle))]">
                   {signal.target.type}
                 </div>
                 {canIgnore && onSignalIgnore ? (
-                  <Button
-                    // Ignore berada di aksi terpisah dari tombol focus target supaya keyboard/mouse user tidak memicu dua intent sekaligus.
-                    disabled={isIgnoring}
-                    onClick={() => onSignalIgnore(signal.id)}
-                    size="sm"
-                    type="button"
-                    variant="secondary"
-                  >
-                    Ignore
-                  </Button>
+                  <WithTooltip content="Hide this signal for the current saved diagram">
+                    <Button
+                      // Ignore berada di aksi terpisah dari tombol focus target supaya keyboard/mouse user tidak memicu dua intent sekaligus.
+                      disabled={isIgnoring}
+                      onClick={() => onSignalIgnore(signal.id)}
+                      size="sm"
+                      title="Ignore review signal"
+                      type="button"
+                      variant="secondary"
+                    >
+                      Ignore
+                    </Button>
+                  </WithTooltip>
                 ) : null}
               </div>
             </div>
@@ -969,22 +977,29 @@ function EditTableDialog({
                   Color
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {tableColorOptions.map((color) => (
-                    <button
-                      aria-label={`Use ${color}`}
-                      className="size-9 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
-                      key={color}
-                      onClick={() => form.setValue('color', color, { shouldDirty: true, shouldValidate: true })}
-                      style={{
-                        backgroundColor: color,
-                        boxShadow:
-                          selectedColor === color
-                            ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
-                            : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
-                      }}
-                      type="button"
-                    />
-                  ))}
+                  {tableColorOptions.map((color) => {
+                    const colorLabel = getTableColorLabel(color);
+
+                    return (
+                      <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
+                        <button
+                          aria-label={`Use ${colorLabel}`}
+                          className="size-9 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
+                          onClick={() => form.setValue('color', color, { shouldDirty: true, shouldValidate: true })}
+                          style={{
+                            backgroundColor: color,
+                            boxShadow:
+                              selectedColor === color
+                                ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
+                                : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
+                          }}
+                          // Hex tetap dipertahankan sebagai title agar metadata warna teknis masih mudah dilihat saat inspeksi native.
+                          title={color}
+                          type="button"
+                        />
+                      </WithTooltip>
+                    );
+                  })}
                 </div>
                 <ControlledInput
                   aria-invalid={Boolean(errors.color)}
@@ -2501,10 +2516,26 @@ function ColumnFact({ label, value }: { label: string; value: string }) {
 
 function ColumnBadge({ children }: { children: string }) {
   return (
-    <span className="rounded-md bg-[rgb(var(--tabliodb-surface-raised))] px-1.5 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-      {children}
-    </span>
+    <WithTooltip content={getColumnBadgeTooltip(children)}>
+      <span
+        className="rounded-md bg-[rgb(var(--tabliodb-surface-raised))] px-1.5 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]"
+        // Badge tetap menyimpan title native agar singkatan database terbaca sebagai metadata sederhana.
+        title={getColumnBadgeTooltip(children)}
+      >
+        {children}
+      </span>
+    </WithTooltip>
   );
+}
+
+function getColumnBadgeTooltip(value: string): string {
+  const labels: Record<string, string> = {
+    NN: 'Not nullable',
+    PK: 'Primary key',
+    UQ: 'Unique column',
+  };
+
+  return labels[value] ?? value;
 }
 
 function getEditTableDefaults(table: DatabaseTable): EditTableFormState {

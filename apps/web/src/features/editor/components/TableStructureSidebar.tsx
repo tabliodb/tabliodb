@@ -7,11 +7,22 @@ import {
   type DatabaseColumn,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import { Button, Checkbox, IconButton, Input, Popover, PopoverContent, PopoverTrigger, Select, cn } from '@tabliodb/ui';
+import {
+  Button,
+  Checkbox,
+  IconButton,
+  Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  WithTooltip,
+  cn,
+} from '@tabliodb/ui';
 import { Columns3, GripVertical, MoreHorizontal, PanelLeftClose, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatColumnType } from '../diagram-model';
-import { getDisplayTableColor, tableColorOptions } from '../table-colors';
+import { getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
 const columnTypeFamilyOptions = [
   'bigint',
   'boolean',
@@ -193,23 +204,30 @@ export function TableStructureSidebar({
               Color
             </div>
             <div className="flex flex-wrap gap-2">
-              {tableColorOptions.map((color) => (
-                <button
-                  aria-label={`Use ${color}`}
-                  className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={readOnly}
-                  key={color}
-                  onClick={() => handleColorChange(color)}
-                  style={{
-                    backgroundColor: color,
-                    boxShadow:
-                      getDisplayTableColor(table.color) === color
-                        ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
-                        : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
-                  }}
-                  type="button"
-                />
-              ))}
+              {tableColorOptions.map((color) => {
+                const colorLabel = getTableColorLabel(color);
+
+                return (
+                  <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
+                    <button
+                      aria-label={`Use ${colorLabel}`}
+                      className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={readOnly}
+                      onClick={() => handleColorChange(color)}
+                      style={{
+                        backgroundColor: color,
+                        boxShadow:
+                          getDisplayTableColor(table.color) === color
+                            ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
+                            : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
+                      }}
+                      // Hex disimpan di title agar inspeksi native/browser tetap punya metadata warna yang presisi.
+                      title={color}
+                      type="button"
+                    />
+                  </WithTooltip>
+                );
+              })}
             </div>
           </div>
           <Button
@@ -335,15 +353,18 @@ function ColumnEditorRow({
           value={column.name}
         />
         <Popover onOpenChange={handleOpenChange} open={attributesOpen}>
-          <PopoverTrigger asChild>
-            <button
-              aria-label={`Column actions for ${column.name}`}
-              className="grid size-7 cursor-pointer place-items-center rounded-[var(--tabliodb-radius-sm)] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white"
-              type="button"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </PopoverTrigger>
+          <WithTooltip content={`Open attributes and actions for ${column.name}`}>
+            <PopoverTrigger asChild>
+              <button
+                aria-label={`Column actions for ${column.name}`}
+                className="grid size-7 cursor-pointer place-items-center rounded-[var(--tabliodb-radius-sm)] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white"
+                title={`Column actions for ${column.name}`}
+                type="button"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </PopoverTrigger>
+          </WithTooltip>
           <PopoverContent
             align="start"
             className="tabliodb-scrollbar max-h-[min(78dvh,540px)] w-[320px] overflow-y-auto overscroll-contain"
@@ -528,22 +549,25 @@ function ColumnToggle({
   onClick: () => void;
 }) {
   return (
-    <button
-      aria-label={label}
-      aria-pressed={active}
-      className={cn(
-        'inline-flex h-8 w-full cursor-pointer items-center justify-center rounded-[10px] border px-1 text-[11px] font-extrabold leading-none transition disabled:cursor-not-allowed disabled:opacity-60',
-        active
-          ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_1px_0_rgb(var(--tabliodb-active-chip-border))]'
-          : 'border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
-      )}
-      disabled={disabled}
-      onClick={onClick}
-      title={label}
-      type="button"
-    >
-      {children}
-    </button>
+    <WithTooltip content={`${label}${active ? ' is enabled' : ' is disabled'}`}>
+      <button
+        aria-label={label}
+        aria-pressed={active}
+        className={cn(
+          'inline-flex h-8 w-full cursor-pointer items-center justify-center rounded-[10px] border px-1 text-[11px] font-extrabold leading-none transition disabled:cursor-not-allowed disabled:opacity-60',
+          active
+            ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_1px_0_rgb(var(--tabliodb-active-chip-border))]'
+            : 'border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
+        )}
+        disabled={disabled}
+        onClick={onClick}
+        // Title tetap dipakai untuk native metadata, sedangkan tooltip Radix memberi penjelasan state yang lebih kaya.
+        title={label}
+        type="button"
+      >
+        {children}
+      </button>
+    </WithTooltip>
   );
 }
 

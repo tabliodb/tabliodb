@@ -53,6 +53,7 @@ import {
   IconButton,
   Input,
   Select,
+  WithTooltip,
   cn,
 } from '@tabliodb/ui';
 import {
@@ -1609,25 +1610,29 @@ function WorkspaceSwitcher({
         Workspace
       </div>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="flex h-[var(--tabliodb-control-lg)] w-full cursor-pointer items-center gap-2.5 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
-            type="button"
-          >
-            <div className="grid size-8 shrink-0 place-items-center rounded-[12px] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
-              <Building2 className="size-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-extrabold">
-                {activeOrganization?.name ?? 'Select workspace'}
+        <WithTooltip content="Switch workspace">
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex h-[var(--tabliodb-control-lg)] w-full cursor-pointer items-center gap-2.5 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+              // Native title dipertahankan karena switcher ini juga membawa konteks workspace aktif.
+              title="Switch workspace"
+              type="button"
+            >
+              <div className="grid size-8 shrink-0 place-items-center rounded-[12px] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
+                <Building2 className="size-4" />
               </div>
-              <div className="truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                {activeOrganization ? formatOrganizationRole(activeOrganization.role) : 'No workspace'}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-extrabold">
+                  {activeOrganization?.name ?? 'Select workspace'}
+                </div>
+                <div className="truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {activeOrganization ? formatOrganizationRole(activeOrganization.role) : 'No workspace'}
+                </div>
               </div>
-            </div>
-            <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
-          </button>
-        </DropdownMenuTrigger>
+              <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
+            </button>
+          </DropdownMenuTrigger>
+        </WithTooltip>
         <DropdownMenuContent align="start" className="w-64">
           {organizations.map((organization) => {
             const isActive = organization.id === activeOrganization?.id;
@@ -2640,15 +2645,19 @@ function ProjectMemberRow({
         }))}
         value={member.role}
       />
-      <Button
-        aria-label={`Remove ${member.name}`}
-        disabled={isBusy}
-        onClick={() => onRemove(member)}
-        size="icon"
-        variant="ghost"
-      >
-        {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-      </Button>
+      <WithTooltip content={`Remove ${member.name} from this project`}>
+        <Button
+          aria-label={`Remove ${member.name}`}
+          disabled={isBusy}
+          onClick={() => onRemove(member)}
+          size="icon"
+          // Title tetap ada sebagai fallback native untuk metadata action destructive.
+          title={`Remove ${member.name}`}
+          variant="ghost"
+        >
+          {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        </Button>
+      </WithTooltip>
     </article>
   );
 }
@@ -2695,15 +2704,19 @@ function OrganizationMemberRow({
         }))}
         value={member.role}
       />
-      <Button
-        aria-label={`Remove ${member.name}`}
-        disabled={isBusy}
-        onClick={() => onRemove(member)}
-        size="icon"
-        variant="ghost"
-      >
-        {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-      </Button>
+      <WithTooltip content={`Remove ${member.name} from this workspace`}>
+        <Button
+          aria-label={`Remove ${member.name}`}
+          disabled={isBusy}
+          onClick={() => onRemove(member)}
+          size="icon"
+          // Title tetap ada sebagai fallback native untuk metadata action destructive.
+          title={`Remove ${member.name}`}
+          variant="ghost"
+        >
+          {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        </Button>
+      </WithTooltip>
     </article>
   );
 }

@@ -21,6 +21,7 @@ import {
   FieldError,
   Input,
   Surface,
+  WithTooltip,
   cn,
 } from '@tabliodb/ui';
 import {
@@ -814,11 +815,20 @@ function UserRow({
       </div>
       <div className="flex justify-start lg:justify-end">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button aria-label={`Manage ${user.name}`} disabled={isBusy} size="icon" variant="secondary">
-              {isBusy ? <Loader2 className="size-4 animate-spin" /> : <MoreHorizontal className="size-4" />}
-            </Button>
-          </DropdownMenuTrigger>
+          <WithTooltip content={`Manage ${user.name}: password, sessions, and account status`}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label={`Manage ${user.name}`}
+                disabled={isBusy}
+                size="icon"
+                // Native title dipertahankan sebagai metadata sederhana ketika tooltip custom tidak aktif.
+                title={`Manage ${user.name}`}
+                variant="secondary"
+              >
+                {isBusy ? <Loader2 className="size-4 animate-spin" /> : <MoreHorizontal className="size-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+          </WithTooltip>
           <DropdownMenuContent align="end">
             <DropdownMenuItem disabled={isBusy} onSelect={() => onResetPassword(user)}>
               <KeyRound className="size-4" />

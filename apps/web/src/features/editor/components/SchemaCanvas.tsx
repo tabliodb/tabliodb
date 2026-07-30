@@ -888,7 +888,7 @@ function renderTableNode(data: TableNodeData): string {
   const rows = data.columns.map((column) => renderColumnRow(column)).join('');
   const resizeHandle = data.readOnly
     ? ''
-    : '<button aria-label="Resize table" class="tabliodb-table-node__resize-handle" type="button"></button>';
+    : '<button aria-label="Resize table" class="tabliodb-table-node__resize-handle" title="Drag to resize table width" type="button"></button>';
 
   return `
     <div class="tabliodb-table-node ${data.selected ? 'is-selected' : ''}" data-tabliodb-table-id="${escapeHtml(data.tableId)}" style="--table-accent: ${escapeHtml(data.color)}">
@@ -905,9 +905,10 @@ function renderTableNode(data: TableNodeData): string {
 
 function renderColumnRow(column: DatabaseColumn): string {
   const badges = [
-    column.primaryKey ? '<span class="tabliodb-table-node__badge">PK</span>' : '',
-    column.unique ? '<span class="tabliodb-table-node__badge">UQ</span>' : '',
-    !column.nullable ? '<span class="tabliodb-table-node__badge">NN</span>' : '',
+    // X6 table rows are rendered as HTML strings, so native title is the safest metadata path until nodes move to React-rendered markup.
+    column.primaryKey ? '<span class="tabliodb-table-node__badge" title="Primary key">PK</span>' : '',
+    column.unique ? '<span class="tabliodb-table-node__badge" title="Unique column">UQ</span>' : '',
+    !column.nullable ? '<span class="tabliodb-table-node__badge" title="Not nullable">NN</span>' : '',
   ].join('');
 
   return `

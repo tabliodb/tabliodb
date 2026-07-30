@@ -9,4 +9,5 @@ export * from './components/Input.js';
 export * from './components/Popover.js';
 export * from './components/Select.js';
 export * from './components/Surface.js';
+export * from './components/Tooltip.js';
 export * from './lib/utils.js';
