@@ -19,7 +19,9 @@ import {
 import {
   Badge,
   Button,
+  Checkbox,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -596,14 +598,16 @@ function AddEnumDialog({
           Enum
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(92vw,520px)] overflow-y-auto">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <DialogContent className="w-[min(92vw,520px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New enum</DialogTitle>
             <DialogDescription>Create reusable values for enum columns.</DialogDescription>
           </DialogHeader>
-          <EnumFormFields form={form} />
-          <DialogFooter className="mt-5">
+          <DialogBody>
+            <EnumFormFields form={form} />
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -663,14 +667,16 @@ function EditEnumDialog({
           Edit
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(92vw,520px)] overflow-y-auto">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <DialogContent className="w-[min(92vw,520px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Edit enum</DialogTitle>
             <DialogDescription>Update enum values and metadata.</DialogDescription>
           </DialogHeader>
-          <EnumFormFields form={form} />
-          <DialogFooter className="mt-5">
+          <DialogBody>
+            <EnumFormFields form={form} />
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => setOpen(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -689,7 +695,7 @@ function EnumFormFields({ form }: { form: UseFormReturn<EnumFormState> }) {
   const { errors } = form.formState;
 
   return (
-    <div className="mt-4 grid gap-4">
+    <div className="grid gap-4">
       <label className="block text-sm">
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Enum name
@@ -776,62 +782,64 @@ function EditTableDialog({
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Edit table</DialogTitle>
             <DialogDescription>Adjust the table identity and visual width.</DialogDescription>
           </DialogHeader>
-          <div className="mt-4 grid gap-4">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Table name
-              </span>
-              <ControlledInput autoFocus aria-invalid={Boolean(errors.name)} control={form.control} name="name" />
-              <FieldError>{errors.name?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Width
-              </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.width)}
-                control={form.control}
-                min={240}
-                max={720}
-                name="width"
-                type="number"
-              />
-              <FieldError>{errors.width?.message}</FieldError>
-            </label>
-            <div>
-              <span className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Color
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {tableColorOptions.map((color) => (
-                  <button
-                    aria-label={`Use ${color}`}
-                    className={cn(
-                      'size-9 cursor-pointer rounded-full border-2 border-white shadow-[0_0_0_2px_rgb(var(--tabliodb-border-strong))] transition hover:scale-105',
-                      selectedColor === color && 'shadow-[0_0_0_3px_rgb(var(--tabliodb-primary))]',
-                    )}
-                    key={color}
-                    onClick={() => form.setValue('color', color, { shouldDirty: true, shouldValidate: true })}
-                    style={{ backgroundColor: color }}
-                    type="button"
-                  />
-                ))}
+          <DialogBody>
+            <div className="grid gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Table name
+                </span>
+                <ControlledInput autoFocus aria-invalid={Boolean(errors.name)} control={form.control} name="name" />
+                <FieldError>{errors.name?.message}</FieldError>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Width
+                </span>
+                <ControlledInput
+                  aria-invalid={Boolean(errors.width)}
+                  control={form.control}
+                  min={240}
+                  max={720}
+                  name="width"
+                  type="number"
+                />
+                <FieldError>{errors.width?.message}</FieldError>
+              </label>
+              <div>
+                <span className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Color
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {tableColorOptions.map((color) => (
+                    <button
+                      aria-label={`Use ${color}`}
+                      className={cn(
+                        'size-9 cursor-pointer rounded-full border-2 border-white shadow-[0_0_0_2px_rgb(var(--tabliodb-border-strong))] transition hover:scale-105',
+                        selectedColor === color && 'shadow-[0_0_0_3px_rgb(var(--tabliodb-primary))]',
+                      )}
+                      key={color}
+                      onClick={() => form.setValue('color', color, { shouldDirty: true, shouldValidate: true })}
+                      style={{ backgroundColor: color }}
+                      type="button"
+                    />
+                  ))}
+                </div>
+                <ControlledInput
+                  aria-invalid={Boolean(errors.color)}
+                  className="mt-3"
+                  control={form.control}
+                  name="color"
+                />
+                <FieldError>{errors.color?.message}</FieldError>
               </div>
-              <ControlledInput
-                aria-invalid={Boolean(errors.color)}
-                className="mt-3"
-                control={form.control}
-                name="color"
-              />
-              <FieldError>{errors.color?.message}</FieldError>
             </div>
-          </div>
-          <DialogFooter className="mt-5">
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => setOpen(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -899,75 +907,77 @@ function AddColumnDialog({
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New column</DialogTitle>
             <DialogDescription>Add a typed column to {table.name}.</DialogDescription>
           </DialogHeader>
-          <div className="mt-4 grid gap-4">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Column name
-              </span>
-              <ControlledInput
-                autoFocus
-                aria-invalid={Boolean(errors.name)}
-                control={form.control}
-                name="name"
-                placeholder="created_at"
-              />
-              <FieldError>{errors.name?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Type
-              </span>
-              <ControlledSelect
-                className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                control={form.control}
-                name="family"
-                options={columnTypeFamilyOptions.map((option) => ({ label: option, value: option }))}
-              />
-            </label>
-            {family === 'varchar' ? (
+          <DialogBody>
+            <div className="grid gap-4">
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Length
+                  Column name
                 </span>
                 <ControlledInput
-                  aria-invalid={Boolean(errors.length)}
+                  autoFocus
+                  aria-invalid={Boolean(errors.name)}
                   control={form.control}
-                  min={1}
-                  max={2048}
-                  name="length"
-                  type="number"
+                  name="name"
+                  placeholder="created_at"
                 />
-                <FieldError>{errors.length?.message}</FieldError>
+                <FieldError>{errors.name?.message}</FieldError>
               </label>
-            ) : null}
-            {family === 'enum' ? <EnumSelectField enumOptions={enumOptions} form={form} /> : null}
-            <div className="grid gap-2">
-              <CheckboxField control={form.control} label="Primary key" name="primaryKey" />
-              <CheckboxField control={form.control} label="Unique" name="unique" />
-              <CheckboxField control={form.control} label="Auto increment" name="autoIncrement" />
-              <CheckboxField control={form.control} label="Nullable" name="nullable" />
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Type
+                </span>
+                <ControlledSelect
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  control={form.control}
+                  name="family"
+                  options={columnTypeFamilyOptions.map((option) => ({ label: option, value: option }))}
+                />
+              </label>
+              {family === 'varchar' ? (
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Length
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(errors.length)}
+                    control={form.control}
+                    min={1}
+                    max={2048}
+                    name="length"
+                    type="number"
+                  />
+                  <FieldError>{errors.length?.message}</FieldError>
+                </label>
+              ) : null}
+              {family === 'enum' ? <EnumSelectField enumOptions={enumOptions} form={form} /> : null}
+              <div className="grid gap-2">
+                <CheckboxField control={form.control} label="Primary key" name="primaryKey" />
+                <CheckboxField control={form.control} label="Unique" name="unique" />
+                <CheckboxField control={form.control} label="Auto increment" name="autoIncrement" />
+                <CheckboxField control={form.control} label="Nullable" name="nullable" />
+              </div>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Default value
+                </span>
+                <ControlledInput control={form.control} name="defaultValue" placeholder="now()" />
+                <FieldError>{errors.defaultValue?.message}</FieldError>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Comment
+                </span>
+                <ControlledInput control={form.control} name="comment" placeholder="Shown in generated docs later" />
+                <FieldError>{errors.comment?.message}</FieldError>
+              </label>
             </div>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Default value
-              </span>
-              <ControlledInput control={form.control} name="defaultValue" placeholder="now()" />
-              <FieldError>{errors.defaultValue?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Comment
-              </span>
-              <ControlledInput control={form.control} name="comment" placeholder="Shown in generated docs later" />
-              <FieldError>{errors.comment?.message}</FieldError>
-            </label>
-          </div>
-          <DialogFooter className="mt-5">
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -1087,69 +1097,71 @@ function EditColumnDialog({
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Edit column</DialogTitle>
             <DialogDescription>Change column type, constraints, and metadata.</DialogDescription>
           </DialogHeader>
-          <div className="mt-4 grid gap-4">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Column name
-              </span>
-              <ControlledInput autoFocus aria-invalid={Boolean(errors.name)} control={form.control} name="name" />
-              <FieldError>{errors.name?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Type
-              </span>
-              <ControlledSelect
-                className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                control={form.control}
-                name="family"
-                options={columnTypeFamilyOptions.map((option) => ({ label: option, value: option }))}
-              />
-            </label>
-            {family === 'varchar' ? (
+          <DialogBody>
+            <div className="grid gap-4">
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Length
+                  Column name
                 </span>
-                <ControlledInput
-                  aria-invalid={Boolean(errors.length)}
-                  control={form.control}
-                  min={1}
-                  max={2048}
-                  name="length"
-                  type="number"
-                />
-                <FieldError>{errors.length?.message}</FieldError>
+                <ControlledInput autoFocus aria-invalid={Boolean(errors.name)} control={form.control} name="name" />
+                <FieldError>{errors.name?.message}</FieldError>
               </label>
-            ) : null}
-            {family === 'enum' ? <EnumSelectField enumOptions={enumOptions} form={form} /> : null}
-            <div className="grid gap-2">
-              <CheckboxField control={form.control} label="Primary key" name="primaryKey" />
-              <CheckboxField control={form.control} label="Unique" name="unique" />
-              <CheckboxField control={form.control} label="Auto increment" name="autoIncrement" />
-              <CheckboxField control={form.control} label="Nullable" name="nullable" />
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Type
+                </span>
+                <ControlledSelect
+                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                  control={form.control}
+                  name="family"
+                  options={columnTypeFamilyOptions.map((option) => ({ label: option, value: option }))}
+                />
+              </label>
+              {family === 'varchar' ? (
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Length
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(errors.length)}
+                    control={form.control}
+                    min={1}
+                    max={2048}
+                    name="length"
+                    type="number"
+                  />
+                  <FieldError>{errors.length?.message}</FieldError>
+                </label>
+              ) : null}
+              {family === 'enum' ? <EnumSelectField enumOptions={enumOptions} form={form} /> : null}
+              <div className="grid gap-2">
+                <CheckboxField control={form.control} label="Primary key" name="primaryKey" />
+                <CheckboxField control={form.control} label="Unique" name="unique" />
+                <CheckboxField control={form.control} label="Auto increment" name="autoIncrement" />
+                <CheckboxField control={form.control} label="Nullable" name="nullable" />
+              </div>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Default value
+                </span>
+                <ControlledInput control={form.control} name="defaultValue" placeholder="now()" />
+                <FieldError>{errors.defaultValue?.message}</FieldError>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Comment
+                </span>
+                <ControlledInput control={form.control} name="comment" placeholder="Column note" />
+                <FieldError>{errors.comment?.message}</FieldError>
+              </label>
             </div>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Default value
-              </span>
-              <ControlledInput control={form.control} name="defaultValue" placeholder="now()" />
-              <FieldError>{errors.defaultValue?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Comment
-              </span>
-              <ControlledInput control={form.control} name="comment" placeholder="Column note" />
-              <FieldError>{errors.comment?.message}</FieldError>
-            </label>
-          </div>
-          <DialogFooter className="mt-5">
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => setOpen(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -1318,14 +1330,16 @@ function AddIndexDialog({
           Index
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <DialogContent className="w-[min(92vw,560px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New index</DialogTitle>
             <DialogDescription>Build a table index from one or more columns.</DialogDescription>
           </DialogHeader>
-          <IndexFormFields columns={columns} form={form} />
-          <DialogFooter className="mt-5">
+          <DialogBody>
+            <IndexFormFields columns={columns} form={form} />
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -1390,14 +1404,16 @@ function EditIndexDialog({
           Edit
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <DialogContent className="w-[min(92vw,560px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Edit index</DialogTitle>
             <DialogDescription>Change indexed columns, method, and partial predicate.</DialogDescription>
           </DialogHeader>
-          <IndexFormFields columns={columns} form={form} />
-          <DialogFooter className="mt-5">
+          <DialogBody>
+            <IndexFormFields columns={columns} form={form} />
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => setOpen(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -1466,7 +1482,7 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
   }
 
   return (
-    <div className="mt-4 grid gap-4">
+    <div className="grid gap-4">
       <label className="block text-sm">
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Index name
@@ -1516,11 +1532,9 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
                 key={column.id}
               >
                 <label className="flex cursor-pointer items-center gap-2 text-sm font-extrabold">
-                  <input
+                  <Checkbox
                     checked={selected}
-                    className="size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))]"
-                    onChange={(event) => handleColumnToggle(column.id, event.currentTarget.checked)}
-                    type="checkbox"
+                    onCheckedChange={(checked) => handleColumnToggle(column.id, checked === true)}
                   />
                   <span className="min-w-0 flex-1 truncate">{column.name}</span>
                   <span className="text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
@@ -1581,12 +1595,10 @@ function IndexFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
                 )}
                 key={column.id}
               >
-                <input
+                <Checkbox
                   checked={includeColumnIds.includes(column.id)}
-                  className="size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))] disabled:cursor-not-allowed"
                   disabled={selectedAsKey}
-                  onChange={(event) => handleIncludeColumnToggle(column.id, event.currentTarget.checked)}
-                  type="checkbox"
+                  onCheckedChange={(checked) => handleIncludeColumnToggle(column.id, checked === true)}
                 />
                 <span className="min-w-0 truncate">{column.name}</span>
               </label>
@@ -1765,14 +1777,16 @@ function AddCheckDialog({
           Check
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <DialogContent className="w-[min(92vw,560px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New check constraint</DialogTitle>
             <DialogDescription>Define a SQL CHECK expression for the selected table.</DialogDescription>
           </DialogHeader>
-          <CheckFormFields columns={columns} form={form} />
-          <DialogFooter className="mt-5">
+          <DialogBody>
+            <CheckFormFields columns={columns} form={form} />
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -1851,14 +1865,16 @@ function EditCheckDialog({
           Edit
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <DialogContent className="w-[min(92vw,560px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Edit check constraint</DialogTitle>
             <DialogDescription>Update the constraint expression, scope, or metadata.</DialogDescription>
           </DialogHeader>
-          <CheckFormFields columns={columns} form={form} />
-          <DialogFooter className="mt-5 justify-between sm:justify-between">
+          <DialogBody>
+            <CheckFormFields columns={columns} form={form} />
+          </DialogBody>
+          <DialogFooter className="justify-between sm:justify-between">
             <Button onClick={handleDelete} type="button" variant={confirmDelete ? 'danger' : 'secondary'}>
               <Trash2 className="size-4" />
               {confirmDelete ? 'Confirm delete' : 'Delete'}
@@ -1883,7 +1899,7 @@ function CheckFormFields({ columns, form }: { columns: DatabaseColumn[]; form: U
   const { errors } = form.formState;
 
   return (
-    <div className="mt-4 grid gap-4">
+    <div className="grid gap-4">
       <label className="block text-sm">
         <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Check name
@@ -2139,156 +2155,158 @@ function EditRelationshipDialog({
           Edit
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(92vw,560px)] overflow-y-auto">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <DialogContent className="w-[min(92vw,560px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Edit relationship</DialogTitle>
             <DialogDescription>Adjust endpoints and referential behavior.</DialogDescription>
           </DialogHeader>
-          <div className="mt-4 grid gap-4">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Relationship name
-              </span>
-              <ControlledInput autoFocus control={form.control} name="name" placeholder="orders_user_id_fkey" />
-              <FieldError>{errors.name?.message}</FieldError>
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
+          <DialogBody>
+            <div className="grid gap-4">
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Primary table
+                  Relationship name
                 </span>
-                <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  control={form.control}
-                  name="sourceTableId"
-                  options={tables.map((table) => ({ label: table.name, value: table.id }))}
-                />
-                <FieldError>{errors.sourceTableId?.message}</FieldError>
+                <ControlledInput autoFocus control={form.control} name="name" placeholder="orders_user_id_fkey" />
+                <FieldError>{errors.name?.message}</FieldError>
               </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Primary table
+                  </span>
+                  <ControlledSelect
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    control={form.control}
+                    name="sourceTableId"
+                    options={tables.map((table) => ({ label: table.name, value: table.id }))}
+                  />
+                  <FieldError>{errors.sourceTableId?.message}</FieldError>
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Primary column
+                  </span>
+                  <ControlledSelect
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    control={form.control}
+                    name="sourceColumnId"
+                    options={
+                      sourceColumns.length > 0
+                        ? sourceColumns.map((column) => ({
+                            label: `${column.name} (${formatColumnType(column.type)})`,
+                            value: column.id,
+                          }))
+                        : [{ disabled: true, label: 'No columns', value: unsetSelectValue }]
+                    }
+                  />
+                  <FieldError>{errors.sourceColumnId?.message}</FieldError>
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Foreign table
+                  </span>
+                  <ControlledSelect
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    control={form.control}
+                    name="targetTableId"
+                    options={tables.map((table) => ({ label: table.name, value: table.id }))}
+                  />
+                  <FieldError>{errors.targetTableId?.message}</FieldError>
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Foreign column
+                  </span>
+                  <ControlledSelect
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    control={form.control}
+                    name="targetColumnId"
+                    options={
+                      targetColumns.length > 0
+                        ? targetColumns.map((column) => ({
+                            label: `${column.name} (${formatColumnType(column.type)})`,
+                            value: column.id,
+                          }))
+                        : [{ disabled: true, label: 'No columns', value: unsetSelectValue }]
+                    }
+                  />
+                  <FieldError>{errors.targetColumnId?.message}</FieldError>
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Cardinality
+                  </span>
+                  <ControlledSelect
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    control={form.control}
+                    name="cardinality"
+                    options={relationshipCardinalityOptions.map((option) => ({
+                      label: formatRelationshipCardinality(option),
+                      value: option,
+                    }))}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Match type
+                  </span>
+                  <ControlledSelect
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    control={form.control}
+                    name="matchType"
+                    options={matchTypeOptions.map((option) => ({
+                      label: option === unsetSelectValue ? 'Not set' : option,
+                      value: option,
+                    }))}
+                  />
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    On delete
+                  </span>
+                  <ControlledSelect
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    control={form.control}
+                    name="onDelete"
+                    options={referentialActionOptions.map((option) => ({
+                      label: option === unsetSelectValue ? 'Not set' : formatReferentialAction(option),
+                      value: option,
+                    }))}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    On update
+                  </span>
+                  <ControlledSelect
+                    className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
+                    control={form.control}
+                    name="onUpdate"
+                    options={referentialActionOptions.map((option) => ({
+                      label: option === unsetSelectValue ? 'Not set' : formatReferentialAction(option),
+                      value: option,
+                    }))}
+                  />
+                </label>
+              </div>
+              <CheckboxField control={form.control} label="Deferrable" name="deferrable" />
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Primary column
+                  Comment
                 </span>
-                <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  control={form.control}
-                  name="sourceColumnId"
-                  options={
-                    sourceColumns.length > 0
-                      ? sourceColumns.map((column) => ({
-                          label: `${column.name} (${formatColumnType(column.type)})`,
-                          value: column.id,
-                        }))
-                      : [{ disabled: true, label: 'No columns', value: unsetSelectValue }]
-                  }
-                />
-                <FieldError>{errors.sourceColumnId?.message}</FieldError>
+                <ControlledInput control={form.control} name="comment" placeholder="Relationship note" />
+                <FieldError>{errors.comment?.message}</FieldError>
               </label>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Foreign table
-                </span>
-                <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  control={form.control}
-                  name="targetTableId"
-                  options={tables.map((table) => ({ label: table.name, value: table.id }))}
-                />
-                <FieldError>{errors.targetTableId?.message}</FieldError>
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Foreign column
-                </span>
-                <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  control={form.control}
-                  name="targetColumnId"
-                  options={
-                    targetColumns.length > 0
-                      ? targetColumns.map((column) => ({
-                          label: `${column.name} (${formatColumnType(column.type)})`,
-                          value: column.id,
-                        }))
-                      : [{ disabled: true, label: 'No columns', value: unsetSelectValue }]
-                  }
-                />
-                <FieldError>{errors.targetColumnId?.message}</FieldError>
-              </label>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Cardinality
-                </span>
-                <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  control={form.control}
-                  name="cardinality"
-                  options={relationshipCardinalityOptions.map((option) => ({
-                    label: formatRelationshipCardinality(option),
-                    value: option,
-                  }))}
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Match type
-                </span>
-                <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  control={form.control}
-                  name="matchType"
-                  options={matchTypeOptions.map((option) => ({
-                    label: option === unsetSelectValue ? 'Not set' : option,
-                    value: option,
-                  }))}
-                />
-              </label>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  On delete
-                </span>
-                <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  control={form.control}
-                  name="onDelete"
-                  options={referentialActionOptions.map((option) => ({
-                    label: option === unsetSelectValue ? 'Not set' : formatReferentialAction(option),
-                    value: option,
-                  }))}
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  On update
-                </span>
-                <ControlledSelect
-                  className="h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)]"
-                  control={form.control}
-                  name="onUpdate"
-                  options={referentialActionOptions.map((option) => ({
-                    label: option === unsetSelectValue ? 'Not set' : formatReferentialAction(option),
-                    value: option,
-                  }))}
-                />
-              </label>
-            </div>
-            <CheckboxField control={form.control} label="Deferrable" name="deferrable" />
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Comment
-              </span>
-              <ControlledInput control={form.control} name="comment" placeholder="Relationship note" />
-              <FieldError>{errors.comment?.message}</FieldError>
-            </label>
-          </div>
-          <DialogFooter className="mt-5">
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => setOpen(false)} type="button" variant="secondary">
               Cancel
             </Button>

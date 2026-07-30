@@ -1,4 +1,4 @@
-import { Input, Select, cn, type InputProps, type SelectOption, type SelectProps } from '@tabliodb/ui';
+import { Checkbox, Input, Select, type InputProps, type SelectOption, type SelectProps } from '@tabliodb/ui';
 import type { ComponentPropsWithoutRef } from 'react';
 import { Controller, type Control, type FieldPath, type FieldValues, type PathValue } from 'react-hook-form';
 
@@ -38,8 +38,8 @@ export function ControlledInput<TFieldValues extends FieldValues>({
 }
 
 export type ControlledCheckboxProps<TFieldValues extends FieldValues> = Omit<
-  ComponentPropsWithoutRef<'input'>,
-  'checked' | 'defaultChecked' | 'name' | 'onBlur' | 'onChange' | 'ref' | 'type'
+  ComponentPropsWithoutRef<typeof Checkbox>,
+  'checked' | 'defaultChecked' | 'name' | 'onBlur' | 'onCheckedChange' | 'ref'
 > & {
   control: Control<TFieldValues>;
   name: FieldPath<TFieldValues>;
@@ -56,14 +56,13 @@ export function ControlledCheckbox<TFieldValues extends FieldValues>({
       control={control}
       name={name}
       render={({ field }) => (
-        <input
+        <Checkbox
           {...props}
           checked={Boolean(field.value)}
-          className={cn('size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))]', className)}
+          className={className}
           name={field.name}
           onBlur={field.onBlur}
-          onChange={(event) => field.onChange(event.currentTarget.checked)}
-          type="checkbox"
+          onCheckedChange={(checked) => field.onChange(checked === true)}
         />
       )}
     />

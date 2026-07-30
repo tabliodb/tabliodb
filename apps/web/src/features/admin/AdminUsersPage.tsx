@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -277,100 +278,104 @@ function InviteUserDialog() {
         </Button>
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,560px)]">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Invite user</DialogTitle>
             <DialogDescription>Create a one-time invitation link for a new teammate.</DialogDescription>
           </DialogHeader>
 
-          <label className="mt-4 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Email
-            </span>
-            <ControlledInput
-              aria-invalid={Boolean(errors.email)}
-              autoComplete="email"
-              control={form.control}
-              disabled={createInvitationMutation.isPending}
-              name="email"
-              type="email"
-            />
-            <FieldError>{errors.email?.message}</FieldError>
-          </label>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_140px]">
-            <fieldset>
-              <legend className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Workspace role
-              </legend>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <RoleOption
-                  checked={form.watch('organizationRole') === OrganizationRole.Member}
-                  description="Can join workspace projects."
-                  label="Member"
-                  onClick={() => form.setValue('organizationRole', OrganizationRole.Member, { shouldDirty: true })}
+          <DialogBody>
+            <div className="grid gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Email
+                </span>
+                <ControlledInput
+                  aria-invalid={Boolean(errors.email)}
+                  autoComplete="email"
+                  control={form.control}
+                  disabled={createInvitationMutation.isPending}
+                  name="email"
+                  type="email"
                 />
-                <RoleOption
-                  checked={form.watch('organizationRole') === OrganizationRole.Admin}
-                  description="Can help manage users."
-                  label="Admin"
-                  onClick={() => form.setValue('organizationRole', OrganizationRole.Admin, { shouldDirty: true })}
+                <FieldError>{errors.email?.message}</FieldError>
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
+                <fieldset>
+                  <legend className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Workspace role
+                  </legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <RoleOption
+                      checked={form.watch('organizationRole') === OrganizationRole.Member}
+                      description="Can join workspace projects."
+                      label="Member"
+                      onClick={() => form.setValue('organizationRole', OrganizationRole.Member, { shouldDirty: true })}
+                    />
+                    <RoleOption
+                      checked={form.watch('organizationRole') === OrganizationRole.Admin}
+                      description="Can help manage users."
+                      label="Admin"
+                      onClick={() => form.setValue('organizationRole', OrganizationRole.Admin, { shouldDirty: true })}
+                    />
+                  </div>
+                </fieldset>
+                <label className="block text-sm">
+                  <span className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Expires
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(errors.expiresInDays)}
+                    control={form.control}
+                    disabled={createInvitationMutation.isPending}
+                    max={30}
+                    min={1}
+                    name="expiresInDays"
+                    type="number"
+                  />
+                  <FieldError>{errors.expiresInDays?.message}</FieldError>
+                </label>
+              </div>
+
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Message
+                </span>
+                <ControlledTextarea
+                  aria-invalid={Boolean(errors.message)}
+                  className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
+                  control={form.control}
+                  disabled={createInvitationMutation.isPending}
+                  name="message"
                 />
-              </div>
-            </fieldset>
-            <label className="block text-sm">
-              <span className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Expires
-              </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.expiresInDays)}
-                control={form.control}
-                disabled={createInvitationMutation.isPending}
-                max={30}
-                min={1}
-                name="expiresInDays"
-                type="number"
-              />
-              <FieldError>{errors.expiresInDays?.message}</FieldError>
-            </label>
-          </div>
+                <FieldError>{errors.message?.message}</FieldError>
+              </label>
 
-          <label className="mt-3 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Message
-            </span>
-            <ControlledTextarea
-              aria-invalid={Boolean(errors.message)}
-              className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
-              control={form.control}
-              disabled={createInvitationMutation.isPending}
-              name="message"
-            />
-            <FieldError>{errors.message?.message}</FieldError>
-          </label>
+              {createdInvite ? (
+                <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3">
+                  <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
+                    Invitation link
+                  </div>
+                  <div className="flex gap-2">
+                    <Input readOnly value={createdInvite.acceptUrl} />
+                    <Button className="shrink-0 gap-2" onClick={copyAcceptUrl} type="button" variant="secondary">
+                      <Copy className="size-4" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
-          {createdInvite ? (
-            <div className="mt-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3">
-              <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
-                Invitation link
-              </div>
-              <div className="flex gap-2">
-                <Input readOnly value={createdInvite.acceptUrl} />
-                <Button className="shrink-0 gap-2" onClick={copyAcceptUrl} type="button" variant="secondary">
-                  <Copy className="size-4" />
-                  Copy
-                </Button>
-              </div>
+              {createInvitationMutation.error ? (
+                <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                  {getErrorMessage(createInvitationMutation.error)}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </DialogBody>
 
-          {createInvitationMutation.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(createInvitationMutation.error)}
-            </div>
-          ) : null}
-
-          <DialogFooter className="mt-5">
+          <DialogFooter>
             <Button
               disabled={createInvitationMutation.isPending}
               onClick={() => handleOpenChange(false)}
@@ -441,97 +446,100 @@ function CreateUserDialog() {
         </Button>
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,560px)]">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Create user</DialogTitle>
             <DialogDescription>Add a teammate to the current workspace.</DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Name
-              </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.name)}
-                autoComplete="name"
-                control={form.control}
-                disabled={createUserMutation.isPending}
-                name="name"
-              />
-              <FieldError>{errors.name?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Email
-              </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.email)}
-                autoComplete="email"
-                control={form.control}
-                disabled={createUserMutation.isPending}
-                name="email"
-                type="email"
-              />
-              <FieldError>{errors.email?.message}</FieldError>
-            </label>
-          </div>
+          <DialogBody>
+            <div className="grid gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Name
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(errors.name)}
+                    autoComplete="name"
+                    control={form.control}
+                    disabled={createUserMutation.isPending}
+                    name="name"
+                  />
+                  <FieldError>{errors.name?.message}</FieldError>
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Email
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(errors.email)}
+                    autoComplete="email"
+                    control={form.control}
+                    disabled={createUserMutation.isPending}
+                    name="email"
+                    type="email"
+                  />
+                  <FieldError>{errors.email?.message}</FieldError>
+                </label>
+              </div>
 
-          <label className="mt-3 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Temporary password
-            </span>
-            <ControlledInput
-              aria-invalid={Boolean(errors.password)}
-              autoComplete="new-password"
-              control={form.control}
-              disabled={createUserMutation.isPending}
-              name="password"
-              type="password"
-            />
-            <FieldError>{errors.password?.message}</FieldError>
-          </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Temporary password
+                </span>
+                <ControlledInput
+                  aria-invalid={Boolean(errors.password)}
+                  autoComplete="new-password"
+                  control={form.control}
+                  disabled={createUserMutation.isPending}
+                  name="password"
+                  type="password"
+                />
+                <FieldError>{errors.password?.message}</FieldError>
+              </label>
 
-          <fieldset className="mt-4">
-            <legend className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Workspace role
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <RoleOption
-                checked={form.watch('organizationRole') === OrganizationRole.Member}
-                description="Can create and edit accessible projects."
-                label="Member"
-                onClick={() => form.setValue('organizationRole', OrganizationRole.Member, { shouldDirty: true })}
-              />
-              <RoleOption
-                checked={form.watch('organizationRole') === OrganizationRole.Admin}
-                description="Can help manage workspace members."
-                label="Admin"
-                onClick={() => form.setValue('organizationRole', OrganizationRole.Admin, { shouldDirty: true })}
-              />
+              <fieldset>
+                <legend className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Workspace role
+                </legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <RoleOption
+                    checked={form.watch('organizationRole') === OrganizationRole.Member}
+                    description="Can create and edit accessible projects."
+                    label="Member"
+                    onClick={() => form.setValue('organizationRole', OrganizationRole.Member, { shouldDirty: true })}
+                  />
+                  <RoleOption
+                    checked={form.watch('organizationRole') === OrganizationRole.Admin}
+                    description="Can help manage workspace members."
+                    label="Admin"
+                    onClick={() => form.setValue('organizationRole', OrganizationRole.Admin, { shouldDirty: true })}
+                  />
+                </div>
+              </fieldset>
+
+              <label className="flex cursor-pointer items-center gap-3 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
+                <ControlledCheckbox
+                  control={form.control}
+                  disabled={createUserMutation.isPending}
+                  name="grantInstanceAdmin"
+                />
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <ShieldCheck className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+                  Instance admin
+                </span>
+              </label>
+
+              {createUserMutation.error ? (
+                <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                  {getErrorMessage(createUserMutation.error)}
+                </div>
+              ) : null}
             </div>
-          </fieldset>
+          </DialogBody>
 
-          <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
-            <ControlledCheckbox
-              className="size-4 cursor-pointer accent-[rgb(var(--tabliodb-primary))]"
-              control={form.control}
-              disabled={createUserMutation.isPending}
-              name="grantInstanceAdmin"
-            />
-            <span className="flex min-w-0 flex-1 items-center gap-2">
-              <ShieldCheck className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
-              Instance admin
-            </span>
-          </label>
-
-          {createUserMutation.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(createUserMutation.error)}
-            </div>
-          ) : null}
-
-          <DialogFooter className="mt-5">
+          <DialogFooter>
             <Button
               disabled={createUserMutation.isPending}
               onClick={() => handleOpenChange(false)}

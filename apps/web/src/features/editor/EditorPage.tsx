@@ -17,6 +17,7 @@ import {
   Badge,
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -715,49 +716,53 @@ function CreateProjectDialog({
         </Button>
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,520px)]">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
             <DialogDescription>Create a workspace project for a schema, product area, or service.</DialogDescription>
           </DialogHeader>
 
-          <label className="mt-4 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Project name
-            </span>
-            <ControlledInput
-              autoFocus
-              aria-invalid={Boolean(errors.name)}
-              control={form.control}
-              disabled={!organizationId || createProjectMutation.isPending}
-              name="name"
-              placeholder="Billing Platform"
-            />
-            <FieldError>{errors.name?.message}</FieldError>
-          </label>
+          <DialogBody>
+            <div className="grid gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Project name
+                </span>
+                <ControlledInput
+                  autoFocus
+                  aria-invalid={Boolean(errors.name)}
+                  control={form.control}
+                  disabled={!organizationId || createProjectMutation.isPending}
+                  name="name"
+                  placeholder="Billing Platform"
+                />
+                <FieldError>{errors.name?.message}</FieldError>
+              </label>
 
-          <label className="mt-3 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Description
-            </span>
-            <ControlledTextarea
-              aria-invalid={Boolean(errors.description)}
-              className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
-              control={form.control}
-              disabled={!organizationId || createProjectMutation.isPending}
-              name="description"
-              placeholder="Schemas for invoices, customers, and subscriptions."
-            />
-            <FieldError>{errors.description?.message}</FieldError>
-          </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Description
+                </span>
+                <ControlledTextarea
+                  aria-invalid={Boolean(errors.description)}
+                  className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
+                  control={form.control}
+                  disabled={!organizationId || createProjectMutation.isPending}
+                  name="description"
+                  placeholder="Schemas for invoices, customers, and subscriptions."
+                />
+                <FieldError>{errors.description?.message}</FieldError>
+              </label>
 
-          {createProjectMutation.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(createProjectMutation.error)}
+              {createProjectMutation.error ? (
+                <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                  {getErrorMessage(createProjectMutation.error)}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </DialogBody>
 
-          <DialogFooter className="mt-5">
+          <DialogFooter>
             <Button
               disabled={createProjectMutation.isPending}
               onClick={() => handleOpenChange(false)}
@@ -894,183 +899,186 @@ function WorkspaceSettingsDialog({
       <DialogTrigger asChild>
         <IconButton icon={Building2} label="Workspace settings" variant="secondary" />
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(94vw,680px)] overflow-y-auto">
+      <DialogContent className="w-[min(94vw,680px)]">
         <DialogHeader>
           <DialogTitle>Workspace settings</DialogTitle>
           <DialogDescription>Configure the current workspace without changing the Tabliodb brand.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
-          <label className="mt-4 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Workspace name
-            </span>
-            <ControlledInput
-              aria-invalid={Boolean(errors.name)}
-              control={form.control}
-              disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
-              name="name"
-            />
-            <FieldError>{errors.name?.message}</FieldError>
-          </label>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <DialogBody className="grid gap-5">
+          <form className="grid gap-4" id="workspace-settings-form" onSubmit={form.handleSubmit(handleSubmit)}>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Default project role
+                Workspace name
               </span>
-              <ControlledSelect
-                className={selectClassName}
+              <ControlledInput
+                aria-invalid={Boolean(errors.name)}
                 control={form.control}
                 disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
-                name="defaultProjectRole"
-                options={workspaceDefaultRoleOptions.map((role) => ({
-                  label: role === 'none' ? 'No automatic project role' : formatProjectRole(role),
-                  value: role,
-                }))}
+                name="name"
               />
+              <FieldError>{errors.name?.message}</FieldError>
             </label>
 
-            <label className="mt-6 flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
-              <ControlledCheckbox
-                control={form.control}
-                disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
-                name="allowMemberProjectCreate"
-              />
-              Members can create projects
-            </label>
-          </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Default project role
+                </span>
+                <ControlledSelect
+                  className={selectClassName}
+                  control={form.control}
+                  disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
+                  name="defaultProjectRole"
+                  options={workspaceDefaultRoleOptions.map((role) => ({
+                    label: role === 'none' ? 'No automatic project role' : formatProjectRole(role),
+                    value: role,
+                  }))}
+                />
+              </label>
 
-          {settingsQuery.error || updateSettingsMutation.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(settingsQuery.error ?? updateSettingsMutation.error)}
-            </div>
-          ) : null}
-
-          <DialogFooter className="mt-5">
-            <Button
-              disabled={updateSettingsMutation.isPending || isWorkspaceMemberMutationPending}
-              onClick={() => handleOpenChange(false)}
-              type="button"
-              variant="secondary"
-            >
-              Close
-            </Button>
-            <Button
-              disabled={
-                settingsQuery.isPending ||
-                updateSettingsMutation.isPending ||
-                isWorkspaceMemberMutationPending ||
-                !canManageWorkspace
-              }
-              type="submit"
-            >
-              {updateSettingsMutation.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Save className="size-4" />
-              )}
-              Save workspace
-            </Button>
-          </DialogFooter>
-        </form>
-
-        {canManageWorkspace ? (
-          <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="flex items-center gap-2 text-sm font-extrabold">
-                  <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
-                  Workspace members
-                </h3>
-                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  {membersQuery.data?.totalCount ?? workspaceMembers.length} people with workspace access
-                </p>
-              </div>
-              <Badge variant="green">{workspaceMembers.length} loaded</Badge>
+              <label className="mt-6 flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
+                <ControlledCheckbox
+                  control={form.control}
+                  disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
+                  name="allowMemberProjectCreate"
+                />
+                Members can create projects
+              </label>
             </div>
 
-            {membersQuery.isPending ? (
-              <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                <Loader2 className="size-4 animate-spin" />
-                Loading members
-              </div>
-            ) : membersQuery.error ? (
-              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-                {getErrorMessage(membersQuery.error)}
-              </div>
-            ) : workspaceMembers.length === 0 ? (
-              <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                No workspace members yet
-              </div>
-            ) : (
-              <div className="mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
-                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                  {workspaceMembers.map((member) => (
-                    <OrganizationMemberRow
-                      isRemoving={removingUserId === member.userId}
-                      isUpdating={updatingUserId === member.userId}
-                      key={member.userId}
-                      member={member}
-                      onRemove={handleRemoveWorkspaceMember}
-                      onRoleChange={handleUpdateWorkspaceMemberRole}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {memberMutationError ? (
-              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-                {getErrorMessage(memberMutationError)}
+            {settingsQuery.error || updateSettingsMutation.error ? (
+              <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {getErrorMessage(settingsQuery.error ?? updateSettingsMutation.error)}
               </div>
             ) : null}
-          </section>
-        ) : (
-          <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-            <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-              Your workspace role is {formatOrganizationRole(organization.role)}. Owner or Admin access is required to
-              manage workspace settings and members.
-            </div>
-          </section>
-        )}
+          </form>
 
-        {canManageWorkspace ? (
-          <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-extrabold">Recent activity</h3>
-                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  Project and workspace changes recorded by the server
-                </p>
-              </div>
-              <Badge variant="blue">{auditLogs.length} loaded</Badge>
-            </div>
-
-            {auditLogsQuery.isPending ? (
-              <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                <Loader2 className="size-4 animate-spin" />
-                Loading activity
-              </div>
-            ) : auditLogsQuery.error ? (
-              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-                {getErrorMessage(auditLogsQuery.error)}
-              </div>
-            ) : auditLogs.length === 0 ? (
-              <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                No activity yet
-              </div>
-            ) : (
-              <div className="mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
-                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                  {auditLogs.map((auditLog) => (
-                    <AuditLogRow auditLog={auditLog} key={auditLog.id} />
-                  ))}
+          {canManageWorkspace ? (
+            <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-extrabold">
+                    <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+                    Workspace members
+                  </h3>
+                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {membersQuery.data?.totalCount ?? workspaceMembers.length} people with workspace access
+                  </p>
                 </div>
+                <Badge variant="green">{workspaceMembers.length} loaded</Badge>
               </div>
+
+              {membersQuery.isPending ? (
+                <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading members
+                </div>
+              ) : membersQuery.error ? (
+                <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                  {getErrorMessage(membersQuery.error)}
+                </div>
+              ) : workspaceMembers.length === 0 ? (
+                <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  No workspace members yet
+                </div>
+              ) : (
+                <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                  <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                    {workspaceMembers.map((member) => (
+                      <OrganizationMemberRow
+                        isRemoving={removingUserId === member.userId}
+                        isUpdating={updatingUserId === member.userId}
+                        key={member.userId}
+                        member={member}
+                        onRemove={handleRemoveWorkspaceMember}
+                        onRoleChange={handleUpdateWorkspaceMemberRole}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {memberMutationError ? (
+                <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                  {getErrorMessage(memberMutationError)}
+                </div>
+              ) : null}
+            </section>
+          ) : (
+            <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+              <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                Your workspace role is {formatOrganizationRole(organization.role)}. Owner or Admin access is required to
+                manage workspace settings and members.
+              </div>
+            </section>
+          )}
+
+          {canManageWorkspace ? (
+            <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-extrabold">Recent activity</h3>
+                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    Project and workspace changes recorded by the server
+                  </p>
+                </div>
+                <Badge variant="blue">{auditLogs.length} loaded</Badge>
+              </div>
+
+              {auditLogsQuery.isPending ? (
+                <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading activity
+                </div>
+              ) : auditLogsQuery.error ? (
+                <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                  {getErrorMessage(auditLogsQuery.error)}
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  No activity yet
+                </div>
+              ) : (
+                <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                  <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                    {auditLogs.map((auditLog) => (
+                      <AuditLogRow auditLog={auditLog} key={auditLog.id} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          ) : null}
+        </DialogBody>
+
+        <DialogFooter>
+          <Button
+            disabled={updateSettingsMutation.isPending || isWorkspaceMemberMutationPending}
+            onClick={() => handleOpenChange(false)}
+            type="button"
+            variant="secondary"
+          >
+            Close
+          </Button>
+          <Button
+            disabled={
+              settingsQuery.isPending ||
+              updateSettingsMutation.isPending ||
+              isWorkspaceMemberMutationPending ||
+              !canManageWorkspace
+            }
+            form="workspace-settings-form"
+            type="submit"
+          >
+            {updateSettingsMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
             )}
-          </section>
-        ) : null}
+            Save workspace
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -1217,143 +1225,145 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
       <DialogTrigger asChild>
         <IconButton icon={Settings} label="Project settings" variant="secondary" />
       </DialogTrigger>
-      <DialogContent className="max-h-[88vh] w-[min(94vw,680px)] overflow-y-auto">
+      <DialogContent className="w-[min(94vw,680px)]">
         <DialogHeader>
           <DialogTitle>Project settings</DialogTitle>
           <DialogDescription>Manage project details, access, and archive state.</DialogDescription>
         </DialogHeader>
 
-        <form id="project-settings-form" onSubmit={form.handleSubmit(handleSubmit)}>
-          <label className="mt-4 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Project name
-            </span>
-            <ControlledInput
-              aria-invalid={Boolean(errors.name)}
-              control={form.control}
-              disabled={isProjectMutationPending}
-              name="name"
-            />
-            <FieldError>{errors.name?.message}</FieldError>
-          </label>
-
-          <label className="mt-3 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Description
-            </span>
-            <ControlledTextarea
-              aria-invalid={Boolean(errors.description)}
-              className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
-              control={form.control}
-              disabled={isProjectMutationPending}
-              name="description"
-            />
-            <FieldError>{errors.description?.message}</FieldError>
-          </label>
-
-          {mutationError ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(mutationError)}
-            </div>
-          ) : null}
-        </form>
-
-        <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="flex items-center gap-2 text-sm font-extrabold">
-                <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
-                Project members
-              </h3>
-              <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                {membersQuery.data?.totalCount ?? members.length} people with direct project access
-              </p>
-            </div>
-            <Badge variant="green">{members.length} loaded</Badge>
-          </div>
-
-          <form
-            className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
-            onSubmit={memberForm.handleSubmit(handleAddMember)}
-          >
+        <DialogBody className="grid gap-5">
+          <form className="grid gap-4" id="project-settings-form" onSubmit={form.handleSubmit(handleSubmit)}>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Email
+                Project name
               </span>
               <ControlledInput
-                aria-invalid={Boolean(memberErrors.email)}
-                autoComplete="email"
-                control={memberForm.control}
-                disabled={isMemberMutationPending}
-                name="email"
-                placeholder="teammate@example.com"
-                type="email"
+                aria-invalid={Boolean(errors.name)}
+                control={form.control}
+                disabled={isProjectMutationPending}
+                name="name"
               />
-              <FieldError>{memberErrors.email?.message}</FieldError>
+              <FieldError>{errors.name?.message}</FieldError>
             </label>
+
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Role
+                Description
               </span>
-              <ControlledSelect
-                className={selectClassName}
-                control={memberForm.control}
-                disabled={isMemberMutationPending}
-                name="role"
-                options={projectRoleOptions.map((role) => ({
-                  label: formatProjectRole(role),
-                  value: role,
-                }))}
+              <ControlledTextarea
+                aria-invalid={Boolean(errors.description)}
+                className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary-soft))]"
+                control={form.control}
+                disabled={isProjectMutationPending}
+                name="description"
               />
+              <FieldError>{errors.description?.message}</FieldError>
             </label>
-            <Button className="self-start sm:mt-6" disabled={isMemberMutationPending} type="submit">
-              {addProjectMemberMutation.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <UserPlus className="size-4" />
-              )}
-              Add
-            </Button>
+
+            {mutationError ? (
+              <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {getErrorMessage(mutationError)}
+              </div>
+            ) : null}
           </form>
 
-          {membersQuery.isPending ? (
-            <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-              <Loader2 className="size-4 animate-spin" />
-              Loading members
-            </div>
-          ) : membersQuery.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(membersQuery.error)}
-            </div>
-          ) : members.length === 0 ? (
-            <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-              No project members yet
-            </div>
-          ) : (
-            <div className="mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
-              <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                {members.map((member) => (
-                  <ProjectMemberRow
-                    isRemoving={removingUserId === member.userId}
-                    isUpdating={updatingUserId === member.userId}
-                    key={member.userId}
-                    member={member}
-                    onRemove={handleRemoveMember}
-                    onRoleChange={handleUpdateMemberRole}
-                  />
-                ))}
+          <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-extrabold">
+                  <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+                  Project members
+                </h3>
+                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {membersQuery.data?.totalCount ?? members.length} people with direct project access
+                </p>
               </div>
+              <Badge variant="green">{members.length} loaded</Badge>
             </div>
-          )}
 
-          {memberMutationError ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(memberMutationError)}
-            </div>
-          ) : null}
-        </section>
+            <form
+              className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
+              onSubmit={memberForm.handleSubmit(handleAddMember)}
+            >
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Email
+                </span>
+                <ControlledInput
+                  aria-invalid={Boolean(memberErrors.email)}
+                  autoComplete="email"
+                  control={memberForm.control}
+                  disabled={isMemberMutationPending}
+                  name="email"
+                  placeholder="teammate@example.com"
+                  type="email"
+                />
+                <FieldError>{memberErrors.email?.message}</FieldError>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Role
+                </span>
+                <ControlledSelect
+                  className={selectClassName}
+                  control={memberForm.control}
+                  disabled={isMemberMutationPending}
+                  name="role"
+                  options={projectRoleOptions.map((role) => ({
+                    label: formatProjectRole(role),
+                    value: role,
+                  }))}
+                />
+              </label>
+              <Button className="self-start sm:mt-6" disabled={isMemberMutationPending} type="submit">
+                {addProjectMemberMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <UserPlus className="size-4" />
+                )}
+                Add
+              </Button>
+            </form>
 
-        <DialogFooter className="mt-1 justify-between sm:justify-between">
+            {membersQuery.isPending ? (
+              <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <Loader2 className="size-4 animate-spin" />
+                Loading members
+              </div>
+            ) : membersQuery.error ? (
+              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {getErrorMessage(membersQuery.error)}
+              </div>
+            ) : members.length === 0 ? (
+              <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                No project members yet
+              </div>
+            ) : (
+              <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                  {members.map((member) => (
+                    <ProjectMemberRow
+                      isRemoving={removingUserId === member.userId}
+                      isUpdating={updatingUserId === member.userId}
+                      key={member.userId}
+                      member={member}
+                      onRemove={handleRemoveMember}
+                      onRoleChange={handleUpdateMemberRole}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {memberMutationError ? (
+              <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {getErrorMessage(memberMutationError)}
+              </div>
+            ) : null}
+          </section>
+        </DialogBody>
+
+        <DialogFooter className="justify-between sm:justify-between">
           <Button
             disabled={isProjectMutationPending || isMemberMutationPending}
             onClick={handleArchive}
@@ -1465,7 +1475,7 @@ function DiagramSettingsDialog({
         <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="secondary" />
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,520px)]">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Diagram settings</DialogTitle>
             <DialogDescription>
@@ -1473,57 +1483,61 @@ function DiagramSettingsDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <label className="mt-4 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Diagram name
-            </span>
-            <ControlledInput
-              autoFocus
-              aria-invalid={Boolean(errors.name)}
-              control={form.control}
-              disabled={isPending || !canEdit}
-              name="name"
-            />
-            <FieldError>{errors.name?.message}</FieldError>
-          </label>
+          <DialogBody>
+            <div className="grid gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Diagram name
+                </span>
+                <ControlledInput
+                  autoFocus
+                  aria-invalid={Boolean(errors.name)}
+                  control={form.control}
+                  disabled={isPending || !canEdit}
+                  name="name"
+                />
+                <FieldError>{errors.name?.message}</FieldError>
+              </label>
 
-          <label className="mt-3 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              SQL dialect
-            </span>
-            <ControlledSelect
-              className={selectClassName}
-              control={form.control}
-              disabled={isPending || !canEdit}
-              name="dialect"
-              options={diagramDialectOptions.map((dialect) => ({
-                label: formatDiagramDialect(dialect),
-                value: dialect,
-              }))}
-            />
-            <FieldError>{errors.dialect?.message}</FieldError>
-          </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  SQL dialect
+                </span>
+                <ControlledSelect
+                  className={selectClassName}
+                  control={form.control}
+                  disabled={isPending || !canEdit}
+                  name="dialect"
+                  options={diagramDialectOptions.map((dialect) => ({
+                    label: formatDiagramDialect(dialect),
+                    value: dialect,
+                  }))}
+                />
+                <FieldError>{errors.dialect?.message}</FieldError>
+              </label>
 
-          {!canEdit ? (
-            <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-gold-text))]">
-              Your project role can view this diagram but cannot update diagram settings.
+              {!canEdit ? (
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-gold-text))]">
+                  Your project role can view this diagram but cannot update diagram settings.
+                </div>
+              ) : null}
+
+              {hasUnsavedDialectChange ? (
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-sky-text))]">
+                  The open snapshot uses {formatDiagramDialect(model.dialect)} while the diagram record uses{' '}
+                  {formatDiagramDialect(diagram.dialect)}.
+                </div>
+              ) : null}
+
+              {updateDiagramMutation.error ? (
+                <div className="rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                  {getErrorMessage(updateDiagramMutation.error)}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </DialogBody>
 
-          {hasUnsavedDialectChange ? (
-            <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-sky-text))]">
-              The open snapshot uses {formatDiagramDialect(model.dialect)} while the diagram record uses{' '}
-              {formatDiagramDialect(diagram.dialect)}.
-            </div>
-          ) : null}
-
-          {updateDiagramMutation.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {getErrorMessage(updateDiagramMutation.error)}
-            </div>
-          ) : null}
-
-          <DialogFooter className="mt-5">
+          <DialogFooter>
             <Button disabled={isPending} onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>
@@ -1941,27 +1955,29 @@ function AddTableDialog({
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New table</DialogTitle>
             <DialogDescription>
               Give the table a friendly SQL-safe name. Spaces will become underscores.
             </DialogDescription>
           </DialogHeader>
-          <label className="mt-4 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Table name
-            </span>
-            <ControlledInput
-              autoFocus
-              aria-invalid={Boolean(errors.tableName)}
-              control={form.control}
-              name="tableName"
-              placeholder="subscriptions"
-            />
-            <FieldError>{errors.tableName?.message}</FieldError>
-          </label>
-          <DialogFooter className="mt-5">
+          <DialogBody>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Table name
+              </span>
+              <ControlledInput
+                autoFocus
+                aria-invalid={Boolean(errors.tableName)}
+                control={form.control}
+                name="tableName"
+                placeholder="subscriptions"
+              />
+              <FieldError>{errors.tableName?.message}</FieldError>
+            </label>
+          </DialogBody>
+          <DialogFooter>
             <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
               Cancel
             </Button>

@@ -1,5 +1,6 @@
 export * from './components/Badge.js';
 export * from './components/Button.js';
+export * from './components/Checkbox.js';
 export * from './components/Dialog.js';
 export * from './components/DropdownMenu.js';
 export * from './components/FieldError.js';
