@@ -1,6 +1,6 @@
-import type { DiagramModel } from '@tabliodb/schema-core';
+import { createStarterDiagramModel, type DiagramModel } from '@tabliodb/schema-core';
 import { describe, expect, it } from 'vitest';
-import { generateCreateSchemaSql } from './index.js';
+import { generateCreateSchemaSql, generateCreateSchemaSqlWithWarnings } from './index.js';
 
 describe('generateCreateSchemaSql', () => {
   it('renders PostgreSQL enum types before dependent tables', () => {
@@ -41,6 +41,66 @@ describe('generateCreateSchemaSql', () => {
 
     expect(generateCreateSchemaSql(model, { dialect: 'postgresql' })).toContain(
       `CONSTRAINT "orders_status_check" CHECK (status IN ('draft', 'published'))`,
+    );
+  });
+
+  it('renders foreign keys and named indexes from the starter diagram', () => {
+    const sql = generateCreateSchemaSql(createStarterDiagramModel(), { dialect: 'postgresql' });
+
+    // Relationships target the FK-side table and preserve stable column IDs as quoted SQL identifiers.
+    expect(sql).toContain(
+      `CONSTRAINT "borrowings_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE`,
+    );
+    expect(sql).toContain(`CREATE UNIQUE INDEX "users_email_key" ON "users" ("email");`);
+    expect(sql).toContain(`CREATE INDEX "borrowings_user_book_idx" ON "borrowings" ("user_id", "book_id");`);
+  });
+
+  it('renders PostgreSQL comments as separate COMMENT statements', () => {
+    const model = createStarterDiagramModel('Comment test');
+    model.tables.users.comment = 'Application users';
+    model.columns['users-email']!.comment = 'Login email address';
+    model.indexes['users-email-unique']!.comment = 'Guarantees one account per email';
+
+    const sql = generateCreateSchemaSql(model, { dialect: 'postgresql' });
+
+    expect(sql).toContain(`COMMENT ON TABLE "users" IS 'Application users';`);
+    expect(sql).toContain(`COMMENT ON COLUMN "users"."email" IS 'Login email address';`);
+    expect(sql).toContain(`COMMENT ON INDEX "users_email_key" IS 'Guarantees one account per email';`);
+  });
+
+  it('renders MySQL type map and inline comments', () => {
+    const model = createStarterDiagramModel('MySQL test', 'mysql');
+    model.tables.users.comment = 'Application users';
+    model.columns['users-id']!.autoIncrement = false;
+    model.columns['users-email']!.comment = 'Login email address';
+
+    const sql = generateCreateSchemaSql(model, { dialect: 'mysql' });
+
+    expect(sql).toContain('`id` CHAR(36) PRIMARY KEY NOT NULL');
+    expect(sql).toContain("`email` VARCHAR(190) NOT NULL COMMENT 'Login email address'");
+    expect(sql).toContain(") COMMENT='Application users';");
+  });
+
+  it('returns warnings for features a dialect cannot faithfully emit', () => {
+    const model = createEnumSqlTestModel({
+      enumValues: ['draft', 'published'],
+    });
+    model.tables.orders.schema = 'public';
+    model.indexes['orders-status-idx'] = {
+      columns: [{ columnId: 'orders-status' }],
+      id: 'orders-status-idx',
+      includeColumnIds: ['orders-id'],
+      name: 'orders_status_idx',
+      tableId: 'orders',
+      unique: false,
+      where: 'status <> draft',
+    };
+
+    const result = generateCreateSchemaSqlWithWarnings(model, { dialect: 'sqlite' });
+
+    expect(result.sql).toContain('"status" TEXT NOT NULL');
+    expect(result.warnings.map((warning) => warning.code)).toEqual(
+      expect.arrayContaining(['schema_not_supported', 'enum_fallback_to_text', 'index_include_not_supported']),
     );
   });
 });

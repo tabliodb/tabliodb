@@ -12,7 +12,7 @@ import {
   type ProjectMemberDto,
   type ProjectResponseDto,
 } from '@tabliodb/sdk';
-import { generateCreateSchemaSql } from '@tabliodb/sql';
+import { generateCreateSchemaSqlWithWarnings, type SqlGenerationWarning } from '@tabliodb/sql';
 import {
   Badge,
   Button,
@@ -40,7 +40,10 @@ import {
   Building2,
   Check,
   ChevronsUpDown,
+  Code2,
+  Copy,
   Database,
+  FileWarning,
   FolderPlus,
   GitBranch,
   History,
@@ -165,6 +168,7 @@ export function EditorPage() {
   const params = useParams();
   const queryClient = useQueryClient();
   const [copiedSql, setCopiedSql] = useState(false);
+  const [sqlPreviewOpen, setSqlPreviewOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
@@ -341,7 +345,10 @@ export function EditorPage() {
       return;
     }
 
-    await navigator.clipboard.writeText(generateCreateSchemaSql(model, { dialect: model.dialect }));
+    const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
+
+    // Copy cepat dan preview dialog memakai generator yang sama supaya user tidak melihat SQL berbeda dari yang disalin.
+    await navigator.clipboard.writeText(generatedSql.sql);
     setCopiedSql(true);
     window.setTimeout(() => setCopiedSql(false), 1600);
   }
@@ -431,6 +438,7 @@ export function EditorPage() {
   }
 
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
+  const sqlPreview = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
   // Expanded sidebars share one comfortable width so table controls do not collapse into cramped rows.
   const expandedSidebarWidth = 'var(--tabliodb-sidebar-width)';
   const collapsedSidebarWidth = '44px';
@@ -493,9 +501,9 @@ export function EditorPage() {
             {saveSnapshotMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             Snapshot
           </Button>
-          <Button className="gap-2" onClick={handleExportSql} variant="sky">
+          <Button className="gap-2" onClick={() => setSqlPreviewOpen(true)} variant="sky">
             <Play className="size-4" />
-            {copiedSql ? 'Copied' : 'SQL'}
+            SQL
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -507,7 +515,7 @@ export function EditorPage() {
                 Fit diagram
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleExportSql}>
-                <Play className="size-4" />
+                <Copy className="size-4" />
                 Copy SQL
               </DropdownMenuItem>
               <DropdownMenuItem disabled>
@@ -527,6 +535,16 @@ export function EditorPage() {
           </DropdownMenu>
         </div>
       </header>
+
+      <SqlPreviewDialog
+        copied={copiedSql}
+        dialect={model.dialect}
+        onCopy={handleExportSql}
+        onOpenChange={setSqlPreviewOpen}
+        open={sqlPreviewOpen}
+        sql={sqlPreview.sql}
+        warnings={sqlPreview.warnings}
+      />
 
       <div
         className="grid min-h-0 flex-1 transition-[grid-template-columns] duration-200"
@@ -717,6 +735,76 @@ function SidebarRail({
     >
       <IconButton icon={icon} label={label} onClick={onClick} variant="ghost" />
     </div>
+  );
+}
+
+function SqlPreviewDialog({
+  copied,
+  dialect,
+  onCopy,
+  onOpenChange,
+  open,
+  sql,
+  warnings,
+}: {
+  copied: boolean;
+  dialect: DatabaseDialect;
+  onCopy: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  sql: string;
+  warnings: SqlGenerationWarning[];
+}) {
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="w-[min(94vw,920px)]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Code2 className="size-5 text-[rgb(var(--tabliodb-sky-text))]" />
+            SQL preview
+          </DialogTitle>
+          <DialogDescription>
+            Review generated {formatDiagramDialect(dialect)} schema SQL before copying it into your database workflow.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogBody className="grid gap-4">
+          {warnings.length > 0 ? (
+            <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
+              <div className="mb-2 flex items-center gap-2 text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
+                <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
+                Dialect warnings
+              </div>
+              <ul className="grid gap-1.5">
+                {warnings.map((warning) => (
+                  <li className="leading-5" key={warning.message}>
+                    {warning.message}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : (
+            <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-primary-text))]">
+              SQL is ready for {formatDiagramDialect(dialect)} with no compatibility warnings.
+            </section>
+          )}
+
+          <pre className="tabliodb-scrollbar max-h-[52dvh] overflow-auto rounded-[18px] border-2 border-[rgb(var(--tabliodb-ink))] bg-[rgb(var(--tabliodb-ink))] p-4 text-[12px] font-semibold leading-5 text-white shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))]">
+            <code>{sql}</code>
+          </pre>
+        </DialogBody>
+
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
+            Close
+          </Button>
+          <Button onClick={onCopy} type="button" variant="sky">
+            <Copy className="size-4" />
+            {copied ? 'Copied' : 'Copy SQL'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
