@@ -33,6 +33,7 @@ import {
   IconButton,
   Input,
   Select,
+  cn,
 } from '@tabliodb/ui';
 import {
   Archive,
@@ -48,6 +49,10 @@ import {
   LogOut,
   MessageSquareText,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Play,
   Plus,
   Save,
@@ -89,6 +94,7 @@ import { snapshotsQueries, useCreateSnapshotMutation } from '@/resources/snapsho
 import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
 import { SchemaCanvas } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
+import { TableStructureSidebar } from './components/TableStructureSidebar';
 
 const addTableFormSchema = z.object({
   tableName: z.string().trim().max(64, 'Keep the table name under 64 characters.'),
@@ -164,6 +170,8 @@ export function EditorPage() {
   const [model, setModel] = useState<DiagramModel | null>(null);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
 
   const organizationsQuery = useQuery(organizationsQueries.list({ limit: 50 }));
   const organizations = organizationsQuery.data?.items ?? [];
@@ -243,6 +251,15 @@ export function EditorPage() {
     },
     [canEditDiagram],
   );
+
+  const handleSelectedTableChange = useCallback((tableId: string | null) => {
+    setSelectedTableId(tableId);
+
+    if (tableId) {
+      // Selecting a table promotes the left sidebar into structure-edit mode, even if the user hid it earlier.
+      setLeftSidebarOpen(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (organizations.length === 0 || organizationsQuery.isPending) {
@@ -376,76 +393,104 @@ export function EditorPage() {
     return <LoadingState />;
   }
 
+  const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
+  const leftSidebarWidth = leftSidebarOpen ? (selectedTable ? '392px' : '272px') : '0px';
+  const rightSidebarWidth = rightSidebarOpen ? '332px' : '0px';
+
   return (
-    <main className="grid h-screen grid-cols-[272px_minmax(0,1fr)_332px] bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
-      <aside className="border-r-2 border-[rgb(var(--tabliodb-border))] bg-white">
-        <div className="flex h-16 items-center gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] px-5">
-          <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-            <Database className="size-5" />
-          </div>
-          <span className="text-base font-extrabold">Tabliodb</span>
-        </div>
-        <div className="p-4">
-          <WorkspaceSwitcher
-            activeOrganization={activeOrganization}
-            onSelect={(organization) => {
-              setModel(null);
-              setSelectedTableId(null);
-              setProjectSearchTerm('');
-              navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
-            }}
-            organizations={organizations}
+    <main
+      className="grid h-screen bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))] transition-[grid-template-columns] duration-200"
+      style={{ gridTemplateColumns: `${leftSidebarWidth} minmax(0,1fr) ${rightSidebarWidth}` }}
+    >
+      <aside
+        className={cn(
+          'min-w-0 overflow-hidden border-r-2 border-[rgb(var(--tabliodb-border))] bg-white',
+          !leftSidebarOpen && 'pointer-events-none invisible',
+        )}
+      >
+        {selectedTable ? (
+          <TableStructureSidebar
+            model={model}
+            onClearTableSelection={() => setSelectedTableId(null)}
+            onHide={() => setLeftSidebarOpen(false)}
+            onModelChange={handleModelChange}
+            readOnly={!canEditDiagram}
+            selectedTableId={selectedTable.id}
           />
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Projects
-            </span>
-            <CreateProjectDialog
-              organizationId={activeOrganization?.id ?? null}
-              onCreated={(project) => {
-                setModel(null);
-                setSelectedTableId(null);
-                navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
-              }}
-            />
-          </div>
-          <div className="relative mb-4">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
-            <Input
-              className="pl-9"
-              onChange={(event) => setProjectSearchTerm(event.target.value)}
-              placeholder="Search projects"
-              value={projectSearchTerm}
-            />
-          </div>
-          {filteredProjects.length === 0 ? (
-            <div className="rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-              No matching projects
+        ) : (
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] px-5">
+              <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+                <Database className="size-5" />
+              </div>
+              <span className="min-w-0 flex-1 truncate text-base font-extrabold">Tabliodb</span>
+              <IconButton icon={PanelLeftClose} label="Hide left sidebar" onClick={() => setLeftSidebarOpen(false)} />
             </div>
-          ) : (
-            <div className="space-y-1">
-              {filteredProjects.map((project) => (
-                <button
-                  className={`flex w-full cursor-pointer items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
-                    project.id === activeProject?.id
-                      ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
-                      : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
-                  }`}
-                  key={project.id}
-                  onClick={() => {
+            <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+              <WorkspaceSwitcher
+                activeOrganization={activeOrganization}
+                onSelect={(organization) => {
+                  setModel(null);
+                  setSelectedTableId(null);
+                  setProjectSearchTerm('');
+                  navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+                }}
+                organizations={organizations}
+              />
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Projects
+                </span>
+                <CreateProjectDialog
+                  organizationId={activeOrganization?.id ?? null}
+                  onCreated={(project) => {
                     setModel(null);
                     setSelectedTableId(null);
                     navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
                   }}
-                  type="button"
-                >
-                  <span className="min-w-0 truncate">{project.name}</span>
-                  <span className="text-xs opacity-70">{project.slug}</span>
-                </button>
-              ))}
+                />
+              </div>
+              <div className="relative mb-4">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+                <Input
+                  className="pl-9"
+                  onChange={(event) => setProjectSearchTerm(event.target.value)}
+                  placeholder="Search projects"
+                  value={projectSearchTerm}
+                />
+              </div>
+              {filteredProjects.length === 0 ? (
+                <div className="rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  No matching projects
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredProjects.map((project) => (
+                    <button
+                      className={`flex w-full cursor-pointer items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
+                        project.id === activeProject?.id
+                          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
+                          : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
+                      }`}
+                      key={project.id}
+                      onClick={() => {
+                        setModel(null);
+                        setSelectedTableId(null);
+                        navigate(
+                          routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }),
+                        );
+                      }}
+                      type="button"
+                    >
+                      <span className="min-w-0 truncate">{project.name}</span>
+                      <span className="text-xs opacity-70">{project.slug}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </aside>
 
       <section className="flex min-w-0 flex-col">
@@ -457,6 +502,16 @@ export function EditorPage() {
             </p>
           </div>
           <div className="flex items-center gap-1">
+            <IconButton
+              icon={leftSidebarOpen ? PanelLeftClose : PanelLeftOpen}
+              label={leftSidebarOpen ? 'Hide left sidebar' : 'Show left sidebar'}
+              onClick={() => setLeftSidebarOpen((value) => !value)}
+            />
+            <IconButton
+              icon={rightSidebarOpen ? PanelRightClose : PanelRightOpen}
+              label={rightSidebarOpen ? 'Hide inspector' : 'Show inspector'}
+              onClick={() => setRightSidebarOpen((value) => !value)}
+            />
             <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
             <IconButton icon={MessageSquareText} label="Comments" />
             <IconButton icon={History} label="History" />
@@ -565,13 +620,14 @@ export function EditorPage() {
           fitSignal={fitSignal}
           model={model}
           onModelChange={handleModelChange}
-          onSelectedTableChange={setSelectedTableId}
+          onSelectedTableChange={handleSelectedTableChange}
           readOnly={!canEditDiagram}
           selectedTableId={selectedTableId}
         />
       </section>
 
       <SchemaInspector
+        className={cn(!rightSidebarOpen && 'pointer-events-none invisible overflow-hidden')}
         latestSnapshotVersion={latestSnapshot?.version ?? 0}
         model={model}
         onModelChange={handleModelChange}

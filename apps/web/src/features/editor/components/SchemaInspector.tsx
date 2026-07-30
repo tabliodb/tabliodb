@@ -219,6 +219,7 @@ const relationshipFormSchema = z
 type RelationshipFormState = z.infer<typeof relationshipFormSchema>;
 
 export type SchemaInspectorProps = {
+  className?: string;
   latestSnapshotVersion: number;
   model: DiagramModel;
   onModelChange: (model: DiagramModel) => void;
@@ -227,6 +228,7 @@ export type SchemaInspectorProps = {
 };
 
 export function SchemaInspector({
+  className,
   latestSnapshotVersion,
   model,
   onModelChange,
@@ -324,7 +326,12 @@ export function SchemaInspector({
   }, [selectedColumnId, selectedRelationshipId, selectedRelationshipIds, selectedRelationships, selectedTable]);
 
   return (
-    <aside className="overflow-y-auto border-l-2 border-[rgb(var(--tabliodb-border))] bg-white">
+    <aside
+      className={cn(
+        'tabliodb-scrollbar min-w-0 overflow-y-auto border-l-2 border-[rgb(var(--tabliodb-border))] bg-white',
+        className,
+      )}
+    >
       <div className="flex h-16 items-center border-b-2 border-[rgb(var(--tabliodb-border))] px-5 text-sm font-extrabold">
         Inspector
       </div>
@@ -368,12 +375,6 @@ export function SchemaInspector({
                   style={{ backgroundColor: selectedTable.color ?? '#0f766e' }}
                 />
               </div>
-              {!readOnly ? (
-                <div className="mt-3 flex gap-2">
-                  <EditTableDialog model={model} onModelChange={onModelChange} table={selectedTable} />
-                  <AddColumnDialog model={model} onModelChange={onModelChange} table={selectedTable} />
-                </div>
-              ) : null}
               <div className="mt-3 space-y-1">
                 {selectedColumns.map((column) => (
                   <button
@@ -408,13 +409,7 @@ export function SchemaInspector({
             </Surface>
           )}
         </section>
-        <ColumnInspector
-          column={selectedColumn}
-          model={model}
-          onModelChange={onModelChange}
-          readOnly={readOnly}
-          table={selectedTable}
-        />
+        <ColumnInspector column={selectedColumn} model={model} table={selectedTable} />
         <IndexBuilderPanel
           columns={selectedColumns}
           index={selectedIndex}
@@ -995,14 +990,10 @@ function AddColumnDialog({
 function ColumnInspector({
   column,
   model,
-  onModelChange,
-  readOnly,
   table,
 }: {
   column: DatabaseColumn | null;
   model: DiagramModel;
-  onModelChange: (model: DiagramModel) => void;
-  readOnly: boolean;
   table: DatabaseTable | null;
 }) {
   return (
@@ -1019,7 +1010,6 @@ function ColumnInspector({
                 {table.name} / {formatColumnType(column.type)}
               </div>
             </div>
-            {!readOnly ? <EditColumnDialog column={column} model={model} onModelChange={onModelChange} /> : null}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <ColumnFact label="Primary key" value={column.primaryKey ? 'Yes' : 'No'} />

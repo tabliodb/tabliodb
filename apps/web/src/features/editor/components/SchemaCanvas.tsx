@@ -25,6 +25,8 @@ const tableNodeWidth = 288;
 const tableHeaderHeight = 46;
 const tableColumnHeight = 32;
 const tablePaddingBottom = 10;
+const tableResizeMaxWidth = 720;
+const tableResizeMinWidth = 240;
 const diagramVisualGridSize = 24;
 const diagramDragGridSize = 1;
 const relationshipActiveColor = '#58cc02';
@@ -53,6 +55,7 @@ export type SchemaCanvasProps = {
 type TableNodeData = {
   color: string;
   columns: DatabaseColumn[];
+  readOnly: boolean;
   selected: boolean;
   tableId: string;
   tableName: string;
@@ -113,6 +116,7 @@ export function SchemaCanvas({
     registerTableNodeShape();
     registerRelationshipRouter();
 
+    const container = containerRef.current;
     const graph = new Graph({
       // HTML table nodes are small enough for synchronous rendering, which avoids queued stale views after drag-end state sync.
       async: false,
@@ -131,7 +135,7 @@ export function SchemaCanvas({
         router: { name: relationshipRouterName },
         snap: { radius: 24 },
       },
-      container: containerRef.current,
+      container,
       grid: {
         visible: true,
         size: diagramVisualGridSize,
@@ -174,6 +178,65 @@ export function SchemaCanvas({
       onSelectedTableChangeRef.current(null);
     });
 
+    const handleResizeMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const handle = target.closest<HTMLElement>('.tabliodb-table-node__resize-handle');
+      const tableElement = handle?.closest<HTMLElement>('[data-tabliodb-table-id]');
+      const tableId = tableElement?.dataset.tabliodbTableId;
+
+      if (!handle || !tableId || readOnly) {
+        return;
+      }
+
+      const table = modelRef.current.tables[tableId];
+      const node = graph.getCellById(tableId) as X6Node | null | undefined;
+
+      if (!table || !node?.isNode()) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectedTableChangeRef.current(tableId);
+
+      const startClientX = event.clientX;
+      const startWidth = getTableWidth(table);
+      const graphScale = getGraphScale(graph);
+      let latestWidth = startWidth;
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        moveEvent.preventDefault();
+        latestWidth = clampTableNodeWidth(startWidth + (moveEvent.clientX - startClientX) / graphScale);
+        node.resize(latestWidth, node.getSize().height);
+      };
+
+      const handleMouseUp = () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+
+        if (latestWidth !== startWidth) {
+          // Width is committed once at drag-end so quick resize movement does not spam snapshot model updates.
+          onModelChangeRef.current(
+            applyDiagramCommand(modelRef.current, {
+              type: 'table.resize',
+              tableId,
+              width: latestWidth,
+            }),
+          );
+        }
+      };
+
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    };
+
+    container.addEventListener('mousedown', handleResizeMouseDown, true);
+
     graph.on('node:moved', ({ node }) => {
       if (readOnly) {
         return;
@@ -204,6 +267,7 @@ export function SchemaCanvas({
     graphRef.current = graph;
 
     return () => {
+      container.removeEventListener('mousedown', handleResizeMouseDown, true);
       graph.dispose();
       graphRef.current = null;
     };
@@ -410,6 +474,7 @@ function createTableNodeMetadata(
     data: {
       color: table.color ?? '#0f766e',
       columns,
+      readOnly,
       selected: table.id === selectedTableId,
       tableId: table.id,
       tableName: table.name,
@@ -770,6 +835,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function clampTableNodeWidth(value: number): number {
+  return clamp(Math.round(value), tableResizeMinWidth, tableResizeMaxWidth);
+}
+
+function getGraphScale(graph: Graph): number {
+  const zoom = graph.zoom();
+
+  return typeof zoom === 'number' && Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+}
+
 function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNodeData): boolean {
   if (!current) {
     return false;
@@ -777,6 +852,7 @@ function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNod
 
   return (
     current.color === next.color &&
+    current.readOnly === next.readOnly &&
     current.selected === next.selected &&
     current.tableId === next.tableId &&
     current.tableName === next.tableName &&
@@ -806,15 +882,19 @@ function fitGraphContent(graph: Graph): void {
 
 function renderTableNode(data: TableNodeData): string {
   const rows = data.columns.map((column) => renderColumnRow(column)).join('');
+  const resizeHandle = data.readOnly
+    ? ''
+    : '<button aria-label="Resize table" class="tabliodb-table-node__resize-handle" type="button"></button>';
 
   return `
-    <div class="tabliodb-table-node ${data.selected ? 'is-selected' : ''}" style="--table-accent: ${escapeHtml(data.color)}">
+    <div class="tabliodb-table-node ${data.selected ? 'is-selected' : ''}" data-tabliodb-table-id="${escapeHtml(data.tableId)}" style="--table-accent: ${escapeHtml(data.color)}">
       <div class="tabliodb-table-node__header">
         <span class="tabliodb-table-node__status"></span>
         <span class="tabliodb-table-node__name">${escapeHtml(data.tableName)}</span>
         <span class="tabliodb-table-node__count">${data.columns.length}</span>
       </div>
       <div class="tabliodb-table-node__columns">${rows}</div>
+      ${resizeHandle}
     </div>
   `;
 }

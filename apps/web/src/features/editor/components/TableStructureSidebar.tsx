@@ -1,0 +1,657 @@
+import {
+  applyDiagramCommand,
+  createDiagramEntityId,
+  getTableColumns,
+  type ColumnTypeFamily,
+  type ColumnTypeSpec,
+  type DatabaseColumn,
+  type DiagramModel,
+} from '@tabliodb/schema-core';
+import { Button, Checkbox, IconButton, Input, Select, cn } from '@tabliodb/ui';
+import {
+  Columns3,
+  GripVertical,
+  KeyRound,
+  MoreHorizontal,
+  PanelLeftClose,
+  Palette,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { formatColumnType } from '../diagram-model';
+
+const tableColorOptions = ['#58cc02', '#1cb0f6', '#ffc800', '#ff4b4b', '#8b5cf6', '#0f766e'] as const;
+const columnTypeFamilyOptions = [
+  'bigint',
+  'boolean',
+  'date',
+  'decimal',
+  'enum',
+  'float',
+  'integer',
+  'json',
+  'text',
+  'time',
+  'timestamp',
+  'uuid',
+  'varchar',
+] as const satisfies readonly ColumnTypeFamily[];
+
+const inlineInputClassName =
+  'h-10 rounded-[12px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-2 text-sm font-extrabold shadow-none outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-60';
+
+const compactSelectClassName =
+  'h-10 rounded-[12px] border-2 border-[rgb(var(--tabliodb-border-strong))] px-2 text-xs shadow-none';
+
+export type TableStructureSidebarProps = {
+  model: DiagramModel;
+  onClearTableSelection: () => void;
+  onHide: () => void;
+  onModelChange: (model: DiagramModel) => void;
+  readOnly?: boolean;
+  selectedTableId: string;
+};
+
+export function TableStructureSidebar({
+  model,
+  onClearTableSelection,
+  onHide,
+  onModelChange,
+  readOnly = false,
+  selectedTableId,
+}: TableStructureSidebarProps) {
+  const table = model.tables[selectedTableId] ?? null;
+  const columns = useMemo(() => (table ? getTableColumns(model, table.id) : []), [model, table]);
+  const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
+  const selectedColumn = columns.find((column) => column.id === selectedColumnId) ?? columns[0] ?? null;
+  const columnIds = columns.map((column) => column.id).join('|');
+
+  useEffect(() => {
+    if (!table) {
+      setSelectedColumnId(null);
+      return;
+    }
+
+    if (!selectedColumnId || !columns.some((column) => column.id === selectedColumnId)) {
+      // Column focus is local to this selected table so inline edits never target an old column after table switching.
+      setSelectedColumnId(columns[0]?.id ?? null);
+    }
+  }, [columnIds, columns, selectedColumnId, table]);
+
+  if (!table) {
+    return (
+      <div className="grid h-full place-items-center p-5 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+        Table selection is no longer available.
+      </div>
+    );
+  }
+
+  function apply(commandModel: DiagramModel) {
+    if (!readOnly) {
+      onModelChange(commandModel);
+    }
+  }
+
+  function handleTableNameCommit(value: string) {
+    const name = value.trim();
+
+    if (!name || name === table.name) {
+      return;
+    }
+
+    apply(applyDiagramCommand(model, { type: 'table.rename', tableId: table.id, name }));
+  }
+
+  function handleColorChange(color: string) {
+    if (color === table.color) {
+      return;
+    }
+
+    apply(applyDiagramCommand(model, { type: 'table.changeColor', tableId: table.id, color }));
+  }
+
+  function handleAddColumn() {
+    const columnId = createDiagramEntityId('column');
+    const name = createUniqueColumnName(columns, 'new_column');
+
+    // The sidebar creates columns directly so table editing stays in one place instead of opening a modal flow.
+    apply(
+      applyDiagramCommand(model, {
+        type: 'column.create',
+        columnId,
+        tableId: table.id,
+        name,
+        columnType: { family: 'varchar', length: 160 },
+        nullable: true,
+      }),
+    );
+    setSelectedColumnId(columnId);
+  }
+
+  function updateColumn(column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) {
+    apply(applyDiagramCommand(model, { type: 'column.update', columnId: column.id, changes }));
+  }
+
+  function handleDeleteColumn(column: DatabaseColumn) {
+    const nextColumnId = columns.find((currentColumn) => currentColumn.id !== column.id)?.id ?? null;
+
+    apply(applyDiagramCommand(model, { type: 'column.delete', columnId: column.id }));
+    setSelectedColumnId(nextColumnId);
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <div className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] px-4">
+        <div
+          className="grid size-9 shrink-0 place-items-center rounded-2xl text-white shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))]"
+          style={{ backgroundColor: table.color ?? '#0f766e' }}
+        >
+          <Columns3 className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Table structure
+          </div>
+          <div className="truncate text-sm font-extrabold">{table.name}</div>
+        </div>
+        <IconButton icon={PanelLeftClose} label="Hide sidebar" onClick={onHide} variant="ghost" />
+        <IconButton icon={X} label="Back to projects" onClick={onClearTableSelection} variant="ghost" />
+      </div>
+
+      <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+        {readOnly ? (
+          <div className="mb-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-xs font-extrabold text-[rgb(var(--tabliodb-gold-text))]">
+            Your role can inspect this table but cannot edit schema details.
+          </div>
+        ) : null}
+
+        <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
+          <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Table name
+          </label>
+          <InlineTextInput className="mt-2" disabled={readOnly} onCommit={handleTableNameCommit} value={table.name} />
+          <div className="mt-3 flex items-center gap-2">
+            <Palette className="size-4 text-[rgb(var(--tabliodb-ink-muted))]" />
+            <div className="flex flex-wrap gap-2">
+              {tableColorOptions.map((color) => (
+                <button
+                  aria-label={`Use ${color}`}
+                  className={cn(
+                    'size-7 cursor-pointer rounded-full border-2 border-white shadow-[0_0_0_2px_rgb(var(--tabliodb-border-strong))] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60',
+                    table.color === color && 'shadow-[0_0_0_3px_rgb(var(--tabliodb-primary))]',
+                  )}
+                  disabled={readOnly}
+                  key={color}
+                  onClick={() => handleColorChange(color)}
+                  style={{ backgroundColor: color }}
+                  type="button"
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-extrabold">Columns</h2>
+              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                {columns.length} fields in {table.name}
+              </p>
+            </div>
+            <Button disabled={readOnly} onClick={handleAddColumn} size="sm" variant="soft">
+              <Plus className="size-4" />
+              Column
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            {columns.map((column) => (
+              <ColumnEditorRow
+                column={column}
+                disabled={readOnly}
+                enumsAvailable={Object.keys(model.enums).length > 0}
+                key={column.id}
+                model={model}
+                onSelect={setSelectedColumnId}
+                onUpdate={updateColumn}
+                selected={selectedColumn?.id === column.id}
+              />
+            ))}
+          </div>
+        </section>
+
+        <ColumnAttributesPanel
+          column={selectedColumn}
+          disabled={readOnly}
+          model={model}
+          onDelete={handleDeleteColumn}
+          onUpdate={updateColumn}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ColumnEditorRow({
+  column,
+  disabled,
+  enumsAvailable,
+  model,
+  onSelect,
+  onUpdate,
+  selected,
+}: {
+  column: DatabaseColumn;
+  disabled: boolean;
+  enumsAvailable: boolean;
+  model: DiagramModel;
+  onSelect: (columnId: string) => void;
+  onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
+  selected: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'grid grid-cols-[14px_minmax(0,1fr)_92px_26px_26px_26px_30px] items-center gap-1 rounded-[16px] border-2 bg-white p-2 transition',
+        selected
+          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
+          : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+      )}
+      onFocus={() => onSelect(column.id)}
+      onMouseDown={() => onSelect(column.id)}
+    >
+      <GripVertical className="size-4 text-[rgb(var(--tabliodb-ink-subtle))]" />
+      <InlineTextInput
+        className="min-w-0"
+        disabled={disabled}
+        onCommit={(value) => {
+          const name = value.trim();
+
+          if (name && name !== column.name) {
+            onUpdate(column, { name });
+          }
+        }}
+        value={column.name}
+      />
+      <Select
+        className={compactSelectClassName}
+        disabled={disabled}
+        onValueChange={(family) => {
+          const nextType = createColumnTypeForFamily(family as ColumnTypeFamily, model, column.type);
+
+          if (nextType) {
+            onUpdate(column, { type: nextType });
+          }
+        }}
+        options={columnTypeFamilyOptions.map((family) => ({
+          disabled: family === 'enum' && !enumsAvailable,
+          label: family,
+          value: family,
+        }))}
+        value={column.type.family}
+      />
+      <ColumnToggle
+        active={!column.nullable}
+        disabled={disabled || column.primaryKey}
+        label="Not nullable"
+        onClick={() => onUpdate(column, { nullable: column.primaryKey ? false : !column.nullable })}
+      >
+        N
+      </ColumnToggle>
+      <ColumnToggle
+        active={column.primaryKey}
+        disabled={disabled}
+        label="Primary key"
+        onClick={() =>
+          onUpdate(column, { nullable: column.primaryKey ? column.nullable : false, primaryKey: !column.primaryKey })
+        }
+      >
+        <KeyRound className="size-3.5" />
+      </ColumnToggle>
+      <ColumnToggle
+        active={column.unique}
+        disabled={disabled}
+        label="Unique"
+        onClick={() => onUpdate(column, { unique: !column.unique })}
+      >
+        UQ
+      </ColumnToggle>
+      <button
+        aria-label={`Select ${column.name} attributes`}
+        className="grid size-8 cursor-pointer place-items-center rounded-[12px] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={disabled}
+        onClick={() => onSelect(column.id)}
+        type="button"
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+function ColumnAttributesPanel({
+  column,
+  disabled,
+  model,
+  onDelete,
+  onUpdate,
+}: {
+  column: DatabaseColumn | null;
+  disabled: boolean;
+  model: DiagramModel;
+  onDelete: (column: DatabaseColumn) => void;
+  onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
+}) {
+  if (!column) {
+    return (
+      <section className="mt-4 rounded-[18px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+        Select a column to edit its attributes.
+      </section>
+    );
+  }
+
+  const enumOptions = Object.values(model.enums);
+
+  return (
+    <section className="mt-4 rounded-[18px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-4 shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))]">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-extrabold">Column attributes</h2>
+          <p className="mt-1 truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+            {column.name} / {formatColumnType(column.type)}
+          </p>
+        </div>
+        <span className="rounded-full bg-[rgb(var(--tabliodb-primary-soft))] px-2 py-1 text-[10px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+          Active
+        </span>
+      </div>
+
+      <div className="grid gap-3">
+        {column.type.family === 'varchar' ? (
+          <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Length
+            <InlineNumberInput
+              className="mt-1"
+              disabled={disabled}
+              max={2048}
+              min={1}
+              onCommit={(length) => onUpdate(column, { type: { ...column.type, length, raw: undefined } })}
+              value={column.type.length ?? 160}
+            />
+          </label>
+        ) : null}
+
+        {column.type.family === 'enum' ? (
+          <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Enum type
+            <Select
+              className={cn(compactSelectClassName, 'mt-1 h-11 text-sm')}
+              disabled={disabled || enumOptions.length === 0}
+              onValueChange={(enumId) => onUpdate(column, { type: { family: 'enum', enumId, raw: undefined } })}
+              options={
+                enumOptions.length > 0
+                  ? enumOptions.map((databaseEnum) => ({ label: databaseEnum.name, value: databaseEnum.id }))
+                  : [{ disabled: true, label: 'Create enum first', value: '__empty' }]
+              }
+              value={column.type.enumId ?? enumOptions[0]?.id}
+            />
+          </label>
+        ) : null}
+
+        <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Default
+          <InlineTextInput
+            className="mt-1"
+            disabled={disabled}
+            onCommit={(defaultValue) => onUpdate(column, { defaultValue: normalizeOptionalString(defaultValue) })}
+            placeholder="Default value"
+            value={column.defaultValue ?? ''}
+          />
+        </label>
+
+        <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Comment
+          <InlineTextarea
+            className="mt-1"
+            disabled={disabled}
+            onCommit={(comment) => onUpdate(column, { comment: normalizeOptionalString(comment) })}
+            placeholder="Optional description for this column"
+            value={column.comment ?? ''}
+          />
+        </label>
+
+        <label className="flex cursor-pointer items-center gap-3 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
+          <Checkbox
+            checked={column.autoIncrement}
+            disabled={disabled}
+            onCheckedChange={(checked) => onUpdate(column, { autoIncrement: checked === true })}
+          />
+          Auto increment
+        </label>
+
+        <Button disabled={disabled} onClick={() => onDelete(column)} variant="danger">
+          <Trash2 className="size-4" />
+          Delete column
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function ColumnToggle({
+  active,
+  children,
+  disabled,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  children: ReactNode;
+  disabled: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={label}
+      aria-pressed={active}
+      className={cn(
+        'grid size-8 cursor-pointer place-items-center rounded-[12px] border-2 text-[10px] font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60',
+        active
+          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_2px_0_rgb(var(--tabliodb-primary-shadow))]'
+          : 'border-[rgb(var(--tabliodb-border))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
+      )}
+      disabled={disabled}
+      onClick={onClick}
+      title={label}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+function InlineTextInput({
+  className,
+  disabled,
+  onCommit,
+  placeholder,
+  value,
+}: {
+  className?: string;
+  disabled?: boolean;
+  onCommit: (value: string) => void;
+  placeholder?: string;
+  value: string;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  function commit() {
+    if (draft !== value) {
+      onCommit(draft);
+    }
+  }
+
+  return (
+    <Input
+      className={cn(inlineInputClassName, className)}
+      disabled={disabled}
+      onBlur={commit}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.currentTarget.blur();
+        }
+      }}
+      placeholder={placeholder}
+      value={draft}
+    />
+  );
+}
+
+function InlineNumberInput({
+  className,
+  disabled,
+  max,
+  min,
+  onCommit,
+  value,
+}: {
+  className?: string;
+  disabled?: boolean;
+  max: number;
+  min: number;
+  onCommit: (value: number) => void;
+  value: number;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  function commit() {
+    const parsedValue = Number(draft);
+
+    if (!Number.isFinite(parsedValue)) {
+      setDraft(String(value));
+      return;
+    }
+
+    const nextValue = Math.min(Math.max(Math.round(parsedValue), min), max);
+
+    setDraft(String(nextValue));
+
+    if (nextValue !== value) {
+      onCommit(nextValue);
+    }
+  }
+
+  return (
+    <Input
+      className={cn(inlineInputClassName, className)}
+      disabled={disabled}
+      max={max}
+      min={min}
+      onBlur={commit}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.currentTarget.blur();
+        }
+      }}
+      type="number"
+      value={draft}
+    />
+  );
+}
+
+function InlineTextarea({
+  className,
+  disabled,
+  onCommit,
+  placeholder,
+  value,
+}: {
+  className?: string;
+  disabled?: boolean;
+  onCommit: (value: string) => void;
+  placeholder?: string;
+  value: string;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  return (
+    <textarea
+      className={cn(
+        'min-h-24 w-full resize-none rounded-[14px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-60',
+        className,
+      )}
+      disabled={disabled}
+      onBlur={() => {
+        if (draft !== value) {
+          onCommit(draft);
+        }
+      }}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      placeholder={placeholder}
+      value={draft}
+    />
+  );
+}
+
+function createColumnTypeForFamily(
+  family: ColumnTypeFamily,
+  model: DiagramModel,
+  currentType: ColumnTypeSpec,
+): ColumnTypeSpec | null {
+  const preservedType = currentType.family === family ? currentType : undefined;
+
+  if (family === 'varchar') {
+    return { ...(preservedType ?? {}), family, length: preservedType?.length ?? 160, raw: undefined };
+  }
+
+  if (family === 'enum') {
+    const enumId = currentType.enumId ?? Object.keys(model.enums)[0];
+
+    // Enum columns require a real enum entity reference, so the disabled select option never emits an invalid update.
+    return enumId ? { family, enumId, raw: undefined } : null;
+  }
+
+  return preservedType ?? { family };
+}
+
+function createUniqueColumnName(columns: DatabaseColumn[], baseName: string): string {
+  const existingNames = new Set(columns.map((column) => column.name));
+
+  if (!existingNames.has(baseName)) {
+    return baseName;
+  }
+
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${baseName}_${index}`;
+
+    if (!existingNames.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  return `${baseName}_${Date.now().toString(36)}`;
+}
+
+function normalizeOptionalString(value: string): string | undefined {
+  const trimmedValue = value.trim();
+
+  return trimmedValue.length > 0 ? trimmedValue : undefined;
+}
