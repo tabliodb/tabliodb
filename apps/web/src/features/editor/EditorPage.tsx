@@ -166,6 +166,7 @@ export function EditorPage() {
   const queryClient = useQueryClient();
   const [copiedSql, setCopiedSql] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -226,6 +227,8 @@ export function EditorPage() {
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
       onSuccess: (snapshot) => {
+        // A successful snapshot write makes the server version canonical again, so the floating save affordance can disappear.
+        setHasUnsavedChanges(false);
         setModel(snapshot.snapshot);
       },
     },
@@ -234,6 +237,7 @@ export function EditorPage() {
   const logoutMutation = useLogoutMutation({
     mutationConfig: {
       onSuccess: () => {
+        setHasUnsavedChanges(false);
         setModel(null);
         setSelectedTableId(null);
         navigate(routes.login.to(), { replace: true });
@@ -248,6 +252,7 @@ export function EditorPage() {
       }
 
       setModel(nextModel);
+      setHasUnsavedChanges(true);
     },
     [canEditDiagram],
   );
@@ -314,6 +319,7 @@ export function EditorPage() {
     }
 
     setModel(latestSnapshot.snapshot);
+    setHasUnsavedChanges(false);
     setSelectedTableId((current) => current ?? Object.keys(latestSnapshot.snapshot.tables)[0] ?? null);
   }, [latestSnapshot]);
 
@@ -324,8 +330,9 @@ export function EditorPage() {
 
     // Empty read-only diagrams cannot create an initial snapshot, so the editor renders an unsaved empty model instead of spinning forever.
     setModel(createSeedDiagramModel(activeDiagram.name));
+    setHasUnsavedChanges(canCreateSnapshot);
     setSelectedTableId(null);
-  }, [activeDiagram, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
+  }, [activeDiagram, canCreateSnapshot, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
 
   async function handleExportSql() {
     if (!model) {
@@ -346,7 +353,27 @@ export function EditorPage() {
     const nextTableId = Object.keys(nextModel.tables).find((tableId) => !model.tables[tableId]) ?? null;
 
     setModel(nextModel);
+    setHasUnsavedChanges(true);
     setSelectedTableId(nextTableId);
+  }
+
+  function handleSaveSnapshot() {
+    if (!activeDiagram || !model || !canCreateSnapshot) {
+      return;
+    }
+
+    saveSnapshotMutation.mutate({
+      diagramId: activeDiagram.id,
+      message: 'Manual save',
+      snapshot: {
+        ...model,
+        metadata: {
+          ...model.metadata,
+          // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
   }
 
   if (isUnauthorized(projectsQuery.error)) {
@@ -420,6 +447,7 @@ export function EditorPage() {
               <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
               <ProjectSettingsDialog
                 onArchived={() => {
+                  setHasUnsavedChanges(false);
                   setModel(null);
                   setSelectedTableId(null);
                   navigate(routes.home.to(), { replace: true });
@@ -431,6 +459,7 @@ export function EditorPage() {
                 diagram={activeDiagram}
                 model={model}
                 onUpdated={(diagram) => {
+                  setHasUnsavedChanges(true);
                   setModel((current) =>
                     current
                       ? {
@@ -453,24 +482,7 @@ export function EditorPage() {
           <Button
             className="gap-2"
             disabled={saveSnapshotMutation.isPending || !canCreateSnapshot}
-            onClick={() => {
-              if (!activeDiagram || !model || !canCreateSnapshot) {
-                return;
-              }
-
-              saveSnapshotMutation.mutate({
-                diagramId: activeDiagram.id,
-                message: 'Manual save',
-                snapshot: {
-                  ...model,
-                  metadata: {
-                    ...model.metadata,
-                    // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
-                    updatedAt: new Date().toISOString(),
-                  },
-                },
-              });
-            }}
+            onClick={handleSaveSnapshot}
           >
             {saveSnapshotMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             Save
@@ -514,7 +526,7 @@ export function EditorPage() {
         className="grid min-h-0 flex-1 transition-[grid-template-columns] duration-200"
         style={{ gridTemplateColumns: `${leftSidebarWidth} minmax(0,1fr) ${rightSidebarWidth}` }}
       >
-        <aside className="min-w-0 overflow-hidden border-r-2 border-[rgb(var(--tabliodb-border))] bg-white">
+        <aside className="relative min-w-0 overflow-hidden border-r-2 border-[rgb(var(--tabliodb-border))] bg-white">
           {!leftSidebarOpen ? (
             <SidebarRail
               icon={PanelLeftOpen}
@@ -540,7 +552,7 @@ export function EditorPage() {
                 <span className="min-w-0 flex-1 truncate text-base font-extrabold">Tabliodb</span>
                 <IconButton icon={PanelLeftClose} label="Hide left sidebar" onClick={() => setLeftSidebarOpen(false)} />
               </div>
-              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4 pb-28">
                 <WorkspaceSwitcher
                   activeOrganization={activeOrganization}
                   onSelect={(organization) => {
@@ -605,6 +617,9 @@ export function EditorPage() {
               </div>
             </div>
           )}
+          {leftSidebarOpen && hasUnsavedChanges && canCreateSnapshot ? (
+            <UnsavedChangesBar isSaving={saveSnapshotMutation.isPending} onSave={handleSaveSnapshot} />
+          ) : null}
         </aside>
 
         <section className="flex min-h-0 min-w-0">
@@ -674,6 +689,25 @@ function SidebarRail({
       )}
     >
       <IconButton icon={icon} label={label} onClick={onClick} variant="ghost" />
+    </div>
+  );
+}
+
+function UnsavedChangesBar({ isSaving, onSave }: { isSaving: boolean; onSave: () => void }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 tabliodb-save-bounce">
+      <div className="pointer-events-auto flex items-center gap-3 rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary))] bg-white p-3 shadow-[0_5px_0_rgb(var(--tabliodb-primary-shadow)),0_18px_34px_rgb(0_0_0/0.16)]">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+            Unsaved changes
+          </div>
+          <div className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Save snapshot</div>
+        </div>
+        <Button className="shrink-0" disabled={isSaving} onClick={onSave} size="sm">
+          {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          Save
+        </Button>
+      </div>
     </div>
   );
 }

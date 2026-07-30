@@ -7,18 +7,7 @@ import {
   type DatabaseColumn,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import {
-  Button,
-  Checkbox,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  IconButton,
-  Input,
-  Select,
-  cn,
-} from '@tabliodb/ui';
+import { Button, Checkbox, IconButton, Input, Popover, PopoverContent, PopoverTrigger, Select, cn } from '@tabliodb/ui';
 import {
   Columns3,
   GripVertical,
@@ -191,7 +180,7 @@ export function TableStructureSidebar({
         <IconButton icon={X} label="Back to projects" onClick={onClearTableSelection} variant="ghost" />
       </div>
 
-      <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4 pb-28">
         {readOnly ? (
           <div className="mb-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-xs font-extrabold text-[rgb(var(--tabliodb-gold-text))]">
             Your role can inspect this table but cannot edit schema details.
@@ -263,8 +252,6 @@ export function TableStructureSidebar({
             ))}
           </div>
         </section>
-
-        <ColumnAttributesPanel column={selectedColumn} disabled={readOnly} model={model} onUpdate={updateColumn} />
       </div>
     </div>
   );
@@ -289,6 +276,32 @@ function ColumnEditorRow({
   onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
   selected: boolean;
 }) {
+  const [attributesOpen, setAttributesOpen] = useState(false);
+  const [confirmDeleteColumn, setConfirmDeleteColumn] = useState(false);
+
+  function handleOpenChange(open: boolean) {
+    setAttributesOpen(open);
+
+    if (!open) {
+      setConfirmDeleteColumn(false);
+    }
+  }
+
+  function handleDeleteColumn() {
+    if (disabled) {
+      return;
+    }
+
+    if (!confirmDeleteColumn) {
+      setConfirmDeleteColumn(true);
+      return;
+    }
+
+    // The second click confirms the destructive column action while keeping the primary attribute popover in one place.
+    onDelete(column);
+    setAttributesOpen(false);
+  }
+
   return (
     <div
       className={cn(
@@ -314,27 +327,27 @@ function ColumnEditorRow({
           }}
           value={column.name}
         />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <Popover onOpenChange={handleOpenChange} open={attributesOpen}>
+          <PopoverTrigger asChild>
             <button
               aria-label={`Column actions for ${column.name}`}
-              className="grid size-8 cursor-pointer place-items-center rounded-[12px] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={disabled}
+              className="grid size-8 cursor-pointer place-items-center rounded-[12px] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white"
               type="button"
             >
               <MoreHorizontal className="size-4" />
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-44">
-            <DropdownMenuItem
-              className="text-red-700 focus:bg-red-50 focus:text-red-700"
-              onSelect={() => onDelete(column)}
-            >
-              <Trash2 className="size-4" />
-              Delete column
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[340px]" side="right">
+            <ColumnAttributesPopoverContent
+              column={column}
+              confirmDeleteColumn={confirmDeleteColumn}
+              disabled={disabled}
+              model={model}
+              onDelete={handleDeleteColumn}
+              onUpdate={onUpdate}
+            />
+          </PopoverContent>
+        </Popover>
       </div>
       <div className="mt-2 grid grid-cols-[minmax(0,1fr)_34px_34px_42px] items-center gap-2">
         <Select
@@ -385,29 +398,25 @@ function ColumnEditorRow({
   );
 }
 
-function ColumnAttributesPanel({
+function ColumnAttributesPopoverContent({
   column,
+  confirmDeleteColumn,
   disabled,
   model,
+  onDelete,
   onUpdate,
 }: {
-  column: DatabaseColumn | null;
+  column: DatabaseColumn;
+  confirmDeleteColumn: boolean;
   disabled: boolean;
   model: DiagramModel;
+  onDelete: () => void;
   onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
 }) {
-  if (!column) {
-    return (
-      <section className="mt-4 rounded-[18px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-        Select a column to edit its attributes.
-      </section>
-    );
-  }
-
   const enumOptions = Object.values(model.enums);
 
   return (
-    <section className="mt-4 rounded-[18px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-4 shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))]">
+    <div>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-extrabold">Column attributes</h2>
@@ -482,8 +491,15 @@ function ColumnAttributesPanel({
           />
           Auto increment
         </label>
+
+        <div className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-3">
+          <Button className="w-full justify-start" disabled={disabled} onClick={onDelete} variant="danger">
+            <Trash2 className="size-4" />
+            {confirmDeleteColumn ? 'Confirm delete column' : 'Delete column'}
+          </Button>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
