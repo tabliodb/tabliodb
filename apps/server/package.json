@@ -15,6 +15,7 @@
     "db:seed": "tsx src/bin/seed-dev.ts",
     "db:fresh": "npm run db:reset && npm run db:seed",
     "openapi:sync": "tsx src/bin/sync-open-api.ts",
+    "recovery": "tsx src/bin/recovery.ts",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

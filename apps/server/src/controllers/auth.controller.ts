@@ -10,6 +10,10 @@ import {
   LoginCredentialDto,
   LoginResponseDto,
   LogoutResponseDto,
+  PasswordResetConfirmDto,
+  PasswordResetConfirmResponseDto,
+  PasswordResetRequestDto,
+  PasswordResetRequestResponseDto,
   SignUpDto,
 } from '../dtos/auth.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
@@ -67,6 +71,24 @@ export class AuthController {
   async logout(@Res({ passthrough: true }) res: Response, @Auth() auth: AuthContext): Promise<LogoutResponseDto> {
     await this.service.logout(auth);
     return clearAuthCookies(res, { successful: true });
+  }
+
+  @Post('password-reset/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: PasswordResetRequestDto })
+  @ApiOperation({ operationId: 'requestPasswordReset' })
+  @ZodResponse({ status: HttpStatus.OK, type: PasswordResetRequestResponseDto })
+  requestPasswordReset(@Body() dto: PasswordResetRequestDto): Promise<PasswordResetRequestResponseDto> {
+    return this.service.requestPasswordReset(dto);
+  }
+
+  @Post('password-reset/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: PasswordResetConfirmDto })
+  @ApiOperation({ operationId: 'confirmPasswordReset' })
+  @ZodResponse({ status: HttpStatus.OK, type: PasswordResetConfirmResponseDto })
+  confirmPasswordReset(@Body() dto: PasswordResetConfirmDto): Promise<PasswordResetConfirmResponseDto> {
+    return this.service.confirmPasswordReset(dto);
   }
 
   @Post('api-keys')

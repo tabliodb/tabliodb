@@ -8,22 +8,32 @@ import {
 import { Permission, isGranted } from '@tabliodb/shared';
 import { parse } from 'cookie';
 import { IncomingHttpHeaders } from 'node:http';
-import { AuthType, SALT_ROUNDS, TabliodbCookie, TabliodbHeader, TabliodbQuery } from '../constants.js';
+import { AuditAction, AuthType, SALT_ROUNDS, TabliodbCookie, TabliodbHeader, TabliodbQuery } from '../constants.js';
 import { AuthContext } from '../database.js';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
   LoginCredentialDto,
   LoginResponseDto,
+  PasswordResetConfirmDto,
+  PasswordResetConfirmResponseDto,
+  PasswordResetRequestDto,
+  PasswordResetRequestResponseDto,
   SignUpDto,
 } from '../dtos/auth.dto.js';
 import { ApiKeyRepository } from '../repositories/api-key.repository.js';
+import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { CryptoRepository } from '../repositories/crypto.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
+import { PasswordResetRepository } from '../repositories/password-reset.repository.js';
 import { SessionRepository } from '../repositories/session.repository.js';
 import { SetupRepository, type InstanceAuthSettings } from '../repositories/setup.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
+import type { JsonValue } from '../schema/index.js';
+
+const PASSWORD_RESET_TOKEN_BYTES = 32;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 export type ValidateRequest = {
   headers: IncomingHttpHeaders;
@@ -34,9 +44,11 @@ export type ValidateRequest = {
 export class AuthService {
   constructor(
     private readonly apiKeyRepository: ApiKeyRepository,
+    private readonly auditLogRepository: AuditLogRepository,
     private readonly configRepository: ConfigRepository,
     private readonly cryptoRepository: CryptoRepository,
     private readonly organizationRepository: OrganizationRepository,
+    private readonly passwordResetRepository: PasswordResetRepository,
     private readonly sessionRepository: SessionRepository,
     private readonly setupRepository: SetupRepository,
     private readonly userRepository: UserRepository,
@@ -86,6 +98,85 @@ export class AuthService {
     if (auth.session) {
       await this.sessionRepository.delete(auth.session.id);
     }
+  }
+
+  async requestPasswordReset(dto: PasswordResetRequestDto): Promise<PasswordResetRequestResponseDto> {
+    const email = dto.email.trim().toLowerCase();
+    const neutralResponse = this.createNeutralPasswordResetRequestResponse();
+    const setup = await this.setupRepository.getStatus();
+
+    if (!setup.isSetupComplete) {
+      return neutralResponse;
+    }
+
+    const user = await this.userRepository.getByEmail(email);
+    if (!user?.passwordHash) {
+      return neutralResponse;
+    }
+
+    const resetToken = this.cryptoRepository.randomBytesAsText(PASSWORD_RESET_TOKEN_BYTES);
+    const tokenHash = this.cryptoRepository.hashSha256(resetToken);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+    const token = await this.passwordResetRepository.createForUser({
+      expiresAt,
+      tokenHash,
+      userId: user.id,
+    });
+    const shouldExposeToken = this.configRepository.getEnv().auth.exposePasswordResetToken;
+
+    await this.auditLogRepository.create({
+      action: AuditAction.AuthPasswordResetRequested,
+      actorId: null,
+      entityId: user.id,
+      entityType: 'user',
+      metadata: {
+        email: user.email,
+        expiresAt: token.expiresAt.toISOString(),
+        tokenExposedInResponse: shouldExposeToken,
+      } satisfies Record<string, JsonValue>,
+      organizationId: null,
+      projectId: null,
+    });
+
+    return {
+      expiresAt: token.expiresAt.toISOString(),
+      resetToken: shouldExposeToken ? resetToken : null,
+      resetUrl: shouldExposeToken ? this.createPasswordResetUrl(resetToken) : null,
+      successful: true,
+    };
+  }
+
+  async confirmPasswordReset(dto: PasswordResetConfirmDto): Promise<PasswordResetConfirmResponseDto> {
+    const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
+    const tokenHash = this.cryptoRepository.hashSha256(dto.token.trim());
+    const reset = await this.passwordResetRepository.consumeValidToken(tokenHash);
+
+    if (!reset) {
+      throw new BadRequestException('Password reset token is invalid or expired');
+    }
+
+    const user = await this.userRepository.updatePasswordHash(reset.userId, passwordHash);
+    if (!user) {
+      throw new BadRequestException('Password reset token is invalid or expired');
+    }
+
+    const revokedSessions = await this.sessionRepository.revokeAllForUser(reset.userId);
+
+    await this.auditLogRepository.create({
+      action: AuditAction.AuthPasswordResetCompleted,
+      actorId: reset.userId,
+      entityId: reset.userId,
+      entityType: 'user',
+      metadata: {
+        email: reset.email,
+        name: reset.name,
+        revokedSessions,
+      } satisfies Record<string, JsonValue>,
+      organizationId: user.organizations[0]?.id ?? null,
+      projectId: null,
+    });
+
+    return { revokedSessions, successful: true };
   }
 
   async createApiKey(auth: AuthContext, dto: ApiKeyCreateDto): Promise<ApiKeyCreateResponseDto> {
@@ -213,6 +304,20 @@ export class AuthService {
 
   getPasswordAuthType(): AuthType {
     return AuthType.Password;
+  }
+
+  private createNeutralPasswordResetRequestResponse(): PasswordResetRequestResponseDto {
+    return {
+      expiresAt: null,
+      resetToken: null,
+      resetUrl: null,
+      successful: true,
+    };
+  }
+
+  private createPasswordResetUrl(token: string): string {
+    const publicUrl = this.configRepository.getEnv().server.publicUrl;
+    return new URL(`/reset-password/${encodeURIComponent(token)}`, publicUrl).toString();
   }
 
   private assertPasswordSignupAllowed(email: string, settings: InstanceAuthSettings): void {

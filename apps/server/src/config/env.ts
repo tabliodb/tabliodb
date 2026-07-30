@@ -19,6 +19,7 @@ export type TabliodbEnv = {
   };
   auth: {
     cookieSecure: boolean;
+    exposePasswordResetToken: boolean;
   };
 };
 
@@ -80,6 +81,9 @@ export function loadEnv(): TabliodbEnv {
     },
     auth: {
       cookieSecure: process.env.TABLIODB_COOKIE_SECURE === 'true',
+      exposePasswordResetToken:
+        process.env.TABLIODB_EXPOSE_PASSWORD_RESET_TOKEN === 'true' ||
+        (process.env.TABLIODB_EXPOSE_PASSWORD_RESET_TOKEN !== 'false' && process.env.NODE_ENV !== 'production'),
     },
   };
 }

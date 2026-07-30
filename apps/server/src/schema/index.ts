@@ -69,6 +69,16 @@ export interface SessionTable {
   updatedAt: Timestamp;
 }
 
+export interface PasswordResetTokenTable {
+  id: Generated<string>;
+  tokenHash: BinaryColumn;
+  userId: string;
+  expiresAt: Timestamp;
+  consumedAt: NullableTimestamp;
+  revokedAt: NullableTimestamp;
+  createdAt: Timestamp;
+}
+
 export interface OrganizationTable {
   id: Generated<string>;
   name: string;
@@ -259,6 +269,7 @@ export interface DB {
   system_settings: SystemSettingTable;
   instance_members: InstanceMemberTable;
   sessions: SessionTable;
+  password_reset_tokens: PasswordResetTokenTable;
   organizations: OrganizationTable;
   organization_members: OrganizationMemberTable;
   invitations: InvitationTable;

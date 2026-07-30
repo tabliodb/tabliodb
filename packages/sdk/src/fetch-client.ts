@@ -41,6 +41,23 @@ export type LoginCredentialDto = {
 export type LogoutResponseDtoOutput = {
   successful: boolean;
 };
+export type PasswordResetRequestDto = {
+  email: string;
+};
+export type PasswordResetRequestResponseDtoOutput = {
+  expiresAt: string | null;
+  resetToken: string | null;
+  resetUrl: string | null;
+  successful: boolean;
+};
+export type PasswordResetConfirmDto = {
+  password: string;
+  token: string;
+};
+export type PasswordResetConfirmResponseDtoOutput = {
+  revokedSessions: number;
+  successful: boolean;
+};
 export type ApiKeyCreateDto = {
   name?: string;
   permissions?: Permissions[];
@@ -737,6 +754,50 @@ export function logout(opts?: Oazapfts.RequestOpts) {
       ...opts,
       method: 'POST',
     }),
+  );
+}
+export function requestPasswordReset(
+  {
+    passwordResetRequestDto,
+  }: {
+    passwordResetRequestDto: PasswordResetRequestDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: PasswordResetRequestResponseDtoOutput;
+    }>(
+      '/auth/password-reset/request',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: passwordResetRequestDto,
+      }),
+    ),
+  );
+}
+export function confirmPasswordReset(
+  {
+    passwordResetConfirmDto,
+  }: {
+    passwordResetConfirmDto: PasswordResetConfirmDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: PasswordResetConfirmResponseDtoOutput;
+    }>(
+      '/auth/password-reset/confirm',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: passwordResetConfirmDto,
+      }),
+    ),
   );
 }
 export function createApiKey(

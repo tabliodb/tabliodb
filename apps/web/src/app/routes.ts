@@ -14,6 +14,10 @@ type InvitationParams = {
   token: string;
 };
 
+type PasswordResetParams = {
+  token: string;
+};
+
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
 }
@@ -30,6 +34,14 @@ export const routes = {
   login: {
     path: '/login',
     to: () => '/login',
+  },
+  forgotPassword: {
+    path: '/forgot-password',
+    to: () => '/forgot-password',
+  },
+  resetPassword: {
+    path: '/reset-password/:token',
+    to: ({ token }: PasswordResetParams) => `/reset-password/${encodePathSegment(token)}`,
   },
   invitation: {
     path: '/invite/:token',

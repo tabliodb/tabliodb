@@ -16,6 +16,19 @@ const SignUpSchema = LoginCredentialSchema.extend({
   name: z.string().min(1),
 }).meta({ id: 'SignUpDto' });
 
+const PasswordResetRequestSchema = z
+  .object({
+    email: z.string().email(),
+  })
+  .meta({ id: 'PasswordResetRequestDto' });
+
+const PasswordResetConfirmSchema = z
+  .object({
+    password: z.string().min(8),
+    token: z.string().min(16),
+  })
+  .meta({ id: 'PasswordResetConfirmDto' });
+
 const AuthUserSchema = z
   .object({
     id: z.string().uuid(),
@@ -58,6 +71,22 @@ const LogoutResponseSchema = z
   })
   .meta({ id: 'LogoutResponseDto' });
 
+const PasswordResetRequestResponseSchema = z
+  .object({
+    expiresAt: z.iso.datetime({ offset: true }).nullable(),
+    resetToken: z.string().nullable(),
+    resetUrl: z.url().nullable(),
+    successful: z.boolean(),
+  })
+  .meta({ id: 'PasswordResetRequestResponseDto' });
+
+const PasswordResetConfirmResponseSchema = z
+  .object({
+    revokedSessions: z.number().int().nonnegative(),
+    successful: z.boolean(),
+  })
+  .meta({ id: 'PasswordResetConfirmResponseDto' });
+
 export class LoginCredentialDto extends createZodDto(LoginCredentialSchema) {}
 export class SignUpDto extends createZodDto(SignUpSchema) {}
 export class LoginResponseDto extends createZodDto(LoginResponseSchema) {}
@@ -65,3 +94,7 @@ export class CurrentUserResponseDto extends createZodDto(CurrentUserResponseSche
 export class ApiKeyCreateDto extends createZodDto(ApiKeyCreateSchema) {}
 export class ApiKeyCreateResponseDto extends createZodDto(ApiKeyCreateResponseSchema) {}
 export class LogoutResponseDto extends createZodDto(LogoutResponseSchema) {}
+export class PasswordResetConfirmDto extends createZodDto(PasswordResetConfirmSchema) {}
+export class PasswordResetConfirmResponseDto extends createZodDto(PasswordResetConfirmResponseSchema) {}
+export class PasswordResetRequestDto extends createZodDto(PasswordResetRequestSchema) {}
+export class PasswordResetRequestResponseDto extends createZodDto(PasswordResetRequestResponseSchema) {}

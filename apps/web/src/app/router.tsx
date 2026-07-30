@@ -10,6 +10,7 @@ import { adminSettingsLoader } from '@/features/admin/loaders/adminSettingsLoade
 import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
 import { LoadingState } from '@/features/app/RouteStates';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
+import { passwordRecoveryLoader } from '@/features/auth/loaders/passwordRecoveryLoader';
 import { requireAuthenticated } from '@/features/auth/middleware/requireAuthenticated';
 import { editorLoader } from '@/features/editor/loaders/editorLoader';
 import { acceptInvitationLoader } from '@/features/invitations/loaders/acceptInvitationLoader';
@@ -24,6 +25,12 @@ const AdminSettingsPage = lazy(() =>
   import('@/features/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })),
 );
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
+const ForgotPasswordPage = lazy(() =>
+  import('@/features/auth/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import('@/features/auth/ResetPasswordPage').then((module) => ({ default: module.ResetPasswordPage })),
+);
 const EditorPage = lazy(() =>
   // The editor pulls AntV X6, SQL/doc generators, and large form surfaces, so it should only load on editor routes.
   import('@/features/editor/EditorPage').then((module) => ({ default: module.EditorPage })),
@@ -57,6 +64,16 @@ export const router = createBrowserRouter([
                 element: <LoginPage />,
                 loader: loginLoader,
                 path: routes.login.path,
+              },
+              {
+                element: <ForgotPasswordPage />,
+                loader: passwordRecoveryLoader,
+                path: routes.forgotPassword.path,
+              },
+              {
+                element: <ResetPasswordPage />,
+                loader: passwordRecoveryLoader,
+                path: routes.resetPassword.path,
               },
               {
                 element: <AcceptInvitationPage />,
