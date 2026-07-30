@@ -31,6 +31,8 @@ const CommentResponseSchema = z
     createdById: z.string().uuid(),
     editedAt: DateTimeSchema.nullable(),
     id: z.string().uuid(),
+    parentCommentId: z.string().uuid().nullable(),
+    replyCount: z.number().int().nonnegative(),
     threadId: z.string().uuid(),
     updatedAt: DateTimeSchema,
   })
@@ -48,6 +50,7 @@ const CommentThreadCreateSchema = z
 const CommentReplyCreateSchema = z
   .object({
     body: z.string().trim().min(1).max(4000),
+    parentCommentId: z.string().uuid().nullable().optional(),
   })
   .meta({ id: 'CommentReplyCreateDto' });
 

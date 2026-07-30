@@ -28,6 +28,7 @@ import {
   type OrganizationSettingsDto,
   type ProjectMemberDto,
   type ProjectResponseDto,
+  type CommentResponseDto,
   type CommentTargetType,
   type CommentThreadListItemDto,
   type ReviewSignalEffectiveSettingsDto,
@@ -1284,6 +1285,7 @@ function CommentsDialog({
   selectedTableId: string | null;
 }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [replyParentComment, setReplyParentComment] = useState<CommentResponseDto | null>(null);
   const createForm = useForm<CommentFormState>({
     defaultValues: { body: '' },
     mode: 'onBlur',
@@ -1318,6 +1320,7 @@ function CommentsDialog({
     enabled: open && mentionMembersQueryOptions.enabled !== false,
   });
   const comments = threadCommentsQuery.data?.items ?? [];
+  const commentTree = useMemo(() => createCommentTree(comments), [comments]);
   const mentionUsers = mentionMembersQuery.data?.items ?? [];
   const createThreadMutation = useCreateCommentThreadMutation();
   const replyMutation = useReplyToCommentThreadMutation();
@@ -1342,6 +1345,12 @@ function CommentsDialog({
     setActiveThreadId(threads[0]?.id ?? null);
   }, [activeThreadId, open, threads]);
 
+  useEffect(() => {
+    // Parent reply selalu scoped ke thread aktif; pindah thread menghapus quote preview agar payload tidak mengarah ke thread lama.
+    setReplyParentComment(null);
+    replyForm.reset({ body: '' });
+  }, [activeThreadId, replyForm]);
+
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && isMutationPending) {
       return;
@@ -1352,6 +1361,7 @@ function CommentsDialog({
     if (!nextOpen) {
       createForm.reset({ body: '' });
       replyForm.reset({ body: '' });
+      setReplyParentComment(null);
       createThreadMutation.reset();
       replyMutation.reset();
       resolveThreadMutation.reset();
@@ -1389,12 +1399,16 @@ function CommentsDialog({
 
     replyMutation.mutate(
       {
-        body: { body: values.body },
+        body: {
+          body: values.body,
+          parentCommentId: replyParentComment?.id ?? null,
+        },
         threadId: activeThread.id,
       },
       {
         onSuccess: () => {
           replyForm.reset({ body: '' });
+          setReplyParentComment(null);
         },
       },
     );
@@ -1415,6 +1429,7 @@ function CommentsDialog({
 
   function handleThreadSelect(thread: CommentThreadListItemDto) {
     setActiveThreadId(thread.id);
+    setReplyParentComment(null);
     focusCommentTarget(model, thread, onFocusTable);
     // Fokus canvas dapat memilih table induk; target komentar dipasang setelahnya agar anchor detail tidak tertimpa fallback table.
     onCommentTargetSelect({ targetId: thread.targetId, targetType: thread.targetType });
@@ -1423,6 +1438,13 @@ function CommentsDialog({
   const mutationError =
     createThreadMutation.error ?? replyMutation.error ?? resolveThreadMutation.error ?? unresolveThreadMutation.error;
   const activeThreadTargetLabel = activeThread ? getCommentThreadTargetLabel(model, activeThread) : null;
+  const replyPlaceholder = activeThread
+    ? canComment
+      ? replyParentComment
+        ? `Reply to ${replyParentComment.author.name} with @teammate`
+        : 'Reply with @teammate'
+      : 'Your role can read this thread only'
+    : 'Select a thread before replying';
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
@@ -1602,26 +1624,14 @@ function CommentsDialog({
                   </div>
                 ) : (
                   <div className="grid gap-3">
-                    {comments.map((comment) => (
-                      <article
-                        className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3"
+                    {commentTree.map((comment) => (
+                      <ThreadCommentItem
+                        canComment={canComment}
+                        comment={comment}
+                        depth={0}
                         key={comment.id}
-                      >
-                        <div className="flex items-start gap-3">
-                          <UserAvatar className="size-9 rounded-[13px] text-xs" user={comment.author} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[13px] font-extrabold">{comment.author.name}</span>
-                              <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                {formatDateTime(comment.createdAt)}
-                              </span>
-                            </div>
-                            <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
-                              {comment.body}
-                            </p>
-                          </div>
-                        </div>
-                      </article>
+                        onReply={setReplyParentComment}
+                      />
                     ))}
                   </div>
                 )}
@@ -1632,6 +1642,25 @@ function CommentsDialog({
               className="shrink-0 border-t border-[rgb(var(--tabliodb-border))] p-3"
               onSubmit={replyForm.handleSubmit(handleReply)}
             >
+              {replyParentComment ? (
+                <div className="mb-2 flex items-start justify-between gap-3 rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
+                      Replying to {replyParentComment.author.name}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      {replyParentComment.body}
+                    </p>
+                  </div>
+                  <button
+                    className="shrink-0 cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))] hover:bg-white/70"
+                    onClick={() => setReplyParentComment(null)}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
               <Controller
                 control={replyForm.control}
                 name="body"
@@ -1640,13 +1669,7 @@ function CommentsDialog({
                     fallback={
                       <CommentComposerFallback
                         invalid={Boolean(replyForm.formState.errors.body)}
-                        placeholder={
-                          activeThread
-                            ? canComment
-                              ? 'Reply with @teammate'
-                              : 'Your role can read this thread only'
-                            : 'Select a thread before replying'
-                        }
+                        placeholder={replyPlaceholder}
                       />
                     }
                   >
@@ -1657,13 +1680,7 @@ function CommentsDialog({
                       menuPlacement="top"
                       onBlur={field.onBlur}
                       onChange={field.onChange}
-                      placeholder={
-                        activeThread
-                          ? canComment
-                            ? 'Reply with @teammate'
-                            : 'Your role can read this thread only'
-                          : 'Select a thread before replying'
-                      }
+                      placeholder={replyPlaceholder}
                       value={field.value}
                     />
                   </Suspense>
@@ -1700,6 +1717,109 @@ function CommentsDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+type ThreadCommentNode = CommentResponseDto & {
+  replies: ThreadCommentNode[];
+};
+
+function ThreadCommentItem({
+  canComment,
+  comment,
+  depth,
+  onReply,
+}: {
+  canComment: boolean;
+  comment: ThreadCommentNode;
+  depth: number;
+  onReply: (comment: CommentResponseDto) => void;
+}) {
+  const visualDepth = Math.min(depth, 4);
+
+  return (
+    <div
+      className={cn(
+        'grid gap-3',
+        depth > 0 && 'border-l-2 border-[rgb(var(--tabliodb-border))] pl-3',
+        depth > 4 && 'rounded-l-[var(--tabliodb-radius-sm)] bg-[rgb(var(--tabliodb-surface))]/70 py-1',
+      )}
+      style={visualDepth > 0 ? { marginLeft: `${visualDepth * 14}px` } : undefined}
+    >
+      <article className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
+        <div className="flex items-start gap-3">
+          <UserAvatar className="size-9 rounded-[13px] text-xs" user={comment.author} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] font-extrabold">{comment.author.name}</span>
+              <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                {formatDateTime(comment.createdAt)}
+              </span>
+              {comment.parentCommentId ? <Badge variant="blue">reply</Badge> : null}
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
+              {comment.body}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                className={cn(
+                  'rounded-full bg-white px-2.5 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] shadow-[inset_0_0_0_1px_rgb(var(--tabliodb-border))]',
+                  canComment
+                    ? 'cursor-pointer hover:bg-[rgb(var(--tabliodb-surface-raised))]'
+                    : 'cursor-not-allowed opacity-60',
+                )}
+                disabled={!canComment}
+                onClick={() => onReply(comment)}
+                type="button"
+              >
+                Reply
+              </button>
+              {comment.replyCount > 0 ? (
+                <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {comment.replyCount} {comment.replyCount === 1 ? 'reply' : 'replies'}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </article>
+
+      {comment.replies.map((reply) => (
+        <ThreadCommentItem canComment={canComment} comment={reply} depth={depth + 1} key={reply.id} onReply={onReply} />
+      ))}
+    </div>
+  );
+}
+
+function createCommentTree(comments: CommentResponseDto[]): ThreadCommentNode[] {
+  const nodesById = new Map<string, ThreadCommentNode>();
+  const roots: ThreadCommentNode[] = [];
+
+  for (const comment of comments) {
+    nodesById.set(comment.id, {
+      ...comment,
+      replies: [],
+    });
+  }
+
+  for (const comment of comments) {
+    const node = nodesById.get(comment.id);
+
+    if (!node) {
+      continue;
+    }
+
+    const parent = comment.parentCommentId ? nodesById.get(comment.parentCommentId) : null;
+
+    if (parent) {
+      // Tree disusun di client dari halaman comment yang tersedia; parent yang belum ikut ter-fetch tetap ditampilkan sebagai root agar pagination tidak merusak UI.
+      parent.replies.push(node);
+      continue;
+    }
+
+    roots.push(node);
+  }
+
+  return roots;
 }
 
 function CommentComposerFallback({ invalid, placeholder }: { invalid: boolean; placeholder: string }) {

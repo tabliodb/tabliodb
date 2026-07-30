@@ -35,6 +35,8 @@ const comment = {
   deletedAt: null,
   editedAt: null,
   id: 'comment-id',
+  parentCommentId: null,
+  replyCount: 0,
   threadId: 'thread-id',
   updatedAt: new Date('2026-07-30T08:01:00.000Z'),
 };
@@ -43,6 +45,7 @@ describe(CommentService.name, () => {
   const commentRepository = {
     createCommentReply: vi.fn(),
     createThreadWithComment: vi.fn(),
+    getCommentInThread: vi.fn(),
     getComments: vi.fn(),
     getThreadById: vi.fn(),
     getThreads: vi.fn(),
@@ -98,8 +101,58 @@ describe(CommentService.name, () => {
     expect(commentRepository.createCommentReply).toHaveBeenCalledWith({
       body: 'Looks good.',
       createdById: 'user-id',
+      parentCommentId: null,
       threadId: 'thread-id',
     });
+  });
+
+  it('creates a nested reply only after the parent comment is verified inside the same thread', async () => {
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.getCommentInThread.mockResolvedValue({
+      deletedAt: null,
+      id: 'parent-comment-id',
+      parentCommentId: null,
+      threadId: 'thread-id',
+    });
+    commentRepository.createCommentReply.mockResolvedValue({
+      comment: {
+        ...comment,
+        id: 'nested-comment-id',
+        parentCommentId: 'parent-comment-id',
+      },
+      thread,
+    });
+
+    await expect(
+      service.replyToThread(auth, 'thread-id', { body: 'Nested detail.', parentCommentId: 'parent-comment-id' }),
+    ).resolves.toMatchObject({
+      comment: {
+        id: 'nested-comment-id',
+        parentCommentId: 'parent-comment-id',
+      },
+    });
+
+    expect(commentRepository.getCommentInThread).toHaveBeenCalledWith('parent-comment-id', 'thread-id');
+    expect(commentRepository.createCommentReply).toHaveBeenCalledWith({
+      body: 'Nested detail.',
+      createdById: 'user-id',
+      parentCommentId: 'parent-comment-id',
+      threadId: 'thread-id',
+    });
+  });
+
+  it('rejects nested replies when the parent comment is not inside the thread', async () => {
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.getCommentInThread.mockResolvedValue(undefined);
+
+    await expect(
+      service.replyToThread(auth, 'thread-id', { body: 'Wrong parent.', parentCommentId: 'other-thread-comment-id' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    // Parent validation prevents cross-thread nesting even when the caller already has comment permission on this thread.
+    expect(commentRepository.createCommentReply).not.toHaveBeenCalled();
   });
 
   it('resolves an existing thread through diagram comment permission', async () => {

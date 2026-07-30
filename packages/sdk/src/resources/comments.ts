@@ -33,6 +33,7 @@ export type CommentThreadCreateDto = {
 
 export type CommentReplyCreateDto = {
   body: string;
+  parentCommentId?: string | null;
 };
 
 export type CommentResponseDto = {
@@ -43,6 +44,8 @@ export type CommentResponseDto = {
   createdById: string;
   editedAt: string | null;
   id: string;
+  parentCommentId: string | null;
+  replyCount: number;
   threadId: string;
   updatedAt: string;
 };

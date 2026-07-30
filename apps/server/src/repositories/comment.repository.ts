@@ -41,6 +41,7 @@ export class CommentRepository {
         .insertInto('comments')
         .values({
           threadId: thread.id,
+          parentCommentId: null,
           body: options.body,
           createdById: options.createdById,
         })
@@ -51,7 +52,12 @@ export class CommentRepository {
     });
   }
 
-  async createCommentReply(options: { body: string; createdById: string; threadId: string }) {
+  async createCommentReply(options: {
+    body: string;
+    createdById: string;
+    parentCommentId: string | null;
+    threadId: string;
+  }) {
     return this.db.transaction().execute(async (tx) => {
       const now = new Date();
       const thread = await tx
@@ -71,6 +77,8 @@ export class CommentRepository {
         .values({
           body: options.body,
           createdById: options.createdById,
+          // Parent null keeps the existing flat-thread behavior; a UUID turns this row into a nested reply.
+          parentCommentId: options.parentCommentId,
           threadId: options.threadId,
         })
         .returningAll()
@@ -82,6 +90,16 @@ export class CommentRepository {
 
   getThreadById(threadId: string) {
     return this.db.selectFrom('comment_threads').selectAll().where('id', '=', threadId).executeTakeFirst();
+  }
+
+  getCommentInThread(commentId: string, threadId: string) {
+    return this.db
+      .selectFrom('comments')
+      .select(['id', 'threadId', 'parentCommentId', 'deletedAt'])
+      .where('id', '=', commentId)
+      .where('threadId', '=', threadId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
   }
 
   async getThreads(diagramId: string, options: CommentThreadListOptions) {
@@ -127,6 +145,7 @@ export class CommentRepository {
       .select([
         'comments.id',
         'comments.threadId',
+        'comments.parentCommentId',
         'comments.body',
         'comments.bodyFormat',
         'comments.createdById',
@@ -141,6 +160,12 @@ export class CommentRepository {
           else concat('/api/files/', users.avatar_file_id::text)
         end`.as('authorAvatarUrl'),
         'users.cursorColor as authorCursorColor',
+        sql<number>`(
+          SELECT count(*)::int
+          FROM comments replies
+          WHERE replies.parent_comment_id = comments.id
+            AND replies.deleted_at IS NULL
+        )`.as('replyCount'),
       ])
       .where('comments.threadId', '=', threadId)
       .where('comments.deletedAt', 'is', null)

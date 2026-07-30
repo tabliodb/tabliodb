@@ -42,6 +42,8 @@ export class CommentService {
         createdById: result.comment.createdById,
         editedAt: toNullableIsoDateTime(result.comment.editedAt),
         createdAt: toIsoDateTime(result.comment.createdAt),
+        parentCommentId: result.comment.parentCommentId,
+        replyCount: 0,
         updatedAt: toIsoDateTime(result.comment.updatedAt),
       },
     };
@@ -85,6 +87,8 @@ export class CommentService {
         createdById: comment.createdById,
         editedAt: toNullableIsoDateTime(comment.editedAt),
         id: comment.id,
+        parentCommentId: comment.parentCommentId,
+        replyCount: Number(comment.replyCount),
         threadId: comment.threadId,
         updatedAt: toIsoDateTime(comment.updatedAt),
       })),
@@ -93,9 +97,20 @@ export class CommentService {
 
   async replyToThread(auth: AuthContext, threadId: string, dto: CommentReplyCreateDto) {
     const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramComment);
+    const parentCommentId = dto.parentCommentId ?? null;
+
+    if (parentCommentId) {
+      const parentComment = await this.commentRepository.getCommentInThread(parentCommentId, thread.id);
+
+      if (!parentComment) {
+        throw new NotFoundException('Parent comment was not found in this thread.');
+      }
+    }
+
     const result = await this.commentRepository.createCommentReply({
       body: dto.body,
       createdById: auth.user.id,
+      parentCommentId,
       threadId: thread.id,
     });
 
@@ -109,6 +124,8 @@ export class CommentService {
         createdById: result.comment.createdById,
         editedAt: toNullableIsoDateTime(result.comment.editedAt),
         id: result.comment.id,
+        parentCommentId: result.comment.parentCommentId,
+        replyCount: 0,
         threadId: result.comment.threadId,
         updatedAt: toIsoDateTime(result.comment.updatedAt),
       },

@@ -276,6 +276,7 @@ export interface CommentThreadTable {
 export interface CommentTable {
   id: Generated<string>;
   threadId: string;
+  parentCommentId: NullableColumn<string>;
   body: string;
   bodyFormat: Defaulted<'markdown'>;
   createdById: string;

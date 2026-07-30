@@ -269,6 +269,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     CREATE TABLE IF NOT EXISTS comments (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       thread_id uuid NOT NULL REFERENCES comment_threads(id) ON DELETE CASCADE,
+      parent_comment_id uuid REFERENCES comments(id) ON DELETE SET NULL,
       body text NOT NULL,
       body_format text NOT NULL DEFAULT 'markdown',
       created_by_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -311,6 +312,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     CREATE INDEX IF NOT EXISTS diagram_review_signals_diagram_idx ON diagram_review_signals(diagram_id, severity, generated_at DESC);
     CREATE INDEX IF NOT EXISTS comment_threads_diagram_target_idx ON comment_threads(diagram_id, target_type, target_id);
     CREATE INDEX IF NOT EXISTS comments_thread_created_at_idx ON comments(thread_id, created_at);
+    CREATE INDEX IF NOT EXISTS comments_thread_parent_created_idx ON comments(thread_id, parent_comment_id, created_at);
     CREATE INDEX IF NOT EXISTS audit_logs_scope_created_at_idx ON audit_logs(organization_id, project_id, created_at DESC);
   `.execute(db);
 }
