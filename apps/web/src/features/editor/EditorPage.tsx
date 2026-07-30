@@ -980,6 +980,7 @@ export function EditorPage() {
             model={model}
             onHide={() => setRightSidebarOpen(false)}
             onModelChange={handleModelChange}
+            onTableSelect={handleSelectedTableChange}
             readOnly={!canEditDiagram}
             selectedTableId={selectedTableId}
           />

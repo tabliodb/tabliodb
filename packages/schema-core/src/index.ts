@@ -192,6 +192,32 @@ export type DiagramModelIntegrityWarning = {
   };
 };
 
+export type DiagramReviewSignalSeverity = 'info' | 'warning' | 'error';
+
+export type DiagramReviewSignalCode =
+  | 'duplicate_column_name'
+  | 'duplicate_table_name'
+  | 'email_column_not_unique'
+  | 'foreign_key_missing_index'
+  | 'money_column_uses_float'
+  | 'relationship_column_type_mismatch'
+  | 'table_missing_primary_key'
+  | 'unused_enum';
+
+export type DiagramReviewSignalTarget = {
+  id: string;
+  type: DiagramEntityKind;
+};
+
+export type DiagramReviewSignal = {
+  code: DiagramReviewSignalCode;
+  id: string;
+  message: string;
+  severity: DiagramReviewSignalSeverity;
+  target: DiagramReviewSignalTarget;
+  title: string;
+};
+
 export const yjsCollections = {
   document: 'document',
   tables: 'tables',
@@ -894,6 +920,305 @@ export function getDiagramModelIntegrityWarnings(model: DiagramModel): DiagramMo
   }
 
   return warnings;
+}
+
+export function getDiagramReviewSignals(model: DiagramModel): DiagramReviewSignal[] {
+  const normalizedModel = serializeDiagramModel(model);
+  const signals: DiagramReviewSignal[] = [];
+
+  pushDuplicateNameReviewSignals(normalizedModel, signals);
+  pushMissingPrimaryKeyReviewSignals(normalizedModel, signals);
+  pushForeignKeyIndexReviewSignals(normalizedModel, signals);
+  pushRelationshipTypeReviewSignals(normalizedModel, signals);
+  pushColumnHeuristicReviewSignals(normalizedModel, signals);
+  pushUnusedEnumReviewSignals(normalizedModel, signals);
+
+  // Review signals are ordered by severity first so the inspector starts with the risks that most deserve attention.
+  return signals.sort((left, right) => {
+    const severityDelta = getReviewSignalSeverityRank(left.severity) - getReviewSignalSeverityRank(right.severity);
+
+    return severityDelta || left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
+  });
+}
+
+function pushDuplicateNameReviewSignals(model: DiagramModel, signals: DiagramReviewSignal[]) {
+  const tableNames = new Map<string, string>();
+
+  for (const table of Object.values(model.tables)) {
+    const tableKey = `${table.schema ?? ''}.${table.name}`.toLowerCase();
+    const existingTableId = tableNames.get(tableKey);
+
+    if (existingTableId) {
+      signals.push(
+        createDiagramReviewSignal({
+          code: 'duplicate_table_name',
+          message: `Table "${formatTableName(table)}" duplicates another table name in this diagram.`,
+          severity: 'error',
+          target: { id: table.id, type: 'table' },
+          title: 'Duplicate table name',
+        }),
+      );
+    } else {
+      tableNames.set(tableKey, table.id);
+    }
+
+    const columnNames = new Map<string, string>();
+
+    for (const column of getTableColumns(model, table.id)) {
+      const columnKey = column.name.toLowerCase();
+      const existingColumnId = columnNames.get(columnKey);
+
+      if (existingColumnId) {
+        signals.push(
+          createDiagramReviewSignal({
+            code: 'duplicate_column_name',
+            message: `Column "${formatColumnName(model, column)}" duplicates another column in "${table.name}".`,
+            severity: 'error',
+            target: { id: column.id, type: 'column' },
+            title: 'Duplicate column name',
+          }),
+        );
+      } else {
+        columnNames.set(columnKey, column.id);
+      }
+    }
+  }
+}
+
+function pushMissingPrimaryKeyReviewSignals(model: DiagramModel, signals: DiagramReviewSignal[]) {
+  for (const table of Object.values(model.tables)) {
+    const hasPrimaryKey = getTableColumns(model, table.id).some((column) => column.primaryKey);
+
+    if (!hasPrimaryKey) {
+      signals.push(
+        createDiagramReviewSignal({
+          code: 'table_missing_primary_key',
+          message: `Table "${formatTableName(table)}" has no primary key, so rows do not have a stable identity.`,
+          severity: 'warning',
+          target: { id: table.id, type: 'table' },
+          title: 'Table has no primary key',
+        }),
+      );
+    }
+  }
+}
+
+function pushForeignKeyIndexReviewSignals(model: DiagramModel, signals: DiagramReviewSignal[]) {
+  for (const relationship of Object.values(model.relationships)) {
+    const targetTable = model.tables[relationship.targetTableId];
+
+    if (!targetTable) {
+      continue;
+    }
+
+    const targetColumnIds = getRelationshipColumnPairs(relationship)
+      .map((pair) => pair.targetColumnId)
+      .filter((columnId) => model.columns[columnId]);
+
+    if (targetColumnIds.length === 0 || hasLeadingIndexForColumns(model, targetTable, targetColumnIds)) {
+      continue;
+    }
+
+    const targetColumnNames = targetColumnIds.map((columnId) => model.columns[columnId]?.name ?? columnId).join(', ');
+
+    signals.push(
+      createDiagramReviewSignal({
+        code: 'foreign_key_missing_index',
+        message: `Foreign key "${targetTable.name}.${targetColumnNames}" is not covered by a leading index.`,
+        severity: 'warning',
+        target: { id: targetColumnIds[0] ?? relationship.id, type: targetColumnIds[0] ? 'column' : 'relationship' },
+        title: 'Foreign key needs an index',
+      }),
+    );
+  }
+}
+
+function pushRelationshipTypeReviewSignals(model: DiagramModel, signals: DiagramReviewSignal[]) {
+  for (const relationship of Object.values(model.relationships)) {
+    for (const pair of getRelationshipColumnPairs(relationship)) {
+      const sourceColumn = model.columns[pair.sourceColumnId];
+      const targetColumn = model.columns[pair.targetColumnId];
+
+      if (!sourceColumn || !targetColumn || areColumnTypesCompatible(sourceColumn.type, targetColumn.type)) {
+        continue;
+      }
+
+      signals.push(
+        createDiagramReviewSignal({
+          code: 'relationship_column_type_mismatch',
+          message: `Relationship connects "${formatColumnName(model, sourceColumn)}" (${formatColumnTypeForSignal(
+            sourceColumn.type,
+          )}) to "${formatColumnName(model, targetColumn)}" (${formatColumnTypeForSignal(targetColumn.type)}).`,
+          severity: 'error',
+          target: { id: targetColumn.id, type: 'column' },
+          title: 'Relationship type mismatch',
+        }),
+      );
+    }
+  }
+}
+
+function pushColumnHeuristicReviewSignals(model: DiagramModel, signals: DiagramReviewSignal[]) {
+  for (const column of Object.values(model.columns)) {
+    const normalizedName = column.name.toLowerCase();
+    const table = model.tables[column.tableId];
+
+    if (!table) {
+      continue;
+    }
+
+    if (isEmailColumnName(normalizedName) && !isColumnUniquelyConstrained(model, table, column)) {
+      signals.push(
+        createDiagramReviewSignal({
+          code: 'email_column_not_unique',
+          message: `Column "${formatColumnName(model, column)}" looks like an email but is not unique.`,
+          severity: 'warning',
+          target: { id: column.id, type: 'column' },
+          title: 'Email column should be unique',
+        }),
+      );
+    }
+
+    if (isMoneyLikeColumnName(normalizedName) && column.type.family === 'float') {
+      signals.push(
+        createDiagramReviewSignal({
+          code: 'money_column_uses_float',
+          message: `Column "${formatColumnName(model, column)}" looks like money; decimal is usually safer than float.`,
+          severity: 'warning',
+          target: { id: column.id, type: 'column' },
+          title: 'Money-like column uses float',
+        }),
+      );
+    }
+  }
+}
+
+function pushUnusedEnumReviewSignals(model: DiagramModel, signals: DiagramReviewSignal[]) {
+  const usedEnumIds = new Set(
+    Object.values(model.columns)
+      .map((column) => column.type.enumId)
+      .filter((enumId): enumId is string => Boolean(enumId)),
+  );
+
+  for (const databaseEnum of Object.values(model.enums)) {
+    if (usedEnumIds.has(databaseEnum.id)) {
+      continue;
+    }
+
+    signals.push(
+      createDiagramReviewSignal({
+        code: 'unused_enum',
+        message: `Enum "${databaseEnum.name}" is defined but no column uses it yet.`,
+        severity: 'info',
+        target: { id: databaseEnum.id, type: 'enum' },
+        title: 'Unused enum',
+      }),
+    );
+  }
+}
+
+function createDiagramReviewSignal(input: Omit<DiagramReviewSignal, 'id'>): DiagramReviewSignal {
+  return {
+    ...input,
+    // ID stabil berbasis rule dan target membuat list React/backend mudah melakukan dedupe tanpa menyimpan state tambahan.
+    id: `${input.code}:${input.target.type}:${input.target.id}`,
+  };
+}
+
+function getReviewSignalSeverityRank(severity: DiagramReviewSignalSeverity): number {
+  const ranks: Record<DiagramReviewSignalSeverity, number> = {
+    error: 0,
+    warning: 1,
+    info: 2,
+  };
+
+  return ranks[severity];
+}
+
+function hasLeadingIndexForColumns(
+  model: DiagramModel,
+  table: DatabaseTable,
+  columnIds: string[],
+  options: { uniqueOnly?: boolean } = {},
+): boolean {
+  if (columnIds.length === 0) {
+    return false;
+  }
+
+  const singleColumn = columnIds.length === 1 ? model.columns[columnIds[0]] : undefined;
+  if (
+    singleColumn &&
+    (singleColumn.primaryKey || singleColumn.unique) &&
+    (!options.uniqueOnly || singleColumn.primaryKey || singleColumn.unique)
+  ) {
+    return true;
+  }
+
+  return Object.values(model.indexes)
+    .filter((index) => index.tableId === table.id)
+    .some((index) => {
+      if (options.uniqueOnly && !index.unique) {
+        return false;
+      }
+
+      const leadingColumnIds = index.columns.slice(0, columnIds.length).map((column) => column.columnId);
+
+      return areStringArraysEqual(leadingColumnIds, columnIds);
+    });
+}
+
+function isColumnUniquelyConstrained(model: DiagramModel, table: DatabaseTable, column: DatabaseColumn): boolean {
+  return hasLeadingIndexForColumns(model, table, [column.id], { uniqueOnly: true });
+}
+
+function areColumnTypesCompatible(sourceType: ColumnTypeSpec, targetType: ColumnTypeSpec): boolean {
+  if (sourceType.family !== targetType.family) {
+    return false;
+  }
+
+  if (sourceType.family === 'enum') {
+    return sourceType.enumId === targetType.enumId;
+  }
+
+  if (sourceType.raw && targetType.raw) {
+    return sourceType.raw.toLowerCase() === targetType.raw.toLowerCase();
+  }
+
+  return true;
+}
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function isEmailColumnName(name: string): boolean {
+  return name === 'email' || name.endsWith('_email') || name.endsWith('email_address');
+}
+
+function isMoneyLikeColumnName(name: string): boolean {
+  return /(^|_)(amount|balance|cost|fee|payment|price|salary|subtotal|tax|total)(_|$)/.test(name);
+}
+
+function formatTableName(table: DatabaseTable): string {
+  return table.schema ? `${table.schema}.${table.name}` : table.name;
+}
+
+function formatColumnName(model: DiagramModel, column: DatabaseColumn): string {
+  const table = model.tables[column.tableId];
+
+  return `${table ? formatTableName(table) : column.tableId}.${column.name}`;
+}
+
+function formatColumnTypeForSignal(type: ColumnTypeSpec): string {
+  if (type.family === 'varchar' && type.length) {
+    return `varchar(${type.length})`;
+  }
+
+  if (type.family === 'decimal' && type.precision) {
+    return type.scale === undefined ? `decimal(${type.precision})` : `decimal(${type.precision}, ${type.scale})`;
+  }
+
+  return type.raw ?? type.family;
 }
 
 function pushMissingRelationshipSideWarnings(

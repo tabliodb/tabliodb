@@ -3,12 +3,14 @@ import * as Y from 'yjs';
 import {
   DiagramCommandError,
   applyDiagramCommand,
+  applyDiagramCommands,
   createEmptyDiagramModel,
   createSequentialDiagramIdFactory,
   createStarterDiagramModel,
   decodeDiagramModelFromYjsUpdate,
   encodeDiagramModelAsYjsUpdate,
   getDiagramModelIntegrityWarnings,
+  getDiagramReviewSignals,
   getTableColumns,
   hasDiagramModelInYjsDocument,
   readDiagramModelFromYjsDocument,
@@ -143,6 +145,147 @@ describe('schema-core diagram commands', () => {
         'orphan_column',
       ]),
     );
+  });
+
+  it('creates deterministic review signals for schema design risks', () => {
+    const modelWithUsers = applyDiagramCommand(
+      createEmptyDiagramModel('Review lint test'),
+      {
+        columns: [
+          { id: 'users-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'users-email', name: 'email', nullable: false, type: { family: 'varchar', length: 190 } },
+        ],
+        name: 'users',
+        tableId: 'users',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const modelWithOrders = applyDiagramCommand(
+      modelWithUsers,
+      {
+        columns: [
+          { id: 'orders-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'integer' } },
+          { id: 'orders-user-id', name: 'user_id', nullable: false, type: { family: 'integer' } },
+          { id: 'orders-total-amount', name: 'total_amount', nullable: false, type: { family: 'float' } },
+        ],
+        name: 'orders',
+        tableId: 'orders',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const modelWithAuditLog = applyDiagramCommand(
+      modelWithOrders,
+      {
+        columns: [{ id: 'audit-actor', name: 'actor', nullable: false, type: { family: 'varchar', length: 80 } }],
+        name: 'audit_log',
+        tableId: 'audit-log',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const modelWithEnum = applyDiagramCommand(
+      modelWithAuditLog,
+      { enumId: 'order-status', name: 'order_status', type: 'enum.create', values: ['draft', 'paid'] },
+      { now: fixedNow },
+    );
+    const modelWithRelationship = applyDiagramCommand(
+      modelWithEnum,
+      {
+        cardinality: 'one_to_many',
+        relationshipId: 'users-orders',
+        sourceColumnIds: ['users-id'],
+        sourceTableId: 'users',
+        targetColumnIds: ['orders-user-id'],
+        targetTableId: 'orders',
+        type: 'relationship.create',
+      },
+      { now: fixedNow },
+    );
+
+    const signals = getDiagramReviewSignals(modelWithRelationship);
+
+    // Review signals are deterministic domain output, so the UI can render them and the server can persist them later.
+    expect(signals.map((signal) => signal.code)).toEqual(
+      expect.arrayContaining([
+        'email_column_not_unique',
+        'foreign_key_missing_index',
+        'money_column_uses_float',
+        'relationship_column_type_mismatch',
+        'table_missing_primary_key',
+        'unused_enum',
+      ]),
+    );
+    expect(signals.find((signal) => signal.code === 'relationship_column_type_mismatch')?.target).toEqual({
+      id: 'orders-user-id',
+      type: 'column',
+    });
+  });
+
+  it('does not flag indexed foreign keys or uniquely constrained email columns', () => {
+    const baseModel = applyDiagramCommand(
+      createEmptyDiagramModel('Positive lint test'),
+      {
+        columns: [
+          { id: 'users-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'users-email', name: 'email', nullable: false, type: { family: 'varchar', length: 190 } },
+        ],
+        name: 'users',
+        tableId: 'users',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const modelWithOrders = applyDiagramCommand(
+      baseModel,
+      {
+        columns: [
+          { id: 'orders-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'orders-user-id', name: 'user_id', nullable: false, type: { family: 'uuid' } },
+        ],
+        name: 'orders',
+        tableId: 'orders',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const indexedModel = applyDiagramCommands(
+      modelWithOrders,
+      [
+        {
+          columns: [{ columnId: 'users-email' }],
+          indexId: 'users-email-key',
+          name: 'users_email_key',
+          tableId: 'users',
+          type: 'index.create',
+          unique: true,
+        },
+        {
+          columns: [{ columnId: 'orders-user-id' }],
+          indexId: 'orders-user-id-index',
+          name: 'orders_user_id_idx',
+          tableId: 'orders',
+          type: 'index.create',
+        },
+        {
+          cardinality: 'one_to_many',
+          relationshipId: 'users-orders',
+          sourceColumnIds: ['users-id'],
+          sourceTableId: 'users',
+          targetColumnIds: ['orders-user-id'],
+          targetTableId: 'orders',
+          type: 'relationship.create',
+        },
+      ],
+      { now: fixedNow },
+    );
+
+    const signalCodes = getDiagramReviewSignals(indexedModel).map((signal) => signal.code);
+
+    expect(signalCodes).not.toContain('email_column_not_unique');
+    expect(signalCodes).not.toContain('foreign_key_missing_index');
+    expect(signalCodes).not.toContain('relationship_column_type_mismatch');
   });
 
   it('removes stale Yjs entities when the canonical model deletes them', () => {

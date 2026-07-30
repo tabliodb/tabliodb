@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   applyDiagramCommand,
   applyDiagramCommands,
-  getRelationshipColumnPairs,
+  getDiagramReviewSignals,
   getTableColumns,
   type ColumnTypeFamily,
   type ColumnTypeSpec,
@@ -14,6 +14,7 @@ import {
   type DatabaseRelationship,
   type DatabaseTable,
   type DiagramModel,
+  type DiagramReviewSignal,
   type ReferentialAction,
 } from '@tabliodb/schema-core';
 import {
@@ -224,6 +225,7 @@ export type SchemaInspectorProps = {
   model: DiagramModel;
   onHide?: () => void;
   onModelChange: (model: DiagramModel) => void;
+  onTableSelect?: (tableId: string) => void;
   readOnly?: boolean;
   selectedTableId: string | null;
 };
@@ -234,6 +236,7 @@ export function SchemaInspector({
   model,
   onHide,
   onModelChange,
+  onTableSelect,
   readOnly = false,
   selectedTableId,
 }: SchemaInspectorProps) {
@@ -259,7 +262,7 @@ export function SchemaInspector({
   const selectedCheck = selectedChecks.find((check) => check.id === selectedCheckId) ?? null;
   const selectedRelationship =
     selectedRelationships.find((relationship) => relationship.id === selectedRelationshipId) ?? null;
-  const reviewSignals = useMemo(() => getReviewSignals(model), [model]);
+  const reviewSignals = useMemo(() => getDiagramReviewSignals(model), [model]);
 
   useEffect(() => {
     if (!selectedEnumId || !enums.some((databaseEnum) => databaseEnum.id === selectedEnumId)) {
@@ -326,6 +329,63 @@ export function SchemaInspector({
       setSelectedRelationshipId(relationshipForColumn?.id ?? selectedRelationships[0]?.id ?? null);
     }
   }, [selectedColumnId, selectedRelationshipId, selectedRelationshipIds, selectedRelationships, selectedTable]);
+
+  function handleReviewSignalSelect(signal: DiagramReviewSignal) {
+    const { id, type } = signal.target;
+
+    if (type === 'table') {
+      onTableSelect?.(id);
+      return;
+    }
+
+    if (type === 'column') {
+      const column = model.columns[id];
+
+      if (column) {
+        // Fokus signal column juga memilih table induknya supaya canvas dan sidebar kiri ikut memberi konteks visual.
+        onTableSelect?.(column.tableId);
+        setSelectedColumnId(column.id);
+      }
+
+      return;
+    }
+
+    if (type === 'enum') {
+      setSelectedEnumId(id);
+      return;
+    }
+
+    if (type === 'index') {
+      const index = model.indexes[id];
+
+      if (index) {
+        onTableSelect?.(index.tableId);
+        setSelectedIndexId(index.id);
+      }
+
+      return;
+    }
+
+    if (type === 'check') {
+      const check = model.checks[id];
+
+      if (check) {
+        onTableSelect?.(check.tableId);
+        setSelectedCheckId(check.id);
+      }
+
+      return;
+    }
+
+    if (type === 'relationship') {
+      const relationship = model.relationships[id];
+
+      if (relationship) {
+        onTableSelect?.(relationship.targetTableId);
+        setSelectedRelationshipId(relationship.id);
+      }
+    }
+  }
 
   return (
     <aside
@@ -441,24 +501,82 @@ export function SchemaInspector({
           relationships={selectedRelationships}
           selectedRelationshipId={selectedRelationshipId}
         />
-        <section>
-          <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-            Review signals
-          </h2>
-          <div className="mt-2 space-y-2 text-sm">
-            {reviewSignals.map((signal) => (
-              <Surface
-                className="border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 font-bold text-[rgb(var(--tabliodb-gold-text))] shadow-[0_3px_0_rgb(var(--tabliodb-gold-border))]"
-                key={signal}
-              >
-                {signal}
-              </Surface>
-            ))}
-          </div>
-        </section>
+        <ReviewSignalsPanel onSignalSelect={handleReviewSignalSelect} signals={reviewSignals} />
       </div>
     </aside>
   );
+}
+
+function ReviewSignalsPanel({
+  onSignalSelect,
+  signals,
+}: {
+  onSignalSelect: (signal: DiagramReviewSignal) => void;
+  signals: DiagramReviewSignal[];
+}) {
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Review signals
+        </h2>
+        <Badge variant={signals.length > 0 ? 'yellow' : 'green'}>{signals.length} found</Badge>
+      </div>
+      {signals.length > 0 ? (
+        <div className="mt-2 space-y-2">
+          {signals.slice(0, 8).map((signal) => (
+            <button
+              className={cn(
+                'w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border bg-white p-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:-translate-y-0.5 hover:bg-[rgb(var(--tabliodb-surface-raised))] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]',
+                getReviewSignalClassName(signal),
+              )}
+              key={signal.id}
+              onClick={() => onSignalSelect(signal)}
+              type="button"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
+                    {signal.title}
+                  </div>
+                  <p className="mt-1 text-[12px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                    {signal.message}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full border border-current px-2 py-0.5 text-[10px] font-extrabold uppercase">
+                  {signal.severity}
+                </span>
+              </div>
+              <div className="mt-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-subtle))]">
+                {signal.target.type}
+              </div>
+            </button>
+          ))}
+          {signals.length > 8 ? (
+            <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              +{signals.length - 8} more signals
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <Surface className="mt-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3 text-[13px] font-bold text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]">
+          Schema looks tidy from the current review rules.
+        </Surface>
+      )}
+    </section>
+  );
+}
+
+function getReviewSignalClassName(signal: DiagramReviewSignal): string {
+  if (signal.severity === 'error') {
+    return 'border-[rgb(var(--tabliodb-danger-border))] text-[rgb(var(--tabliodb-danger-text))]';
+  }
+
+  if (signal.severity === 'warning') {
+    return 'border-[rgb(var(--tabliodb-gold-border))] text-[rgb(var(--tabliodb-gold-text))]';
+  }
+
+  return 'border-[rgb(var(--tabliodb-sky-border))] text-[rgb(var(--tabliodb-sky-text))]';
 }
 
 function EnumEditorPanel({
@@ -2720,22 +2838,4 @@ function formatReferentialAction(action: ReferentialAction | undefined): string 
   };
 
   return labels[action];
-}
-
-function getReviewSignals(model: DiagramModel): string[] {
-  const relationshipsByTargetColumn = new Set(
-    Object.values(model.relationships).flatMap((relationship) =>
-      getRelationshipColumnPairs(relationship).map((pair) => pair.targetColumnId),
-    ),
-  );
-
-  const missingRelationshipIndexes = Object.values(model.columns)
-    .filter((column) => column.name.endsWith('_id') && !relationshipsByTargetColumn.has(column.id))
-    .map((column) => `${model.tables[column.tableId]?.name ?? column.tableId}.${column.name} has no relationship`);
-
-  if (missingRelationshipIndexes.length > 0) {
-    return missingRelationshipIndexes.slice(0, 2);
-  }
-
-  return ['Foreign keys are mapped', 'Unique columns are visible'];
 }
