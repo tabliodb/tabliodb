@@ -1311,6 +1311,76 @@
         "tags": ["setup"]
       }
     },
+    "/setup/auth-settings": {
+      "get": {
+        "operationId": "getInstanceAuthSettings",
+        "parameters": [],
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceAuthSettingsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": ["setup"]
+      },
+      "post": {
+        "operationId": "updateInstanceAuthSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstanceAuthSettingsUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceAuthSettingsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": ["setup"]
+      }
+    },
     "/snapshots": {
       "post": {
         "operationId": "createSnapshot",
@@ -2949,6 +3019,40 @@
         },
         "required": ["completedAt", "hasOrganization", "hasOwner", "isSetupComplete", "signupPolicy"],
         "additionalProperties": false
+      },
+      "InstanceAuthSettingsDto_Output": {
+        "type": "object",
+        "properties": {
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "signupPolicy": {
+            "type": "string",
+            "enum": ["signup_disabled", "invite_only", "allowed_domains", "sso_only", "public_signup"]
+          }
+        },
+        "required": ["allowedDomains", "signupPolicy"],
+        "additionalProperties": false
+      },
+      "InstanceAuthSettingsUpdateDto": {
+        "type": "object",
+        "properties": {
+          "allowedDomains": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "signupPolicy": {
+            "type": "string",
+            "enum": ["signup_disabled", "invite_only", "allowed_domains", "sso_only", "public_signup"]
+          }
+        },
+        "required": ["allowedDomains", "signupPolicy"]
       },
       "SetupCreateDto": {
         "type": "object",

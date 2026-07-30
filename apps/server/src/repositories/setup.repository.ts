@@ -10,7 +10,14 @@ export type SetupStatus = {
   hasOrganization: boolean;
   hasOwner: boolean;
   isSetupComplete: boolean;
-  signupPolicy: 'signup_disabled' | 'invite_only' | 'allowed_domains' | 'sso_only' | 'public_signup';
+  signupPolicy: SignupPolicy;
+};
+
+export type SignupPolicy = 'signup_disabled' | 'invite_only' | 'allowed_domains' | 'sso_only' | 'public_signup';
+
+export type InstanceAuthSettings = {
+  allowedDomains: string[];
+  signupPolicy: SignupPolicy;
 };
 
 export type InitialSetupOptions = {
@@ -27,6 +34,35 @@ export class SetupRepository {
 
   getStatus(): Promise<SetupStatus> {
     return this.getStatusWith(this.db);
+  }
+
+  async getAuthSettings(): Promise<InstanceAuthSettings> {
+    const [signupPolicySetting, allowedDomainsSetting] = await Promise.all([
+      this.getSettingValue('auth.signup_policy'),
+      this.getSettingValue('auth.allowed_domains'),
+    ]);
+
+    return {
+      allowedDomains: this.readAllowedDomains(allowedDomainsSetting),
+      signupPolicy: this.readSignupPolicy(signupPolicySetting),
+    };
+  }
+
+  async updateAuthSettings(options: InstanceAuthSettings & { updatedById: string }): Promise<InstanceAuthSettings> {
+    await this.upsertSettings([
+      {
+        key: 'auth.signup_policy',
+        updatedById: options.updatedById,
+        value: { policy: options.signupPolicy },
+      },
+      {
+        key: 'auth.allowed_domains',
+        updatedById: options.updatedById,
+        value: { domains: options.allowedDomains },
+      },
+    ]);
+
+    return this.getAuthSettings();
   }
 
   createInitialSetup(options: InitialSetupOptions) {
@@ -115,6 +151,46 @@ export class SetupRepository {
     };
   }
 
+  private async getSettingValue(key: string): Promise<JsonValue | null> {
+    const setting = await this.db
+      .selectFrom('system_settings')
+      .select('value')
+      .where('key', '=', key)
+      .executeTakeFirst();
+
+    return setting?.value ?? null;
+  }
+
+  private async upsertSettings(
+    settings: Array<{
+      key: string;
+      updatedById: string;
+      value: JsonValue;
+    }>,
+  ): Promise<void> {
+    const now = new Date();
+
+    await this.db
+      .insertInto('system_settings')
+      .values(
+        settings.map((setting) => ({
+          isSecret: false,
+          key: setting.key,
+          updatedAt: now,
+          updatedById: setting.updatedById,
+          value: setting.value,
+        })),
+      )
+      .onConflict((oc) =>
+        oc.column('key').doUpdateSet((eb) => ({
+          updatedAt: now,
+          updatedById: eb.ref('excluded.updatedById'),
+          value: eb.ref('excluded.value'),
+        })),
+      )
+      .execute();
+  }
+
   private async getStatusWith(db: Kysely<DB> | Transaction<DB>): Promise<SetupStatus> {
     const completedSetting = await db
       .selectFrom('system_settings')
@@ -161,7 +237,15 @@ export class SetupRepository {
     return null;
   }
 
-  private readSignupPolicy(value: JsonValue): SetupStatus['signupPolicy'] {
+  private readAllowedDomains(value: JsonValue): string[] {
+    if (value && typeof value === 'object' && !Array.isArray(value) && Array.isArray(value.domains)) {
+      return value.domains.filter((domain): domain is string => typeof domain === 'string');
+    }
+
+    return [];
+  }
+
+  private readSignupPolicy(value: JsonValue): SignupPolicy {
     if (value && typeof value === 'object' && !Array.isArray(value) && typeof value.policy === 'string') {
       const policy = value.policy;
       if (

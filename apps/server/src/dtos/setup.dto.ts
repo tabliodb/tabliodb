@@ -2,6 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
+const SignupPolicySchema = z.enum(['signup_disabled', 'invite_only', 'allowed_domains', 'sso_only', 'public_signup']);
 
 const SetupStatusResponseSchema = z
   .object({
@@ -9,9 +10,23 @@ const SetupStatusResponseSchema = z
     hasOrganization: z.boolean(),
     hasOwner: z.boolean(),
     isSetupComplete: z.boolean(),
-    signupPolicy: z.enum(['signup_disabled', 'invite_only', 'allowed_domains', 'sso_only', 'public_signup']),
+    signupPolicy: SignupPolicySchema,
   })
   .meta({ id: 'SetupStatusResponseDto' });
+
+const InstanceAuthSettingsSchema = z
+  .object({
+    allowedDomains: z.array(z.string()),
+    signupPolicy: SignupPolicySchema,
+  })
+  .meta({ id: 'InstanceAuthSettingsDto' });
+
+const InstanceAuthSettingsUpdateSchema = z
+  .object({
+    allowedDomains: z.array(z.string()).max(100),
+    signupPolicy: SignupPolicySchema,
+  })
+  .meta({ id: 'InstanceAuthSettingsUpdateDto' });
 
 const SetupCreateSchema = z
   .object({
@@ -37,5 +52,7 @@ const SetupCreateResponseSchema = z
   .meta({ id: 'SetupCreateResponseDto' });
 
 export class SetupStatusResponseDto extends createZodDto(SetupStatusResponseSchema) {}
+export class InstanceAuthSettingsDto extends createZodDto(InstanceAuthSettingsSchema) {}
+export class InstanceAuthSettingsUpdateDto extends createZodDto(InstanceAuthSettingsUpdateSchema) {}
 export class SetupCreateDto extends createZodDto(SetupCreateSchema) {}
 export class SetupCreateResponseDto extends createZodDto(SetupCreateResponseSchema) {}

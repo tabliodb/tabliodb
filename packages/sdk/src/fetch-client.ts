@@ -321,6 +321,14 @@ export type SetupCreateResponseDtoOutput = {
     name: string;
   };
 };
+export type InstanceAuthSettingsDtoOutput = {
+  allowedDomains: string[];
+  signupPolicy: SignupPolicy;
+};
+export type InstanceAuthSettingsUpdateDto = {
+  allowedDomains: string[];
+  signupPolicy: SignupPolicy;
+};
 export type SnapshotCreateDto = {
   diagramId: string;
   message?: string;
@@ -1330,6 +1338,38 @@ export function completeSetup(
         ...opts,
         method: 'POST',
         body: setupCreateDto,
+      }),
+    ),
+  );
+}
+export function getInstanceAuthSettings(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: InstanceAuthSettingsDtoOutput;
+    }>('/setup/auth-settings', {
+      ...opts,
+    }),
+  );
+}
+export function updateInstanceAuthSettings(
+  {
+    instanceAuthSettingsUpdateDto,
+  }: {
+    instanceAuthSettingsUpdateDto: InstanceAuthSettingsUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: InstanceAuthSettingsDtoOutput;
+    }>(
+      '/setup/auth-settings',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: instanceAuthSettingsUpdateDto,
       }),
     ),
   );

@@ -6,6 +6,7 @@ import { EditorLayout } from './layouts/EditorLayout';
 import { RootLayout } from './layouts/RootLayout';
 import { SystemLayout } from './layouts/SystemLayout';
 import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
+import { adminSettingsLoader } from '@/features/admin/loaders/adminSettingsLoader';
 import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
 import { LoadingState } from '@/features/app/RouteStates';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
@@ -18,6 +19,9 @@ import { routes } from './routes';
 
 const AdminUsersPage = lazy(() =>
   import('@/features/admin/AdminUsersPage').then((module) => ({ default: module.AdminUsersPage })),
+);
+const AdminSettingsPage = lazy(() =>
+  import('@/features/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })),
 );
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
 const EditorPage = lazy(() =>
@@ -74,6 +78,11 @@ export const router = createBrowserRouter([
                 element: <AdminUsersPage />,
                 loader: adminUsersLoader,
                 path: routes.adminUsers.path,
+              },
+              {
+                element: <AdminSettingsPage />,
+                loader: adminSettingsLoader,
+                path: routes.adminSettings.path,
               },
             ],
           },

@@ -1,9 +1,19 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@tabliodb/shared';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
+import type { AuthContext } from '../database.js';
 import { AuthType } from '../constants.js';
-import { SetupCreateDto, SetupCreateResponseDto, SetupStatusResponseDto } from '../dtos/setup.dto.js';
+import {
+  InstanceAuthSettingsDto,
+  InstanceAuthSettingsUpdateDto,
+  SetupCreateDto,
+  SetupCreateResponseDto,
+  SetupStatusResponseDto,
+} from '../dtos/setup.dto.js';
+import { Auth, Authenticated } from '../middleware/auth.guard.js';
+import { RequirePermission } from '../middleware/permission.guard.js';
 import { SetupService } from '../services/setup.service.js';
 import { respondWithAuthCookies } from '../utils/response.js';
 
@@ -17,6 +27,29 @@ export class SetupController {
   @ZodResponse({ type: SetupStatusResponseDto })
   getStatus(): Promise<SetupStatusResponseDto> {
     return this.service.getStatus();
+  }
+
+  @Get('auth-settings')
+  @Authenticated()
+  @RequirePermission(Permission.OrganizationManage)
+  @ApiOperation({ operationId: 'getInstanceAuthSettings' })
+  @ZodResponse({ type: InstanceAuthSettingsDto })
+  getAuthSettings(@Auth() auth: AuthContext): Promise<InstanceAuthSettingsDto> {
+    return this.service.getAuthSettings(auth);
+  }
+
+  @Post('auth-settings')
+  @Authenticated()
+  @RequirePermission(Permission.OrganizationManage)
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: InstanceAuthSettingsUpdateDto })
+  @ApiOperation({ operationId: 'updateInstanceAuthSettings' })
+  @ZodResponse({ status: HttpStatus.OK, type: InstanceAuthSettingsDto })
+  updateAuthSettings(
+    @Auth() auth: AuthContext,
+    @Body() dto: InstanceAuthSettingsUpdateDto,
+  ): Promise<InstanceAuthSettingsDto> {
+    return this.service.updateAuthSettings(auth, dto);
   }
 
   @Post()

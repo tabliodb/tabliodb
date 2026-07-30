@@ -43,6 +43,10 @@ export const routes = {
     path: '/admin/users',
     to: () => '/admin/users',
   },
+  adminSettings: {
+    path: '/admin/settings',
+    to: () => '/admin/settings',
+  },
   workspace: {
     path: '/workspaces/:workspaceSlug',
     to: ({ workspaceSlug }: WorkspaceParams) => `/workspaces/${encodePathSegment(workspaceSlug)}`,

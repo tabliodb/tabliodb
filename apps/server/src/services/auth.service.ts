@@ -1,8 +1,14 @@
-import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Permission, isGranted } from '@tabliodb/shared';
 import { parse } from 'cookie';
 import { IncomingHttpHeaders } from 'node:http';
-import { AuthType, TabliodbCookie, TabliodbHeader, TabliodbQuery } from '../constants.js';
+import { AuthType, SALT_ROUNDS, TabliodbCookie, TabliodbHeader, TabliodbQuery } from '../constants.js';
 import { AuthContext } from '../database.js';
 import {
   ApiKeyCreateDto,
@@ -14,8 +20,9 @@ import {
 import { ApiKeyRepository } from '../repositories/api-key.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { CryptoRepository } from '../repositories/crypto.repository.js';
+import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { SessionRepository } from '../repositories/session.repository.js';
-import { SetupRepository } from '../repositories/setup.repository.js';
+import { SetupRepository, type InstanceAuthSettings } from '../repositories/setup.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 
 export type ValidateRequest = {
@@ -29,18 +36,41 @@ export class AuthService {
     private readonly apiKeyRepository: ApiKeyRepository,
     private readonly configRepository: ConfigRepository,
     private readonly cryptoRepository: CryptoRepository,
+    private readonly organizationRepository: OrganizationRepository,
     private readonly sessionRepository: SessionRepository,
     private readonly setupRepository: SetupRepository,
     private readonly userRepository: UserRepository,
   ) {}
 
-  async signUp(_dto: SignUpDto): Promise<LoginResponseDto> {
+  async signUp(dto: SignUpDto): Promise<LoginResponseDto> {
     const setup = await this.setupRepository.getStatus();
-    if (setup.isSetupComplete) {
-      throw new BadRequestException('Public sign-up is disabled for this Tabliodb instance');
+    if (!setup.isSetupComplete) {
+      throw new BadRequestException('Complete first setup before creating regular user accounts');
     }
 
-    throw new BadRequestException('Complete first setup before creating regular user accounts');
+    const settings = await this.setupRepository.getAuthSettings();
+    const email = dto.email.trim().toLowerCase();
+
+    this.assertPasswordSignupAllowed(email, settings);
+
+    if (await this.userRepository.getAnyByEmail(email)) {
+      throw new ConflictException('A user with this email already exists');
+    }
+
+    const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
+    const user = await this.userRepository.create({
+      avatarColor: '#58cc02',
+      email,
+      name: dto.name.trim(),
+      passwordHash,
+    });
+
+    await this.organizationRepository.createPersonalOrganization({
+      name: `${user.name}'s Workspace`,
+      userId: user.id,
+    });
+
+    return this.createLoginResponse(user);
   }
 
   async login(dto: LoginCredentialDto): Promise<LoginResponseDto> {
@@ -183,5 +213,31 @@ export class AuthService {
 
   getPasswordAuthType(): AuthType {
     return AuthType.Password;
+  }
+
+  private assertPasswordSignupAllowed(email: string, settings: InstanceAuthSettings): void {
+    if (settings.signupPolicy === 'public_signup') {
+      return;
+    }
+
+    if (settings.signupPolicy === 'allowed_domains') {
+      const domain = email.split('@')[1]?.toLowerCase();
+
+      if (domain && settings.allowedDomains.includes(domain)) {
+        return;
+      }
+
+      throw new BadRequestException('Email domain is not allowed for this Tabliodb instance');
+    }
+
+    if (settings.signupPolicy === 'sso_only') {
+      throw new BadRequestException('Password sign-up is disabled because this instance requires SSO');
+    }
+
+    if (settings.signupPolicy === 'signup_disabled') {
+      throw new BadRequestException('Public sign-up is disabled for this Tabliodb instance');
+    }
+
+    throw new BadRequestException('This Tabliodb instance is invite only');
   }
 }
