@@ -3,7 +3,7 @@ import type { HTMLAttributes } from 'react';
 import { cn } from '../lib/utils.js';
 
 export const badgeVariants = cva(
-  'inline-flex h-6 items-center rounded-full border px-2 text-[11px] font-extrabold tracking-normal',
+  'inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-extrabold leading-none tracking-normal',
   {
     defaultVariants: {
       variant: 'neutral',

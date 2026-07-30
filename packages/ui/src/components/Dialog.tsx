@@ -15,7 +15,7 @@ export const DialogOverlay = forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-50 bg-[rgb(var(--tabliodb-ink)/0.32)] backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=open]:animate-in',
+      'fixed inset-0 z-50 bg-[rgb(var(--tabliodb-ink)/0.28)] backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=open]:animate-in',
       className,
     )}
     ref={ref}
@@ -32,7 +32,7 @@ export const DialogContent = forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[min(92vw,440px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[22px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))] shadow-[0_8px_0_rgb(var(--tabliodb-border-strong)),0_18px_48px_rgb(0_0_0/0.16)] outline-none',
+        'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[min(92vw,440px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[18px] border border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))] shadow-[0_4px_0_rgb(var(--tabliodb-border-strong)),0_18px_48px_rgb(15_23_42/0.14)] outline-none',
         className,
       )}
       ref={ref}
@@ -45,7 +45,7 @@ export const DialogContent = forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 export function DialogHeader({ className, ...props }: ComponentPropsWithoutRef<'div'>) {
-  return <div className={cn('shrink-0 grid gap-1.5 px-5 pt-5 text-left', className)} {...props} />;
+  return <div className={cn('grid shrink-0 gap-1 px-5 pt-5 text-left', className)} {...props} />;
 }
 
 export function DialogBody({ className, ...props }: ComponentPropsWithoutRef<'div'>) {
@@ -65,7 +65,7 @@ export function DialogFooter({ className, ...props }: ComponentPropsWithoutRef<'
   return (
     <div
       className={cn(
-        'shrink-0 flex flex-col-reverse gap-2 border-t-2 border-[rgb(var(--tabliodb-border))] bg-white px-5 py-4 sm:flex-row sm:justify-end',
+        'flex shrink-0 flex-col-reverse gap-2 border-t border-[rgb(var(--tabliodb-border))] bg-white px-5 py-4 sm:flex-row sm:justify-end',
         className,
       )}
       {...props}
@@ -77,7 +77,7 @@ export const DialogTitle = forwardRef<
   ElementRef<typeof DialogPrimitive.Title>,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Title className={cn('text-lg font-extrabold tracking-normal', className)} ref={ref} {...props} />
+  <DialogPrimitive.Title className={cn('text-base font-extrabold tracking-normal', className)} ref={ref} {...props} />
 ));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
@@ -86,7 +86,7 @@ export const DialogDescription = forwardRef<
   ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
-    className={cn('text-sm font-medium text-[rgb(var(--tabliodb-ink-muted))]', className)}
+    className={cn('text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]', className)}
     ref={ref}
     {...props}
   />

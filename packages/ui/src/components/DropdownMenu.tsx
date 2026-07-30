@@ -22,7 +22,7 @@ export const DropdownMenuContent = forwardRef<
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       className={cn(
-        'z-50 min-w-52 overflow-hidden rounded-[18px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-2 text-[rgb(var(--tabliodb-ink))] shadow-[0_6px_0_rgb(var(--tabliodb-border-strong)),0_14px_32px_rgb(0_0_0/0.14)]',
+        'z-50 min-w-52 overflow-hidden rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-1.5 text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_32px_rgb(15_23_42/0.12)]',
         className,
       )}
       ref={ref}
@@ -42,7 +42,7 @@ export const DropdownMenuItem = forwardRef<
   <DropdownMenuPrimitive.Item
     className={cn(
       // Menu rows are direct command surfaces, so they intentionally use pointer cursor instead of Radix's neutral default.
-      'relative flex cursor-pointer select-none items-center gap-2 rounded-[12px] px-3 py-2 text-sm font-bold outline-none transition-colors focus:bg-[rgb(var(--tabliodb-primary-soft))] focus:text-[rgb(var(--tabliodb-primary-text))] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+      'relative flex cursor-pointer select-none items-center gap-2 rounded-[var(--tabliodb-radius-sm)] px-3 py-2 text-[13px] font-bold outline-none transition-colors focus:bg-[rgb(var(--tabliodb-primary-soft))] focus:text-[rgb(var(--tabliodb-primary-text))] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
       inset && 'pl-8',
       className,
     )}
@@ -53,5 +53,5 @@ export const DropdownMenuItem = forwardRef<
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 
 export function DropdownMenuSeparatorItem({ className, ...props }: ComponentPropsWithoutRef<'div'>) {
-  return <div className={cn('-mx-1 my-1 h-px bg-[rgb(var(--tabliodb-border))]', className)} {...props} />;
+  return <div className={cn('-mx-0.5 my-1 h-px bg-[rgb(var(--tabliodb-border))]', className)} {...props} />;
 }

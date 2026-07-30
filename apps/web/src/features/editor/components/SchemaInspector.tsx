@@ -330,16 +330,13 @@ export function SchemaInspector({
 
   return (
     <aside
-      className={cn(
-        'flex min-h-0 min-w-0 flex-col border-l-2 border-[rgb(var(--tabliodb-border))] bg-white',
-        className,
-      )}
+      className={cn('flex min-h-0 min-w-0 flex-col border-l border-[rgb(var(--tabliodb-border))] bg-white', className)}
     >
-      <div className="flex h-16 shrink-0 items-center justify-between border-b-2 border-[rgb(var(--tabliodb-border))] px-5 text-sm font-extrabold">
+      <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] px-4 text-[13px] font-extrabold">
         <span>Inspector</span>
         {onHide ? <IconButton icon={PanelRightClose} label="Hide inspector" onClick={onHide} variant="ghost" /> : null}
       </div>
-      <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+      <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant="green">{model.dialect}</Badge>
           <Badge variant="blue">v{latestSnapshotVersion}</Badge>
@@ -365,17 +362,17 @@ export function SchemaInspector({
             Selected table
           </h2>
           {selectedTable ? (
-            <Surface className="mt-2 p-4">
+            <Surface className="mt-2 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-extrabold">{selectedTable.name}</div>
-                  <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="truncate text-[13px] font-extrabold leading-5">{selectedTable.name}</div>
+                  <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {selectedColumns.length} columns / {selectedIndexes.length} indexes / {selectedChecks.length} checks
                     / {countTableRelationships(model, selectedTable)} relationships
                   </div>
                 </div>
                 <span
-                  className="mt-1 size-4 shrink-0 rounded-full border-2 border-white shadow-[0_0_0_2px_rgb(var(--tabliodb-border-strong))]"
+                  className="mt-1 size-3.5 shrink-0 rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(var(--tabliodb-border-strong))]"
                   style={{ backgroundColor: selectedTable.color ?? '#0f766e' }}
                 />
               </div>
@@ -408,7 +405,7 @@ export function SchemaInspector({
               </div>
             </Surface>
           ) : (
-            <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+            <Surface className="mt-2 border-dashed p-3 text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
               No table selected
             </Surface>
           )}
@@ -485,11 +482,11 @@ function EnumEditorPanel({
   return (
     <section>
       <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">Enums</h2>
-      <Surface className="mt-2 p-4">
+      <Surface className="mt-2 p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-sm font-extrabold">{enums.length} enums</div>
-            <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+            <div className="text-[13px] font-extrabold leading-5">{enums.length} enums</div>
+            <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
               Reusable database type values
             </div>
           </div>
@@ -517,16 +514,16 @@ function EnumEditorPanel({
             ))}
           </div>
         ) : (
-          <div className="mt-3 rounded-xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+          <div className="mt-3 rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
             No enums yet
           </div>
         )}
         {databaseEnum ? (
-          <div className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+          <div className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="truncate text-sm font-extrabold">{databaseEnum.name}</div>
-                <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <div className="truncate text-[13px] font-extrabold leading-5">{databaseEnum.name}</div>
+                <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {databaseEnum.schema ? `${databaseEnum.schema} schema` : 'default schema'}
                 </div>
               </div>
@@ -544,7 +541,7 @@ function EnumEditorPanel({
               <ColumnFact label="Used by" value={String(countEnumUsage(model, databaseEnum.id))} />
             </div>
             {databaseEnum.comment ? (
-              <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                 {databaseEnum.comment}
               </p>
             ) : null}
@@ -1006,11 +1003,11 @@ function ColumnInspector({
         Selected column
       </h2>
       {column && table ? (
-        <Surface className="mt-2 p-4">
+        <Surface className="mt-2 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="truncate text-sm font-extrabold">{column.name}</div>
-              <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              <div className="truncate text-[13px] font-extrabold leading-5">{column.name}</div>
+              <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                 {table.name} / {formatColumnType(column.type)}
               </div>
             </div>
@@ -1024,13 +1021,13 @@ function ColumnInspector({
             <ColumnFact label="Default" value={column.defaultValue || '-'} />
           </div>
           {column.comment ? (
-            <p className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+            <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
               {column.comment}
             </p>
           ) : null}
         </Surface>
       ) : (
-        <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+        <Surface className="mt-2 border-dashed p-3 text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
           No column selected
         </Surface>
       )}
@@ -1195,11 +1192,11 @@ function IndexBuilderPanel({
     <section>
       <h2 className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">Indexes</h2>
       {table ? (
-        <Surface className="mt-2 p-4">
+        <Surface className="mt-2 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-sm font-extrabold">{indexes.length} indexes</div>
-              <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              <div className="text-[13px] font-extrabold leading-5">{indexes.length} indexes</div>
+              <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                 Composite, unique, and partial indexes
               </div>
             </div>
@@ -1229,16 +1226,16 @@ function IndexBuilderPanel({
               ))}
             </div>
           ) : (
-            <div className="mt-3 rounded-xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+            <div className="mt-3 rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
               No indexes yet
             </div>
           )}
           {index ? (
-            <div className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+            <div className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-extrabold">{index.name}</div>
-                  <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="truncate text-[13px] font-extrabold leading-5">{index.name}</div>
+                  <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {index.unique ? 'Unique index' : 'Non-unique index'}
                   </div>
                 </div>
@@ -1253,12 +1250,12 @@ function IndexBuilderPanel({
                 <ColumnFact label="Partial" value={index.where ? 'Yes' : 'No'} />
               </div>
               {index.where ? (
-                <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   WHERE {index.where}
                 </p>
               ) : null}
               {index.comment ? (
-                <p className="mt-2 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <p className="mt-2 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {index.comment}
                 </p>
               ) : null}
@@ -1266,7 +1263,7 @@ function IndexBuilderPanel({
           ) : null}
         </Surface>
       ) : (
-        <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+        <Surface className="mt-2 border-dashed p-3 text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
           No table selected
         </Surface>
       )}
@@ -1645,11 +1642,11 @@ function CheckConstraintPanel({
         Check constraints
       </h2>
       {table ? (
-        <Surface className="mt-2 p-4">
+        <Surface className="mt-2 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-sm font-extrabold">{checks.length} checks</div>
-              <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              <div className="text-[13px] font-extrabold leading-5">{checks.length} checks</div>
+              <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                 Validate table and column-level business rules
               </div>
             </div>
@@ -1685,16 +1682,16 @@ function CheckConstraintPanel({
               ))}
             </div>
           ) : (
-            <div className="mt-3 rounded-xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+            <div className="mt-3 rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
               No check constraints yet
             </div>
           )}
           {check ? (
-            <div className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+            <div className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-extrabold">{check.name}</div>
-                  <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="truncate text-[13px] font-extrabold leading-5">{check.name}</div>
+                  <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {formatCheckScope(model, check)}
                   </div>
                 </div>
@@ -1702,11 +1699,11 @@ function CheckConstraintPanel({
                   <EditCheckDialog check={check} columns={columns} model={model} onModelChange={onModelChange} />
                 ) : null}
               </div>
-              <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                 CHECK ({check.expression})
               </p>
               {check.comment ? (
-                <p className="mt-2 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <p className="mt-2 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {check.comment}
                 </p>
               ) : null}
@@ -1714,7 +1711,7 @@ function CheckConstraintPanel({
           ) : null}
         </Surface>
       ) : (
-        <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+        <Surface className="mt-2 border-dashed p-3 text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
           No table selected
         </Surface>
       )}
@@ -1998,7 +1995,7 @@ function RelationshipInspector({
         Relationships
       </h2>
       {relationships.length > 0 ? (
-        <Surface className="mt-2 p-4">
+        <Surface className="mt-2 p-3">
           <div className="space-y-1">
             {relationships.map((currentRelationship) => (
               <button
@@ -2024,11 +2021,13 @@ function RelationshipInspector({
             ))}
           </div>
           {relationship ? (
-            <div className="mt-3 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+            <div className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-extrabold">{getRelationshipTitle(model, relationship)}</div>
-                  <div className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="truncate text-[13px] font-extrabold leading-5">
+                    {getRelationshipTitle(model, relationship)}
+                  </div>
+                  <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {formatRelationshipCardinality(relationship.cardinality)}
                   </div>
                 </div>
@@ -2043,7 +2042,7 @@ function RelationshipInspector({
                 <ColumnFact label="Deferred" value={relationship.deferrable ? 'Yes' : 'No'} />
               </div>
               {relationship.comment ? (
-                <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {relationship.comment}
                 </p>
               ) : null}
@@ -2051,7 +2050,7 @@ function RelationshipInspector({
           ) : null}
         </Surface>
       ) : (
-        <Surface className="mt-2 border-dashed p-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+        <Surface className="mt-2 border-dashed p-3 text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
           No relationship on this table
         </Surface>
       )}

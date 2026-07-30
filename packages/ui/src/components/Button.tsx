@@ -5,7 +5,7 @@ import { cn } from '../lib/utils.js';
 
 // The shared primitive owns pointer affordance so every shadcn-style button reads as clickable across the app.
 export const buttonVariants = cva(
-  'inline-flex cursor-pointer select-none items-center justify-center gap-2 whitespace-nowrap rounded-[14px] text-sm font-extrabold tracking-normal outline-none transition-[background,border-color,box-shadow,color,transform] focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-primary)/0.25)] disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-0.5',
+  'inline-flex cursor-pointer select-none items-center justify-center gap-2 whitespace-nowrap rounded-[var(--tabliodb-radius-md)] text-[13px] font-extrabold leading-none tracking-normal outline-none transition-[background,border-color,box-shadow,color,transform] focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-primary)/0.22)] disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-0.5',
   {
     defaultVariants: {
       size: 'default',
@@ -13,21 +13,21 @@ export const buttonVariants = cva(
     },
     variants: {
       size: {
-        default: 'h-11 px-4',
-        icon: 'size-11 p-0',
-        sm: 'h-9 rounded-xl px-3 text-xs',
-        lg: 'h-12 px-5 text-base',
+        default: 'h-[var(--tabliodb-control-md)] px-3.5',
+        icon: 'size-[var(--tabliodb-control-md)] p-0',
+        sm: 'h-[var(--tabliodb-control-sm)] rounded-[var(--tabliodb-radius-sm)] px-3 text-xs',
+        lg: 'h-[var(--tabliodb-control-lg)] px-4 text-sm',
       },
       variant: {
         danger:
-          'border-2 border-red-500 bg-red-500 text-white shadow-[0_4px_0_#b91c1c] hover:bg-red-400 active:shadow-[0_2px_0_#b91c1c]',
+          'border border-red-500 bg-red-500 text-white shadow-[0_3px_0_#b91c1c] hover:bg-red-400 active:shadow-[0_1px_0_#b91c1c]',
         ghost: 'bg-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
         primary:
-          'border-2 border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_4px_0_rgb(var(--tabliodb-primary-shadow))] hover:bg-[rgb(var(--tabliodb-primary-hover))] active:shadow-[0_2px_0_rgb(var(--tabliodb-primary-shadow))]',
+          'border border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_3px_0_rgb(var(--tabliodb-primary-shadow))] hover:bg-[rgb(var(--tabliodb-primary-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-primary-shadow))]',
         secondary:
-          'border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))] shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))] hover:bg-[rgb(var(--tabliodb-surface-raised))] active:shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]',
-        sky: 'border-2 border-[rgb(var(--tabliodb-sky))] bg-[rgb(var(--tabliodb-sky))] text-white shadow-[0_4px_0_rgb(var(--tabliodb-sky-shadow))] hover:bg-[rgb(var(--tabliodb-sky-hover))] active:shadow-[0_2px_0_rgb(var(--tabliodb-sky-shadow))]',
-        soft: 'border-2 border-transparent bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] hover:bg-[rgb(var(--tabliodb-primary-soft-hover))]',
+          'border border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] hover:bg-[rgb(var(--tabliodb-surface-raised))] active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]',
+        sky: 'border border-[rgb(var(--tabliodb-sky))] bg-[rgb(var(--tabliodb-sky))] text-white shadow-[0_3px_0_rgb(var(--tabliodb-sky-shadow))] hover:bg-[rgb(var(--tabliodb-sky-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-sky-shadow))]',
+        soft: 'border border-transparent bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] hover:bg-[rgb(var(--tabliodb-primary-soft-hover))]',
       },
     },
   },

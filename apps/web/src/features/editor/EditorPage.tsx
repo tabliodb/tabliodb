@@ -158,7 +158,7 @@ const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 
 const selectClassName =
-  'h-11 w-full cursor-pointer rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.18)] disabled:cursor-not-allowed disabled:opacity-50';
+  'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-50';
 
 export function EditorPage() {
   const navigate = useNavigate();
@@ -432,24 +432,26 @@ export function EditorPage() {
 
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
   // Expanded sidebars share one comfortable width so table controls do not collapse into cramped rows.
-  const expandedSidebarWidth = '332px';
-  const collapsedSidebarWidth = '48px';
+  const expandedSidebarWidth = 'var(--tabliodb-sidebar-width)';
+  const collapsedSidebarWidth = '44px';
   const leftSidebarWidth = leftSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
   const rightSidebarWidth = rightSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
 
   return (
     <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b-2 border-[rgb(var(--tabliodb-border))] bg-white px-5">
-        <div className="flex min-w-0 items-center gap-4">
+      <header className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] bg-white px-4">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="flex shrink-0 items-center gap-2">
-            <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-              <Database className="size-5" />
+            <div className="grid size-8 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+              <Database className="size-[18px]" />
             </div>
-            <span className="text-base font-extrabold">Tabliodb</span>
+            <span className="text-[15px] font-extrabold">Tabliodb</span>
           </div>
-          <div className="min-w-0 border-l-2 border-[rgb(var(--tabliodb-border))] pl-4">
-            <h1 className="truncate text-base font-extrabold">{activeProject?.name ?? defaultProjectName}</h1>
-            <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+          <div className="min-w-0 border-l border-[rgb(var(--tabliodb-border))] pl-3">
+            <h1 className="truncate text-[14px] font-extrabold leading-5">
+              {activeProject?.name ?? defaultProjectName}
+            </h1>
+            <p className="truncate text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
               {activeDiagram?.name ?? defaultDiagramName} / {model.dialect} / snapshot v{latestSnapshot?.version ?? 0}
             </p>
           </div>
@@ -530,7 +532,7 @@ export function EditorPage() {
         className="grid min-h-0 flex-1 transition-[grid-template-columns] duration-200"
         style={{ gridTemplateColumns: `${leftSidebarWidth} minmax(0,1fr) ${rightSidebarWidth}` }}
       >
-        <aside className="relative min-w-0 overflow-hidden border-r-2 border-[rgb(var(--tabliodb-border))] bg-white">
+        <aside className="relative min-w-0 overflow-hidden border-r border-[rgb(var(--tabliodb-border))] bg-white">
           {!leftSidebarOpen ? (
             <SidebarRail
               icon={PanelLeftOpen}
@@ -549,14 +551,14 @@ export function EditorPage() {
             />
           ) : (
             <div className="flex h-full min-h-0 flex-col">
-              <div className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] px-5">
-                <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-                  <Database className="size-5" />
+              <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4">
+                <div className="grid size-8 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+                  <Database className="size-4" />
                 </div>
-                <span className="min-w-0 flex-1 truncate text-base font-extrabold">Workspace</span>
+                <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold">Workspace</span>
                 <IconButton icon={PanelLeftClose} label="Hide left sidebar" onClick={() => setLeftSidebarOpen(false)} />
               </div>
-              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
                 <WorkspaceSwitcher
                   activeOrganization={activeOrganization}
                   onSelect={(organization) => {
@@ -592,16 +594,16 @@ export function EditorPage() {
                   />
                 </div>
                 {filteredProjects.length === 0 ? (
-                  <div className="rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                     No matching projects
                   </div>
                 ) : (
                   <div className="space-y-1">
                     {filteredProjects.map((project) => (
                       <button
-                        className={`flex w-full cursor-pointer items-center justify-between rounded-[14px] border-2 px-3 py-2.5 text-left text-sm font-extrabold transition ${
+                        className={`flex w-full cursor-pointer items-center justify-between rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-left text-[13px] font-bold transition ${
                           project.id === activeProject?.id
-                            ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
+                            ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]'
                             : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
                         }`}
                         key={project.id}
@@ -648,7 +650,7 @@ export function EditorPage() {
             selectedTableId={selectedTableId}
           />
         ) : (
-          <aside className="min-w-0 overflow-hidden border-l-2 border-[rgb(var(--tabliodb-border))] bg-white">
+          <aside className="min-w-0 overflow-hidden border-l border-[rgb(var(--tabliodb-border))] bg-white">
             <SidebarRail
               icon={PanelRightOpen}
               label="Show inspector"
@@ -728,22 +730,24 @@ function WorkspaceSwitcher({
   organizations: OrganizationDto[];
 }) {
   return (
-    <div className="mb-5">
-      <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+    <div className="mb-4">
+      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
         Workspace
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="flex h-12 w-full cursor-pointer items-center gap-3 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+            className="flex h-[var(--tabliodb-control-lg)] w-full cursor-pointer items-center gap-2.5 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
             type="button"
           >
             <div className="grid size-8 shrink-0 place-items-center rounded-[12px] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
               <Building2 className="size-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-extrabold">{activeOrganization?.name ?? 'Select workspace'}</div>
-              <div className="truncate text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+              <div className="truncate text-[13px] font-extrabold">
+                {activeOrganization?.name ?? 'Select workspace'}
+              </div>
+              <div className="truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                 {activeOrganization ? formatOrganizationRole(activeOrganization.role) : 'No workspace'}
               </div>
             </div>
@@ -765,8 +769,8 @@ function WorkspaceSwitcher({
                 }}
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-extrabold">{organization.name}</span>
-                  <span className="block truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <span className="block truncate text-[13px] font-extrabold">{organization.name}</span>
+                  <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {organization.slug}
                   </span>
                 </span>

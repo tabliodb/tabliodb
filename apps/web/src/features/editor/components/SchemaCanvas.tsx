@@ -22,9 +22,9 @@ import { formatColumnType } from '../diagram-model';
 
 const tableNodeShape = 'tabliodb-table';
 const tableNodeWidth = 288;
-const tableHeaderHeight = 46;
-const tableColumnHeight = 32;
-const tablePaddingBottom = 10;
+const tableHeaderHeight = 38;
+const tableColumnHeight = 26;
+const tablePaddingBottom = 6;
 const tableResizeMaxWidth = 720;
 const tableResizeMinWidth = 240;
 const diagramVisualGridSize = 24;
@@ -122,7 +122,7 @@ export function SchemaCanvas({
       async: false,
       autoResize: true,
       background: {
-        color: '#f7f7f7',
+        color: '#f8fafc',
       },
       connecting: {
         allowBlank: false,
@@ -141,7 +141,7 @@ export function SchemaCanvas({
         size: diagramVisualGridSize,
         type: 'dot',
         args: {
-          color: '#e5e5e5',
+          color: '#e7ebf0',
           thickness: 1,
         },
       },
