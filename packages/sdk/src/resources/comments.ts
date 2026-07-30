@@ -17,7 +17,7 @@ export type CommentTargetType =
   'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
 
 export type CommentAuthorDto = {
-  avatarColor: string | null;
+  cursorColor: string;
   email: string;
   id: string;
   name: string;

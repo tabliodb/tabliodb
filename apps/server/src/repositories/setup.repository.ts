@@ -80,12 +80,12 @@ export class SetupRepository {
       const user = await tx
         .insertInto('users')
         .values({
-          avatarColor: '#58cc02',
+          cursorColor: '#58cc02',
           email: options.ownerEmail,
           name: options.ownerName,
           passwordHash: options.ownerPasswordHash,
         })
-        .returning(['id', 'email', 'name', 'avatarColor'])
+        .returning(['id', 'email', 'name', 'cursorColor'])
         .executeTakeFirstOrThrow();
 
       await tx

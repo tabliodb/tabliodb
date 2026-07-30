@@ -11,7 +11,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       email citext NOT NULL UNIQUE,
       name text NOT NULL,
       password_hash text,
-      avatar_color text,
+      cursor_color text NOT NULL DEFAULT '#58cc02',
       locale text,
       timezone text,
       is_disabled boolean NOT NULL DEFAULT false,

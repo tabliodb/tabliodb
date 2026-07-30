@@ -31,7 +31,9 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     $$ LANGUAGE plpgsql;
 
     SELECT pg_temp.tabliodb_rename_column_if_needed('users', 'password', 'password_hash');
-    SELECT pg_temp.tabliodb_rename_column_if_needed('users', 'avatarColor', 'avatar_color');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('users', 'avatarColor', 'cursor_color');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('users', 'avatar_color', 'cursor_color');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('users', 'cursorColor', 'cursor_color');
     SELECT pg_temp.tabliodb_rename_column_if_needed('users', 'createdAt', 'created_at');
     SELECT pg_temp.tabliodb_rename_column_if_needed('users', 'updatedAt', 'updated_at');
     SELECT pg_temp.tabliodb_rename_column_if_needed('users', 'deletedAt', 'deleted_at');
@@ -101,6 +103,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     SELECT pg_temp.tabliodb_rename_column_if_needed('audit_logs', 'createdAt', 'created_at');
 
     ALTER TABLE IF EXISTS users
+      ADD COLUMN IF NOT EXISTS cursor_color text,
       ADD COLUMN IF NOT EXISTS locale text,
       ADD COLUMN IF NOT EXISTS timezone text,
       ADD COLUMN IF NOT EXISTS is_disabled boolean NOT NULL DEFAULT false,
@@ -108,6 +111,14 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ADD COLUMN IF NOT EXISTS last_login_at timestamptz,
       ADD COLUMN IF NOT EXISTS password_changed_at timestamptz,
       ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}';
+
+    UPDATE users
+    SET cursor_color = '#58cc02'
+    WHERE cursor_color IS NULL;
+
+    ALTER TABLE IF EXISTS users
+      ALTER COLUMN cursor_color SET DEFAULT '#58cc02',
+      ALTER COLUMN cursor_color SET NOT NULL;
 
     ALTER TABLE IF EXISTS sessions
       ADD COLUMN IF NOT EXISTS user_agent text,

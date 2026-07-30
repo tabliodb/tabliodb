@@ -92,7 +92,7 @@ async function createOrRepairOwner(
     (await tx
       .insertInto('users')
       .values({
-        avatarColor: '#58cc02',
+        cursorColor: '#58cc02',
         email: options.email,
         name: options.name,
         passwordHash,

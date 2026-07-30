@@ -23,7 +23,7 @@ import {
 } from 'lexical';
 import { useEffect, useMemo, useState } from 'react';
 
-export type CommentMentionUser = Pick<ProjectMemberDto, 'avatarColor' | 'email' | 'name' | 'userId'>;
+export type CommentMentionUser = Pick<ProjectMemberDto, 'cursorColor' | 'email' | 'name' | 'userId'>;
 
 export type CommentComposerProps = {
   'aria-invalid'?: boolean;
@@ -272,7 +272,7 @@ function CommentMentionPlugin({
         >
           <span
             className="grid size-8 shrink-0 place-items-center rounded-[12px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[11px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
-            style={user.avatarColor ? { backgroundColor: user.avatarColor } : undefined}
+            style={user.cursorColor ? { backgroundColor: user.cursorColor } : undefined}
           >
             {getMentionInitials(user)}
           </span>

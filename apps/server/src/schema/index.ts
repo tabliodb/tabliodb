@@ -26,7 +26,7 @@ export interface UserTable {
   email: string;
   name: string;
   passwordHash: NullableColumn<string>;
-  avatarColor: NullableColumn<string>;
+  cursorColor: Defaulted<string>;
   locale: NullableColumn<string>;
   timezone: NullableColumn<string>;
   isDisabled: Defaulted<boolean>;

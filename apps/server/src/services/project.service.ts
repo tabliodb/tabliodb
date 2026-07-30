@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { defaultDiagramReviewSettings } from '@tabliodb/schema-core';
 import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import { AuthContext } from '../database.js';
@@ -71,6 +72,7 @@ export class ProjectService {
       name: dto.name,
       slug: slugify(dto.name),
       description: dto.description ?? null,
+      reviewSettings: defaultDiagramReviewSettings,
       createdById: auth.user.id,
     });
 
@@ -365,7 +367,7 @@ export class ProjectService {
   }
 
   private serializeMember(member: {
-    avatarColor: string | null;
+    cursorColor: string;
     createdAt: Date | string;
     email: string;
     name: string;

@@ -27,7 +27,7 @@ export type InvitationRecord = {
 };
 
 export type InvitationAcceptedUser = {
-  avatarColor: string | null;
+  cursorColor: string;
   email: string;
   id: string;
   name: string;
@@ -73,12 +73,12 @@ export class InvitationRepository {
       const user = await tx
         .insertInto('users')
         .values({
-          avatarColor: '#58cc02',
+          cursorColor: '#58cc02',
           email: invitation.email,
           name: options.name,
           passwordHash: options.passwordHash,
         })
-        .returning(['id', 'email', 'name', 'avatarColor'])
+        .returning(['id', 'email', 'name', 'cursorColor'])
         .executeTakeFirstOrThrow();
 
       await tx

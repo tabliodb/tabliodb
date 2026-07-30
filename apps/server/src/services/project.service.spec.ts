@@ -6,7 +6,7 @@ import { ProjectService } from './project.service.js';
 
 const auth: AuthContext = {
   user: {
-    avatarColor: null,
+    cursorColor: '#58cc02',
     email: 'owner@tabliodb.local',
     id: 'owner-id',
     name: 'Project Owner',
@@ -74,7 +74,7 @@ describe(ProjectService.name, () => {
     });
     organizationRepository.getByIdForUser.mockResolvedValue({ id: 'organization-id' });
     projectRepository.upsertMember.mockResolvedValue({
-      avatarColor: null,
+      cursorColor: '#58cc02',
       createdAt: new Date('2026-07-29T11:00:00.000Z'),
       email: 'editor@tabliodb.local',
       name: 'Editor User',

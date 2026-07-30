@@ -10,7 +10,7 @@ const authWithLimitedApiKey: AuthContext = {
     permissions: [Permission.ApiKeyManage],
   },
   user: {
-    avatarColor: null,
+    cursorColor: '#58cc02',
     email: 'automation@tabliodb.local',
     id: 'user-id',
     name: 'Automation User',
@@ -95,7 +95,7 @@ describe(AuthService.name, () => {
     userRepository.getAnyByEmail.mockResolvedValue(undefined);
     userRepository.getByEmail.mockResolvedValue(undefined);
     userRepository.create.mockResolvedValue({
-      avatarColor: '#58cc02',
+      cursorColor: '#58cc02',
       email: 'new@company.test',
       id: 'created-user-id',
       name: 'New User',
@@ -140,7 +140,7 @@ describe(AuthService.name, () => {
     });
 
     expect(userRepository.create).toHaveBeenCalledWith({
-      avatarColor: '#58cc02',
+      cursorColor: '#58cc02',
       email: 'new@company.test',
       name: 'New User',
       passwordHash: 'hashed-password',

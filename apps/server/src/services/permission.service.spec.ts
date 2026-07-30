@@ -6,7 +6,7 @@ import { PermissionService } from './permission.service.js';
 
 const auth: AuthContext = {
   user: {
-    avatarColor: null,
+    cursorColor: '#58cc02',
     email: 'editor@tabliodb.local',
     id: 'user-id',
     name: 'Editor User',

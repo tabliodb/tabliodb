@@ -73,7 +73,7 @@ export class CommentService {
       ...comments,
       items: comments.items.map((comment) => ({
         author: {
-          avatarColor: comment.authorAvatarColor,
+          cursorColor: comment.authorCursorColor,
           email: comment.authorEmail,
           id: comment.authorId,
           name: comment.authorName,
@@ -158,7 +158,7 @@ export class CommentService {
 
   private serializeAuthor(user: AuthContext['user']) {
     return {
-      avatarColor: user.avatarColor,
+      cursorColor: user.cursorColor,
       email: user.email,
       id: user.id,
       name: user.name,

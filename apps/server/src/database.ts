@@ -4,7 +4,7 @@ export type AuthUser = {
   id: string;
   email: string;
   name: string;
-  avatarColor: string | null;
+  cursorColor: string;
 };
 
 export type AuthSession = {

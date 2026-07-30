@@ -54,6 +54,7 @@ export class DiagramService {
       projectId: dto.projectId,
       name: dto.name,
       dialect: dto.dialect,
+      reviewSettings: defaultDiagramReviewSettings,
       createdById: auth.user.id,
     });
 

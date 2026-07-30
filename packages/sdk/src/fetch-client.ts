@@ -23,7 +23,7 @@ export type AuthUserDtoOutput = {
   id: string;
   email: string;
   name: string;
-  avatarColor: string | null;
+  cursorColor: string;
 };
 export type SignUpDto = {
   email: string;
@@ -78,7 +78,7 @@ export type CommentThreadCreateDto = {
 };
 export type CommentResponseDtoOutput = {
   author: {
-    avatarColor: string | null;
+    cursorColor: string;
     email: string;
     id: string;
     name: string;
@@ -416,7 +416,7 @@ export type OrganizationSettingsUpdateDto = {
   allowMemberProjectCreate?: boolean;
 };
 export type OrganizationMemberDtoOutput = {
-  avatarColor: string | null;
+  cursorColor: string;
   createdAt: string;
   email: string;
   joinedAt: string | null;
@@ -494,7 +494,7 @@ export type ProjectMemberDtoOutput = {
   userId: string;
   email: string;
   name: string;
-  avatarColor: string | null;
+  cursorColor: string;
   role: Role2;
   createdAt: string;
   updatedAt: string;
@@ -567,7 +567,7 @@ export type SetupCreateResponseDtoOutput = {
   accessToken: string;
   setup: SetupStatusResponseDtoOutput;
   user: {
-    avatarColor: string | null;
+    cursorColor: string;
     email: string;
     id: string;
     name: string;
@@ -875,7 +875,7 @@ export type UserResponseDtoOutput = {
   id: string;
   email: string;
   name: string;
-  avatarColor: string | null;
+  cursorColor: string;
   isDisabled: boolean;
   instanceRole: InstanceRole | null;
   organizations: {

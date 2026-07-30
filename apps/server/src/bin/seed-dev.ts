@@ -1,5 +1,9 @@
 import { ProjectRole, OrganizationRole } from '@tabliodb/shared';
-import { createStarterDiagramModel, encodeDiagramModelAsYjsUpdate } from '@tabliodb/schema-core';
+import {
+  createStarterDiagramModel,
+  defaultDiagramReviewSettings,
+  encodeDiagramModelAsYjsUpdate,
+} from '@tabliodb/schema-core';
 import { hash } from 'bcrypt';
 import { Kysely, sql, type Transaction } from 'kysely';
 import { loadEnv } from '../config/env.js';
@@ -93,7 +97,7 @@ async function upsertSeedOwner(tx: Transaction<DB>) {
   const owner = await tx
     .insertInto('users')
     .values({
-      avatarColor: '#58cc02',
+      cursorColor: '#58cc02',
       email,
       name: seedOwnerName,
       passwordHash,
@@ -217,6 +221,7 @@ async function upsertSeedProject(tx: Transaction<DB>, ownerId: string, organizat
         description: 'Starter schema workspace',
         name: seedProjectName,
         organizationId,
+        reviewSettings: defaultDiagramReviewSettings,
         slug,
       })
       .returning(['id', 'name', 'slug'])
@@ -260,6 +265,7 @@ async function upsertSeedDiagram(tx: Transaction<DB>, ownerId: string, projectId
         dialect: 'postgresql',
         name: seedDiagramName,
         projectId,
+        reviewSettings: defaultDiagramReviewSettings,
         slug,
       })
       .returning(['id', 'name', 'slug'])

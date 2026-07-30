@@ -71,7 +71,7 @@ export class AuthService {
 
     const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
     const user = await this.userRepository.create({
-      avatarColor: '#58cc02',
+      cursorColor: '#58cc02',
       email,
       name: dto.name.trim(),
       passwordHash,
@@ -250,7 +250,7 @@ export class AuthService {
     };
   }
 
-  async createLoginResponse(user: { id: string; email: string; name: string; avatarColor: string | null }) {
+  async createLoginResponse(user: { id: string; email: string; name: string; cursorColor: string }) {
     const accessToken = this.cryptoRepository.randomBytesAsText(32);
     const token = this.cryptoRepository.hashSha256(accessToken);
 
@@ -270,7 +270,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
-        avatarColor: user.avatarColor,
+        cursorColor: user.cursorColor,
       },
     };
   }

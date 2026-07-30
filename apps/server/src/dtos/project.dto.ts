@@ -56,7 +56,7 @@ const ProjectMemberSchema = z
     userId: z.string().uuid(),
     email: z.string().email(),
     name: z.string(),
-    avatarColor: z.string().nullable(),
+    cursorColor: z.string(),
     role: ProjectRoleSchema,
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,

@@ -21,7 +21,7 @@ export class SessionRepository {
         jsonObjectFrom(
           eb
             .selectFrom('users')
-            .select(['users.id', 'users.email', 'users.name', 'users.avatarColor'])
+            .select(['users.id', 'users.email', 'users.name', 'users.cursorColor'])
             .whereRef('users.id', '=', 'sessions.userId')
             .where('users.isDisabled', '=', false)
             .where('users.deletedAt', 'is', null),

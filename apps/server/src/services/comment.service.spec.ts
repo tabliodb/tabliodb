@@ -6,7 +6,7 @@ import { CommentService } from './comment.service.js';
 
 const auth: AuthContext = {
   user: {
-    avatarColor: '#58cc02',
+    cursorColor: '#58cc02',
     email: 'commenter@tabliodb.local',
     id: 'user-id',
     name: 'Commenter User',

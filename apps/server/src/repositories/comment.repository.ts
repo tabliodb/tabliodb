@@ -136,7 +136,7 @@ export class CommentRepository {
         'users.id as authorId',
         'users.email as authorEmail',
         'users.name as authorName',
-        'users.avatarColor as authorAvatarColor',
+        'users.cursorColor as authorCursorColor',
       ])
       .where('comments.threadId', '=', threadId)
       .where('comments.deletedAt', 'is', null)

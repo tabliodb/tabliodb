@@ -25,7 +25,7 @@ export class ApiKeyRepository {
         jsonObjectFrom(
           eb
             .selectFrom('users')
-            .select(['users.id', 'users.email', 'users.name', 'users.avatarColor'])
+            .select(['users.id', 'users.email', 'users.name', 'users.cursorColor'])
             .whereRef('users.id', '=', 'api_keys.userId')
             .where('users.isDisabled', '=', false)
             .where('users.deletedAt', 'is', null),

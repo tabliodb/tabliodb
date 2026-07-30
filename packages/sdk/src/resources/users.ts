@@ -23,7 +23,7 @@ export type UserCreateDto = {
 };
 
 export type UserResponseDto = {
-  avatarColor: string | null;
+  cursorColor: string;
   createdAt: string;
   email: string;
   id: string;

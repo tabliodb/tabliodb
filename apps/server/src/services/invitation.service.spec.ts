@@ -7,7 +7,7 @@ import { InvitationService } from './invitation.service.js';
 
 const auth: AuthContext = {
   user: {
-    avatarColor: null,
+    cursorColor: '#58cc02',
     email: 'owner@tabliodb.local',
     id: 'owner-id',
     name: 'Tabliodb Owner',
@@ -84,7 +84,7 @@ describe(InvitationService.name, () => {
     authService.createLoginResponse.mockResolvedValue({
       accessToken: 'session-token',
       user: {
-        avatarColor: '#58cc02',
+        cursorColor: '#58cc02',
         email: 'new.user@tabliodb.local',
         id: 'new-user-id',
         name: 'New User',
@@ -139,7 +139,7 @@ describe(InvitationService.name, () => {
         acceptedById: 'new-user-id',
       },
       user: {
-        avatarColor: '#58cc02',
+        cursorColor: '#58cc02',
         email: 'new.user@tabliodb.local',
         id: 'new-user-id',
         name: 'New User',

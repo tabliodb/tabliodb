@@ -42,7 +42,7 @@ const OrganizationListResponseSchema = z
 
 const OrganizationMemberSchema = z
   .object({
-    avatarColor: z.string().nullable(),
+    cursorColor: z.string(),
     createdAt: DateTimeSchema,
     email: z.string().email(),
     joinedAt: DateTimeSchema.nullable(),

@@ -6,7 +6,7 @@ import { UserService } from './user.service.js';
 
 const auth: AuthContext = {
   user: {
-    avatarColor: null,
+    cursorColor: '#58cc02',
     email: 'owner@tabliodb.local',
     id: 'owner-id',
     name: 'Tabliodb Owner',
@@ -76,7 +76,7 @@ describe(UserService.name, () => {
       updatedAt: '2026-07-29T10:00:00.000Z',
     });
     expect(userRepository.createManagedUser).toHaveBeenCalledWith({
-      avatarColor: '#1cb0f6',
+      cursorColor: '#1cb0f6',
       createdById: 'owner-id',
       email: 'new.user@tabliodb.local',
       instanceRole: undefined,
@@ -214,7 +214,7 @@ describe(UserService.name, () => {
 
 function createManagedUserRow(
   overrides: Partial<{
-    avatarColor: string | null;
+    cursorColor: string;
     createdAt: Date;
     email: string;
     id: string;
@@ -225,7 +225,7 @@ function createManagedUserRow(
   }> = {},
 ) {
   return {
-    avatarColor: overrides.avatarColor ?? '#1cb0f6',
+    cursorColor: overrides.cursorColor ?? '#1cb0f6',
     createdAt: overrides.createdAt ?? new Date('2026-07-29T10:00:00.000Z'),
     email: overrides.email ?? 'target@tabliodb.local',
     id: overrides.id ?? 'target-user-id',

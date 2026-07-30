@@ -50,7 +50,7 @@ export type ProjectArchiveResponseDto = {
 };
 
 export type ProjectMemberDto = {
-  avatarColor: string | null;
+  cursorColor: string;
   createdAt: string;
   email: string;
   name: string;

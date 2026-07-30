@@ -34,7 +34,7 @@ const AuthUserSchema = z
     id: z.string().uuid(),
     email: z.string().email(),
     name: z.string(),
-    avatarColor: z.string().nullable(),
+    cursorColor: z.string(),
   })
   .meta({ id: 'AuthUserDto' });
 

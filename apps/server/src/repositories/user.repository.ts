@@ -6,7 +6,7 @@ import type { DB, UserTable } from '../schema/index.js';
 import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
 
 export type ManagedUserCreateOptions = {
-  avatarColor: string | null;
+  cursorColor: string;
   createdById: string;
   email: string;
   instanceRole?: 'admin';
@@ -50,7 +50,7 @@ export class UserRepository {
   getAuthUserById(id: string) {
     return this.db
       .selectFrom('users')
-      .select(['id', 'email', 'name', 'avatarColor'])
+      .select(['id', 'email', 'name', 'cursorColor'])
       .where('id', '=', id)
       .where('isDisabled', '=', false)
       .where('deletedAt', 'is', null)
@@ -70,7 +70,7 @@ export class UserRepository {
       const user = await tx
         .insertInto('users')
         .values({
-          avatarColor: options.avatarColor,
+          cursorColor: options.cursorColor,
           email: options.email,
           name: options.name,
           passwordHash: options.passwordHash,
@@ -243,7 +243,7 @@ export class UserRepository {
         'users.id',
         'users.email',
         'users.name',
-        'users.avatarColor',
+        'users.cursorColor',
         'users.isDisabled',
         'users.createdAt',
         'users.updatedAt',

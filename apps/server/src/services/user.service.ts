@@ -78,7 +78,7 @@ export class UserService {
     const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
 
     const user = await this.userRepository.createManagedUser({
-      avatarColor: '#1cb0f6',
+      cursorColor: '#1cb0f6',
       createdById: auth.user.id,
       email,
       instanceRole: dto.instanceRole,

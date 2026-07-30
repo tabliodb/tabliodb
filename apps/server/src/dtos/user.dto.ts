@@ -35,7 +35,7 @@ const UserResponseSchema = z
     id: z.string().uuid(),
     email: z.string().email(),
     name: z.string(),
-    avatarColor: z.string().nullable(),
+    cursorColor: z.string(),
     isDisabled: z.boolean(),
     instanceRole: InstanceRoleSchema.nullable(),
     organizations: z.array(

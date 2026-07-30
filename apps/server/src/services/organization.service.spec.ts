@@ -6,7 +6,7 @@ import { OrganizationService } from './organization.service.js';
 
 const auth: AuthContext = {
   user: {
-    avatarColor: null,
+    cursorColor: '#58cc02',
     email: 'owner@tabliodb.local',
     id: 'owner-id',
     name: 'Workspace Owner',
@@ -14,7 +14,7 @@ const auth: AuthContext = {
 };
 
 const ownerMember = {
-  avatarColor: null,
+  cursorColor: '#58cc02',
   createdAt: new Date('2026-07-29T10:00:00.000Z'),
   email: 'owner@tabliodb.local',
   joinedAt: new Date('2026-07-29T10:00:00.000Z'),
