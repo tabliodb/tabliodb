@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import { AdminLayout } from './layouts/AdminLayout';
 import { AuthLayout } from './layouts/AuthLayout';
@@ -6,19 +7,27 @@ import { RootLayout } from './layouts/RootLayout';
 import { SystemLayout } from './layouts/SystemLayout';
 import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
 import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
-import { AdminUsersPage } from '@/features/admin/AdminUsersPage';
 import { LoadingState } from '@/features/app/RouteStates';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
-import { LoginPage } from '@/features/auth/LoginPage';
 import { requireAuthenticated } from '@/features/auth/middleware/requireAuthenticated';
 import { editorLoader } from '@/features/editor/loaders/editorLoader';
-import { EditorPage } from '@/features/editor/EditorPage';
 import { acceptInvitationLoader } from '@/features/invitations/loaders/acceptInvitationLoader';
-import { AcceptInvitationPage } from '@/features/invitations/AcceptInvitationPage';
 import { requireSetupComplete } from '@/features/setup/middleware/requireSetupComplete';
 import { setupLoader } from '@/features/setup/loaders/setupLoader';
-import { SetupPage } from '@/features/setup/SetupPage';
 import { routes } from './routes';
+
+const AdminUsersPage = lazy(() =>
+  import('@/features/admin/AdminUsersPage').then((module) => ({ default: module.AdminUsersPage })),
+);
+const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
+const EditorPage = lazy(() =>
+  // The editor pulls AntV X6, SQL/doc generators, and large form surfaces, so it should only load on editor routes.
+  import('@/features/editor/EditorPage').then((module) => ({ default: module.EditorPage })),
+);
+const AcceptInvitationPage = lazy(() =>
+  import('@/features/invitations/AcceptInvitationPage').then((module) => ({ default: module.AcceptInvitationPage })),
+);
+const SetupPage = lazy(() => import('@/features/setup/SetupPage').then((module) => ({ default: module.SetupPage })));
 
 export const router = createBrowserRouter([
   {
