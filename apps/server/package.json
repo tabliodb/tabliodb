@@ -11,6 +11,9 @@
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "db:migrate": "tsx src/bin/migrate.ts",
+    "db:reset": "tsx src/bin/reset-dev.ts",
+    "db:seed": "tsx src/bin/seed-dev.ts",
+    "db:fresh": "npm run db:reset && npm run db:seed",
     "openapi:sync": "tsx src/bin/sync-open-api.ts",
     "test": "vitest run --passWithNoTests"
   },

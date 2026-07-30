@@ -5,6 +5,7 @@ import {
   applyDiagramCommand,
   createEmptyDiagramModel,
   createSequentialDiagramIdFactory,
+  createStarterDiagramModel,
   decodeDiagramModelFromYjsUpdate,
   encodeDiagramModelAsYjsUpdate,
   getTableColumns,
@@ -18,6 +19,28 @@ import {
 const fixedNow = () => '2026-07-29T00:00:00.000Z';
 
 describe('schema-core diagram commands', () => {
+  it('creates the canonical starter diagram used by dev seed and the frontend', () => {
+    const model = createStarterDiagramModel('Library System');
+
+    // The starter diagram is intentionally covered in schema-core so server seed and frontend initial snapshots cannot drift.
+    expect(Object.keys(model.tables)).toEqual(['users', 'books', 'borrowings']);
+    expect(getTableColumns(model, 'borrowings').map((column) => column.name)).toEqual([
+      'id',
+      'user_id',
+      'book_id',
+      'due_at',
+    ]);
+    expect(model.indexes['borrowings-user-book-index']).toMatchObject({
+      columns: [{ columnId: 'borrowings-user-id' }, { columnId: 'borrowings-book-id' }],
+      unique: false,
+    });
+    expect(model.relationships['users-borrowings']).toMatchObject({
+      sourceColumnIds: ['users-id'],
+      targetColumnIds: ['borrowings-user-id'],
+      cardinality: 'one_to_many',
+    });
+  });
+
   it('round-trips a diagram model through granular Yjs collections', () => {
     const document = new Y.Doc();
     const model = applyDiagramCommand(

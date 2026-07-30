@@ -220,6 +220,106 @@ export function createEmptyDiagramModel(
   };
 }
 
+export function createStarterDiagramModel(
+  name = 'Library System',
+  dialect: DatabaseDialect = 'postgresql',
+): DiagramModel {
+  const now = new Date().toISOString();
+
+  // Starter model lives in schema-core so dev seed, server defaults, and frontend empty-state creation share one canonical shape.
+  return applyDiagramCommands(
+    createEmptyDiagramModel(name, dialect),
+    [
+      {
+        type: 'table.create',
+        tableId: 'users',
+        name: 'users',
+        position: { x: 80, y: 96 },
+        width: defaultTableWidth,
+        color: '#58cc02',
+        columns: [
+          { id: 'users-id', name: 'id', type: { family: 'uuid' }, nullable: false, primaryKey: true },
+          { id: 'users-name', name: 'name', type: { family: 'varchar', length: 120 }, nullable: false },
+          { id: 'users-email', name: 'email', type: { family: 'varchar', length: 190 }, nullable: false, unique: true },
+        ],
+      },
+      {
+        type: 'table.create',
+        tableId: 'books',
+        name: 'books',
+        position: { x: 520, y: 72 },
+        width: defaultTableWidth,
+        color: '#1cb0f6',
+        columns: [
+          { id: 'books-id', name: 'id', type: { family: 'uuid' }, nullable: false, primaryKey: true },
+          { id: 'books-title', name: 'title', type: { family: 'varchar', length: 220 }, nullable: false },
+          { id: 'books-isbn', name: 'isbn', type: { family: 'varchar', length: 32 }, nullable: false, unique: true },
+        ],
+      },
+      {
+        type: 'table.create',
+        tableId: 'borrowings',
+        name: 'borrowings',
+        position: { x: 320, y: 348 },
+        width: defaultTableWidth,
+        color: '#ffc800',
+        columns: [
+          { id: 'borrowings-id', name: 'id', type: { family: 'uuid' }, nullable: false, primaryKey: true },
+          { id: 'borrowings-user-id', name: 'user_id', type: { family: 'uuid' }, nullable: false },
+          { id: 'borrowings-book-id', name: 'book_id', type: { family: 'uuid' }, nullable: false },
+          { id: 'borrowings-due-at', name: 'due_at', type: { family: 'timestamp' }, nullable: false },
+        ],
+      },
+      {
+        type: 'index.create',
+        indexId: 'users-email-unique',
+        tableId: 'users',
+        name: 'users_email_key',
+        columns: [{ columnId: 'users-email' }],
+        unique: true,
+      },
+      {
+        type: 'index.create',
+        indexId: 'books-isbn-unique',
+        tableId: 'books',
+        name: 'books_isbn_key',
+        columns: [{ columnId: 'books-isbn' }],
+        unique: true,
+      },
+      {
+        type: 'index.create',
+        indexId: 'borrowings-user-book-index',
+        tableId: 'borrowings',
+        name: 'borrowings_user_book_idx',
+        columns: [{ columnId: 'borrowings-user-id' }, { columnId: 'borrowings-book-id' }],
+      },
+      {
+        type: 'relationship.create',
+        relationshipId: 'users-borrowings',
+        sourceTableId: 'users',
+        sourceColumnIds: ['users-id'],
+        targetTableId: 'borrowings',
+        targetColumnIds: ['borrowings-user-id'],
+        cardinality: 'one_to_many',
+        onDelete: 'cascade',
+        name: 'borrowings_user_id_fkey',
+      },
+      {
+        type: 'relationship.create',
+        relationshipId: 'books-borrowings',
+        sourceTableId: 'books',
+        sourceColumnIds: ['books-id'],
+        targetTableId: 'borrowings',
+        targetColumnIds: ['borrowings-book-id'],
+        cardinality: 'one_to_many',
+        onDelete: 'restrict',
+        name: 'borrowings_book_id_fkey',
+      },
+    ],
+    { now: () => now },
+  );
+}
+
 export function writeDiagramModelToYjsDocument(document: Y.Doc, model: DiagramModel): void {
   const normalizedModel = serializeDiagramModel(model);
 

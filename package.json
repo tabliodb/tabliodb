@@ -20,6 +20,9 @@
     "format": "prettier --cache --check .",
     "format:fix": "prettier --cache --write .",
     "db:migrate": "npm run db:migrate -w @tabliodb/server",
+    "db:reset": "npm run db:reset -w @tabliodb/server",
+    "db:seed": "npm run db:seed -w @tabliodb/server",
+    "db:fresh": "npm run db:fresh -w @tabliodb/server",
     "openapi:sync": "npm run openapi:sync -w @tabliodb/server",
     "sdk:generate": "npm run openapi:sync && oazapfts --optimistic --argumentStyle=object --useEnumType --allSchemas open-api/tabliodb-openapi-specs.json packages/sdk/src/fetch-client.ts && prettier --write packages/sdk/src/fetch-client.ts",
     "sdk:build": "npm run build -w @tabliodb/sdk"

@@ -22,6 +22,7 @@ npm install
 cp docker/example.env .env
 docker compose --env-file .env -f docker/docker-compose.dev.yml up -d database redis db_ui
 npm run db:migrate
+npm run db:seed
 npm run dev:server
 npm run dev:web
 ```
@@ -31,6 +32,14 @@ Web default: `http://localhost:5173`
 Realtime default: `ws://localhost:1234`  
 PostgreSQL Docker default: `localhost:5433`
 Database UI default: `http://localhost:8080`
+
+Seed development membuat akun dan workspace starter:
+
+- Email: `owner@tabliodb.local`
+- Password: `tabliodb-dev`
+- Workspace: `Personal Workspace`
+- Project: `Library System`
+- Diagram: `Main schema`
 
 Login Adminer:
 
@@ -45,6 +54,28 @@ Di PowerShell, salin env dengan:
 ```powershell
 Copy-Item docker\example.env .env
 ```
+
+## Database Development
+
+Gunakan migration biasa ketika hanya ingin menerapkan perubahan schema:
+
+```bash
+npm run db:migrate
+```
+
+Gunakan seed ketika ingin mengisi data starter tanpa menghapus data yang sudah ada:
+
+```bash
+npm run db:seed
+```
+
+Gunakan reset development ketika ingin database bersih dari awal:
+
+```bash
+npm run db:fresh
+```
+
+`db:fresh` menjalankan `db:reset` lalu `db:seed`. Reset hanya diizinkan otomatis untuk database lokal bernama `tabliodb` atau database dengan suffix `_dev`. Untuk environment disposable lain, set `TABLIODB_ALLOW_DB_RESET=true` secara eksplisit.
 
 ## Generated SDK
 

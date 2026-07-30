@@ -1,7 +1,7 @@
 import {
   applyDiagramCommand,
+  createStarterDiagramModel,
   type ColumnTypeSpec,
-  type DatabaseColumn,
   type DiagramModel,
 } from '@tabliodb/schema-core';
 
@@ -22,154 +22,8 @@ export function formatColumnType(type: ColumnTypeSpec): string {
 }
 
 export function createSeedDiagramModel(name = 'Library System'): DiagramModel {
-  const now = new Date().toISOString();
-
-  return {
-    schemaVersion: 1,
-    dialect: 'postgresql',
-    tables: {
-      users: {
-        id: 'users',
-        name: 'users',
-        position: { x: 80, y: 96 },
-        width: 288,
-        columnIds: ['users-id', 'users-name', 'users-email'],
-        indexIds: ['users-email-unique'],
-        color: '#58cc02',
-      },
-      books: {
-        id: 'books',
-        name: 'books',
-        position: { x: 520, y: 72 },
-        width: 288,
-        columnIds: ['books-id', 'books-title', 'books-isbn'],
-        indexIds: ['books-isbn-unique'],
-        color: '#1cb0f6',
-      },
-      borrowings: {
-        id: 'borrowings',
-        name: 'borrowings',
-        position: { x: 320, y: 348 },
-        width: 288,
-        columnIds: ['borrowings-id', 'borrowings-user-id', 'borrowings-book-id', 'borrowings-due-at'],
-        indexIds: ['borrowings-user-book-index'],
-        color: '#ffc800',
-      },
-    },
-    columns: {
-      'users-id': createColumn('users-id', 'users', 'id', { family: 'uuid' }, { nullable: false, primaryKey: true }),
-      'users-name': createColumn(
-        'users-name',
-        'users',
-        'name',
-        { family: 'varchar', length: 120 },
-        { nullable: false },
-      ),
-      'users-email': createColumn(
-        'users-email',
-        'users',
-        'email',
-        { family: 'varchar', length: 190 },
-        { nullable: false, unique: true },
-      ),
-      'books-id': createColumn('books-id', 'books', 'id', { family: 'uuid' }, { nullable: false, primaryKey: true }),
-      'books-title': createColumn(
-        'books-title',
-        'books',
-        'title',
-        { family: 'varchar', length: 220 },
-        { nullable: false },
-      ),
-      'books-isbn': createColumn(
-        'books-isbn',
-        'books',
-        'isbn',
-        { family: 'varchar', length: 32 },
-        { nullable: false, unique: true },
-      ),
-      'borrowings-id': createColumn(
-        'borrowings-id',
-        'borrowings',
-        'id',
-        { family: 'uuid' },
-        { nullable: false, primaryKey: true },
-      ),
-      'borrowings-user-id': createColumn(
-        'borrowings-user-id',
-        'borrowings',
-        'user_id',
-        { family: 'uuid' },
-        { nullable: false },
-      ),
-      'borrowings-book-id': createColumn(
-        'borrowings-book-id',
-        'borrowings',
-        'book_id',
-        { family: 'uuid' },
-        { nullable: false },
-      ),
-      'borrowings-due-at': createColumn(
-        'borrowings-due-at',
-        'borrowings',
-        'due_at',
-        { family: 'timestamp' },
-        { nullable: false },
-      ),
-    },
-    indexes: {
-      'users-email-unique': {
-        id: 'users-email-unique',
-        tableId: 'users',
-        name: 'users_email_key',
-        columns: [{ columnId: 'users-email' }],
-        unique: true,
-      },
-      'books-isbn-unique': {
-        id: 'books-isbn-unique',
-        tableId: 'books',
-        name: 'books_isbn_key',
-        columns: [{ columnId: 'books-isbn' }],
-        unique: true,
-      },
-      'borrowings-user-book-index': {
-        id: 'borrowings-user-book-index',
-        tableId: 'borrowings',
-        name: 'borrowings_user_book_idx',
-        columns: [{ columnId: 'borrowings-user-id' }, { columnId: 'borrowings-book-id' }],
-        unique: false,
-      },
-    },
-    relationships: {
-      'users-borrowings': {
-        id: 'users-borrowings',
-        sourceTableId: 'users',
-        sourceColumnIds: ['users-id'],
-        targetTableId: 'borrowings',
-        targetColumnIds: ['borrowings-user-id'],
-        cardinality: 'one_to_many',
-        onDelete: 'cascade',
-        name: 'borrowings_user_id_fkey',
-      },
-      'books-borrowings': {
-        id: 'books-borrowings',
-        sourceTableId: 'books',
-        sourceColumnIds: ['books-id'],
-        targetTableId: 'borrowings',
-        targetColumnIds: ['borrowings-book-id'],
-        cardinality: 'one_to_many',
-        onDelete: 'restrict',
-        name: 'borrowings_book_id_fkey',
-      },
-    },
-    enums: {},
-    checks: {},
-    notes: {},
-    groups: {},
-    metadata: {
-      name,
-      updatedAt: now,
-    },
-  };
+  // Frontend initial snapshots and server dev seed now share the same canonical starter diagram from schema-core.
+  return createStarterDiagramModel(name);
 }
 
 export function addTableToDiagramModel(model: DiagramModel, tableName?: string): DiagramModel {
@@ -191,23 +45,4 @@ function normalizeTableName(tableName?: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9_]+/g, '_')
     .replace(/^_+|_+$/g, '');
-}
-
-function createColumn(
-  id: string,
-  tableId: string,
-  name: string,
-  type: ColumnTypeSpec,
-  options: Partial<Pick<DatabaseColumn, 'autoIncrement' | 'nullable' | 'primaryKey' | 'unique'>> = {},
-): DatabaseColumn {
-  return {
-    id,
-    tableId,
-    name,
-    type,
-    autoIncrement: options.autoIncrement ?? false,
-    nullable: options.nullable ?? true,
-    primaryKey: options.primaryKey ?? false,
-    unique: options.unique ?? false,
-  };
 }
