@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { DatabaseDialect, DiagramModel } from '@tabliodb/schema-core';
+import { stringifyDiagramModel, type DatabaseDialect, type DiagramModel } from '@tabliodb/schema-core';
+import { generateDiagramMarkdown } from '@tabliodb/docs';
 import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import {
   TabliodbApiError,
@@ -43,6 +44,9 @@ import {
   Code2,
   Copy,
   Database,
+  Download,
+  FileJson,
+  FileText,
   FileWarning,
   FolderPlus,
   GitBranch,
@@ -353,6 +357,43 @@ export function EditorPage() {
     window.setTimeout(() => setCopiedSql(false), 1600);
   }
 
+  function handleDownloadSql() {
+    if (!model) {
+      return;
+    }
+
+    const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
+
+    // SQL download memakai output yang sama dengan preview/copy supaya semua jalur export tetap konsisten.
+    downloadTextFile(`${getExportFileStem()}.${model.dialect}.sql`, generatedSql.sql, 'application/sql;charset=utf-8');
+  }
+
+  function handleExportJson() {
+    if (!model) {
+      return;
+    }
+
+    // JSON Tabliodb adalah format portable paling aman karena melewati serializer schema-core sebelum diunduh.
+    downloadTextFile(
+      `${getExportFileStem()}.tabliodb.json`,
+      `${stringifyDiagramModel(model)}\n`,
+      'application/json;charset=utf-8',
+    );
+  }
+
+  function handleExportMarkdown() {
+    if (!model) {
+      return;
+    }
+
+    // Markdown docs sengaja dibuat client-side agar user bisa langsung membawa dokumentasi schema tanpa background job.
+    downloadTextFile(`${getExportFileStem()}.schema.md`, generateDiagramMarkdown(model), 'text/markdown;charset=utf-8');
+  }
+
+  function getExportFileStem() {
+    return createExportFileStem(activeProject?.name, activeDiagram?.name ?? model?.metadata.name);
+  }
+
   function handleAddTable(tableName?: string) {
     if (!canEditDiagram || !model) {
       return;
@@ -518,6 +559,19 @@ export function EditorPage() {
                 <Copy className="size-4" />
                 Copy SQL
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleDownloadSql}>
+                <Download className="size-4" />
+                Download SQL
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleExportJson}>
+                <FileJson className="size-4" />
+                Export Tabliodb JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleExportMarkdown}>
+                <FileText className="size-4" />
+                Export Markdown docs
+              </DropdownMenuItem>
+              <DropdownMenuSeparatorItem />
               <DropdownMenuItem disabled>
                 <Share2 className="size-4" />
                 Share workspace coming soon
@@ -540,6 +594,7 @@ export function EditorPage() {
         copied={copiedSql}
         dialect={model.dialect}
         onCopy={handleExportSql}
+        onDownload={handleDownloadSql}
         onOpenChange={setSqlPreviewOpen}
         open={sqlPreviewOpen}
         sql={sqlPreview.sql}
@@ -742,6 +797,7 @@ function SqlPreviewDialog({
   copied,
   dialect,
   onCopy,
+  onDownload,
   onOpenChange,
   open,
   sql,
@@ -750,6 +806,7 @@ function SqlPreviewDialog({
   copied: boolean;
   dialect: DatabaseDialect;
   onCopy: () => void;
+  onDownload: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   sql: string;
@@ -797,6 +854,10 @@ function SqlPreviewDialog({
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
             Close
+          </Button>
+          <Button onClick={onDownload} type="button" variant="secondary">
+            <Download className="size-4" />
+            Download .sql
           </Button>
           <Button onClick={onCopy} type="button" variant="sky">
             <Copy className="size-4" />
@@ -2206,6 +2267,37 @@ function AddTableDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function downloadTextFile(fileName: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  // Anchor sementara tetap paling kompatibel untuk download client-side tanpa menambah dependency.
+  link.href = objectUrl;
+  link.download = fileName;
+  link.rel = 'noopener';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function createExportFileStem(projectName?: string, diagramName?: string): string {
+  const parts = ['tabliodb', toFileSlug(projectName), toFileSlug(diagramName)].filter(Boolean);
+
+  return parts.join('-') || 'tabliodb-diagram';
+}
+
+function toFileSlug(value?: string): string {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function isUnauthorized(error: unknown): boolean {

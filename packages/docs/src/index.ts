@@ -1,0 +1,313 @@
+import {
+  DiagramModelSchema,
+  getRelationshipColumnPairs,
+  getTableColumns,
+  serializeDiagramModel,
+  type ColumnTypeSpec,
+  type DatabaseColumn,
+  type DatabaseIndex,
+  type DatabaseRelationship,
+  type DatabaseTable,
+  type DiagramModel,
+} from '@tabliodb/schema-core';
+
+export type GenerateDiagramMarkdownOptions = {
+  includeChecks?: boolean;
+  includeEnums?: boolean;
+  includeIndexes?: boolean;
+  includeRelationships?: boolean;
+};
+
+export function generateDiagramMarkdown(model: DiagramModel, options: GenerateDiagramMarkdownOptions = {}): string {
+  const normalizedModel = serializeDiagramModel(DiagramModelSchema.parse(model));
+  const includeChecks = options.includeChecks ?? true;
+  const includeEnums = options.includeEnums ?? true;
+  const includeIndexes = options.includeIndexes ?? true;
+  const includeRelationships = options.includeRelationships ?? true;
+  const sections = [
+    renderHeading(normalizedModel),
+    renderTableOfContents(normalizedModel),
+    ...Object.values(normalizedModel.tables).map((table) => renderTableSection(normalizedModel, table, options)),
+    includeRelationships ? renderRelationshipSection(normalizedModel) : '',
+    includeIndexes ? renderIndexSection(normalizedModel) : '',
+    includeEnums ? renderEnumSection(normalizedModel) : '',
+    includeChecks ? renderCheckSection(normalizedModel) : '',
+  ].filter((section) => section.trim().length > 0);
+
+  // Markdown exports are deterministic so generated docs can be committed and diffed cleanly.
+  return `${sections.join('\n\n')}\n`;
+}
+
+function renderHeading(model: DiagramModel): string {
+  return [
+    `# ${escapeMarkdownText(model.metadata.name)}`,
+    '',
+    `- Dialect: \`${model.dialect}\``,
+    `- Schema version: \`${model.schemaVersion}\``,
+    `- Tables: \`${Object.keys(model.tables).length}\``,
+    `- Relationships: \`${Object.keys(model.relationships).length}\``,
+    model.metadata.updatedAt ? `- Updated at: \`${model.metadata.updatedAt}\`` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function renderTableOfContents(model: DiagramModel): string {
+  const tableLinks = Object.values(model.tables).map(
+    (table) => `- [${escapeMarkdownText(table.name)}](#${slugify(table.name)})`,
+  );
+
+  return ['## Tables', ...tableLinks].join('\n');
+}
+
+function renderTableSection(
+  model: DiagramModel,
+  table: DatabaseTable,
+  options: GenerateDiagramMarkdownOptions,
+): string {
+  const includeChecks = options.includeChecks ?? true;
+  const includeIndexes = options.includeIndexes ?? true;
+  const includeRelationships = options.includeRelationships ?? true;
+  const columns = getTableColumns(model, table.id);
+  const tableIndexes = Object.values(model.indexes).filter((index) => index.tableId === table.id);
+  const tableChecks = Object.values(model.checks).filter((check) => check.tableId === table.id);
+  const incomingRelationships = Object.values(model.relationships).filter(
+    (relationship) => relationship.targetTableId === table.id,
+  );
+  const outgoingRelationships = Object.values(model.relationships).filter(
+    (relationship) => relationship.sourceTableId === table.id,
+  );
+  const lines = [
+    `## ${escapeMarkdownText(table.name)}`,
+    table.schema ? `Schema: \`${table.schema}\`` : '',
+    table.comment ? escapeMarkdownText(table.comment) : '',
+    '',
+    renderColumnTable(columns),
+    includeIndexes && tableIndexes.length > 0
+      ? ['', '### Indexes', renderIndexTable(model, tableIndexes)].join('\n')
+      : '',
+    includeRelationships && (incomingRelationships.length > 0 || outgoingRelationships.length > 0)
+      ? [
+          '',
+          '### Relationships',
+          renderTableRelationshipList(model, [...outgoingRelationships, ...incomingRelationships]),
+        ].join('\n')
+      : '',
+    includeChecks && tableChecks.length > 0 ? ['', '### Checks', renderCheckTable(tableChecks)].join('\n') : '',
+  ];
+
+  return lines.filter(Boolean).join('\n');
+}
+
+function renderColumnTable(columns: DatabaseColumn[]): string {
+  if (columns.length === 0) {
+    return '_No columns yet._';
+  }
+
+  const rows = columns.map((column) =>
+    [
+      escapeMarkdownTableCell(column.name),
+      escapeMarkdownTableCell(formatColumnType(column.type)),
+      column.nullable ? 'Yes' : 'No',
+      column.primaryKey ? 'Yes' : 'No',
+      column.unique ? 'Yes' : 'No',
+      column.defaultValue ? `\`${escapeMarkdownTableCell(column.defaultValue)}\`` : '',
+      column.comment ? escapeMarkdownTableCell(column.comment) : '',
+    ].join(' | '),
+  );
+
+  return [
+    '| Column | Type | Nullable | PK | Unique | Default | Comment |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    ...rows.map((row) => `| ${row} |`),
+  ].join('\n');
+}
+
+function renderRelationshipSection(model: DiagramModel): string {
+  const relationships = Object.values(model.relationships);
+
+  if (relationships.length === 0) {
+    return '';
+  }
+
+  return ['## Relationships', renderRelationshipTable(model, relationships)].join('\n');
+}
+
+function renderRelationshipTable(model: DiagramModel, relationships: DatabaseRelationship[]): string {
+  const rows = relationships.map((relationship) =>
+    [
+      escapeMarkdownTableCell(relationship.name ?? relationship.id),
+      escapeMarkdownTableCell(formatRelationshipSide(model, relationship.sourceTableId, relationship.sourceColumnIds)),
+      escapeMarkdownTableCell(formatRelationshipSide(model, relationship.targetTableId, relationship.targetColumnIds)),
+      formatCardinality(relationship.cardinality),
+      relationship.onDelete ? `ON DELETE ${relationship.onDelete.replaceAll('_', ' ').toUpperCase()}` : '',
+      relationship.onUpdate ? `ON UPDATE ${relationship.onUpdate.replaceAll('_', ' ').toUpperCase()}` : '',
+    ].join(' | '),
+  );
+
+  return [
+    '| Name | Referenced | Foreign key | Cardinality | Delete | Update |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...rows.map((row) => `| ${row} |`),
+  ].join('\n');
+}
+
+function renderTableRelationshipList(model: DiagramModel, relationships: DatabaseRelationship[]): string {
+  return relationships
+    .map((relationship) => {
+      const pairs = getRelationshipColumnPairs(relationship)
+        .map((pair) => {
+          const sourceColumn = model.columns[pair.sourceColumnId];
+          const targetColumn = model.columns[pair.targetColumnId];
+          return sourceColumn && targetColumn ? `${sourceColumn.name} -> ${targetColumn.name}` : null;
+        })
+        .filter((pair): pair is string => Boolean(pair))
+        .join(', ');
+
+      return `- \`${relationship.name ?? relationship.id}\`: ${formatRelationshipSide(
+        model,
+        relationship.sourceTableId,
+        relationship.sourceColumnIds,
+      )} -> ${formatRelationshipSide(model, relationship.targetTableId, relationship.targetColumnIds)}${
+        pairs ? ` (${pairs})` : ''
+      }`;
+    })
+    .join('\n');
+}
+
+function renderIndexSection(model: DiagramModel): string {
+  const indexes = Object.values(model.indexes);
+
+  if (indexes.length === 0) {
+    return '';
+  }
+
+  return ['## Indexes', renderIndexTable(model, indexes)].join('\n');
+}
+
+function renderIndexTable(model: DiagramModel, indexes: DatabaseIndex[]): string {
+  const rows = indexes.map((index) => {
+    const table = model.tables[index.tableId];
+    const columns = index.columns
+      .map((indexColumn) => {
+        const column = model.columns[indexColumn.columnId];
+        const direction = indexColumn.order ? ` ${indexColumn.order.toUpperCase()}` : '';
+        const nulls = indexColumn.nulls ? ` NULLS ${indexColumn.nulls.toUpperCase()}` : '';
+        return column ? `${column.name}${direction}${nulls}` : indexColumn.columnId;
+      })
+      .join(', ');
+
+    return [
+      escapeMarkdownTableCell(index.name),
+      escapeMarkdownTableCell(table?.name ?? index.tableId),
+      escapeMarkdownTableCell(columns),
+      index.unique ? 'Yes' : 'No',
+      index.method ?? '',
+      index.where ? `\`${escapeMarkdownTableCell(index.where)}\`` : '',
+    ].join(' | ');
+  });
+
+  return [
+    '| Name | Table | Columns | Unique | Method | Filter |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...rows.map((row) => `| ${row} |`),
+  ].join('\n');
+}
+
+function renderEnumSection(model: DiagramModel): string {
+  const enums = Object.values(model.enums);
+
+  if (enums.length === 0) {
+    return '';
+  }
+
+  const rows = enums.map((databaseEnum) =>
+    [
+      escapeMarkdownTableCell(databaseEnum.name),
+      databaseEnum.schema ? escapeMarkdownTableCell(databaseEnum.schema) : '',
+      escapeMarkdownTableCell(databaseEnum.values.join(', ')),
+      databaseEnum.comment ? escapeMarkdownTableCell(databaseEnum.comment) : '',
+    ].join(' | '),
+  );
+
+  return [
+    '## Enums',
+    '| Name | Schema | Values | Comment |',
+    '| --- | --- | --- | --- |',
+    ...rows.map((row) => `| ${row} |`),
+  ].join('\n');
+}
+
+function renderCheckSection(model: DiagramModel): string {
+  const checks = Object.values(model.checks);
+
+  if (checks.length === 0) {
+    return '';
+  }
+
+  return ['## Checks', renderCheckTable(checks)].join('\n');
+}
+
+function renderCheckTable(checks: Array<{ comment?: string; expression: string; name: string }>): string {
+  const rows = checks.map((check) =>
+    [
+      escapeMarkdownTableCell(check.name),
+      `\`${escapeMarkdownTableCell(check.expression)}\``,
+      check.comment ? escapeMarkdownTableCell(check.comment) : '',
+    ].join(' | '),
+  );
+
+  return ['| Name | Expression | Comment |', '| --- | --- | --- |', ...rows.map((row) => `| ${row} |`)].join('\n');
+}
+
+function formatRelationshipSide(model: DiagramModel, tableId: string, columnIds: string[]): string {
+  const table = model.tables[tableId];
+  const columnNames = columnIds.map((columnId) => model.columns[columnId]?.name ?? columnId).join(', ');
+
+  return `${table?.name ?? tableId}.${columnNames}`;
+}
+
+function formatCardinality(cardinality: DatabaseRelationship['cardinality']): string {
+  return {
+    many_to_many: 'many to many',
+    one_to_many: 'one to many',
+    one_to_one: 'one to one',
+  }[cardinality];
+}
+
+function formatColumnType(type: ColumnTypeSpec): string {
+  if (type.raw) {
+    return type.raw;
+  }
+
+  if (type.family === 'varchar' && type.length) {
+    return `varchar(${type.length})`;
+  }
+
+  if (type.family === 'decimal') {
+    return `decimal(${type.precision ?? 10}, ${type.scale ?? 2})`;
+  }
+
+  if (type.family === 'enum') {
+    return type.enumId ? `enum:${type.enumId}` : 'enum';
+  }
+
+  return type.family;
+}
+
+function escapeMarkdownText(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('|', '\\|').replaceAll('[', '\\[').replaceAll(']', '\\]');
+}
+
+function escapeMarkdownTableCell(value: string): string {
+  return escapeMarkdownText(value).replaceAll('\n', '<br />');
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9\s-]/g, '')
+    .replaceAll(/\s+/g, '-')
+    .replaceAll(/-+/g, '-');
+}

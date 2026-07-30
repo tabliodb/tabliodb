@@ -8,6 +8,7 @@
     "paths": {
       "@tabliodb/shared": ["../../packages/shared/src/index.ts"],
       "@tabliodb/schema-core": ["../../packages/schema-core/src/index.ts"],
+      "@tabliodb/docs": ["../../packages/docs/src/index.ts"],
       "@tabliodb/sdk": ["../../packages/sdk/src/index.ts"],
       "@tabliodb/sql": ["../../packages/sql/src/index.ts"],
       "@tabliodb/ui": ["../../packages/ui/src/index.ts"],

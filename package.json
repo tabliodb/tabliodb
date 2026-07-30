@@ -14,7 +14,7 @@
     "dev": "npm run dev -ws --if-present",
     "dev:server": "npm run dev -w @tabliodb/server",
     "dev:web": "npm run dev -w @tabliodb/web",
-    "build": "npm run build -w @tabliodb/shared && npm run build -w @tabliodb/schema-core && npm run build -w @tabliodb/sql && npm run build -w @tabliodb/ui && npm run build -w @tabliodb/sdk && npm run build -w @tabliodb/server && npm run build -w @tabliodb/web",
+    "build": "npm run build -w @tabliodb/shared && npm run build -w @tabliodb/schema-core && npm run build -w @tabliodb/sql && npm run build -w @tabliodb/docs && npm run build -w @tabliodb/ui && npm run build -w @tabliodb/sdk && npm run build -w @tabliodb/server && npm run build -w @tabliodb/web",
     "check": "npm run check -ws --if-present",
     "test": "npm run test -ws --if-present",
     "format": "prettier --cache --check .",

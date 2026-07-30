@@ -16,6 +16,7 @@
     "@fontsource-variable/nunito": "^5.3.0",
     "@hocuspocus/provider": "^4.4.0",
     "@hookform/resolvers": "^5.5.7",
+    "@tabliodb/docs": "file:../../packages/docs",
     "@tabliodb/schema-core": "file:../../packages/schema-core",
     "@tabliodb/sdk": "file:../../packages/sdk",
     "@tabliodb/shared": "file:../../packages/shared",
