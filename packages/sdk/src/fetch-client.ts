@@ -641,6 +641,20 @@ export type UserCreateDto = {
   organizationRole?: OrganizationRole;
   instanceRole?: InstanceRole2;
 };
+export type UserStatusUpdateDto = {
+  isDisabled: boolean;
+};
+export type UserPasswordResetDto = {
+  password: string;
+};
+export type UserPasswordResetResponseDtoOutput = {
+  successful: boolean;
+  revokedSessions: number;
+};
+export type UserSessionRevokeResponseDtoOutput = {
+  successful: boolean;
+  revokedSessions: number;
+};
 export type CurrentUserResponseDtoOutput = AuthUserDtoOutput;
 export function getServerHealth(opts?: Oazapfts.RequestOpts) {
   return oazapfts.ok(
@@ -1424,6 +1438,72 @@ export function createUser(
         body: userCreateDto,
       }),
     ),
+  );
+}
+export function updateUserStatus(
+  {
+    userId,
+    userStatusUpdateDto,
+  }: {
+    userId: string;
+    userStatusUpdateDto: UserStatusUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: UserResponseDtoOutput;
+    }>(
+      `/users/${encodeURIComponent(userId)}/status`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: userStatusUpdateDto,
+      }),
+    ),
+  );
+}
+export function resetUserPassword(
+  {
+    userId,
+    userPasswordResetDto,
+  }: {
+    userId: string;
+    userPasswordResetDto: UserPasswordResetDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: UserPasswordResetResponseDtoOutput;
+    }>(
+      `/users/${encodeURIComponent(userId)}/reset-password`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: userPasswordResetDto,
+      }),
+    ),
+  );
+}
+export function revokeUserSessions(
+  {
+    userId,
+  }: {
+    userId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: UserSessionRevokeResponseDtoOutput;
+    }>(`/users/${encodeURIComponent(userId)}/revoke-sessions`, {
+      ...opts,
+      method: 'POST',
+    }),
   );
 }
 export enum Permissions {

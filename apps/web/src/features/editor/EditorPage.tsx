@@ -2617,6 +2617,22 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     return changedFields.length > 0 ? `Updated workspace ${changedFields.join(', ')}` : 'Updated workspace settings';
   }
 
+  if (auditLog.action === 'user.disabled') {
+    return `Disabled user ${readMetadataString(auditLog.metadata, 'email', 'user')}`;
+  }
+
+  if (auditLog.action === 'user.enabled') {
+    return `Enabled user ${readMetadataString(auditLog.metadata, 'email', 'user')}`;
+  }
+
+  if (auditLog.action === 'user.password_reset') {
+    return `Reset password for ${readMetadataString(auditLog.metadata, 'email', 'user')}`;
+  }
+
+  if (auditLog.action === 'user.sessions_revoked') {
+    return `Revoked sessions for ${readMetadataString(auditLog.metadata, 'email', 'user')}`;
+  }
+
   return auditLog.action;
 }
 
@@ -2631,19 +2647,24 @@ function formatAuditLogAction(action: string): string {
       'project.member_added': 'Member',
       'project.member_removed': 'Removed',
       'project.member_role_updated': 'Role',
+      'user.disabled': 'Disabled',
+      'user.enabled': 'Enabled',
+      'user.password_reset': 'Password',
+      'user.sessions_revoked': 'Sessions',
     }[action] ?? 'Audit'
   );
 }
 
 function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow' {
-  if (action === 'project.created' || action === 'project.member_added') {
+  if (action === 'project.created' || action === 'project.member_added' || action === 'user.enabled') {
     return 'green';
   }
 
   if (
     action === 'organization.member_removed' ||
     action === 'project.archived' ||
-    action === 'project.member_removed'
+    action === 'project.member_removed' ||
+    action === 'user.disabled'
   ) {
     return 'yellow';
   }
@@ -2651,7 +2672,9 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
   if (
     action === 'organization.member_role_updated' ||
     action === 'organization.settings_updated' ||
-    action === 'project.member_role_updated'
+    action === 'project.member_role_updated' ||
+    action === 'user.password_reset' ||
+    action === 'user.sessions_revoked'
   ) {
     return 'blue';
   }

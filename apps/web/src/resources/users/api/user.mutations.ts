@@ -1,13 +1,27 @@
 import { useMutation } from '@tanstack/react-query';
-import type { UserCreateDto } from '@tabliodb/sdk';
+import type { UserCreateDto, UserPasswordResetDto, UserStatusUpdateDto } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { usersKeys } from './user.keys';
 
 const createUserMutationFn = (body: UserCreateDto) => sdk.users.create(body);
+const resetUserPasswordMutationFn = (variables: { body: UserPasswordResetDto; userId: string }) =>
+  sdk.users.resetPassword(variables.userId, variables.body);
+const revokeUserSessionsMutationFn = (variables: { userId: string }) => sdk.users.revokeSessions(variables.userId);
+const updateUserStatusMutationFn = (variables: { body: UserStatusUpdateDto; userId: string }) =>
+  sdk.users.updateStatus(variables.userId, variables.body);
 
 type UseCreateUserMutationParams = {
   mutationConfig?: MutationConfig<typeof createUserMutationFn>;
+};
+type UseResetUserPasswordMutationParams = {
+  mutationConfig?: MutationConfig<typeof resetUserPasswordMutationFn>;
+};
+type UseRevokeUserSessionsMutationParams = {
+  mutationConfig?: MutationConfig<typeof revokeUserSessionsMutationFn>;
+};
+type UseUpdateUserStatusMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateUserStatusMutationFn>;
 };
 
 export function useCreateUserMutation(params: UseCreateUserMutationParams = {}) {
@@ -16,6 +30,42 @@ export function useCreateUserMutation(params: UseCreateUserMutationParams = {}) 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Setelah admin membuat user, semua daftar user perlu fresh karena role dan membership ditulis dalam transaksi server.
+      queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useResetUserPasswordMutation(params: UseResetUserPasswordMutationParams = {}) {
+  return useMutation({
+    mutationFn: resetUserPasswordMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Password reset merevoke session target di server, jadi directory user perlu refresh untuk menampilkan status terbaru.
+      queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useRevokeUserSessionsMutation(params: UseRevokeUserSessionsMutationParams = {}) {
+  return useMutation({
+    mutationFn: revokeUserSessionsMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Session revoke tidak mengubah row user, tetapi invalidasi menjaga badge/action admin tetap sinkron jika nanti summary session ditambah.
+      queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useUpdateUserStatusMutation(params: UseUpdateUserStatusMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateUserStatusMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Disable/enable memengaruhi akses login dan badge admin, jadi semua list user di-refresh setelah mutation sukses.
       queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },

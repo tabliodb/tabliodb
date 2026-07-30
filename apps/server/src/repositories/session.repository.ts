@@ -36,4 +36,21 @@ export class SessionRepository {
   async delete(id: string): Promise<void> {
     await this.db.deleteFrom('sessions').where('id', '=', id).execute();
   }
+
+  async revokeAllForUser(userId: string, options: { exceptSessionId?: string } = {}): Promise<number> {
+    const now = new Date();
+    const result = await this.db
+      .updateTable('sessions')
+      .set({
+        revokedAt: now,
+        updatedAt: now,
+      })
+      .where('userId', '=', userId)
+      .where('revokedAt', 'is', null)
+      .$if(Boolean(options.exceptSessionId), (query) => query.where('id', '!=', options.exceptSessionId!))
+      .executeTakeFirst();
+
+    // Kysely exposes affected rows as bigint for PostgreSQL, but the API contract should stay JSON-number friendly.
+    return Number(result.numUpdatedRows);
+  }
 }

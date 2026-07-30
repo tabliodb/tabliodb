@@ -29,6 +29,10 @@ export enum AuditAction {
   ProjectMemberAdded = 'project.member_added',
   ProjectMemberRemoved = 'project.member_removed',
   ProjectMemberRoleUpdated = 'project.member_role_updated',
+  UserDisabled = 'user.disabled',
+  UserEnabled = 'user.enabled',
+  UserPasswordReset = 'user.password_reset',
+  UserSessionsRevoked = 'user.sessions_revoked',
 }
 
 export const SALT_ROUNDS = 12;

@@ -112,6 +112,53 @@ export class UserRepository {
     return users[0];
   }
 
+  async getEnabledInstanceOwnerCount(): Promise<number> {
+    const row = await this.db
+      .selectFrom('instance_members')
+      .innerJoin('users', 'users.id', 'instance_members.userId')
+      .select((eb) => eb.fn.count<number>('users.id').as('count'))
+      .where('instance_members.role', '=', 'owner')
+      .where('users.isDisabled', '=', false)
+      .where('users.deletedAt', 'is', null)
+      .executeTakeFirstOrThrow();
+
+    return Number(row.count);
+  }
+
+  async updateDisabledStatus(userId: string, isDisabled: boolean) {
+    const now = new Date();
+    const updated = await this.db
+      .updateTable('users')
+      .set({
+        disabledAt: isDisabled ? now : null,
+        isDisabled,
+        updatedAt: now,
+      })
+      .where('id', '=', userId)
+      .where('deletedAt', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+
+    return updated ? this.getManagedUserById(updated.id) : undefined;
+  }
+
+  async updatePasswordHash(userId: string, passwordHash: string) {
+    const now = new Date();
+    const updated = await this.db
+      .updateTable('users')
+      .set({
+        passwordChangedAt: now,
+        passwordHash,
+        updatedAt: now,
+      })
+      .where('id', '=', userId)
+      .where('deletedAt', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+
+    return updated ? this.getManagedUserById(updated.id) : undefined;
+  }
+
   async listManagedUsers(options: ManagedUserListOptions) {
     const offset = decodeOffsetCursor(options.cursor);
     const baseQuery = this.getManagedUserFilterQuery(options);

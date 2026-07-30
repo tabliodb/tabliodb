@@ -13,19 +13,44 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparatorItem,
+  DropdownMenuTrigger,
   FieldError,
   Input,
   Surface,
   cn,
 } from '@tabliodb/ui';
-import { Copy, Crown, Loader2, MailPlus, Plus, Search, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
+import {
+  Copy,
+  Crown,
+  KeyRound,
+  Loader2,
+  MailPlus,
+  MoreHorizontal,
+  Plus,
+  Power,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  UserPlus,
+  UsersRound,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledTextarea } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
 import { useCreateInvitationMutation } from '@/resources/invitations';
-import { useCreateUserMutation, usersQueries } from '@/resources/users';
+import {
+  useCreateUserMutation,
+  useResetUserPasswordMutation,
+  useRevokeUserSessionsMutation,
+  useUpdateUserStatusMutation,
+  usersQueries,
+} from '@/resources/users';
 
 const createUserFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
@@ -60,6 +85,15 @@ const inviteUserDefaults: InviteUserFormState = {
   message: '',
   organizationRole: OrganizationRole.Member,
 };
+const resetPasswordFormSchema = z.object({
+  password: z.string().min(8, 'Password must be at least 8 characters.'),
+});
+
+type ResetPasswordFormState = z.infer<typeof resetPasswordFormSchema>;
+
+const resetPasswordDefaults: ResetPasswordFormState = {
+  password: '',
+};
 
 const roleFilters = ['all', 'owner', 'instance-admin', 'org-admin', 'member'] as const;
 type RoleFilter = (typeof roleFilters)[number];
@@ -70,6 +104,7 @@ export function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [pageCursor, setPageCursor] = useState<string | undefined>();
   const [cursorHistory, setCursorHistory] = useState<Array<string | undefined>>([]);
+  const [resetPasswordUser, setResetPasswordUser] = useState<UserResponseDto | null>(null);
   const userListQuery = useMemo<UserListQuery>(
     () => ({
       cursor: pageCursor,
@@ -81,6 +116,9 @@ export function AdminUsersPage() {
   );
   const usersQuery = useQuery(usersQueries.list(userListQuery));
   const users = usersQuery.data?.items ?? [];
+  const updateUserStatusMutation = useUpdateUserStatusMutation();
+  const revokeUserSessionsMutation = useRevokeUserSessionsMutation();
+  const userActionError = updateUserStatusMutation.error ?? revokeUserSessionsMutation.error;
 
   const stats = useMemo(
     () => ({
@@ -100,6 +138,26 @@ export function AdminUsersPage() {
     // Search dan role filter mengubah dataset server, jadi cursor lama tidak boleh dipakai lagi.
     setPageCursor(undefined);
     setCursorHistory([]);
+  }
+
+  function handleToggleUserStatus(user: UserResponseDto) {
+    updateUserStatusMutation.mutate({
+      body: {
+        isDisabled: !user.isDisabled,
+      },
+      userId: user.id,
+    });
+  }
+
+  function handleRevokeUserSessions(user: UserResponseDto) {
+    revokeUserSessionsMutation.mutate({ userId: user.id });
+  }
+
+  function isUserActionPending(userId: string): boolean {
+    return (
+      (updateUserStatusMutation.isPending && updateUserStatusMutation.variables?.userId === userId) ||
+      (revokeUserSessionsMutation.isPending && revokeUserSessionsMutation.variables?.userId === userId)
+    );
   }
 
   return (
@@ -127,6 +185,12 @@ export function AdminUsersPage() {
         <StatCard label="Page admins" value={stats.instanceAdmins} tone="blue" />
         <StatCard label="Page org admins" value={stats.organizationAdmins} tone="yellow" />
       </section>
+
+      {userActionError ? (
+        <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+          {getErrorMessage(userActionError)}
+        </div>
+      ) : null}
 
       <Surface className="overflow-hidden" depth="md">
         <div className="flex flex-col gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] p-4 lg:flex-row lg:items-center lg:justify-between">
@@ -186,7 +250,14 @@ export function AdminUsersPage() {
         ) : (
           <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
             {users.map((user) => (
-              <UserRow key={user.id} user={user} />
+              <UserRow
+                isBusy={isUserActionPending(user.id)}
+                key={user.id}
+                onResetPassword={setResetPasswordUser}
+                onRevokeSessions={handleRevokeUserSessions}
+                onToggleStatus={handleToggleUserStatus}
+                user={user}
+              />
             ))}
           </div>
         )}
@@ -221,6 +292,15 @@ export function AdminUsersPage() {
           </div>
         </div>
       </Surface>
+
+      <ResetUserPasswordDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setResetPasswordUser(null);
+          }
+        }}
+        user={resetPasswordUser}
+      />
     </div>
   );
 }
@@ -559,6 +639,112 @@ function CreateUserDialog() {
   );
 }
 
+function ResetUserPasswordDialog({
+  onOpenChange,
+  user,
+}: {
+  onOpenChange: (open: boolean) => void;
+  user: UserResponseDto | null;
+}) {
+  const form = useForm<ResetPasswordFormState>({
+    defaultValues: resetPasswordDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(resetPasswordFormSchema),
+  });
+  const { errors } = form.formState;
+  const resetPasswordMutation = useResetUserPasswordMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        // Password reset sengaja menutup dialog setelah server merevoke session target agar admin tidak mengulang submit.
+        form.reset(resetPasswordDefaults);
+        onOpenChange(false);
+      },
+    },
+  });
+  const open = Boolean(user);
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && !resetPasswordMutation.isPending) {
+      form.reset(resetPasswordDefaults);
+      resetPasswordMutation.reset();
+    }
+
+    onOpenChange(nextOpen);
+  }
+
+  function handleSubmit(values: ResetPasswordFormState) {
+    if (!user) {
+      return;
+    }
+
+    resetPasswordMutation.mutate({
+      body: {
+        password: values.password,
+      },
+      userId: user.id,
+    });
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogContent className="w-[min(94vw,520px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Reset password</DialogTitle>
+            <DialogDescription>
+              Set a new temporary password for {user?.name ?? 'this user'}. Active sessions will be revoked.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogBody>
+            <div className="grid gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  New password
+                </span>
+                <ControlledInput
+                  aria-invalid={Boolean(errors.password)}
+                  autoComplete="new-password"
+                  control={form.control}
+                  disabled={resetPasswordMutation.isPending}
+                  name="password"
+                  type="password"
+                />
+                <FieldError>{errors.password?.message}</FieldError>
+              </label>
+
+              {resetPasswordMutation.error ? (
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                  {getErrorMessage(resetPasswordMutation.error)}
+                </div>
+              ) : null}
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
+            <Button
+              disabled={resetPasswordMutation.isPending}
+              onClick={() => handleOpenChange(false)}
+              type="button"
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button disabled={resetPasswordMutation.isPending || !user} type="submit" variant="sky">
+              {resetPasswordMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <KeyRound className="size-4" />
+              )}
+              Reset password
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RoleOption({
   checked,
   description,
@@ -587,12 +773,24 @@ function RoleOption({
   );
 }
 
-function UserRow({ user }: { user: UserResponseDto }) {
+function UserRow({
+  isBusy,
+  onResetPassword,
+  onRevokeSessions,
+  onToggleStatus,
+  user,
+}: {
+  isBusy: boolean;
+  onResetPassword: (user: UserResponseDto) => void;
+  onRevokeSessions: (user: UserResponseDto) => void;
+  onToggleStatus: (user: UserResponseDto) => void;
+  user: UserResponseDto;
+}) {
   const bucket = getUserRoleBucket(user);
   const initials = getInitials(user.name);
 
   return (
-    <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] lg:grid-cols-[minmax(0,1.2fr)_minmax(180px,0.8fr)_auto] lg:items-center">
+    <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] lg:grid-cols-[minmax(0,1.2fr)_minmax(180px,0.8fr)_auto_auto] lg:items-center">
       <div className="flex min-w-0 items-center gap-3">
         <div className="grid size-11 shrink-0 place-items-center rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
           {initials}
@@ -613,6 +811,34 @@ function UserRow({ user }: { user: UserResponseDto }) {
       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
         <RoleBadge bucket={bucket} />
         {user.isDisabled ? <Badge>Disabled</Badge> : <Badge variant="green">Active</Badge>}
+      </div>
+      <div className="flex justify-start lg:justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button aria-label={`Manage ${user.name}`} disabled={isBusy} size="icon" variant="secondary">
+              {isBusy ? <Loader2 className="size-4 animate-spin" /> : <MoreHorizontal className="size-4" />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={isBusy} onSelect={() => onResetPassword(user)}>
+              <KeyRound className="size-4" />
+              Reset password
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={isBusy} onSelect={() => onRevokeSessions(user)}>
+              <RotateCcw className="size-4" />
+              Revoke sessions
+            </DropdownMenuItem>
+            <DropdownMenuSeparatorItem />
+            <DropdownMenuItem
+              className={user.isDisabled ? undefined : 'text-[rgb(var(--tabliodb-danger-text))]'}
+              disabled={isBusy}
+              onSelect={() => onToggleStatus(user)}
+            >
+              <Power className="size-4" />
+              {user.isDisabled ? 'Enable user' : 'Disable user'}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </article>
   );

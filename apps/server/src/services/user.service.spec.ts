@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { OrganizationRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
@@ -14,6 +14,9 @@ const auth: AuthContext = {
 };
 
 describe(UserService.name, () => {
+  const auditLogRepository = {
+    create: vi.fn(),
+  };
   const cryptoRepository = {
     hashBcrypt: vi.fn(),
   };
@@ -24,8 +27,15 @@ describe(UserService.name, () => {
   const userRepository = {
     createManagedUser: vi.fn(),
     getAnyByEmail: vi.fn(),
+    getEnabledInstanceOwnerCount: vi.fn(),
     getInstanceRole: vi.fn(),
+    getManagedUserById: vi.fn(),
     listManagedUsers: vi.fn(),
+    updateDisabledStatus: vi.fn(),
+    updatePasswordHash: vi.fn(),
+  };
+  const sessionRepository = {
+    revokeAllForUser: vi.fn(),
   };
 
   let service: UserService;
@@ -33,18 +43,24 @@ describe(UserService.name, () => {
   beforeEach(() => {
     vi.resetAllMocks();
 
-    service = new UserService(cryptoRepository as never, organizationRepository as never, userRepository as never);
+    service = new UserService(
+      auditLogRepository as never,
+      cryptoRepository as never,
+      organizationRepository as never,
+      sessionRepository as never,
+      userRepository as never,
+    );
 
     userRepository.getInstanceRole.mockResolvedValue({ role: 'owner' });
     userRepository.getAnyByEmail.mockResolvedValue(undefined);
+    userRepository.getEnabledInstanceOwnerCount.mockResolvedValue(2);
     organizationRepository.getFirstForUser.mockResolvedValue({
       id: 'organization-id',
       name: 'Default Workspace',
     });
     cryptoRepository.hashBcrypt.mockResolvedValue('hashed-password');
-    userRepository.createManagedUser.mockResolvedValue({
-      id: 'created-user-id',
-    });
+    userRepository.createManagedUser.mockResolvedValue(createManagedUserRow({ id: 'created-user-id' }));
+    sessionRepository.revokeAllForUser.mockResolvedValue(3);
   });
 
   it('creates a managed organization member from an instance owner', async () => {
@@ -54,7 +70,11 @@ describe(UserService.name, () => {
       password: 'password-aman',
     });
 
-    expect(result).toEqual({ id: 'created-user-id' });
+    expect(result).toMatchObject({
+      createdAt: '2026-07-29T10:00:00.000Z',
+      id: 'created-user-id',
+      updatedAt: '2026-07-29T10:00:00.000Z',
+    });
     expect(userRepository.createManagedUser).toHaveBeenCalledWith({
       avatarColor: '#1cb0f6',
       createdById: 'owner-id',
@@ -124,4 +144,103 @@ describe(UserService.name, () => {
     expect(organizationRepository.getFirstForUser).not.toHaveBeenCalled();
     expect(userRepository.createManagedUser).not.toHaveBeenCalled();
   });
+
+  it('disables a managed user and revokes active sessions immediately', async () => {
+    const currentUser = createManagedUserRow({ id: 'target-user-id', isDisabled: false });
+    const disabledUser = createManagedUserRow({ id: 'target-user-id', isDisabled: true });
+
+    userRepository.getManagedUserById.mockResolvedValue(currentUser);
+    userRepository.updateDisabledStatus.mockResolvedValue(disabledUser);
+
+    await expect(service.updateStatus(auth, 'target-user-id', { isDisabled: true })).resolves.toMatchObject({
+      id: 'target-user-id',
+      isDisabled: true,
+    });
+
+    expect(userRepository.updateDisabledStatus).toHaveBeenCalledWith('target-user-id', true);
+    expect(sessionRepository.revokeAllForUser).toHaveBeenCalledWith('target-user-id');
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.disabled',
+        entityId: 'target-user-id',
+        entityType: 'user',
+        metadata: expect.objectContaining({
+          revokedSessions: 3,
+        }),
+      }),
+    );
+  });
+
+  it('prevents disabling the last enabled instance owner', async () => {
+    userRepository.getManagedUserById.mockResolvedValue(
+      createManagedUserRow({ id: 'another-owner-id', instanceRole: 'owner', isDisabled: false }),
+    );
+    userRepository.getEnabledInstanceOwnerCount.mockResolvedValue(1);
+
+    await expect(service.updateStatus(auth, 'another-owner-id', { isDisabled: true })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+
+    expect(userRepository.updateDisabledStatus).not.toHaveBeenCalled();
+    expect(sessionRepository.revokeAllForUser).not.toHaveBeenCalled();
+  });
+
+  it('resets a user password and revokes existing sessions', async () => {
+    userRepository.getManagedUserById.mockResolvedValue(createManagedUserRow({ id: 'target-user-id' }));
+    userRepository.updatePasswordHash.mockResolvedValue(createManagedUserRow({ id: 'target-user-id' }));
+
+    await expect(
+      service.resetPassword(auth, 'target-user-id', {
+        password: 'password-baru',
+      }),
+    ).resolves.toEqual({ revokedSessions: 3, successful: true });
+
+    expect(cryptoRepository.hashBcrypt).toHaveBeenCalledWith('password-baru', 12);
+    expect(userRepository.updatePasswordHash).toHaveBeenCalledWith('target-user-id', 'hashed-password');
+    expect(sessionRepository.revokeAllForUser).toHaveBeenCalledWith('target-user-id');
+  });
+
+  it('blocks non-owner instance admins from managing instance admins', async () => {
+    userRepository.getInstanceRole.mockResolvedValue({ role: 'admin' });
+    userRepository.getManagedUserById.mockResolvedValue(
+      createManagedUserRow({ id: 'target-admin-id', instanceRole: 'admin' }),
+    );
+
+    await expect(service.revokeSessions(auth, 'target-admin-id')).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(sessionRepository.revokeAllForUser).not.toHaveBeenCalled();
+  });
 });
+
+function createManagedUserRow(
+  overrides: Partial<{
+    avatarColor: string | null;
+    createdAt: Date;
+    email: string;
+    id: string;
+    instanceRole: 'admin' | 'owner' | null;
+    isDisabled: boolean;
+    name: string;
+    updatedAt: Date;
+  }> = {},
+) {
+  return {
+    avatarColor: overrides.avatarColor ?? '#1cb0f6',
+    createdAt: overrides.createdAt ?? new Date('2026-07-29T10:00:00.000Z'),
+    email: overrides.email ?? 'target@tabliodb.local',
+    id: overrides.id ?? 'target-user-id',
+    instanceRole: overrides.instanceRole ?? null,
+    isDisabled: overrides.isDisabled ?? false,
+    name: overrides.name ?? 'Target User',
+    organizations: [
+      {
+        id: 'organization-id',
+        name: 'Default Workspace',
+        role: OrganizationRole.Member,
+        slug: 'default-workspace',
+        status: 'active',
+      },
+    ],
+    updatedAt: overrides.updatedAt ?? new Date('2026-07-29T10:00:00.000Z'),
+  };
+}

@@ -18,6 +18,18 @@ const UserCreateSchema = z
   })
   .meta({ id: 'UserCreateDto' });
 
+const UserStatusUpdateSchema = z
+  .object({
+    isDisabled: z.boolean(),
+  })
+  .meta({ id: 'UserStatusUpdateDto' });
+
+const UserPasswordResetSchema = z
+  .object({
+    password: z.string().min(8),
+  })
+  .meta({ id: 'UserPasswordResetDto' });
+
 const UserResponseSchema = z
   .object({
     id: z.string().uuid(),
@@ -57,7 +69,25 @@ const UserListResponseSchema = z
   })
   .meta({ id: 'UserListResponseDto' });
 
+const UserPasswordResetResponseSchema = z
+  .object({
+    successful: z.boolean(),
+    revokedSessions: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'UserPasswordResetResponseDto' });
+
+const UserSessionRevokeResponseSchema = z
+  .object({
+    successful: z.boolean(),
+    revokedSessions: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'UserSessionRevokeResponseDto' });
+
 export class UserCreateDto extends createZodDto(UserCreateSchema) {}
 export class UserListQueryDto extends createZodDto(UserListQuerySchema) {}
 export class UserListResponseDto extends createZodDto(UserListResponseSchema) {}
+export class UserPasswordResetDto extends createZodDto(UserPasswordResetSchema) {}
+export class UserPasswordResetResponseDto extends createZodDto(UserPasswordResetResponseSchema) {}
 export class UserResponseDto extends createZodDto(UserResponseSchema) {}
+export class UserSessionRevokeResponseDto extends createZodDto(UserSessionRevokeResponseSchema) {}
+export class UserStatusUpdateDto extends createZodDto(UserStatusUpdateSchema) {}
