@@ -17,7 +17,18 @@ import {
   type DatabaseTable,
   type DiagramModel,
 } from '@tabliodb/schema-core';
+import type { CommentThreadListItemDto } from '@tabliodb/sdk';
 import { useEffect, useRef } from 'react';
+import {
+  createCommentMarkerSummary,
+  formatCommentMarkerCount,
+  formatCommentMarkerTitle,
+  getColumnCommentMarkerCount,
+  getTableCommentMarkerCount,
+  hasOpenCommentMarkers,
+  type CommentMarkerCount,
+  type CommentMarkerSummary,
+} from '../comment-markers';
 import { formatColumnType } from '../diagram-model';
 import { getDisplayTableColor } from '../table-colors';
 
@@ -47,6 +58,7 @@ let relationshipRouterRegistered = false;
 let tableShapeRegistered = false;
 
 export type SchemaCanvasProps = {
+  commentThreads?: CommentThreadListItemDto[];
   fitSignal: number;
   fitKey: string;
   model: DiagramModel;
@@ -58,7 +70,9 @@ export type SchemaCanvasProps = {
 
 type TableNodeData = {
   color: string;
+  columnCommentMarkers: Record<string, CommentMarkerCount>;
   columns: DatabaseColumn[];
+  commentMarker: CommentMarkerCount;
   readOnly: boolean;
   selected: boolean;
   tableId: string;
@@ -85,6 +99,7 @@ type RelationshipPlan = {
 };
 
 export function SchemaCanvas({
+  commentThreads = [],
   fitKey,
   fitSignal,
   model,
@@ -284,13 +299,13 @@ export function SchemaCanvas({
       return;
     }
 
-    syncGraphFromModel(graph, model, selectedTableId, readOnly);
+    syncGraphFromModel(graph, model, selectedTableId, commentThreads, readOnly);
 
     if (fitKeyRef.current !== fitKey) {
       fitKeyRef.current = fitKey;
       fitGraphContent(graph);
     }
-  }, [fitKey, model, readOnly, selectedTableId]);
+  }, [commentThreads, fitKey, model, readOnly, selectedTableId]);
 
   useEffect(() => {
     const graph = graphRef.current;
@@ -327,9 +342,12 @@ function syncGraphFromModel(
   graph: Graph,
   model: DiagramModel,
   selectedTableId: string | null,
+  commentThreads: CommentThreadListItemDto[],
   readOnly: boolean,
 ): void {
   const relationshipPlan = createRelationshipPlan(model, selectedTableId);
+  // Marker summary dihitung sekali per sync supaya node table tidak mengulang scan thread untuk setiap row.
+  const commentMarkerSummary = createCommentMarkerSummary(model, commentThreads);
   const nodeIds = new Set(Object.keys(model.tables));
   const edgeMetadata = createRelationshipEdgeMetadata(model, relationshipPlan);
   const edgeIds = new Set(edgeMetadata.map((edge) => edge.id).filter((id): id is string => Boolean(id)));
@@ -355,6 +373,7 @@ function syncGraphFromModel(
           table,
           selectedTableId,
           relationshipPlan.terminalsByTable.get(table.id) ?? [],
+          commentMarkerSummary,
           readOnly,
         ),
       );
@@ -467,6 +486,7 @@ function createTableNodeMetadata(
   table: DatabaseTable,
   selectedTableId: string | null,
   terminals: RelationshipTerminal[],
+  commentMarkerSummary: CommentMarkerSummary,
   readOnly: boolean,
 ): NodeMetadata {
   const columns = getTableColumns(model, table.id);
@@ -477,7 +497,11 @@ function createTableNodeMetadata(
     id: table.id,
     data: {
       color: getDisplayTableColor(table.color),
+      columnCommentMarkers: Object.fromEntries(
+        columns.map((column) => [column.id, getColumnCommentMarkerCount(commentMarkerSummary, column.id)]),
+      ),
       columns,
+      commentMarker: getTableCommentMarkerCount(commentMarkerSummary, table.id),
       readOnly,
       selected: table.id === selectedTableId,
       tableId: table.id,
@@ -860,9 +884,13 @@ function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNod
     current.selected === next.selected &&
     current.tableId === next.tableId &&
     current.tableName === next.tableName &&
+    current.commentMarker.open === next.commentMarker.open &&
+    current.commentMarker.total === next.commentMarker.total &&
     current.columns.length === next.columns.length &&
     current.columns.every((column, index) => {
       const nextColumn = next.columns[index];
+      const currentColumnMarker = current.columnCommentMarkers[column.id] ?? { open: 0, total: 0 };
+      const nextColumnMarker = next.columnCommentMarkers[nextColumn.id] ?? { open: 0, total: 0 };
 
       return (
         column.id === nextColumn.id &&
@@ -870,7 +898,9 @@ function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNod
         formatColumnType(column.type) === formatColumnType(nextColumn.type) &&
         column.nullable === nextColumn.nullable &&
         column.primaryKey === nextColumn.primaryKey &&
-        column.unique === nextColumn.unique
+        column.unique === nextColumn.unique &&
+        currentColumnMarker.open === nextColumnMarker.open &&
+        currentColumnMarker.total === nextColumnMarker.total
       );
     })
   );
@@ -885,7 +915,8 @@ function fitGraphContent(graph: Graph): void {
 }
 
 function renderTableNode(data: TableNodeData): string {
-  const rows = data.columns.map((column) => renderColumnRow(column)).join('');
+  const rows = data.columns.map((column) => renderColumnRow(column, data.columnCommentMarkers[column.id])).join('');
+  const commentMarker = renderCommentMarker(data.commentMarker, `table ${data.tableName}`);
   const resizeHandle = data.readOnly
     ? ''
     : '<button aria-label="Resize table" class="tabliodb-table-node__resize-handle" title="Drag to resize table width" type="button"></button>';
@@ -895,7 +926,10 @@ function renderTableNode(data: TableNodeData): string {
       <div class="tabliodb-table-node__header">
         <span class="tabliodb-table-node__status"></span>
         <span class="tabliodb-table-node__name">${escapeHtml(data.tableName)}</span>
-        <span class="tabliodb-table-node__count">${data.columns.length}</span>
+        <span class="tabliodb-table-node__header-meta">
+          ${commentMarker}
+          <span class="tabliodb-table-node__count">${data.columns.length}</span>
+        </span>
       </div>
       <div class="tabliodb-table-node__columns">${rows}</div>
       ${resizeHandle}
@@ -903,7 +937,8 @@ function renderTableNode(data: TableNodeData): string {
   `;
 }
 
-function renderColumnRow(column: DatabaseColumn): string {
+function renderColumnRow(column: DatabaseColumn, commentMarkerCount: CommentMarkerCount | undefined): string {
+  const commentMarker = renderCommentMarker(commentMarkerCount, `column ${column.name}`);
   const badges = [
     // X6 table rows are rendered as HTML strings, so native title is the safest metadata path until nodes move to React-rendered markup.
     column.primaryKey ? '<span class="tabliodb-table-node__badge" title="Primary key">PK</span>' : '',
@@ -915,9 +950,17 @@ function renderColumnRow(column: DatabaseColumn): string {
     <div class="tabliodb-table-node__column">
       <span class="tabliodb-table-node__column-name">${escapeHtml(column.name)}</span>
       <span class="tabliodb-table-node__column-type">${escapeHtml(formatColumnType(column.type))}</span>
-      <span class="tabliodb-table-node__badges">${badges}</span>
+      <span class="tabliodb-table-node__badges">${commentMarker}${badges}</span>
     </div>
   `;
+}
+
+function renderCommentMarker(count: CommentMarkerCount | undefined, label: string): string {
+  if (!count || !hasOpenCommentMarkers(count)) {
+    return '';
+  }
+
+  return `<span class="tabliodb-table-node__comment-marker" title="${escapeHtml(formatCommentMarkerTitle(count, label))}">${escapeHtml(formatCommentMarkerCount(count))}</span>`;
 }
 
 function escapeHtml(value: string): string {

@@ -351,8 +351,16 @@ export function EditorPage() {
     reviewSignalQueries.listByDiagram(activeDiagram?.id ?? '', reviewSignalPageQuery),
   );
   const reviewSignalSettingsQuery = useQuery(reviewSignalQueries.diagramSettings(activeDiagram?.id ?? ''));
+  const commentThreadsQueryOptions = commentQueries.listThreads(activeDiagram?.id ?? '', commentThreadPageQuery);
+  const commentThreadsQuery = useQuery({
+    ...commentThreadsQueryOptions,
+    // Marker canvas/inspector membutuhkan ringkasan thread sejak editor terbuka; dialog memakai query key yang sama sehingga cache tetap menyatu.
+    enabled: Boolean(activeDiagram) && commentThreadsQueryOptions.enabled !== false,
+  });
 
   const latestSnapshot = snapshotsQuery.data?.[0] ?? null;
+  const commentThreads = commentThreadsQuery.data?.items ?? [];
+  const openCommentThreadCount = commentThreads.filter((thread) => thread.status === 'open').length;
   const persistedReviewSignals = useMemo(() => {
     if (!model || !isCurrentDraftPersisted(model)) {
       return null;
@@ -790,7 +798,17 @@ export function EditorPage() {
         </div>
         <div className="flex items-center gap-1">
           <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
-          <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
+          <div className="relative">
+            <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
+            {openCommentThreadCount > 0 ? (
+              <span
+                className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-1 text-[9px] font-extrabold leading-4 text-[rgb(var(--tabliodb-sky-text))] shadow-[0_1px_0_rgb(var(--tabliodb-sky-border))]"
+                title={`${openCommentThreadCount} open comment threads`}
+              >
+                {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
+              </span>
+            ) : null}
+          </div>
           <IconButton disabled icon={History} label="History coming soon" />
           <IconButton disabled icon={GitBranch} label="Branches coming soon" />
           <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
@@ -1072,6 +1090,7 @@ export function EditorPage() {
 
         <section className="flex min-h-0 min-w-0">
           <SchemaCanvas
+            commentThreads={commentThreads}
             fitKey={activeDiagram?.id ?? 'empty'}
             fitSignal={fitSignal}
             model={model}
@@ -1086,6 +1105,7 @@ export function EditorPage() {
           <SchemaInspector
             // Tombol ignore hanya aktif untuk signal server-backed; draft lokal tetap menampilkan lint langsung supaya user tidak bisa ignore state yang belum tersimpan.
             canIgnoreReviewSignals={canEditDiagram && persistedReviewSignals !== null}
+            commentThreads={commentThreads}
             isIgnoringReviewSignal={ignoreReviewSignalMutation.isPending}
             latestSnapshotVersion={latestSnapshot?.version ?? 0}
             model={model}

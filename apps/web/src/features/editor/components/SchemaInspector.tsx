@@ -18,6 +18,7 @@ import {
   type DiagramReviewSignal,
   type ReferentialAction,
 } from '@tabliodb/schema-core';
+import type { CommentThreadListItemDto } from '@tabliodb/sdk';
 import {
   Badge,
   Button,
@@ -37,7 +38,7 @@ import {
   WithTooltip,
   cn,
 } from '@tabliodb/ui';
-import { PanelRightClose, Pencil, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { MessageSquareText, PanelRightClose, Pencil, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
@@ -48,6 +49,18 @@ import {
   ControlledTextarea,
   type ControlledCheckboxProps,
 } from '@/features/app/FormControls';
+import {
+  createCommentMarkerSummary,
+  formatCommentMarkerCount,
+  formatCommentMarkerTitle,
+  getColumnCommentMarkerCount,
+  getCommentMarkerCountForTarget,
+  getRelationshipCommentMarkerCount,
+  getTableCommentMarkerCount,
+  hasOpenCommentMarkers,
+  type CommentMarkerCount,
+  type CommentMarkerSummary,
+} from '../comment-markers';
 import { formatColumnType } from '../diagram-model';
 import { getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
 const unsetSelectValue = '__unset' as const;
@@ -228,6 +241,7 @@ export type SchemaInspectorCommentTarget = {
 
 export type SchemaInspectorProps = {
   className?: string;
+  commentThreads?: CommentThreadListItemDto[];
   latestSnapshotVersion: number;
   model: DiagramModel;
   canIgnoreReviewSignals?: boolean;
@@ -245,6 +259,7 @@ export type SchemaInspectorProps = {
 
 export function SchemaInspector({
   className,
+  commentThreads = [],
   latestSnapshotVersion,
   model,
   canIgnoreReviewSignals = false,
@@ -284,6 +299,10 @@ export function SchemaInspector({
   const reviewSignals = useMemo(
     () => serverReviewSignals ?? getDiagramReviewSignals(model, reviewSettings),
     [model, reviewSettings, serverReviewSignals],
+  );
+  const commentMarkerSummary = useMemo(
+    () => createCommentMarkerSummary(model, commentThreads),
+    [commentThreads, model],
   );
 
   useEffect(() => {
@@ -462,6 +481,7 @@ export function SchemaInspector({
         ) : null}
         <EnumEditorPanel
           databaseEnum={selectedEnum}
+          commentMarkerSummary={commentMarkerSummary}
           enums={enums}
           model={model}
           onEnumSelect={handleEnumSelect}
@@ -477,7 +497,13 @@ export function SchemaInspector({
             <Surface className="mt-2 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-[13px] font-extrabold leading-5">{selectedTable.name}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-[13px] font-extrabold leading-5">{selectedTable.name}</div>
+                    <CommentMarkerBadge
+                      count={getTableCommentMarkerCount(commentMarkerSummary, selectedTable.id)}
+                      label={`table ${selectedTable.name}`}
+                    />
+                  </div>
                   <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {selectedColumns.length} cols / {selectedIndexes.length} idx / {selectedChecks.length} checks /{' '}
                     {countTableRelationships(model, selectedTable)} rels
@@ -502,7 +528,13 @@ export function SchemaInspector({
                     type="button"
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-extrabold text-[rgb(var(--tabliodb-ink))]">{column.name}</div>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="truncate font-extrabold text-[rgb(var(--tabliodb-ink))]">{column.name}</div>
+                        <CommentMarkerBadge
+                          count={getColumnCommentMarkerCount(commentMarkerSummary, column.id)}
+                          label={`column ${column.name}`}
+                        />
+                      </div>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {column.primaryKey ? <ColumnBadge>PK</ColumnBadge> : null}
                         {column.unique ? <ColumnBadge>UQ</ColumnBadge> : null}
@@ -525,6 +557,7 @@ export function SchemaInspector({
         <ColumnInspector column={selectedColumn} model={model} table={selectedTable} />
         <IndexBuilderPanel
           columns={selectedColumns}
+          commentMarkerSummary={commentMarkerSummary}
           index={selectedIndex}
           indexes={selectedIndexes}
           model={model}
@@ -538,6 +571,7 @@ export function SchemaInspector({
           check={selectedCheck}
           checks={selectedChecks}
           columns={selectedColumns}
+          commentMarkerSummary={commentMarkerSummary}
           model={model}
           onCheckSelect={handleCheckSelect}
           onModelChange={onModelChange}
@@ -547,6 +581,7 @@ export function SchemaInspector({
         />
         <RelationshipInspector
           model={model}
+          commentMarkerSummary={commentMarkerSummary}
           onModelChange={onModelChange}
           onRelationshipSelect={handleRelationshipSelect}
           readOnly={readOnly}
@@ -671,6 +706,7 @@ function getReviewSignalClassName(signal: DiagramReviewSignal): string {
 
 function EnumEditorPanel({
   databaseEnum,
+  commentMarkerSummary,
   enums,
   model,
   onEnumSelect,
@@ -679,6 +715,7 @@ function EnumEditorPanel({
   selectedEnumId,
 }: {
   databaseEnum: DatabaseEnum | null;
+  commentMarkerSummary: CommentMarkerSummary;
   enums: DatabaseEnum[];
   model: DiagramModel;
   onEnumSelect: (enumId: string) => void;
@@ -713,7 +750,13 @@ function EnumEditorPanel({
                 onClick={() => onEnumSelect(currentEnum.id)}
                 type="button"
               >
-                <div className="truncate text-xs font-extrabold">{currentEnum.name}</div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="truncate text-xs font-extrabold">{currentEnum.name}</div>
+                  <CommentMarkerBadge
+                    count={getCommentMarkerCountForTarget(commentMarkerSummary, 'enum', currentEnum.id)}
+                    label={`enum ${currentEnum.name}`}
+                  />
+                </div>
                 <div className="mt-1 truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {currentEnum.values.join(', ')}
                 </div>
@@ -729,7 +772,13 @@ function EnumEditorPanel({
           <div className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="truncate text-[13px] font-extrabold leading-5">{databaseEnum.name}</div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="truncate text-[13px] font-extrabold leading-5">{databaseEnum.name}</div>
+                  <CommentMarkerBadge
+                    count={getCommentMarkerCountForTarget(commentMarkerSummary, 'enum', databaseEnum.id)}
+                    label={`enum ${databaseEnum.name}`}
+                  />
+                </div>
                 <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {databaseEnum.schema ? `${databaseEnum.schema} schema` : 'default schema'}
                 </div>
@@ -1386,6 +1435,7 @@ function EditColumnDialog({
 
 function IndexBuilderPanel({
   columns,
+  commentMarkerSummary,
   index,
   indexes,
   model,
@@ -1396,6 +1446,7 @@ function IndexBuilderPanel({
   table,
 }: {
   columns: DatabaseColumn[];
+  commentMarkerSummary: CommentMarkerSummary;
   index: DatabaseIndex | null;
   indexes: DatabaseIndex[];
   model: DiagramModel;
@@ -1435,7 +1486,13 @@ function IndexBuilderPanel({
                   onClick={() => onIndexSelect(currentIndex.id)}
                   type="button"
                 >
-                  <div className="truncate text-xs font-extrabold">{currentIndex.name}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-xs font-extrabold">{currentIndex.name}</div>
+                    <CommentMarkerBadge
+                      count={getCommentMarkerCountForTarget(commentMarkerSummary, 'index', currentIndex.id)}
+                      label={`index ${currentIndex.name}`}
+                    />
+                  </div>
                   <div className="mt-1 truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {formatIndexColumns(model, currentIndex)}
                   </div>
@@ -1451,7 +1508,13 @@ function IndexBuilderPanel({
             <div className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-[13px] font-extrabold leading-5">{index.name}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-[13px] font-extrabold leading-5">{index.name}</div>
+                    <CommentMarkerBadge
+                      count={getCommentMarkerCountForTarget(commentMarkerSummary, 'index', index.id)}
+                      label={`index ${index.name}`}
+                    />
+                  </div>
                   <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {index.unique ? 'Unique index' : 'Non-unique index'}
                   </div>
@@ -1837,6 +1900,7 @@ function CheckConstraintPanel({
   check,
   checks,
   columns,
+  commentMarkerSummary,
   model,
   onCheckSelect,
   onModelChange,
@@ -1847,6 +1911,7 @@ function CheckConstraintPanel({
   check: DatabaseCheck | null;
   checks: DatabaseCheck[];
   columns: DatabaseColumn[];
+  commentMarkerSummary: CommentMarkerSummary;
   model: DiagramModel;
   onCheckSelect: (checkId: string) => void;
   onModelChange: (model: DiagramModel) => void;
@@ -1892,7 +1957,13 @@ function CheckConstraintPanel({
                   onClick={() => onCheckSelect(currentCheck.id)}
                   type="button"
                 >
-                  <div className="truncate text-xs font-extrabold">{currentCheck.name}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-xs font-extrabold">{currentCheck.name}</div>
+                    <CommentMarkerBadge
+                      count={getCommentMarkerCountForTarget(commentMarkerSummary, 'check', currentCheck.id)}
+                      label={`check ${currentCheck.name}`}
+                    />
+                  </div>
                   <div className="mt-1 truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {currentCheck.expression}
                   </div>
@@ -1908,7 +1979,13 @@ function CheckConstraintPanel({
             <div className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-[13px] font-extrabold leading-5">{check.name}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-[13px] font-extrabold leading-5">{check.name}</div>
+                    <CommentMarkerBadge
+                      count={getCommentMarkerCountForTarget(commentMarkerSummary, 'check', check.id)}
+                      label={`check ${check.name}`}
+                    />
+                  </div>
                   <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {formatCheckScope(model, check)}
                   </div>
@@ -2191,6 +2268,7 @@ function EnumSelectField({ enumOptions, form }: { enumOptions: DatabaseEnum[]; f
 }
 
 function RelationshipInspector({
+  commentMarkerSummary,
   model,
   onModelChange,
   onRelationshipSelect,
@@ -2199,6 +2277,7 @@ function RelationshipInspector({
   relationships,
   selectedRelationshipId,
 }: {
+  commentMarkerSummary: CommentMarkerSummary;
   model: DiagramModel;
   onModelChange: (model: DiagramModel) => void;
   onRelationshipSelect: (relationshipId: string) => void;
@@ -2227,8 +2306,14 @@ function RelationshipInspector({
                 onClick={() => onRelationshipSelect(currentRelationship.id)}
                 type="button"
               >
-                <div className="truncate text-xs font-extrabold">
-                  {getRelationshipTitle(model, currentRelationship)}
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="truncate text-xs font-extrabold">
+                    {getRelationshipTitle(model, currentRelationship)}
+                  </div>
+                  <CommentMarkerBadge
+                    count={getRelationshipCommentMarkerCount(commentMarkerSummary, currentRelationship.id)}
+                    label={`relationship ${getRelationshipTitle(model, currentRelationship)}`}
+                  />
                 </div>
                 <div className="mt-1 truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {getRelationshipEndpointLabel(model, currentRelationship, 'source')}
@@ -2242,8 +2327,14 @@ function RelationshipInspector({
             <div className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-[13px] font-extrabold leading-5">
-                    {getRelationshipTitle(model, relationship)}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-[13px] font-extrabold leading-5">
+                      {getRelationshipTitle(model, relationship)}
+                    </div>
+                    <CommentMarkerBadge
+                      count={getRelationshipCommentMarkerCount(commentMarkerSummary, relationship.id)}
+                      label={`relationship ${getRelationshipTitle(model, relationship)}`}
+                    />
                   </div>
                   <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                     {formatRelationshipCardinality(relationship.cardinality)}
@@ -2552,6 +2643,27 @@ function ColumnFact({ label, value }: { label: string; value: string }) {
       </div>
       <div className="mt-0.5 truncate font-extrabold text-[rgb(var(--tabliodb-ink))]">{value}</div>
     </div>
+  );
+}
+
+function CommentMarkerBadge({ count, label }: { count: CommentMarkerCount; label: string }) {
+  if (!hasOpenCommentMarkers(count)) {
+    return null;
+  }
+
+  const title = formatCommentMarkerTitle(count, label);
+
+  return (
+    <WithTooltip content={title}>
+      <span
+        className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-1.5 text-[10px] font-extrabold leading-none text-[rgb(var(--tabliodb-sky-text))] shadow-[0_1px_0_rgb(var(--tabliodb-sky-border))]"
+        // Native title tetap dipertahankan agar marker komentar punya metadata fallback saat tooltip belum aktif.
+        title={title}
+      >
+        <MessageSquareText className="size-3" />
+        {formatCommentMarkerCount(count)}
+      </span>
+    </WithTooltip>
   );
 }
 

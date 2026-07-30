@@ -164,6 +164,14 @@ body {
   color: rgb(var(--tabliodb-ink));
 }
 
+.tabliodb-table-node__header-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+
 .tabliodb-table-node__status {
   width: 10px;
   height: 10px;
@@ -220,8 +228,25 @@ body {
 
 .tabliodb-table-node__badges {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 4px;
+}
+
+.tabliodb-table-node__comment-marker {
+  display: inline-flex;
+  min-width: 15px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--tabliodb-sky-border));
+  border-radius: 999px;
+  background: rgb(var(--tabliodb-sky-soft));
+  box-shadow: 0 1px 0 rgb(var(--tabliodb-sky-border));
+  color: rgb(var(--tabliodb-sky-text));
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .tabliodb-table-node__badge {
