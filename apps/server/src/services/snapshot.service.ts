@@ -7,11 +7,13 @@ import { SnapshotRepository } from '../repositories/snapshot.repository.js';
 import { toIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
 import { DiagramService } from './diagram.service.js';
+import { ReviewSignalService } from './review-signal.service.js';
 
 @Injectable()
 export class SnapshotService {
   constructor(
     private readonly diagramService: DiagramService,
+    private readonly reviewSignalService: ReviewSignalService,
     private readonly snapshotRepository: SnapshotRepository,
   ) {}
 
@@ -24,6 +26,9 @@ export class SnapshotService {
       message: dto.message,
       snapshot: dto.snapshot,
     });
+
+    // Snapshot adalah checkpoint eksplisit; menyimpan ulang signal di sini membuat panel review dan API history tidak basi.
+    await this.reviewSignalService.syncDiagramModel(dto.diagramId, dto.snapshot);
 
     return {
       id: snapshot.id,

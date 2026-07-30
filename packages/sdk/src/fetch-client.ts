@@ -484,6 +484,25 @@ export type DiagramListResponseDtoOutput = {
   nextCursor: string | null;
   totalCount: number;
 };
+export type ReviewSignalResponseDtoOutput = {
+  code: string;
+  diagramId: string;
+  generatedAt: string;
+  id: string;
+  ignoredAt: string | null;
+  ignoredById: string | null;
+  message: string;
+  ruleKey: string;
+  severity: Severity;
+  targetId: string | null;
+  targetType: string;
+  title: string;
+};
+export type ReviewSignalListResponseDtoOutput = {
+  items: ReviewSignalResponseDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
 export type SetupStatusResponseDtoOutput = {
   completedAt: string | null;
   hasOrganization: boolean;
@@ -1597,6 +1616,74 @@ export function getProjectDiagrams(
     ),
   );
 }
+export function getDiagramReviewSignals(
+  {
+    includeIgnored,
+    cursor,
+    limit,
+    diagramId,
+  }: {
+    includeIgnored?: boolean;
+    cursor?: string;
+    limit?: number;
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: ReviewSignalListResponseDtoOutput;
+    }>(
+      `/review-signals/diagram/${encodeURIComponent(diagramId)}${QS.query(
+        QS.explode({
+          includeIgnored,
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function ignoreReviewSignal(
+  {
+    signalId,
+  }: {
+    signalId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ReviewSignalResponseDtoOutput;
+    }>(`/review-signals/${encodeURIComponent(signalId)}/ignore`, {
+      ...opts,
+      method: 'POST',
+    }),
+  );
+}
+export function unignoreReviewSignal(
+  {
+    signalId,
+  }: {
+    signalId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ReviewSignalResponseDtoOutput;
+    }>(`/review-signals/${encodeURIComponent(signalId)}/unignore`, {
+      ...opts,
+      method: 'POST',
+    }),
+  );
+}
 export function getSetupStatus(opts?: Oazapfts.RequestOpts) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
@@ -1985,6 +2072,12 @@ export enum Role2 {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
+}
+export enum Severity {
+  Info = 'info',
+  Warning = 'warning',
+  Error = 'error',
+  Success = 'success',
 }
 export enum SignupPolicy {
   SignupDisabled = 'signup_disabled',

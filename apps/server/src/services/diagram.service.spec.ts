@@ -57,6 +57,9 @@ describe(DiagramService.name, () => {
     getByIdForUser: vi.fn(),
     getDiagramRole: vi.fn(),
   };
+  const reviewSignalRepository = {
+    syncGeneratedSignals: vi.fn(),
+  };
 
   let service: DiagramService;
 
@@ -66,6 +69,7 @@ describe(DiagramService.name, () => {
       collaborationRepository as never,
       diagramRepository as never,
       projectRepository as never,
+      reviewSignalRepository as never,
     );
   });
 
@@ -203,6 +207,7 @@ describe(DiagramService.name, () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(diagramRepository.replaceDocumentModel).not.toHaveBeenCalled();
+    expect(reviewSignalRepository.syncGeneratedSignals).not.toHaveBeenCalled();
   });
 
   it('allows a project editor to import SQL into a diagram draft', async () => {
@@ -229,6 +234,7 @@ describe(DiagramService.name, () => {
       }),
       'user-id',
     );
+    expect(reviewSignalRepository.syncGeneratedSignals).toHaveBeenCalledWith('diagram-id', expect.any(Array));
     expect(Object.values(response.model.tables)).toContainEqual(expect.objectContaining({ name: 'authors' }));
   });
 });

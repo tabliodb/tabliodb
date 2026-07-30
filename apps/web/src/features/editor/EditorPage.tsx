@@ -5,8 +5,10 @@ import {
   parseDiagramModel,
   stringifyDiagramModel,
   type DatabaseDialect,
+  type DiagramEntityKind,
   type DiagramModel,
   type DiagramModelIntegrityWarning,
+  type DiagramReviewSignal,
 } from '@tabliodb/schema-core';
 import { generateDiagramMarkdown } from '@tabliodb/docs';
 import { generateDiagramSvg } from '@tabliodb/render';
@@ -23,6 +25,7 @@ import {
   type OrganizationSettingsDto,
   type ProjectMemberDto,
   type ProjectResponseDto,
+  type ReviewSignalResponseDto,
 } from '@tabliodb/sdk';
 import {
   generateCreateSchemaSqlWithWarnings,
@@ -131,6 +134,7 @@ import {
   useUpdateProjectMutation,
 } from '@/resources/projects';
 import { snapshotsQueries, useCreateSnapshotMutation } from '@/resources/snapshots';
+import { reviewSignalKeys, reviewSignalQueries, useIgnoreReviewSignalMutation } from '@/resources/review-signals';
 import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
 import { SchemaCanvas } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
@@ -220,6 +224,7 @@ const organizationRoleOptions = [
 ] as const;
 
 const projectMemberPageQuery = { limit: 50 } as const;
+const reviewSignalPageQuery = { limit: 50 } as const;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 
@@ -291,8 +296,19 @@ export function EditorPage() {
       createSeedDiagramModel(diagram.name),
     ),
   );
+  const reviewSignalsQuery = useQuery(
+    reviewSignalQueries.listByDiagram(activeDiagram?.id ?? '', reviewSignalPageQuery),
+  );
 
   const latestSnapshot = snapshotsQuery.data?.[0] ?? null;
+  const persistedReviewSignals = useMemo(() => {
+    if (!model || !isCurrentDraftPersisted(model)) {
+      return null;
+    }
+
+    // Server-backed review signals hanya dipakai untuk draft persisted; edit lokal tetap memakai lint langsung dari model UI.
+    return reviewSignalsQuery.data?.items.flatMap(mapReviewSignalResponseToDomainSignal) ?? null;
+  }, [model, reviewSignalsQuery.data?.items]);
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -301,11 +317,14 @@ export function EditorPage() {
         modelRef.current = snapshot.snapshot;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshot.snapshot);
         setModel(snapshot.snapshot);
+        queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
   });
 
   const exportDiagramMutation = useExportDiagramMutation();
+  // Ignore dipisahkan dari mutasi snapshot/import karena aksi ini hanya mengubah visibility review signal yang sudah persist di server.
+  const ignoreReviewSignalMutation = useIgnoreReviewSignalMutation();
   const importDiagramMutation = useImportDiagramMutation({
     mutationConfig: {
       onSuccess: (response) => {
@@ -316,6 +335,7 @@ export function EditorPage() {
         persistedDraftSignatureRef.current = createDiagramModelSignature(importedModel);
         setModel(importedModel);
         setSelectedTableId(null);
+        queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
   });
@@ -976,12 +996,17 @@ export function EditorPage() {
 
         {rightSidebarOpen ? (
           <SchemaInspector
+            // Tombol ignore hanya aktif untuk signal server-backed; draft lokal tetap menampilkan lint langsung supaya user tidak bisa ignore state yang belum tersimpan.
+            canIgnoreReviewSignals={canEditDiagram && persistedReviewSignals !== null}
+            isIgnoringReviewSignal={ignoreReviewSignalMutation.isPending}
             latestSnapshotVersion={latestSnapshot?.version ?? 0}
             model={model}
             onHide={() => setRightSidebarOpen(false)}
             onModelChange={handleModelChange}
+            onReviewSignalIgnore={(signalId) => ignoreReviewSignalMutation.mutate(signalId)}
             onTableSelect={handleSelectedTableChange}
             readOnly={!canEditDiagram}
+            reviewSignals={persistedReviewSignals}
             selectedTableId={selectedTableId}
           />
         ) : (
@@ -3126,6 +3151,51 @@ function toDiagramExportWarnings(warnings: readonly DiagramExportWarningInput[])
         }
       : undefined,
   }));
+}
+
+const reviewSignalTargetTypes = [
+  'table',
+  'column',
+  'relationship',
+  'index',
+  'enum',
+  'check',
+  'note',
+  'group',
+] as const satisfies readonly DiagramEntityKind[];
+
+const reviewSignalSeverities = [
+  'info',
+  'warning',
+  'error',
+] as const satisfies readonly DiagramReviewSignal['severity'][];
+
+function mapReviewSignalResponseToDomainSignal(signal: ReviewSignalResponseDto): DiagramReviewSignal[] {
+  if (!signal.targetId || !isReviewSignalTargetType(signal.targetType) || !isReviewSignalSeverity(signal.severity)) {
+    return [];
+  }
+
+  return [
+    {
+      code: signal.code as DiagramReviewSignal['code'],
+      id: signal.id,
+      message: signal.message,
+      severity: signal.severity,
+      target: {
+        id: signal.targetId,
+        type: signal.targetType,
+      },
+      title: signal.title,
+    },
+  ];
+}
+
+function isReviewSignalTargetType(value: string): value is DiagramEntityKind {
+  return (reviewSignalTargetTypes as readonly string[]).includes(value);
+}
+
+function isReviewSignalSeverity(value: string): value is DiagramReviewSignal['severity'] {
+  return (reviewSignalSeverities as readonly string[]).includes(value);
 }
 
 function downloadTextFile(fileName: string, content: string, mimeType: string) {

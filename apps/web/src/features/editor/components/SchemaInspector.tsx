@@ -223,10 +223,14 @@ export type SchemaInspectorProps = {
   className?: string;
   latestSnapshotVersion: number;
   model: DiagramModel;
+  canIgnoreReviewSignals?: boolean;
+  isIgnoringReviewSignal?: boolean;
   onHide?: () => void;
   onModelChange: (model: DiagramModel) => void;
+  onReviewSignalIgnore?: (signalId: string) => void;
   onTableSelect?: (tableId: string) => void;
   readOnly?: boolean;
+  reviewSignals?: DiagramReviewSignal[] | null;
   selectedTableId: string | null;
 };
 
@@ -234,10 +238,14 @@ export function SchemaInspector({
   className,
   latestSnapshotVersion,
   model,
+  canIgnoreReviewSignals = false,
+  isIgnoringReviewSignal = false,
   onHide,
   onModelChange,
+  onReviewSignalIgnore,
   onTableSelect,
   readOnly = false,
+  reviewSignals: serverReviewSignals,
   selectedTableId,
 }: SchemaInspectorProps) {
   const enums = Object.values(model.enums);
@@ -262,7 +270,10 @@ export function SchemaInspector({
   const selectedCheck = selectedChecks.find((check) => check.id === selectedCheckId) ?? null;
   const selectedRelationship =
     selectedRelationships.find((relationship) => relationship.id === selectedRelationshipId) ?? null;
-  const reviewSignals = useMemo(() => getDiagramReviewSignals(model), [model]);
+  const reviewSignals = useMemo(
+    () => serverReviewSignals ?? getDiagramReviewSignals(model),
+    [model, serverReviewSignals],
+  );
 
   useEffect(() => {
     if (!selectedEnumId || !enums.some((databaseEnum) => databaseEnum.id === selectedEnumId)) {
@@ -501,16 +512,28 @@ export function SchemaInspector({
           relationships={selectedRelationships}
           selectedRelationshipId={selectedRelationshipId}
         />
-        <ReviewSignalsPanel onSignalSelect={handleReviewSignalSelect} signals={reviewSignals} />
+        <ReviewSignalsPanel
+          canIgnore={canIgnoreReviewSignals}
+          isIgnoring={isIgnoringReviewSignal}
+          onSignalIgnore={onReviewSignalIgnore}
+          onSignalSelect={handleReviewSignalSelect}
+          signals={reviewSignals}
+        />
       </div>
     </aside>
   );
 }
 
 function ReviewSignalsPanel({
+  canIgnore,
+  isIgnoring,
+  onSignalIgnore,
   onSignalSelect,
   signals,
 }: {
+  canIgnore: boolean;
+  isIgnoring: boolean;
+  onSignalIgnore?: (signalId: string) => void;
   onSignalSelect: (signal: DiagramReviewSignal) => void;
   signals: DiagramReviewSignal[];
 }) {
@@ -525,32 +548,50 @@ function ReviewSignalsPanel({
       {signals.length > 0 ? (
         <div className="mt-2 space-y-2">
           {signals.slice(0, 8).map((signal) => (
-            <button
+            <div
               className={cn(
-                'w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border bg-white p-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:-translate-y-0.5 hover:bg-[rgb(var(--tabliodb-surface-raised))] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]',
+                'w-full rounded-[var(--tabliodb-radius-md)] border bg-white p-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:-translate-y-0.5 hover:bg-[rgb(var(--tabliodb-surface-raised))]',
                 getReviewSignalClassName(signal),
               )}
               key={signal.id}
-              onClick={() => onSignalSelect(signal)}
-              type="button"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
-                    {signal.title}
+              <button
+                className="block w-full cursor-pointer rounded-[calc(var(--tabliodb-radius-md)-4px)] text-left outline-none transition focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
+                onClick={() => onSignalSelect(signal)}
+                type="button"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
+                      {signal.title}
+                    </div>
+                    <p className="mt-1 text-[12px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      {signal.message}
+                    </p>
                   </div>
-                  <p className="mt-1 text-[12px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                    {signal.message}
-                  </p>
+                  <span className="shrink-0 rounded-full border border-current px-2 py-0.5 text-[10px] font-extrabold uppercase">
+                    {signal.severity}
+                  </span>
                 </div>
-                <span className="shrink-0 rounded-full border border-current px-2 py-0.5 text-[10px] font-extrabold uppercase">
-                  {signal.severity}
-                </span>
+              </button>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-subtle))]">
+                  {signal.target.type}
+                </div>
+                {canIgnore && onSignalIgnore ? (
+                  <Button
+                    // Ignore berada di aksi terpisah dari tombol focus target supaya keyboard/mouse user tidak memicu dua intent sekaligus.
+                    disabled={isIgnoring}
+                    onClick={() => onSignalIgnore(signal.id)}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                  >
+                    Ignore
+                  </Button>
+                ) : null}
               </div>
-              <div className="mt-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-subtle))]">
-                {signal.target.type}
-              </div>
-            </button>
+            </div>
           ))}
           {signals.length > 8 ? (
             <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">

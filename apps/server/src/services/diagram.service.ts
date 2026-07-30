@@ -5,6 +5,7 @@ import {
   createEmptyDiagramModel,
   decodeDiagramModelFromYjsUpdate,
   getDiagramModelIntegrityWarnings,
+  getDiagramReviewSignals,
   parseDiagramModel,
   serializeDiagramModel,
   stringifyDiagramModel,
@@ -27,6 +28,7 @@ import {
 import { CollaborationRepository } from '../repositories/collaboration.repository.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
+import { ReviewSignalRepository } from '../repositories/review-signal.repository.js';
 import { toIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
 
@@ -36,6 +38,7 @@ export class DiagramService {
     private readonly collaborationRepository: CollaborationRepository,
     private readonly diagramRepository: DiagramRepository,
     private readonly projectRepository: ProjectRepository,
+    private readonly reviewSignalRepository: ReviewSignalRepository,
   ) {}
 
   async create(auth: AuthContext, dto: DiagramCreateDto): Promise<DiagramResponseDto> {
@@ -94,6 +97,16 @@ export class DiagramService {
     }
 
     return diagram;
+  }
+
+  async getCurrentModel(
+    auth: AuthContext,
+    diagramId: string,
+    permission: Permission = Permission.DiagramRead,
+  ): Promise<DiagramModel> {
+    const diagram = await this.requireDiagram(auth, diagramId, permission);
+
+    return this.loadCurrentModel(diagram);
   }
 
   async update(auth: AuthContext, diagramId: string, dto: DiagramUpdateDto): Promise<DiagramResponseDto> {
@@ -186,6 +199,9 @@ export class DiagramService {
     if (!diagramRow) {
       throw new NotFoundException('Diagram not found');
     }
+
+    // Import mengganti live document langsung, jadi review cache ikut disync agar endpoint review tidak membaca signal lama.
+    await this.reviewSignalRepository.syncGeneratedSignals(diagramId, getDiagramReviewSignals(model));
 
     return {
       diagram: this.serializeDiagram(diagramRow),

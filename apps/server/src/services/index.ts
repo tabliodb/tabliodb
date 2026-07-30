@@ -6,6 +6,7 @@ import { InvitationService } from './invitation.service.js';
 import { OrganizationService } from './organization.service.js';
 import { PermissionService } from './permission.service.js';
 import { ProjectService } from './project.service.js';
+import { ReviewSignalService } from './review-signal.service.js';
 import { ServerService } from './server.service.js';
 import { SetupService } from './setup.service.js';
 import { SnapshotService } from './snapshot.service.js';
@@ -20,6 +21,7 @@ export const services = [
   OrganizationService,
   PermissionService,
   ProjectService,
+  ReviewSignalService,
   ServerService,
   SetupService,
   SnapshotService,
