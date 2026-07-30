@@ -33,7 +33,7 @@ export function createTabliodbRequestOptions(options: TabliodbClientOptions = {}
 export function configureTabliodbSdk(options: TabliodbClientOptions = {}): RequestOpts {
   const requestOptions = createTabliodbRequestOptions(options);
 
-  // Oazapfts generated client membaca defaults secara live; mutasi terkendali ini meniru pola SDK generated Immich.
+  // Oazapfts generated client membaca defaults secara live.
   Object.assign(defaults, requestOptions, {
     headers: requestOptions.headers ?? {},
   });
