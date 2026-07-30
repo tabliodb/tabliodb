@@ -48,7 +48,6 @@ const compactSelectClassName =
 export type TableStructureSidebarProps = {
   model: DiagramModel;
   onClearTableSelection: () => void;
-  onDraftChange: () => void;
   onHide: () => void;
   onModelChange: (model: DiagramModel) => void;
   readOnly?: boolean;
@@ -58,7 +57,6 @@ export type TableStructureSidebarProps = {
 export function TableStructureSidebar({
   model,
   onClearTableSelection,
-  onDraftChange,
   onHide,
   onModelChange,
   readOnly = false,
@@ -186,7 +184,7 @@ export function TableStructureSidebar({
 
       <div
         className={cn(
-          'tabliodb-scrollbar min-h-0 flex-1 p-4 pb-28',
+          'tabliodb-scrollbar min-h-0 flex-1 p-4',
           activeAttributesColumnId ? 'overflow-hidden' : 'overflow-y-auto',
         )}
       >
@@ -200,13 +198,7 @@ export function TableStructureSidebar({
           <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Table name
           </label>
-          <InlineTextInput
-            className="mt-2"
-            disabled={readOnly}
-            onCommit={handleTableNameCommit}
-            onDraftChange={onDraftChange}
-            value={table.name}
-          />
+          <InlineTextInput className="mt-2" disabled={readOnly} onCommit={handleTableNameCommit} value={table.name} />
           <div className="mt-3 flex items-center gap-2.5">
             <Palette className="size-4 text-[rgb(var(--tabliodb-ink-muted))]" />
             <div className="flex flex-wrap gap-2.5">
@@ -262,7 +254,6 @@ export function TableStructureSidebar({
                 model={model}
                 onAttributesOpenChange={(open) => setActiveAttributesColumnId(open ? column.id : null)}
                 onDelete={handleDeleteColumn}
-                onDraftChange={onDraftChange}
                 onSelect={setSelectedColumnId}
                 onUpdate={updateColumn}
                 selected={selectedColumn?.id === column.id}
@@ -283,7 +274,6 @@ function ColumnEditorRow({
   model,
   onAttributesOpenChange,
   onDelete,
-  onDraftChange,
   onSelect,
   onUpdate,
   selected,
@@ -295,7 +285,6 @@ function ColumnEditorRow({
   model: DiagramModel;
   onAttributesOpenChange: (open: boolean) => void;
   onDelete: (column: DatabaseColumn) => void;
-  onDraftChange: () => void;
   onSelect: (columnId: string) => void;
   onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
   selected: boolean;
@@ -348,7 +337,6 @@ function ColumnEditorRow({
               onUpdate(column, { name });
             }
           }}
-          onDraftChange={onDraftChange}
           value={column.name}
         />
         <Popover onOpenChange={handleOpenChange} open={attributesOpen}>
@@ -372,7 +360,6 @@ function ColumnEditorRow({
               disabled={disabled}
               model={model}
               onDelete={handleDeleteColumn}
-              onDraftChange={onDraftChange}
               onUpdate={onUpdate}
             />
           </PopoverContent>
@@ -433,7 +420,6 @@ function ColumnAttributesPopoverContent({
   disabled,
   model,
   onDelete,
-  onDraftChange,
   onUpdate,
 }: {
   column: DatabaseColumn;
@@ -441,7 +427,6 @@ function ColumnAttributesPopoverContent({
   disabled: boolean;
   model: DiagramModel;
   onDelete: () => void;
-  onDraftChange: () => void;
   onUpdate: (column: DatabaseColumn, changes: Partial<Omit<DatabaseColumn, 'id' | 'tableId'>>) => void;
 }) {
   const enumOptions = Object.values(model.enums);
@@ -470,7 +455,6 @@ function ColumnAttributesPopoverContent({
               max={2048}
               min={1}
               onCommit={(length) => onUpdate(column, { type: { ...column.type, length, raw: undefined } })}
-              onDraftChange={onDraftChange}
               value={column.type.length ?? 160}
             />
           </label>
@@ -499,7 +483,6 @@ function ColumnAttributesPopoverContent({
             className="mt-1"
             disabled={disabled}
             onCommit={(defaultValue) => onUpdate(column, { defaultValue: normalizeOptionalString(defaultValue) })}
-            onDraftChange={onDraftChange}
             placeholder="Default value"
             value={column.defaultValue ?? ''}
           />
@@ -511,7 +494,6 @@ function ColumnAttributesPopoverContent({
             className="mt-1"
             disabled={disabled}
             onCommit={(comment) => onUpdate(column, { comment: normalizeOptionalString(comment) })}
-            onDraftChange={onDraftChange}
             placeholder="Optional description for this column"
             value={column.comment ?? ''}
           />
@@ -574,14 +556,12 @@ function InlineTextInput({
   className,
   disabled,
   onCommit,
-  onDraftChange,
   placeholder,
   value,
 }: {
   className?: string;
   disabled?: boolean;
   onCommit: (value: string) => void;
-  onDraftChange?: () => void;
   placeholder?: string;
   value: string;
 }) {
@@ -597,21 +577,12 @@ function InlineTextInput({
     }
   }
 
-  function handleChange(nextValue: string) {
-    setDraft(nextValue);
-
-    if (nextValue !== value) {
-      // Dirty feedback should appear while the user types, not only after blur commits the field.
-      onDraftChange?.();
-    }
-  }
-
   return (
     <Input
       className={cn(inlineInputClassName, className)}
       disabled={disabled}
       onBlur={commit}
-      onChange={(event) => handleChange(event.currentTarget.value)}
+      onChange={(event) => setDraft(event.currentTarget.value)}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
           event.currentTarget.blur();
@@ -629,7 +600,6 @@ function InlineNumberInput({
   max,
   min,
   onCommit,
-  onDraftChange,
   value,
 }: {
   className?: string;
@@ -637,7 +607,6 @@ function InlineNumberInput({
   max: number;
   min: number;
   onCommit: (value: number) => void;
-  onDraftChange?: () => void;
   value: number;
 }) {
   const [draft, setDraft] = useState(String(value));
@@ -670,16 +639,7 @@ function InlineNumberInput({
       max={max}
       min={min}
       onBlur={commit}
-      onChange={(event) => {
-        const nextValue = event.currentTarget.value;
-
-        setDraft(nextValue);
-
-        if (nextValue !== String(value)) {
-          // Number drafts can be temporarily invalid while typing, but they still signal that the editor has pending work.
-          onDraftChange?.();
-        }
-      }}
+      onChange={(event) => setDraft(event.currentTarget.value)}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
           event.currentTarget.blur();
@@ -695,14 +655,12 @@ function InlineTextarea({
   className,
   disabled,
   onCommit,
-  onDraftChange,
   placeholder,
   value,
 }: {
   className?: string;
   disabled?: boolean;
   onCommit: (value: string) => void;
-  onDraftChange?: () => void;
   placeholder?: string;
   value: string;
 }) {
@@ -724,16 +682,7 @@ function InlineTextarea({
           onCommit(draft);
         }
       }}
-      onChange={(event) => {
-        const nextValue = event.currentTarget.value;
-
-        setDraft(nextValue);
-
-        if (nextValue !== value) {
-          // Textarea edits use the same immediate dirty feedback as compact inline inputs.
-          onDraftChange?.();
-        }
-      }}
+      onChange={(event) => setDraft(event.currentTarget.value)}
       placeholder={placeholder}
       value={draft}
     />

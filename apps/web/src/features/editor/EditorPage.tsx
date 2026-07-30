@@ -166,7 +166,6 @@ export function EditorPage() {
   const queryClient = useQueryClient();
   const [copiedSql, setCopiedSql] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
@@ -228,8 +227,7 @@ export function EditorPage() {
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
       onSuccess: (snapshot) => {
-        // A successful snapshot write makes the server version canonical again, so the floating save affordance can disappear.
-        setHasUnsavedChanges(false);
+        // Snapshot creation returns the canonical versioned model while live editing remains a separate persistence concern.
         modelRef.current = snapshot.snapshot;
         setModel(snapshot.snapshot);
       },
@@ -239,7 +237,6 @@ export function EditorPage() {
   const logoutMutation = useLogoutMutation({
     mutationConfig: {
       onSuccess: () => {
-        setHasUnsavedChanges(false);
         modelRef.current = null;
         setModel(null);
         setSelectedTableId(null);
@@ -254,10 +251,9 @@ export function EditorPage() {
         return;
       }
 
-      // Keep the latest draft model synchronously available for Save clicks that happen immediately after an input blur.
+      // Keep the latest draft model synchronously available for snapshot clicks that happen immediately after an input blur.
       modelRef.current = nextModel;
       setModel(nextModel);
-      setHasUnsavedChanges(true);
     },
     [canEditDiagram],
   );
@@ -325,7 +321,6 @@ export function EditorPage() {
 
     modelRef.current = latestSnapshot.snapshot;
     setModel(latestSnapshot.snapshot);
-    setHasUnsavedChanges(false);
     setSelectedTableId(null);
   }, [latestSnapshot]);
 
@@ -338,9 +333,8 @@ export function EditorPage() {
     const seedModel = createSeedDiagramModel(activeDiagram.name);
     modelRef.current = seedModel;
     setModel(seedModel);
-    setHasUnsavedChanges(canCreateSnapshot);
     setSelectedTableId(null);
-  }, [activeDiagram, canCreateSnapshot, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
+  }, [activeDiagram, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
 
   async function handleExportSql() {
     if (!model) {
@@ -362,7 +356,6 @@ export function EditorPage() {
 
     modelRef.current = nextModel;
     setModel(nextModel);
-    setHasUnsavedChanges(true);
     setSelectedTableId(nextTableId);
   }
 
@@ -380,7 +373,7 @@ export function EditorPage() {
 
       saveSnapshotMutation.mutate({
         diagramId: activeDiagram.id,
-        message: 'Manual save',
+        message: 'Manual snapshot',
         snapshot: {
           ...modelToSave,
           metadata: {
@@ -391,15 +384,6 @@ export function EditorPage() {
         },
       });
     }, 0);
-  }
-
-  function markDraftChanged() {
-    if (!canEditDiagram) {
-      return;
-    }
-
-    // Draft text edits mark the diagram dirty immediately, even before blur commits the parsed schema model.
-    setHasUnsavedChanges(true);
   }
 
   if (isUnauthorized(projectsQuery.error)) {
@@ -481,7 +465,6 @@ export function EditorPage() {
               <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
               <ProjectSettingsDialog
                 onArchived={() => {
-                  setHasUnsavedChanges(false);
                   modelRef.current = null;
                   setModel(null);
                   setSelectedTableId(null);
@@ -494,7 +477,6 @@ export function EditorPage() {
                 diagram={activeDiagram}
                 model={model}
                 onUpdated={(diagram) => {
-                  setHasUnsavedChanges(true);
                   setModel((current) => (current ? updateLiveModelFromDiagram(current, diagram, modelRef) : current));
                 }}
               />
@@ -507,7 +489,7 @@ export function EditorPage() {
             onClick={handleSaveSnapshot}
           >
             {saveSnapshotMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            Save
+            Snapshot
           </Button>
           <Button className="gap-2" onClick={handleExportSql} variant="sky">
             <Play className="size-4" />
@@ -560,7 +542,6 @@ export function EditorPage() {
             <TableStructureSidebar
               model={model}
               onClearTableSelection={() => setSelectedTableId(null)}
-              onDraftChange={markDraftChanged}
               onHide={() => setLeftSidebarOpen(false)}
               onModelChange={handleModelChange}
               readOnly={!canEditDiagram}
@@ -575,7 +556,7 @@ export function EditorPage() {
                 <span className="min-w-0 flex-1 truncate text-base font-extrabold">Workspace</span>
                 <IconButton icon={PanelLeftClose} label="Hide left sidebar" onClick={() => setLeftSidebarOpen(false)} />
               </div>
-              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4 pb-28">
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
                 <WorkspaceSwitcher
                   activeOrganization={activeOrganization}
                   onSelect={(organization) => {
@@ -643,9 +624,6 @@ export function EditorPage() {
               </div>
             </div>
           )}
-          {leftSidebarOpen && hasUnsavedChanges && canCreateSnapshot ? (
-            <UnsavedChangesBar isSaving={saveSnapshotMutation.isPending} onSave={handleSaveSnapshot} />
-          ) : null}
         </aside>
 
         <section className="flex min-h-0 min-w-0">
@@ -706,7 +684,7 @@ function updateLiveModelFromDiagram(
     dialect: diagram.dialect,
     metadata: {
       ...currentModel.metadata,
-      // Diagram metadata follows the server record immediately; snapshot persistence still happens on Save.
+      // Diagram metadata follows the server record immediately; version history is created only by the Snapshot action.
       name: diagram.name,
       updatedAt: new Date().toISOString(),
     },
@@ -736,25 +714,6 @@ function SidebarRail({
       )}
     >
       <IconButton icon={icon} label={label} onClick={onClick} variant="ghost" />
-    </div>
-  );
-}
-
-function UnsavedChangesBar({ isSaving, onSave }: { isSaving: boolean; onSave: () => void }) {
-  return (
-    <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 tabliodb-save-bounce">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary))] bg-white p-3 shadow-[0_5px_0_rgb(var(--tabliodb-primary-shadow)),0_18px_34px_rgb(0_0_0/0.16)]">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
-            Unsaved changes
-          </div>
-          <div className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Save snapshot</div>
-        </div>
-        <Button className="shrink-0" disabled={isSaving} onClick={onSave} size="sm">
-          {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          Save
-        </Button>
-      </div>
     </div>
   );
 }
