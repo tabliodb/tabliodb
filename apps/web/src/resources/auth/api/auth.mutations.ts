@@ -1,5 +1,10 @@
 import { useMutation } from '@tanstack/react-query';
-import type { LoginCredentialDto, PasswordResetConfirmDto, PasswordResetRequestDto } from '@tabliodb/sdk';
+import type {
+  CurrentUserProfileUpdateDto,
+  LoginCredentialDto,
+  PasswordResetConfirmDto,
+  PasswordResetRequestDto,
+} from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { projectsKeys } from '@/resources/projects';
@@ -8,6 +13,7 @@ import { authKeys } from './auth.keys';
 
 const uploadAvatarMutationFn = (file: Blob) => sdk.auth.uploadAvatar(file);
 const deleteAvatarMutationFn = () => sdk.auth.deleteAvatar();
+const updateProfileMutationFn = (body: CurrentUserProfileUpdateDto) => sdk.auth.updateProfile(body);
 const loginMutationFn = (body: LoginCredentialDto) => sdk.auth.login(body);
 const logoutMutationFn = () => sdk.auth.logout();
 const passwordResetRequestMutationFn = (body: PasswordResetRequestDto) => sdk.auth.requestPasswordReset(body);
@@ -18,6 +24,9 @@ type UseUploadAvatarMutationParams = {
 };
 type UseDeleteAvatarMutationParams = {
   mutationConfig?: MutationConfig<typeof deleteAvatarMutationFn>;
+};
+type UseUpdateProfileMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateProfileMutationFn>;
 };
 type UseLoginMutationParams = {
   mutationConfig?: MutationConfig<typeof loginMutationFn>;
@@ -86,6 +95,19 @@ export function useDeleteAvatarMutation(params: UseDeleteAvatarMutationParams = 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Delete avatar mengikuti strategi cache yang sama seperti upload agar header/profile tidak menunggu roundtrip tambahan.
+      queryClient.setQueryData(authKeys.me(), data);
+      queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useUpdateProfileMutation(params: UseUpdateProfileMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateProfileMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Profile identity tampil di header, mention, dan directory admin; response /auth/me langsung menjadi cache source of truth.
       queryClient.setQueryData(authKeys.me(), data);
       queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);

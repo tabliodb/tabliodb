@@ -13,6 +13,7 @@ import { AuthContext } from '../database.js';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
+  CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
   LoginCredentialDto,
   LoginResponseDto,
@@ -113,6 +114,27 @@ export class AuthService {
     await this.fileService.clearUserAvatar(auth.user.id);
 
     return this.getFreshAuthUser(auth.user.id);
+  }
+
+  async updateProfile(auth: AuthContext, dto: CurrentUserProfileUpdateDto): Promise<CurrentUserResponseDto> {
+    const values: { cursorColor?: string; name?: string } = {};
+
+    if (dto.name !== undefined) {
+      // Nama dinormalisasi di server supaya SDK, API key client, dan web mendapat perilaku yang sama.
+      values.name = dto.name.trim();
+    }
+
+    if (dto.cursorColor !== undefined) {
+      values.cursorColor = dto.cursorColor.toLowerCase();
+    }
+
+    const user = await this.userRepository.updateProfile(auth.user.id, values);
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    return user;
   }
 
   async requestPasswordReset(dto: PasswordResetRequestDto): Promise<PasswordResetRequestResponseDto> {

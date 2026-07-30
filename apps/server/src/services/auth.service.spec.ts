@@ -62,6 +62,7 @@ describe(AuthService.name, () => {
     getAuthUserById: vi.fn(),
     getByEmail: vi.fn(),
     updatePasswordHash: vi.fn(),
+    updateProfile: vi.fn(),
   };
 
   let service: AuthService;
@@ -176,6 +177,30 @@ describe(AuthService.name, () => {
 
     expect(userRepository.create).not.toHaveBeenCalled();
     expect(organizationRepository.createPersonalOrganization).not.toHaveBeenCalled();
+  });
+
+  it('updates the current user profile with normalized values', async () => {
+    userRepository.updateProfile.mockResolvedValue({
+      avatarUrl: null,
+      cursorColor: '#1cb0f6',
+      email: 'automation@tabliodb.local',
+      id: 'user-id',
+      name: 'Automation Lead',
+    });
+
+    const response = await service.updateProfile(authWithLimitedApiKey, {
+      cursorColor: '#1CB0F6',
+      name: ' Automation Lead ',
+    });
+
+    expect(userRepository.updateProfile).toHaveBeenCalledWith('user-id', {
+      cursorColor: '#1cb0f6',
+      name: 'Automation Lead',
+    });
+    expect(response).toMatchObject({
+      cursorColor: '#1cb0f6',
+      name: 'Automation Lead',
+    });
   });
 
   it('keeps password reset request neutral when the email does not exist', async () => {

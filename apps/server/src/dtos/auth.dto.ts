@@ -39,6 +39,16 @@ const AuthUserSchema = z
   })
   .meta({ id: 'AuthUserDto' });
 
+const CurrentUserProfileUpdateSchema = z
+  .object({
+    cursorColor: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, 'Use a valid hex color.')
+      .optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+  })
+  .meta({ id: 'CurrentUserProfileUpdateDto' });
+
 const LoginResponseSchema = z
   .object({
     accessToken: z.string(),
@@ -92,6 +102,7 @@ export class LoginCredentialDto extends createZodDto(LoginCredentialSchema) {}
 export class SignUpDto extends createZodDto(SignUpSchema) {}
 export class LoginResponseDto extends createZodDto(LoginResponseSchema) {}
 export class CurrentUserResponseDto extends createZodDto(CurrentUserResponseSchema) {}
+export class CurrentUserProfileUpdateDto extends createZodDto(CurrentUserProfileUpdateSchema) {}
 export class ApiKeyCreateDto extends createZodDto(ApiKeyCreateSchema) {}
 export class ApiKeyCreateResponseDto extends createZodDto(ApiKeyCreateResponseSchema) {}
 export class LogoutResponseDto extends createZodDto(LogoutResponseSchema) {}

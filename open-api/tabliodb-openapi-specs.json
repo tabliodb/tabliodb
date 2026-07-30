@@ -56,6 +56,49 @@
         ]
       }
     },
+    "/auth/me/profile": {
+      "patch": {
+        "operationId": "updateCurrentUserProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurrentUserProfileUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/me/avatar": {
       "post": {
         "operationId": "uploadCurrentUserAvatar",
@@ -2733,6 +2776,20 @@
       },
       "CurrentUserResponseDto_Output": {
         "$ref": "#/components/schemas/AuthUserDto_Output"
+      },
+      "CurrentUserProfileUpdateDto": {
+        "type": "object",
+        "properties": {
+          "cursorColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        }
       },
       "SignUpDto": {
         "type": "object",

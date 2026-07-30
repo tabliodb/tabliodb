@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Res,
   UploadedFile,
@@ -18,6 +19,7 @@ import { ZodResponse } from 'nestjs-zod';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
+  CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
   LoginCredentialDto,
   LoginResponseDto,
@@ -47,6 +49,18 @@ export class AuthController {
   @ZodResponse({ type: CurrentUserResponseDto })
   getCurrentUser(@Auth() auth: AuthContext): CurrentUserResponseDto {
     return auth.user;
+  }
+
+  @Patch('me/profile')
+  @Authenticated()
+  @ApiBody({ type: CurrentUserProfileUpdateDto })
+  @ApiOperation({ operationId: 'updateCurrentUserProfile' })
+  @ZodResponse({ type: CurrentUserResponseDto })
+  updateCurrentUserProfile(
+    @Auth() auth: AuthContext,
+    @Body() dto: CurrentUserProfileUpdateDto,
+  ): Promise<CurrentUserResponseDto> {
+    return this.service.updateProfile(auth, dto);
   }
 
   @Post('me/avatar')

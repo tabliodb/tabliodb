@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { Button } from '@tabliodb/ui';
-import { Database, LayoutDashboard, LogOut, Settings, ShieldCheck, UsersRound } from 'lucide-react';
+import { Database, LayoutDashboard, LogOut, Settings, ShieldCheck, UserRound, UsersRound } from 'lucide-react';
 import { routes } from '@/app/routes';
 import { LoadingState } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
@@ -32,6 +32,7 @@ export function AdminLayout() {
         <nav className="grid gap-2 p-4">
           <AdminNavLink icon={<UsersRound className="size-4" />} label="Users" to={routes.adminUsers.to()} />
           <AdminNavLink icon={<Settings className="size-4" />} label="Settings" to={routes.adminSettings.to()} />
+          <AdminNavLink icon={<UserRound className="size-4" />} label="Profile" to={routes.profile.to()} />
           <AdminNavLink icon={<LayoutDashboard className="size-4" />} label="Editor" to={routes.home.to()} />
         </nav>
         <div className="p-4 lg:absolute lg:bottom-0 lg:w-[264px]">

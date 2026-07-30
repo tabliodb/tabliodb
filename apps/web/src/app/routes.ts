@@ -59,6 +59,10 @@ export const routes = {
     path: '/admin/settings',
     to: () => '/admin/settings',
   },
+  profile: {
+    path: '/profile',
+    to: () => '/profile',
+  },
   workspace: {
     path: '/workspaces/:workspaceSlug',
     to: ({ workspaceSlug }: WorkspaceParams) => `/workspaces/${encodePathSegment(workspaceSlug)}`,

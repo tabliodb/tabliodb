@@ -2,6 +2,7 @@ import type { Permission } from '@tabliodb/shared';
 import type { RequestOpts } from '@oazapfts/runtime';
 import type {
   ApiKeyCreateDto as GeneratedApiKeyCreateDto,
+  CurrentUserProfileUpdateDto as GeneratedCurrentUserProfileUpdateDto,
   PasswordResetConfirmDto as GeneratedPasswordResetConfirmDto,
   PasswordResetRequestDto as GeneratedPasswordResetRequestDto,
 } from '../fetch-client.js';
@@ -14,6 +15,7 @@ import {
   logout as logoutRequest,
   requestPasswordReset as requestPasswordResetRequest,
   signUp as signUpRequest,
+  updateCurrentUserProfile as updateCurrentUserProfileRequest,
   uploadCurrentUserAvatar as uploadCurrentUserAvatarRequest,
 } from '../fetch-client.js';
 
@@ -42,6 +44,11 @@ export type LoginResponseDto = {
 };
 
 export type CurrentUserResponseDto = AuthUserDto;
+
+export type CurrentUserProfileUpdateDto = {
+  cursorColor?: string;
+  name?: string;
+};
 
 export type LogoutResponseDto = {
   successful: boolean;
@@ -91,6 +98,7 @@ export type AuthResource = {
   me: () => Promise<CurrentUserResponseDto>;
   requestPasswordReset: (body: PasswordResetRequestDto) => Promise<PasswordResetRequestResponseDto>;
   signUp: (body: SignUpDto) => Promise<LoginResponseDto>;
+  updateProfile: (body: CurrentUserProfileUpdateDto) => Promise<CurrentUserResponseDto>;
   uploadAvatar: (file: Blob) => Promise<CurrentUserResponseDto>;
 };
 
@@ -100,6 +108,11 @@ export function createAuthResource(opts?: RequestOpts): AuthResource {
     uploadAvatar: (file: Blob) =>
       uploadCurrentUserAvatarRequest({ body: { file } }, opts) as Promise<CurrentUserResponseDto>,
     deleteAvatar: () => deleteCurrentUserAvatarRequest(opts) as Promise<CurrentUserResponseDto>,
+    updateProfile: (body: CurrentUserProfileUpdateDto) =>
+      updateCurrentUserProfileRequest(
+        { currentUserProfileUpdateDto: body as unknown as GeneratedCurrentUserProfileUpdateDto },
+        opts,
+      ) as Promise<CurrentUserResponseDto>,
     login: (body: LoginCredentialDto) => loginRequest({ loginCredentialDto: body }, opts) as Promise<LoginResponseDto>,
     signUp: (body: SignUpDto) => signUpRequest({ signUpDto: body }, opts) as Promise<LoginResponseDto>,
     logout: () => logoutRequest(opts) as Promise<LogoutResponseDto>,

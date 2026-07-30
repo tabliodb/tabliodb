@@ -1,5 +1,6 @@
 import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
+import { AccountLayout } from './layouts/AccountLayout';
 import { AdminLayout } from './layouts/AdminLayout';
 import { AuthLayout } from './layouts/AuthLayout';
 import { EditorLayout } from './layouts/EditorLayout';
@@ -14,6 +15,7 @@ import { passwordRecoveryLoader } from '@/features/auth/loaders/passwordRecovery
 import { requireAuthenticated } from '@/features/auth/middleware/requireAuthenticated';
 import { editorLoader } from '@/features/editor/loaders/editorLoader';
 import { acceptInvitationLoader } from '@/features/invitations/loaders/acceptInvitationLoader';
+import { profileLoader } from '@/features/profile/loaders/profileLoader';
 import { requireSetupComplete } from '@/features/setup/middleware/requireSetupComplete';
 import { setupLoader } from '@/features/setup/loaders/setupLoader';
 import { routes } from './routes';
@@ -39,6 +41,9 @@ const AcceptInvitationPage = lazy(() =>
   import('@/features/invitations/AcceptInvitationPage').then((module) => ({ default: module.AcceptInvitationPage })),
 );
 const SetupPage = lazy(() => import('@/features/setup/SetupPage').then((module) => ({ default: module.SetupPage })));
+const ProfilePage = lazy(() =>
+  import('@/features/profile/ProfilePage').then((module) => ({ default: module.ProfilePage })),
+);
 
 export const router = createBrowserRouter([
   {
@@ -100,6 +105,18 @@ export const router = createBrowserRouter([
                 element: <AdminSettingsPage />,
                 loader: adminSettingsLoader,
                 path: routes.adminSettings.path,
+              },
+            ],
+          },
+          {
+            element: <AccountLayout />,
+            errorElement: <RouteErrorBoundary />,
+            middleware: [requireSetupComplete, requireAuthenticated],
+            children: [
+              {
+                element: <ProfilePage />,
+                loader: profileLoader,
+                path: routes.profile.path,
               },
             ],
           },

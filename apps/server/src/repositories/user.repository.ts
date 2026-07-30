@@ -70,6 +70,23 @@ export class UserRepository {
     return this.db.selectFrom('instance_members').select('role').where('userId', '=', userId).executeTakeFirst();
   }
 
+  async updateProfile(userId: string, values: { cursorColor?: string; name?: string }) {
+    const updated = await this.db
+      .updateTable('users')
+      .set({
+        ...values,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', userId)
+      .where('isDisabled', '=', false)
+      .where('deletedAt', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+
+    // Re-read melalui getAuthUserById agar response profile selalu sama dengan /auth/me dan session payload.
+    return updated ? this.getAuthUserById(updated.id) : undefined;
+  }
+
   create(dto: Insertable<UserTable>) {
     return this.db.insertInto('users').values(dto).returningAll().executeTakeFirstOrThrow();
   }

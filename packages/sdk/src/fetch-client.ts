@@ -26,6 +26,10 @@ export type AuthUserDtoOutput = {
   avatarUrl: string | null;
   cursorColor: string;
 };
+export type CurrentUserProfileUpdateDto = {
+  cursorColor?: string;
+  name?: string;
+};
 export type SignUpDto = {
   email: string;
   password: string;
@@ -940,6 +944,28 @@ export function getCurrentUser(opts?: Oazapfts.RequestOpts) {
     }>('/auth/me', {
       ...opts,
     }),
+  );
+}
+export function updateCurrentUserProfile(
+  {
+    currentUserProfileUpdateDto,
+  }: {
+    currentUserProfileUpdateDto: CurrentUserProfileUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: AuthUserDtoOutput;
+    }>(
+      '/auth/me/profile',
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: currentUserProfileUpdateDto,
+      }),
+    ),
   );
 }
 export function uploadCurrentUserAvatar(

@@ -100,6 +100,7 @@ import {
   SlidersHorizontal,
   Trash2,
   UserPlus,
+  UserRound,
   UsersRound,
 } from 'lucide-react';
 import {
@@ -904,6 +905,10 @@ export function EditorPage() {
               <DropdownMenuItem disabled>
                 <Share2 className="size-4" />
                 Share workspace coming soon
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate(routes.profile.to())}>
+                <UserRound className="size-4" />
+                Profile
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => navigate(routes.adminUsers.to())}>
                 <ShieldCheck className="size-4" />
