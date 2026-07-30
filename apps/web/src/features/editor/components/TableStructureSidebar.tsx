@@ -235,8 +235,6 @@ export function TableStructureSidebar({
                             ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
                             : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
                       }}
-                      // Hex disimpan di title agar inspeksi native/browser tetap punya metadata warna yang presisi.
-                      title={color}
                       type="button"
                     />
                   </WithTooltip>
@@ -372,7 +370,6 @@ function ColumnEditorRow({
               <button
                 aria-label={`Column actions for ${column.name}`}
                 className="grid size-7 cursor-pointer place-items-center rounded-[var(--tabliodb-radius-sm)] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white"
-                title={`Column actions for ${column.name}`}
                 type="button"
               >
                 <MoreHorizontal className="size-4" />
@@ -575,8 +572,6 @@ function ColumnToggle({
         )}
         disabled={disabled}
         onClick={onClick}
-        // Title tetap dipakai untuk native metadata, sedangkan tooltip Radix memberi penjelasan state yang lebih kaya.
-        title={label}
         type="button"
       >
         {children}

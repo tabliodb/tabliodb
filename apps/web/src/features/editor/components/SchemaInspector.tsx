@@ -636,8 +636,6 @@ function ReviewSignalsPanel({
                 <button
                   className="block w-full cursor-pointer rounded-[calc(var(--tabliodb-radius-md)-4px)] text-left outline-none transition focus-visible:ring-4 focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
                   onClick={() => onSignalSelect(signal)}
-                  // Native title tetap memberi metadata singkat jika user membuka browser tanpa custom tooltip.
-                  title={`Focus ${signal.target.type}`}
                   type="button"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -666,7 +664,6 @@ function ReviewSignalsPanel({
                       disabled={isIgnoring}
                       onClick={() => onSignalIgnore(signal.id)}
                       size="sm"
-                      title="Ignore review signal"
                       type="button"
                       variant="secondary"
                     >
@@ -1083,8 +1080,6 @@ function EditTableDialog({
                                 ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
                                 : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
                           }}
-                          // Hex tetap dipertahankan sebagai title agar metadata warna teknis masih mudah dilihat saat inspeksi native.
-                          title={color}
                           type="button"
                         />
                       </WithTooltip>
@@ -2655,11 +2650,7 @@ function CommentMarkerBadge({ count, label }: { count: CommentMarkerCount; label
 
   return (
     <WithTooltip content={title}>
-      <span
-        className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-1.5 text-[10px] font-extrabold leading-none text-[rgb(var(--tabliodb-sky-text))] shadow-[0_1px_0_rgb(var(--tabliodb-sky-border))]"
-        // Native title tetap dipertahankan agar marker komentar punya metadata fallback saat tooltip belum aktif.
-        title={title}
-      >
+      <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-1.5 text-[10px] font-extrabold leading-none text-[rgb(var(--tabliodb-sky-text))] shadow-[0_1px_0_rgb(var(--tabliodb-sky-border))]">
         <MessageSquareText className="size-3" />
         {formatCommentMarkerCount(count)}
       </span>
@@ -2670,11 +2661,7 @@ function CommentMarkerBadge({ count, label }: { count: CommentMarkerCount; label
 function ColumnBadge({ children }: { children: string }) {
   return (
     <WithTooltip content={getColumnBadgeTooltip(children)}>
-      <span
-        className="rounded-md bg-[rgb(var(--tabliodb-surface-raised))] px-1.5 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]"
-        // Badge tetap menyimpan title native agar singkatan database terbaca sebagai metadata sederhana.
-        title={getColumnBadgeTooltip(children)}
-      >
+      <span className="rounded-md bg-[rgb(var(--tabliodb-surface-raised))] px-1.5 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
         {children}
       </span>
     </WithTooltip>

@@ -817,14 +817,7 @@ function UserRow({
         <DropdownMenu>
           <WithTooltip content={`Manage ${user.name}: password, sessions, and account status`}>
             <DropdownMenuTrigger asChild>
-              <Button
-                aria-label={`Manage ${user.name}`}
-                disabled={isBusy}
-                size="icon"
-                // Native title dipertahankan sebagai metadata sederhana ketika tooltip custom tidak aktif.
-                title={`Manage ${user.name}`}
-                variant="secondary"
-              >
+              <Button aria-label={`Manage ${user.name}`} disabled={isBusy} size="icon" variant="secondary">
                 {isBusy ? <Loader2 className="size-4 animate-spin" /> : <MoreHorizontal className="size-4" />}
               </Button>
             </DropdownMenuTrigger>

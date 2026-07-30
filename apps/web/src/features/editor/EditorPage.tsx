@@ -801,10 +801,7 @@ export function EditorPage() {
           <div className="relative">
             <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
             {openCommentThreadCount > 0 ? (
-              <span
-                className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-1 text-[9px] font-extrabold leading-4 text-[rgb(var(--tabliodb-sky-text))] shadow-[0_1px_0_rgb(var(--tabliodb-sky-border))]"
-                title={`${openCommentThreadCount} open comment threads`}
-              >
+              <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-1 text-[9px] font-extrabold leading-4 text-[rgb(var(--tabliodb-sky-text))] shadow-[0_1px_0_rgb(var(--tabliodb-sky-border))]">
                 {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
               </span>
             ) : null}
@@ -1430,7 +1427,6 @@ function CommentsDialog({
                         )}
                         key={thread.id}
                         onClick={() => handleThreadSelect(thread)}
-                        title={`Open ${getCommentThreadTargetLabel(model, thread)}`}
                         type="button"
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -1442,7 +1438,9 @@ function CommentsDialog({
                               {formatDateTime(thread.updatedAt)}
                             </p>
                           </div>
-                          <Badge variant={thread.status === 'resolved' ? 'green' : 'yellow'}>{thread.status}</Badge>
+                          <Badge variant={thread.status === 'resolved' ? 'purple' : 'green'}>
+                            {formatCommentThreadStatus(thread.status)}
+                          </Badge>
                         </div>
                       </button>
                     ))}
@@ -1468,7 +1466,7 @@ function CommentsDialog({
                   onClick={handleToggleResolved}
                   size="sm"
                   type="button"
-                  variant={activeThread.status === 'resolved' ? 'secondary' : 'primary'}
+                  variant={activeThread.status === 'resolved' ? 'primary' : 'purple'}
                 >
                   {resolveThreadMutation.isPending || unresolveThreadMutation.isPending ? (
                     <Loader2 className="size-4 animate-spin" />
@@ -1794,6 +1792,10 @@ function formatCommentTargetType(targetType: CommentTargetType): string {
     .split('_')
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
     .join(' ');
+}
+
+function formatCommentThreadStatus(status: CommentThreadListItemDto['status']): string {
+  return status === 'resolved' ? 'Resolved' : 'Open';
 }
 
 function SidebarRail({
@@ -2352,8 +2354,6 @@ function WorkspaceSwitcher({
           <DropdownMenuTrigger asChild>
             <button
               className="flex h-[var(--tabliodb-control-lg)] w-full cursor-pointer items-center gap-2.5 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
-              // Native title dipertahankan karena switcher ini juga membawa konteks workspace aktif.
-              title="Switch workspace"
               type="button"
             >
               <div className="grid size-8 shrink-0 place-items-center rounded-[12px] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
@@ -3589,8 +3589,6 @@ function ProjectMemberRow({
           disabled={isBusy}
           onClick={() => onRemove(member)}
           size="icon"
-          // Title tetap ada sebagai fallback native untuk metadata action destructive.
-          title={`Remove ${member.name}`}
           variant="ghost"
         >
           {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
@@ -3648,8 +3646,6 @@ function OrganizationMemberRow({
           disabled={isBusy}
           onClick={() => onRemove(member)}
           size="icon"
-          // Title tetap ada sebagai fallback native untuk metadata action destructive.
-          title={`Remove ${member.name}`}
           variant="ghost"
         >
           {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}

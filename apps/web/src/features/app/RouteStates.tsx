@@ -1,3 +1,4 @@
+import { TabliodbApiError } from '@tabliodb/sdk';
 import { Button, Surface } from '@tabliodb/ui';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -38,5 +39,66 @@ export function ErrorState({
 }
 
 export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown error';
+  if (error instanceof TabliodbApiError) {
+    const apiMessage = getApiErrorDataMessage(error.data);
+
+    if (apiMessage) {
+      return apiMessage;
+    }
+
+    return getHttpStatusFallbackMessage(error.status);
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return typeof error === 'string' && error.trim() ? error : 'Something went wrong. Please try again.';
+}
+
+function getApiErrorDataMessage(data: unknown): string | null {
+  if (typeof data === 'string') {
+    return data.trim() || null;
+  }
+
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  const response = data as { error?: unknown; message?: unknown };
+  const message = normalizeErrorMessage(response.message);
+
+  if (message) {
+    return message;
+  }
+
+  return normalizeErrorMessage(response.error);
+}
+
+function normalizeErrorMessage(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return value.trim() || null;
+  }
+
+  if (Array.isArray(value)) {
+    const messages = value.map((item) => normalizeErrorMessage(item)).filter((item): item is string => Boolean(item));
+
+    return messages.length > 0 ? messages.join(' ') : null;
+  }
+
+  return null;
+}
+
+function getHttpStatusFallbackMessage(status: number): string {
+  const fallbackMessages: Record<number, string> = {
+    400: 'The request could not be processed. Please review the entered data.',
+    401: 'Your session has expired. Please sign in again.',
+    403: 'You do not have permission to perform this action.',
+    404: 'The requested data was not found. It may have been deleted or moved.',
+    409: 'This action conflicts with existing data. Please refresh and try again.',
+    422: 'Some fields are invalid. Please review the form and try again.',
+    429: 'Too many requests. Please wait a moment and try again.',
+  };
+
+  return fallbackMessages[status] ?? 'The server could not complete this request. Please try again.';
 }
