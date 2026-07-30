@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { DiagramModel } from '@tabliodb/schema-core';
+import type { DatabaseDialect, DiagramModel } from '@tabliodb/schema-core';
 import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import {
   TabliodbApiError,
   type AuditLogDto,
+  type DiagramResponseDto,
   type OrganizationDto,
   type OrganizationMemberDto,
   type OrganizationSettingsDto,
@@ -52,6 +53,7 @@ import {
   Settings,
   Share2,
   ShieldCheck,
+  SlidersHorizontal,
   Trash2,
   UserPlus,
   UsersRound,
@@ -64,7 +66,7 @@ import { routes } from '@/app/routes';
 import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
-import { defaultDiagramName, diagramsQueries } from '@/resources/diagrams';
+import { defaultDiagramName, diagramsQueries, useUpdateDiagramMutation } from '@/resources/diagrams';
 import {
   organizationsQueries,
   useRemoveOrganizationMemberMutation,
@@ -98,6 +100,21 @@ const projectFormSchema = z.object({
 });
 
 type ProjectFormState = z.infer<typeof projectFormSchema>;
+
+const diagramDialectOptions = [
+  'postgresql',
+  'mysql',
+  'sqlite',
+  'mariadb',
+  'sqlserver',
+] as const satisfies readonly DatabaseDialect[];
+
+const diagramSettingsFormSchema = z.object({
+  dialect: z.enum(diagramDialectOptions),
+  name: z.string().trim().min(1, 'Diagram name is required.').max(80, 'Keep the name under 80 characters.'),
+});
+
+type DiagramSettingsFormState = z.infer<typeof diagramSettingsFormSchema>;
 
 const workspaceDefaultRoleOptions = ['none', ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
 
@@ -453,6 +470,27 @@ export function EditorPage() {
                     navigate(routes.home.to(), { replace: true });
                   }}
                   project={activeProject}
+                />
+                <DiagramSettingsDialog
+                  canEdit={canEditDiagram}
+                  diagram={activeDiagram}
+                  model={model}
+                  onUpdated={(diagram) => {
+                    setModel((current) =>
+                      current
+                        ? {
+                            ...current,
+                            dialect: diagram.dialect,
+                            metadata: {
+                              ...current.metadata,
+                              // Diagram metadata follows the server record immediately; snapshot persistence still happens on Save.
+                              name: diagram.name,
+                              updatedAt: new Date().toISOString(),
+                            },
+                          }
+                        : current,
+                    );
+                  }}
                 />
               </>
             ) : null}
@@ -1359,6 +1397,159 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
   );
 }
 
+function DiagramSettingsDialog({
+  canEdit,
+  diagram,
+  model,
+  onUpdated,
+}: {
+  canEdit: boolean;
+  diagram: DiagramResponseDto;
+  model: DiagramModel;
+  onUpdated: (diagram: DiagramResponseDto) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<DiagramSettingsFormState>({
+    defaultValues: getDiagramSettingsDefaults(diagram),
+    mode: 'onBlur',
+    resolver: zodResolver(diagramSettingsFormSchema),
+  });
+  const { errors } = form.formState;
+  const updateDiagramMutation = useUpdateDiagramMutation({
+    mutationConfig: {
+      onSuccess: (updatedDiagram) => {
+        // Server response is the canonical diagram metadata, so the form and live model are reset from that exact payload.
+        form.reset(getDiagramSettingsDefaults(updatedDiagram));
+        onUpdated(updatedDiagram);
+        setOpen(false);
+      },
+    },
+  });
+  const isPending = updateDiagramMutation.isPending;
+  const hasUnsavedDialectChange = model.dialect !== diagram.dialect;
+
+  useEffect(() => {
+    if (open) {
+      form.reset(getDiagramSettingsDefaults(diagram));
+      updateDiagramMutation.reset();
+    }
+  }, [diagram, form, open]);
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && isPending) {
+      return;
+    }
+
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      form.reset(getDiagramSettingsDefaults(diagram));
+      updateDiagramMutation.reset();
+    }
+  }
+
+  function handleSubmit(values: DiagramSettingsFormState) {
+    if (!canEdit) {
+      return;
+    }
+
+    updateDiagramMutation.mutate({
+      body: {
+        dialect: values.dialect,
+        name: values.name,
+      },
+      diagramId: diagram.id,
+    });
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogTrigger asChild>
+        <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="secondary" />
+      </DialogTrigger>
+      <DialogContent className="w-[min(94vw,520px)]">
+        <form onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Diagram settings</DialogTitle>
+            <DialogDescription>
+              Rename the active diagram and choose the SQL dialect for generated output.
+            </DialogDescription>
+          </DialogHeader>
+
+          <label className="mt-4 block text-sm">
+            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Diagram name
+            </span>
+            <ControlledInput
+              autoFocus
+              aria-invalid={Boolean(errors.name)}
+              control={form.control}
+              disabled={isPending || !canEdit}
+              name="name"
+            />
+            <FieldError>{errors.name?.message}</FieldError>
+          </label>
+
+          <label className="mt-3 block text-sm">
+            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              SQL dialect
+            </span>
+            <ControlledSelect
+              className={selectClassName}
+              control={form.control}
+              disabled={isPending || !canEdit}
+              name="dialect"
+            >
+              {diagramDialectOptions.map((dialect) => (
+                <option key={dialect} value={dialect}>
+                  {formatDiagramDialect(dialect)}
+                </option>
+              ))}
+            </ControlledSelect>
+            <FieldError>{errors.dialect?.message}</FieldError>
+          </label>
+
+          {!canEdit ? (
+            <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-gold-text))]">
+              Your project role can view this diagram but cannot update diagram settings.
+            </div>
+          ) : null}
+
+          {hasUnsavedDialectChange ? (
+            <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-sky-text))]">
+              The open snapshot uses {formatDiagramDialect(model.dialect)} while the diagram record uses{' '}
+              {formatDiagramDialect(diagram.dialect)}.
+            </div>
+          ) : null}
+
+          {updateDiagramMutation.error ? (
+            <div className="mt-4 rounded-[14px] border-2 border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {getErrorMessage(updateDiagramMutation.error)}
+            </div>
+          ) : null}
+
+          <DialogFooter className="mt-5">
+            <Button disabled={isPending} onClick={() => handleOpenChange(false)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button disabled={isPending || !canEdit} type="submit">
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              Save diagram
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function getDiagramSettingsDefaults(diagram: DiagramResponseDto): DiagramSettingsFormState {
+  return {
+    dialect: diagram.dialect,
+    name: diagram.name,
+  };
+}
+
 function getProjectFormDefaults(project: ProjectResponseDto): ProjectFormState {
   return {
     description: project.description ?? '',
@@ -1549,6 +1740,16 @@ function formatProjectRole(role: ProjectRole): string {
     [ProjectRole.Owner]: 'Owner',
     [ProjectRole.Viewer]: 'Viewer',
   }[role];
+}
+
+function formatDiagramDialect(dialect: DatabaseDialect): string {
+  return {
+    mariadb: 'MariaDB',
+    mysql: 'MySQL',
+    postgresql: 'PostgreSQL',
+    sqlite: 'SQLite',
+    sqlserver: 'SQL Server',
+  }[dialect];
 }
 
 function formatOrganizationRole(role: OrganizationDto['role']): string {

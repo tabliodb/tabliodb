@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Permission, ProjectRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
@@ -46,6 +46,7 @@ describe(DiagramService.name, () => {
     create: vi.fn(),
     getById: vi.fn(),
     getByProject: vi.fn(),
+    update: vi.fn(),
   };
   const projectRepository = {
     getByIdForUser: vi.fn(),
@@ -111,6 +112,55 @@ describe(DiagramService.name, () => {
 
     await expect(service.requireDiagram(auth, 'diagram-id', Permission.SnapshotCreate)).resolves.toMatchObject({
       id: 'diagram-id',
+    });
+  });
+
+  it('rejects an empty diagram settings update', async () => {
+    await expect(service.update(auth, 'diagram-id', {})).rejects.toBeInstanceOf(BadRequestException);
+
+    // Empty updates are rejected before permission lookup so the API returns a precise client error.
+    expect(projectRepository.getDiagramRole).not.toHaveBeenCalled();
+    expect(diagramRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('blocks a project viewer from updating diagram settings', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+
+    await expect(
+      service.update(auth, 'diagram-id', {
+        name: 'Readonly rename',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    // Service-level permission protects SDK/API-key callers even if a controller decorator is bypassed in tests.
+    expect(diagramRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('allows a project editor to update diagram settings', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    diagramRepository.update.mockResolvedValue({
+      ...diagram,
+      dialect: 'mysql',
+      name: 'Warehouse schema',
+      updatedAt: new Date('2026-07-29T12:00:00.000Z'),
+    });
+
+    await expect(
+      service.update(auth, 'diagram-id', {
+        dialect: 'mysql',
+        name: '  Warehouse schema  ',
+      }),
+    ).resolves.toMatchObject({
+      dialect: 'mysql',
+      id: 'diagram-id',
+      name: 'Warehouse schema',
+      updatedAt: '2026-07-29T12:00:00.000Z',
+    });
+
+    expect(diagramRepository.update).toHaveBeenCalledWith('diagram-id', {
+      dialect: 'mysql',
+      name: 'Warehouse schema',
     });
   });
 });

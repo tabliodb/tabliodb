@@ -105,6 +105,10 @@ export type DiagramResponseDtoOutput = {
   createdAt: string;
   updatedAt: string;
 };
+export type DiagramUpdateDto = {
+  name?: string;
+  dialect?: Dialect;
+};
 export type InvitationCreateDto = {
   email: string;
   organizationId?: string;
@@ -804,6 +808,30 @@ export function createDiagram(
         ...opts,
         method: 'POST',
         body: diagramCreateDto,
+      }),
+    ),
+  );
+}
+export function updateDiagram(
+  {
+    diagramId,
+    diagramUpdateDto,
+  }: {
+    diagramId: string;
+    diagramUpdateDto: DiagramUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: DiagramResponseDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: diagramUpdateDto,
       }),
     ),
   );

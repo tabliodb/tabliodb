@@ -1,8 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { DatabaseDialect } from '@tabliodb/schema-core';
 import { Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
-import { DiagramCreateDto, DiagramListQueryDto } from '../dtos/diagram.dto.js';
+import { DiagramCreateDto, DiagramListQueryDto, DiagramResponseDto, DiagramUpdateDto } from '../dtos/diagram.dto.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
 import { toIsoDateTime } from '../utils/date-time.js';
@@ -15,7 +15,7 @@ export class DiagramService {
     private readonly projectRepository: ProjectRepository,
   ) {}
 
-  async create(auth: AuthContext, dto: DiagramCreateDto) {
+  async create(auth: AuthContext, dto: DiagramCreateDto): Promise<DiagramResponseDto> {
     const project = await this.projectRepository.getByIdForUser(auth.user.id, dto.projectId);
     if (!project) {
       throw new NotFoundException('Project not found');
@@ -30,15 +30,7 @@ export class DiagramService {
       createdById: auth.user.id,
     });
 
-    return {
-      id: diagram.id,
-      projectId: diagram.projectId,
-      name: diagram.name,
-      // Kysely membaca kolom dialect sebagai text karena database menyimpannya generik, sedangkan kontrak API mengekspos union dialect canonical.
-      dialect: diagram.dialect as DatabaseDialect,
-      createdAt: toIsoDateTime(diagram.createdAt),
-      updatedAt: toIsoDateTime(diagram.updatedAt),
-    };
+    return this.serializeDiagram(diagram);
   }
 
   async getByProject(auth: AuthContext, projectId: string, query: DiagramListQueryDto) {
@@ -81,6 +73,31 @@ export class DiagramService {
     return diagram;
   }
 
+  async update(auth: AuthContext, diagramId: string, dto: DiagramUpdateDto): Promise<DiagramResponseDto> {
+    if (dto.name === undefined && dto.dialect === undefined) {
+      throw new BadRequestException('At least one diagram field is required');
+    }
+
+    const nextName = dto.name?.trim();
+    if (dto.name !== undefined && !nextName) {
+      throw new BadRequestException('Diagram name is required');
+    }
+
+    // requireDiagram centralizes project-role lookup, archived filtering, and permission enforcement for every diagram write.
+    await this.requireDiagram(auth, diagramId, Permission.DiagramUpdate);
+
+    const diagram = await this.diagramRepository.update(diagramId, {
+      dialect: dto.dialect,
+      name: nextName,
+    });
+
+    if (!diagram) {
+      throw new NotFoundException('Diagram not found');
+    }
+
+    return this.serializeDiagram(diagram);
+  }
+
   private assertProjectPermission(role: ProjectRole, permission: Permission): void {
     if (
       !isGranted({
@@ -90,5 +107,19 @@ export class DiagramService {
     ) {
       throw new ForbiddenException(`${permission} permission is required`);
     }
+  }
+
+  private serializeDiagram(
+    diagram: NonNullable<Awaited<ReturnType<DiagramRepository['getById']>>>,
+  ): DiagramResponseDto {
+    return {
+      id: diagram.id,
+      projectId: diagram.projectId,
+      name: diagram.name,
+      // Kysely membaca kolom dialect sebagai text karena database menyimpannya generik, sedangkan kontrak API mengekspos union dialect canonical.
+      dialect: diagram.dialect as DatabaseDialect,
+      createdAt: toIsoDateTime(diagram.createdAt),
+      updatedAt: toIsoDateTime(diagram.updatedAt),
+    };
   }
 }

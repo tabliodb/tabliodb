@@ -31,6 +31,7 @@ export class DiagramRepository {
       .selectFrom('diagrams')
       .select(['id', 'projectId', 'name', 'dialect', 'createdAt', 'updatedAt'])
       .where('projectId', '=', projectId)
+      .where('archivedAt', 'is', null)
       .orderBy('updatedAt', 'desc')
       .limit(options.limit + 1)
       .offset(offset)
@@ -39,6 +40,7 @@ export class DiagramRepository {
       .selectFrom('diagrams')
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .where('projectId', '=', projectId)
+      .where('archivedAt', 'is', null)
       .executeTakeFirstOrThrow();
 
     return {
@@ -54,6 +56,36 @@ export class DiagramRepository {
   }
 
   getById(id: string) {
-    return this.db.selectFrom('diagrams').selectAll().where('id', '=', id).executeTakeFirst();
+    return this.db
+      .selectFrom('diagrams')
+      .selectAll()
+      .where('id', '=', id)
+      .where('archivedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  async update(diagramId: string, dto: { dialect?: DatabaseDialect; name?: string }) {
+    const values: { dialect?: DatabaseDialect; name?: string; updatedAt: Date } = {
+      updatedAt: new Date(),
+    };
+
+    if (dto.name !== undefined) {
+      values.name = dto.name;
+    }
+
+    if (dto.dialect !== undefined) {
+      values.dialect = dto.dialect;
+    }
+
+    const diagram = await this.db
+      .updateTable('diagrams')
+      .set(values)
+      .where('id', '=', diagramId)
+      .where('archivedAt', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+
+    // Fetch the row through getById so every public repository read keeps one archived-filtering rule.
+    return diagram ? this.getById(diagram.id) : undefined;
   }
 }

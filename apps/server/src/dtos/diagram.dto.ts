@@ -12,6 +12,14 @@ const DiagramCreateSchema = z
   })
   .meta({ id: 'DiagramCreateDto' });
 
+const DiagramUpdateSchema = z
+  .object({
+    // Diagram settings is a partial update because users may rename the diagram without changing its SQL dialect.
+    name: z.string().trim().min(1).max(80).optional(),
+    dialect: DatabaseDialectSchema.optional(),
+  })
+  .meta({ id: 'DiagramUpdateDto' });
+
 const DiagramResponseSchema = z
   .object({
     id: z.string().uuid(),
@@ -42,3 +50,4 @@ export class DiagramCreateDto extends createZodDto(DiagramCreateSchema) {}
 export class DiagramListQueryDto extends createZodDto(DiagramListQuerySchema) {}
 export class DiagramListResponseDto extends createZodDto(DiagramListResponseSchema) {}
 export class DiagramResponseDto extends createZodDto(DiagramResponseSchema) {}
+export class DiagramUpdateDto extends createZodDto(DiagramUpdateSchema) {}

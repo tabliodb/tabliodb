@@ -340,6 +340,58 @@
         ]
       }
     },
+    "/diagrams/{diagramId}": {
+      "patch": {
+        "operationId": "updateDiagram",
+        "parameters": [
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagramUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
     "/invitations": {
       "post": {
         "operationId": "createInvitation",
@@ -2063,6 +2115,26 @@
           "updatedAt"
         ],
         "additionalProperties": false
+      },
+      "DiagramUpdateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "mysql",
+              "sqlite",
+              "mariadb",
+              "sqlserver"
+            ]
+          }
+        }
       },
       "InvitationCreateDto": {
         "type": "object",
