@@ -1,4 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import {
+  createEmptyDiagramModel,
+  encodeDiagramModelAsYjsUpdate,
+  type DatabaseDialect,
+  type DiagramModel,
+} from '@tabliodb/schema-core';
 import { Kysely } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB } from '../schema/index.js';
@@ -14,7 +20,14 @@ export class CollaborationRepository {
       .where('diagramId', '=', diagramId)
       .executeTakeFirst();
 
-    return row?.yjsState ? new Uint8Array(row.yjsState) : null;
+    if (row?.yjsState) {
+      return new Uint8Array(row.yjsState);
+    }
+
+    const hydrationModel = await this.loadHydrationModel(diagramId);
+
+    // Empty realtime documents are bootstrapped from trusted server data so clients never start from a blank Y.Doc by accident.
+    return hydrationModel ? encodeDiagramModelAsYjsUpdate(hydrationModel) : null;
   }
 
   async storeDocument(diagramId: string, state: Uint8Array): Promise<void> {
@@ -29,5 +42,31 @@ export class CollaborationRepository {
         })),
       )
       .execute();
+  }
+
+  private async loadHydrationModel(diagramId: string): Promise<DiagramModel | null> {
+    const snapshotRow = await this.db
+      .selectFrom('diagram_snapshots')
+      .select('snapshot')
+      .where('diagramId', '=', diagramId)
+      .orderBy('version', 'desc')
+      .executeTakeFirst();
+
+    if (snapshotRow) {
+      return snapshotRow.snapshot as DiagramModel;
+    }
+
+    const diagramRow = await this.db
+      .selectFrom('diagrams')
+      .select(['dialect', 'name'])
+      .where('id', '=', diagramId)
+      .where('archivedAt', 'is', null)
+      .executeTakeFirst();
+
+    if (!diagramRow) {
+      return null;
+    }
+
+    return createEmptyDiagramModel(diagramRow.name, diagramRow.dialect as DatabaseDialect);
   }
 }

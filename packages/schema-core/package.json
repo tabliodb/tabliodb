@@ -17,6 +17,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "yjs": "^13.6.31",
     "zod": "^4.4.3"
   },
   "devDependencies": {

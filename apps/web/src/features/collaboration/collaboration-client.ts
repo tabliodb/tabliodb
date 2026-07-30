@@ -4,7 +4,7 @@ import * as Y from 'yjs';
 
 export type DiagramCollaborationOptions = {
   diagramId: string;
-  token: string;
+  token?: string | null;
   url?: string;
 };
 
@@ -13,7 +13,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
   const provider = new HocuspocusProvider({
     document,
     name: diagramDocumentName(options.diagramId),
-    token: options.token,
+    // Browser UI relies on the httpOnly session cookie in the WebSocket handshake; explicit tokens remain useful for non-browser clients.
+    token: options.token ?? null,
     url: options.url ?? 'ws://localhost:1234',
   });
 

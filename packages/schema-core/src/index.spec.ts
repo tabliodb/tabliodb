@@ -1,15 +1,97 @@
 import { describe, expect, it } from 'vitest';
+import * as Y from 'yjs';
 import {
   DiagramCommandError,
   applyDiagramCommand,
   createEmptyDiagramModel,
   createSequentialDiagramIdFactory,
+  decodeDiagramModelFromYjsUpdate,
+  encodeDiagramModelAsYjsUpdate,
   getTableColumns,
+  hasDiagramModelInYjsDocument,
+  readDiagramModelFromYjsDocument,
+  serializeDiagramModel,
+  writeDiagramModelToYjsDocument,
+  yjsCollections,
 } from './index.js';
 
 const fixedNow = () => '2026-07-29T00:00:00.000Z';
 
 describe('schema-core diagram commands', () => {
+  it('round-trips a diagram model through granular Yjs collections', () => {
+    const document = new Y.Doc();
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Realtime adapter test'),
+      {
+        type: 'table.create',
+        columns: [
+          { id: 'users-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'users-email', name: 'email', nullable: false, unique: true, type: { family: 'varchar', length: 190 } },
+        ],
+        name: 'users',
+        position: { x: 40, y: 80 },
+        tableId: 'users',
+      },
+      { now: fixedNow },
+    );
+
+    writeDiagramModelToYjsDocument(document, model);
+
+    const tables = document.getMap<Y.Map<unknown>>(yjsCollections.tables);
+    expect(hasDiagramModelInYjsDocument(document)).toBe(true);
+    expect(tables.get('users')).toBeInstanceOf(Y.Map);
+    expect(readDiagramModelFromYjsDocument(document)).toEqual(serializeDiagramModel(model));
+  });
+
+  it('encodes and decodes a diagram model as a portable Yjs update', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Realtime update test'),
+      {
+        type: 'table.create',
+        columns: [{ id: 'sessions-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } }],
+        name: 'sessions',
+        tableId: 'sessions',
+      },
+      { now: fixedNow },
+    );
+    const update = encodeDiagramModelAsYjsUpdate(model);
+
+    expect(update.byteLength).toBeGreaterThan(0);
+    expect(decodeDiagramModelFromYjsUpdate(update)).toEqual(serializeDiagramModel(model));
+  });
+
+  it('removes stale Yjs entities when the canonical model deletes them', () => {
+    const document = new Y.Doc();
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Realtime delete test'),
+      {
+        type: 'table.create',
+        columns: [{ id: 'books-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } }],
+        name: 'books',
+        tableId: 'books',
+      },
+      { now: fixedNow },
+    );
+    const deletedModel = applyDiagramCommand(model, { tableId: 'books', type: 'table.delete' }, { now: fixedNow });
+
+    writeDiagramModelToYjsDocument(document, model);
+    writeDiagramModelToYjsDocument(document, deletedModel);
+
+    // The Yjs adapter mirrors deletes instead of keeping orphaned entities that could reappear after reconnect.
+    expect(document.getMap(yjsCollections.tables).has('books')).toBe(false);
+    expect(document.getMap(yjsCollections.columns).has('books-id')).toBe(false);
+    expect(readDiagramModelFromYjsDocument(document)).toEqual(serializeDiagramModel(deletedModel));
+  });
+
+  it('uses an explicit fallback for an empty Yjs document', () => {
+    const document = new Y.Doc();
+    const fallback = createEmptyDiagramModel('Fallback model');
+
+    expect(hasDiagramModelInYjsDocument(document)).toBe(false);
+    expect(readDiagramModelFromYjsDocument(document, fallback)).toEqual(serializeDiagramModel(fallback));
+    expect(() => readDiagramModelFromYjsDocument(document)).toThrow(DiagramCommandError);
+  });
+
   it('creates a table with stable generated IDs and default columns', () => {
     const model = createEmptyDiagramModel('Command test');
     const nextModel = applyDiagramCommand(

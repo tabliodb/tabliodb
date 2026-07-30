@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import * as Y from 'yjs';
 
 export const currentDiagramSchemaVersion = 1;
 
@@ -172,6 +173,7 @@ export const DiagramModelSchema = z.object({
 export type DiagramModel = z.infer<typeof DiagramModelSchema>;
 
 export const yjsCollections = {
+  document: 'document',
   tables: 'tables',
   columns: 'columns',
   indexes: 'indexes',
@@ -182,6 +184,19 @@ export const yjsCollections = {
   groups: 'groups',
   metadata: 'metadata',
 } as const;
+
+const yjsEntityCollectionKeys = [
+  'tables',
+  'columns',
+  'indexes',
+  'relationships',
+  'enums',
+  'checks',
+  'notes',
+  'groups',
+] as const;
+
+type YjsRecord = Record<string, unknown>;
 
 export function createEmptyDiagramModel(
   name = 'Untitled diagram',
@@ -203,6 +218,78 @@ export function createEmptyDiagramModel(
       updatedAt: new Date().toISOString(),
     },
   };
+}
+
+export function writeDiagramModelToYjsDocument(document: Y.Doc, model: DiagramModel): void {
+  const normalizedModel = serializeDiagramModel(model);
+
+  document.transact(() => {
+    const documentMap = document.getMap<unknown>(yjsCollections.document);
+
+    // Root fields are separated from entity collections so snapshot metadata changes do not replace the whole diagram.
+    syncYMapFromRecord(documentMap, {
+      dialect: normalizedModel.dialect,
+      schemaVersion: normalizedModel.schemaVersion,
+    });
+
+    syncYMapFromRecord(document.getMap<unknown>(yjsCollections.metadata), normalizedModel.metadata as YjsRecord);
+
+    for (const collectionKey of yjsEntityCollectionKeys) {
+      syncYEntityCollection(
+        document.getMap<Y.Map<unknown>>(yjsCollections[collectionKey]),
+        normalizedModel[collectionKey] as Record<string, YjsRecord>,
+      );
+    }
+  });
+}
+
+export function hasDiagramModelInYjsDocument(document: Y.Doc): boolean {
+  const documentMap = document.getMap<unknown>(yjsCollections.document);
+
+  return documentMap.has('dialect') && documentMap.has('schemaVersion');
+}
+
+export function readDiagramModelFromYjsDocument(document: Y.Doc, fallback?: DiagramModel): DiagramModel {
+  if (!hasDiagramModelInYjsDocument(document)) {
+    if (fallback) {
+      return serializeDiagramModel(fallback);
+    }
+
+    throw new DiagramCommandError('Yjs document does not contain a Tabliodb diagram model');
+  }
+
+  const documentMap = document.getMap<unknown>(yjsCollections.document);
+  const rawModel = {
+    schemaVersion: documentMap.get('schemaVersion'),
+    dialect: documentMap.get('dialect'),
+    tables: readYEntityCollection(document.getMap<Y.Map<unknown>>(yjsCollections.tables)),
+    columns: readYEntityCollection(document.getMap<Y.Map<unknown>>(yjsCollections.columns)),
+    indexes: readYEntityCollection(document.getMap<Y.Map<unknown>>(yjsCollections.indexes)),
+    relationships: readYEntityCollection(document.getMap<Y.Map<unknown>>(yjsCollections.relationships)),
+    enums: readYEntityCollection(document.getMap<Y.Map<unknown>>(yjsCollections.enums)),
+    checks: readYEntityCollection(document.getMap<Y.Map<unknown>>(yjsCollections.checks)),
+    notes: readYEntityCollection(document.getMap<Y.Map<unknown>>(yjsCollections.notes)),
+    groups: readYEntityCollection(document.getMap<Y.Map<unknown>>(yjsCollections.groups)),
+    metadata: readYMapAsRecord(document.getMap<unknown>(yjsCollections.metadata)),
+  };
+
+  return parseDiagramModel(rawModel);
+}
+
+export function encodeDiagramModelAsYjsUpdate(model: DiagramModel): Uint8Array {
+  const document = new Y.Doc();
+
+  writeDiagramModelToYjsDocument(document, model);
+
+  return Y.encodeStateAsUpdate(document);
+}
+
+export function decodeDiagramModelFromYjsUpdate(update: Uint8Array, fallback?: DiagramModel): DiagramModel {
+  const document = new Y.Doc();
+
+  Y.applyUpdate(document, update);
+
+  return readDiagramModelFromYjsDocument(document, fallback);
 }
 
 export function getTableColumns(model: DiagramModel, tableId: string): DatabaseColumn[] {
@@ -562,6 +649,82 @@ export function serializeDiagramModel(model: DiagramModel): DiagramModel {
 
 export function stringifyDiagramModel(model: DiagramModel, space = 2): string {
   return JSON.stringify(serializeDiagramModel(model), null, space);
+}
+
+function syncYEntityCollection(collection: Y.Map<Y.Map<unknown>>, entities: Record<string, YjsRecord>): void {
+  const nextIds = new Set(Object.keys(entities));
+
+  for (const existingId of Array.from(collection.keys())) {
+    if (!nextIds.has(existingId)) {
+      collection.delete(existingId);
+    }
+  }
+
+  for (const [entityId, entity] of Object.entries(entities)) {
+    const existingEntityMap = collection.get(entityId);
+    const entityMap = existingEntityMap instanceof Y.Map ? existingEntityMap : new Y.Map<unknown>();
+
+    if (entityMap !== existingEntityMap) {
+      collection.set(entityId, entityMap);
+    }
+
+    // Each entity gets its own Y.Map, so changing one table or column does not replace the full diagram document.
+    syncYMapFromRecord(entityMap, entity);
+  }
+}
+
+function syncYMapFromRecord(map: Y.Map<unknown>, record: YjsRecord): void {
+  const nextKeys = new Set(Object.keys(record));
+
+  for (const existingKey of Array.from(map.keys())) {
+    if (!nextKeys.has(existingKey)) {
+      map.delete(existingKey);
+    }
+  }
+
+  for (const [key, value] of Object.entries(record)) {
+    map.set(key, cloneYjsSerializableValue(value));
+  }
+}
+
+function readYEntityCollection(collection: Y.Map<Y.Map<unknown>>): Record<string, unknown> {
+  const entities: Record<string, unknown> = {};
+
+  collection.forEach((value, entityId) => {
+    entities[entityId] = value instanceof Y.Map ? readYMapAsRecord(value) : cloneYjsSerializableValue(value);
+  });
+
+  return entities;
+}
+
+function readYMapAsRecord(map: Y.Map<unknown>): YjsRecord {
+  const record: YjsRecord = {};
+
+  map.forEach((value, key) => {
+    record[key] = readYjsValue(value);
+  });
+
+  return record;
+}
+
+function readYjsValue(value: unknown): unknown {
+  if (value instanceof Y.Map) {
+    return readYMapAsRecord(value);
+  }
+
+  if (value instanceof Y.Array) {
+    return value.toArray().map((item) => readYjsValue(item));
+  }
+
+  return cloneYjsSerializableValue(value);
+}
+
+function cloneYjsSerializableValue(value: unknown): unknown {
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as unknown;
 }
 
 function createTable(model: DiagramModel, command: CreateTableCommand, idFactory: DiagramIdFactory): DiagramModel {
