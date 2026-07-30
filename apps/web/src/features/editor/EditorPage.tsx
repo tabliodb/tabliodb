@@ -458,9 +458,9 @@ export function EditorPage() {
         </div>
         <div className="flex items-center gap-1">
           <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
-          <IconButton icon={MessageSquareText} label="Comments" />
-          <IconButton icon={History} label="History" />
-          <IconButton icon={GitBranch} label="Branches" />
+          <IconButton disabled icon={MessageSquareText} label="Comments coming soon" />
+          <IconButton disabled icon={History} label="History coming soon" />
+          <IconButton disabled icon={GitBranch} label="Branches coming soon" />
           <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
           {activeProject ? (
             <>
@@ -510,9 +510,9 @@ export function EditorPage() {
                 <Play className="size-4" />
                 Copy SQL
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem disabled>
                 <Share2 className="size-4" />
-                Share workspace
+                Share workspace coming soon
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => navigate(routes.adminUsers.to())}>
                 <ShieldCheck className="size-4" />
@@ -1025,7 +1025,7 @@ function WorkspaceSettingsDialog({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <IconButton icon={Building2} label="Workspace settings" variant="secondary" />
+        <IconButton icon={Building2} label="Workspace settings" variant="ghost" />
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,680px)]">
         <DialogHeader>
@@ -1351,7 +1351,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <IconButton icon={Settings} label="Project settings" variant="secondary" />
+        <IconButton icon={Settings} label="Project settings" variant="ghost" />
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,680px)]">
         <DialogHeader>
@@ -1600,7 +1600,7 @@ function DiagramSettingsDialog({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="secondary" />
+        <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="ghost" />
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,520px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>

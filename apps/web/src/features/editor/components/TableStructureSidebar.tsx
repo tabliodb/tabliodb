@@ -8,17 +8,7 @@ import {
   type DiagramModel,
 } from '@tabliodb/schema-core';
 import { Button, Checkbox, IconButton, Input, Popover, PopoverContent, PopoverTrigger, Select, cn } from '@tabliodb/ui';
-import {
-  Columns3,
-  GripVertical,
-  KeyRound,
-  MoreHorizontal,
-  PanelLeftClose,
-  Palette,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Columns3, GripVertical, MoreHorizontal, PanelLeftClose, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatColumnType } from '../diagram-model';
 
@@ -199,8 +189,10 @@ export function TableStructureSidebar({
             Table name
           </label>
           <InlineTextInput className="mt-2" disabled={readOnly} onCommit={handleTableNameCommit} value={table.name} />
-          <div className="mt-3 flex items-start gap-2">
-            <Palette className="size-4 text-[rgb(var(--tabliodb-ink-muted))]" />
+          <div className="mt-3">
+            <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Color
+            </div>
             <div className="flex flex-wrap gap-2">
               {tableColorOptions.map((color) => (
                 <button
@@ -219,12 +211,13 @@ export function TableStructureSidebar({
             </div>
           </div>
           <Button
-            className="mt-3 h-9 w-full justify-start text-[13px]"
+            className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_#b91c1c]"
             disabled={readOnly}
             onClick={handleDeleteTable}
+            size="sm"
             variant="danger"
           >
-            <Trash2 className="size-4" />
+            <Trash2 className="size-3.5" />
             {confirmDeleteTable ? 'Confirm delete table' : 'Delete table'}
           </Button>
         </section>
@@ -319,7 +312,7 @@ function ColumnEditorRow({
       className={cn(
         'rounded-[var(--tabliodb-radius-lg)] border bg-white p-2 transition',
         selected
-          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]'
+          ? 'border-[rgb(var(--tabliodb-primary))] bg-white shadow-[inset_3px_0_0_rgb(var(--tabliodb-primary)),0_2px_0_rgb(var(--tabliodb-primary-border))]'
           : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
       )}
       onFocus={() => onSelect(column.id)}
@@ -365,7 +358,7 @@ function ColumnEditorRow({
           </PopoverContent>
         </Popover>
       </div>
-      <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_30px_30px_36px] items-center gap-1.5">
+      <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_34px_34px_38px] items-center gap-1.5">
         <Select
           className={compactSelectClassName}
           disabled={disabled}
@@ -389,7 +382,7 @@ function ColumnEditorRow({
           label="Not nullable"
           onClick={() => onUpdate(column, { nullable: column.primaryKey ? false : !column.nullable })}
         >
-          N
+          NN
         </ColumnToggle>
         <ColumnToggle
           active={column.primaryKey}
@@ -399,7 +392,7 @@ function ColumnEditorRow({
             onUpdate(column, { nullable: column.primaryKey ? column.nullable : false, primaryKey: !column.primaryKey })
           }
         >
-          <KeyRound className="size-3.5" />
+          PK
         </ColumnToggle>
         <ColumnToggle
           active={column.unique}
@@ -537,10 +530,10 @@ function ColumnToggle({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        'grid h-[var(--tabliodb-control-sm)] w-full cursor-pointer place-items-center rounded-[var(--tabliodb-radius-sm)] border text-xs font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex h-8 w-full cursor-pointer items-center justify-center rounded-[10px] border px-1 text-[11px] font-extrabold leading-none transition disabled:cursor-not-allowed disabled:opacity-60',
         active
-          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_2px_0_rgb(var(--tabliodb-primary-shadow))]'
-          : 'border-[rgb(var(--tabliodb-border))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
+          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
+          : 'border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
       )}
       disabled={disabled}
       onClick={onClick}

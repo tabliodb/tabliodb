@@ -367,8 +367,8 @@ export function SchemaInspector({
                 <div className="min-w-0">
                   <div className="truncate text-[13px] font-extrabold leading-5">{selectedTable.name}</div>
                   <div className="text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                    {selectedColumns.length} columns / {selectedIndexes.length} indexes / {selectedChecks.length} checks
-                    / {countTableRelationships(model, selectedTable)} relationships
+                    {selectedColumns.length} cols / {selectedIndexes.length} idx / {selectedChecks.length} checks /{' '}
+                    {countTableRelationships(model, selectedTable)} rels
                   </div>
                 </div>
                 <span

@@ -85,8 +85,8 @@ body {
 }
 
 .tabliodb-scrollbar::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
+  height: 8px;
+  width: 8px;
 }
 
 .tabliodb-scrollbar::-webkit-scrollbar-track {
@@ -95,7 +95,7 @@ body {
 
 .tabliodb-scrollbar::-webkit-scrollbar-thumb {
   background: rgb(var(--tabliodb-border-strong));
-  border: 3px solid transparent;
+  border: 2px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
 }
