@@ -8,11 +8,13 @@ import type {
 import {
   confirmPasswordReset as confirmPasswordResetRequest,
   createApiKey as createApiKeyRequest,
+  deleteCurrentUserAvatar as deleteCurrentUserAvatarRequest,
   getCurrentUser,
   login as loginRequest,
   logout as logoutRequest,
   requestPasswordReset as requestPasswordResetRequest,
   signUp as signUpRequest,
+  uploadCurrentUserAvatar as uploadCurrentUserAvatarRequest,
 } from '../fetch-client.js';
 
 export type LoginCredentialDto = {
@@ -83,16 +85,21 @@ export type ApiKeyCreateResponseDto = {
 export type AuthResource = {
   confirmPasswordReset: (body: PasswordResetConfirmDto) => Promise<PasswordResetConfirmResponseDto>;
   createApiKey: (body: ApiKeyCreateDto) => Promise<ApiKeyCreateResponseDto>;
+  deleteAvatar: () => Promise<CurrentUserResponseDto>;
   login: (body: LoginCredentialDto) => Promise<LoginResponseDto>;
   logout: () => Promise<LogoutResponseDto>;
   me: () => Promise<CurrentUserResponseDto>;
   requestPasswordReset: (body: PasswordResetRequestDto) => Promise<PasswordResetRequestResponseDto>;
   signUp: (body: SignUpDto) => Promise<LoginResponseDto>;
+  uploadAvatar: (file: Blob) => Promise<CurrentUserResponseDto>;
 };
 
 export function createAuthResource(opts?: RequestOpts): AuthResource {
   return {
     me: () => getCurrentUser(opts) as Promise<CurrentUserResponseDto>,
+    uploadAvatar: (file: Blob) =>
+      uploadCurrentUserAvatarRequest({ body: { file } }, opts) as Promise<CurrentUserResponseDto>,
+    deleteAvatar: () => deleteCurrentUserAvatarRequest(opts) as Promise<CurrentUserResponseDto>,
     login: (body: LoginCredentialDto) => loginRequest({ loginCredentialDto: body }, opts) as Promise<LoginResponseDto>,
     signUp: (body: SignUpDto) => signUpRequest({ signUpDto: body }, opts) as Promise<LoginResponseDto>,
     logout: () => logoutRequest(opts) as Promise<LogoutResponseDto>,

@@ -30,7 +30,10 @@ export class ApiKeyRepository {
               'users.email',
               'users.name',
               'users.cursorColor',
-              sql<string | null>`null`.as('avatarUrl'),
+              sql<string | null>`case
+                when users.avatar_file_id is null then null
+                else concat('/api/files/', users.avatar_file_id::text)
+              end`.as('avatarUrl'),
             ])
             .whereRef('users.id', '=', 'api_keys.userId')
             .where('users.isDisabled', '=', false)

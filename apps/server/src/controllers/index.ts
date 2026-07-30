@@ -2,6 +2,7 @@ import { AppController } from './app.controller.js';
 import { AuthController } from './auth.controller.js';
 import { CommentController } from './comment.controller.js';
 import { DiagramController } from './diagram.controller.js';
+import { FileController } from './file.controller.js';
 import { InvitationController } from './invitation.controller.js';
 import { OrganizationController } from './organization.controller.js';
 import { ProjectController } from './project.controller.js';
@@ -15,6 +16,7 @@ export const controllers = [
   AuthController,
   CommentController,
   DiagramController,
+  FileController,
   InvitationController,
   OrganizationController,
   ProjectController,

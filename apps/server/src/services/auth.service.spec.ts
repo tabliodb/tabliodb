@@ -35,6 +35,10 @@ describe(AuthService.name, () => {
     hashSha256: vi.fn(),
     randomBytesAsText: vi.fn(),
   };
+  const fileService = {
+    clearUserAvatar: vi.fn(),
+    uploadUserAvatar: vi.fn(),
+  };
   const organizationRepository = {
     createPersonalOrganization: vi.fn(),
   };
@@ -55,6 +59,7 @@ describe(AuthService.name, () => {
   const userRepository = {
     create: vi.fn(),
     getAnyByEmail: vi.fn(),
+    getAuthUserById: vi.fn(),
     getByEmail: vi.fn(),
     updatePasswordHash: vi.fn(),
   };
@@ -68,6 +73,7 @@ describe(AuthService.name, () => {
       auditLogRepository as never,
       configRepository as never,
       cryptoRepository as never,
+      fileService as never,
       organizationRepository as never,
       passwordResetRepository as never,
       sessionRepository as never,

@@ -50,7 +50,16 @@ export class UserRepository {
   getAuthUserById(id: string) {
     return this.db
       .selectFrom('users')
-      .select(['id', 'email', 'name', 'cursorColor', sql<string | null>`null`.as('avatarUrl')])
+      .select([
+        'id',
+        'email',
+        'name',
+        'cursorColor',
+        sql<string | null>`case
+          when avatar_file_id is null then null
+          else concat('/api/files/', avatar_file_id::text)
+        end`.as('avatarUrl'),
+      ])
       .where('id', '=', id)
       .where('isDisabled', '=', false)
       .where('deletedAt', 'is', null)
@@ -243,7 +252,10 @@ export class UserRepository {
         'users.id',
         'users.email',
         'users.name',
-        sql<string | null>`null`.as('avatarUrl'),
+        sql<string | null>`case
+          when users.avatar_file_id is null then null
+          else concat('/api/files/', users.avatar_file_id::text)
+        end`.as('avatarUrl'),
         'users.cursorColor',
         'users.isDisabled',
         'users.createdAt',

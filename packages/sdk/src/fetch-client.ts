@@ -942,6 +942,41 @@ export function getCurrentUser(opts?: Oazapfts.RequestOpts) {
     }),
   );
 }
+export function uploadCurrentUserAvatar(
+  {
+    body,
+  }: {
+    body: {
+      file: Blob;
+    };
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: AuthUserDtoOutput;
+    }>(
+      '/auth/me/avatar',
+      oazapfts.multipart({
+        ...opts,
+        method: 'POST',
+        body,
+      }),
+    ),
+  );
+}
+export function deleteCurrentUserAvatar(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: AuthUserDtoOutput;
+    }>('/auth/me/avatar', {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
 export function signUp(
   {
     signUpDto,
@@ -1303,6 +1338,20 @@ export function importDiagram(
         body: diagramImportDto,
       }),
     ),
+  );
+}
+export function getFile(
+  {
+    fileId,
+  }: {
+    fileId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchText(`/files/${encodeURIComponent(fileId)}`, {
+      ...opts,
+    }),
   );
 }
 export function createInvitation(

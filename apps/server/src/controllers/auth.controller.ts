@@ -1,5 +1,17 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
@@ -19,6 +31,7 @@ import {
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
 import { AuthService } from '../services/auth.service.js';
+import { AVATAR_MAX_BYTES, type UploadedAvatarFile } from '../services/file.service.js';
 import { AuthType } from '../constants.js';
 import { clearAuthCookies, respondWithAuthCookies } from '../utils/response.js';
 import type { AuthContext } from '../database.js';
@@ -34,6 +47,41 @@ export class AuthController {
   @ZodResponse({ type: CurrentUserResponseDto })
   getCurrentUser(@Auth() auth: AuthContext): CurrentUserResponseDto {
     return auth.user;
+  }
+
+  @Post('me/avatar')
+  @Authenticated()
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: AVATAR_MAX_BYTES } }))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      properties: {
+        file: {
+          format: 'binary',
+          type: 'string',
+        },
+      },
+      required: ['file'],
+      type: 'object',
+    },
+  })
+  @ApiOperation({ operationId: 'uploadCurrentUserAvatar' })
+  @ZodResponse({ status: HttpStatus.OK, type: CurrentUserResponseDto })
+  uploadCurrentUserAvatar(
+    @Auth() auth: AuthContext,
+    @UploadedFile() file: UploadedAvatarFile | undefined,
+  ): Promise<CurrentUserResponseDto> {
+    return this.service.uploadAvatar(auth, file);
+  }
+
+  @Delete('me/avatar')
+  @Authenticated()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: 'deleteCurrentUserAvatar' })
+  @ZodResponse({ status: HttpStatus.OK, type: CurrentUserResponseDto })
+  deleteCurrentUserAvatar(@Auth() auth: AuthContext): Promise<CurrentUserResponseDto> {
+    return this.service.deleteAvatar(auth);
   }
 
   @Post('sign-up')

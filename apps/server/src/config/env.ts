@@ -21,6 +21,9 @@ export type TabliodbEnv = {
     cookieSecure: boolean;
     exposePasswordResetToken: boolean;
   };
+  storage: {
+    localPath: string;
+  };
 };
 
 function findUp(filename: string, startDirectory: string): string | null {
@@ -84,6 +87,9 @@ export function loadEnv(): TabliodbEnv {
       exposePasswordResetToken:
         process.env.TABLIODB_EXPOSE_PASSWORD_RESET_TOKEN === 'true' ||
         (process.env.TABLIODB_EXPOSE_PASSWORD_RESET_TOKEN !== 'false' && process.env.NODE_ENV !== 'production'),
+    },
+    storage: {
+      localPath: path.resolve(process.env.TABLIODB_STORAGE_PATH || path.join(process.cwd(), 'data', 'uploads')),
     },
   };
 }

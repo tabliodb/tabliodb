@@ -3,13 +3,22 @@ import type { LoginCredentialDto, PasswordResetConfirmDto, PasswordResetRequestD
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { projectsKeys } from '@/resources/projects';
+import { usersKeys } from '@/resources/users';
 import { authKeys } from './auth.keys';
 
+const uploadAvatarMutationFn = (file: Blob) => sdk.auth.uploadAvatar(file);
+const deleteAvatarMutationFn = () => sdk.auth.deleteAvatar();
 const loginMutationFn = (body: LoginCredentialDto) => sdk.auth.login(body);
 const logoutMutationFn = () => sdk.auth.logout();
 const passwordResetRequestMutationFn = (body: PasswordResetRequestDto) => sdk.auth.requestPasswordReset(body);
 const passwordResetConfirmMutationFn = (body: PasswordResetConfirmDto) => sdk.auth.confirmPasswordReset(body);
 
+type UseUploadAvatarMutationParams = {
+  mutationConfig?: MutationConfig<typeof uploadAvatarMutationFn>;
+};
+type UseDeleteAvatarMutationParams = {
+  mutationConfig?: MutationConfig<typeof deleteAvatarMutationFn>;
+};
 type UseLoginMutationParams = {
   mutationConfig?: MutationConfig<typeof loginMutationFn>;
 };
@@ -57,6 +66,32 @@ export function usePasswordResetRequestMutation(params: UsePasswordResetRequestM
 type UsePasswordResetConfirmMutationParams = {
   mutationConfig?: MutationConfig<typeof passwordResetConfirmMutationFn>;
 };
+
+export function useUploadAvatarMutation(params: UseUploadAvatarMutationParams = {}) {
+  return useMutation({
+    mutationFn: uploadAvatarMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Avatar upload mengembalikan CurrentUserResponseDto terbaru, jadi auth cache bisa langsung sinkron tanpa refetch.
+      queryClient.setQueryData(authKeys.me(), data);
+      queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useDeleteAvatarMutation(params: UseDeleteAvatarMutationParams = {}) {
+  return useMutation({
+    mutationFn: deleteAvatarMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Delete avatar mengikuti strategi cache yang sama seperti upload agar header/profile tidak menunggu roundtrip tambahan.
+      queryClient.setQueryData(authKeys.me(), data);
+      queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
 
 export function usePasswordResetConfirmMutation(params: UsePasswordResetConfirmMutationParams = {}) {
   return useMutation({

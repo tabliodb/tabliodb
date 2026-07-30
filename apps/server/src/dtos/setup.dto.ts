@@ -43,7 +43,7 @@ const SetupCreateResponseSchema = z
     accessToken: z.string(),
     setup: SetupStatusResponseSchema,
     user: z.object({
-      avatarUrl: z.string().url().nullable(),
+      avatarUrl: z.string().nullable(),
       cursorColor: z.string(),
       email: z.string().email(),
       id: z.string().uuid(),

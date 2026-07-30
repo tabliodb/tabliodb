@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OrganizationRole, type ProjectRole } from '@tabliodb/shared';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB } from '../schema/index.js';
 import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
@@ -163,6 +163,10 @@ export class OrganizationRepository {
         'organization_members.userId',
         'users.email',
         'users.name',
+        sql<string | null>`case
+          when users.avatar_file_id is null then null
+          else concat('/api/files/', users.avatar_file_id::text)
+        end`.as('avatarUrl'),
         'users.cursorColor',
         'organization_members.role',
         'organization_members.status',
@@ -201,6 +205,10 @@ export class OrganizationRepository {
         'organization_members.userId',
         'users.email',
         'users.name',
+        sql<string | null>`case
+          when users.avatar_file_id is null then null
+          else concat('/api/files/', users.avatar_file_id::text)
+        end`.as('avatarUrl'),
         'users.cursorColor',
         'organization_members.role',
         'organization_members.status',

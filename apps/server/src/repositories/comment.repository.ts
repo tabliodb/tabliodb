@@ -136,7 +136,10 @@ export class CommentRepository {
         'users.id as authorId',
         'users.email as authorEmail',
         'users.name as authorName',
-        sql<string | null>`null`.as('authorAvatarUrl'),
+        sql<string | null>`case
+          when users.avatar_file_id is null then null
+          else concat('/api/files/', users.avatar_file_id::text)
+        end`.as('authorAvatarUrl'),
         'users.cursorColor as authorCursorColor',
       ])
       .where('comments.threadId', '=', threadId)

@@ -56,6 +56,89 @@
         ]
       }
     },
+    "/auth/me/avatar": {
+      "post": {
+        "operationId": "uploadCurrentUserAvatar",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteCurrentUserAvatar",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/sign-up": {
       "post": {
         "operationId": "signUp",
@@ -776,6 +859,41 @@
         "summary": "",
         "tags": [
           "diagrams"
+        ]
+      }
+    },
+    "/files/{fileId}": {
+      "get": {
+        "operationId": "getFile",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "files"
         ]
       }
     },
@@ -2598,7 +2716,6 @@
           },
           "avatarUrl": {
             "type": "string",
-            "format": "uri",
             "nullable": true
           },
           "cursorColor": {
@@ -2904,7 +3021,6 @@
             "properties": {
               "avatarUrl": {
                 "type": "string",
-                "format": "uri",
                 "nullable": true
               },
               "cursorColor": {
@@ -4639,7 +4755,6 @@
         "properties": {
           "avatarUrl": {
             "type": "string",
-            "format": "uri",
             "nullable": true
           },
           "cursorColor": {
@@ -5031,7 +5146,6 @@
           },
           "avatarUrl": {
             "type": "string",
-            "format": "uri",
             "nullable": true
           },
           "cursorColor": {
@@ -5478,7 +5592,6 @@
             "properties": {
               "avatarUrl": {
                 "type": "string",
-                "format": "uri",
                 "nullable": true
               },
               "cursorColor": {
@@ -6828,7 +6941,6 @@
           },
           "avatarUrl": {
             "type": "string",
-            "format": "uri",
             "nullable": true
           },
           "cursorColor": {

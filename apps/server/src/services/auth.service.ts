@@ -13,6 +13,7 @@ import { AuthContext } from '../database.js';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
+  CurrentUserResponseDto,
   LoginCredentialDto,
   LoginResponseDto,
   PasswordResetConfirmDto,
@@ -31,6 +32,7 @@ import { SessionRepository } from '../repositories/session.repository.js';
 import { SetupRepository, type InstanceAuthSettings } from '../repositories/setup.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
+import { FileService, type UploadedAvatarFile } from './file.service.js';
 
 const PASSWORD_RESET_TOKEN_BYTES = 32;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
@@ -47,6 +49,7 @@ export class AuthService {
     private readonly auditLogRepository: AuditLogRepository,
     private readonly configRepository: ConfigRepository,
     private readonly cryptoRepository: CryptoRepository,
+    private readonly fileService: FileService,
     private readonly organizationRepository: OrganizationRepository,
     private readonly passwordResetRepository: PasswordResetRepository,
     private readonly sessionRepository: SessionRepository,
@@ -98,6 +101,18 @@ export class AuthService {
     if (auth.session) {
       await this.sessionRepository.delete(auth.session.id);
     }
+  }
+
+  async uploadAvatar(auth: AuthContext, file: UploadedAvatarFile | undefined): Promise<CurrentUserResponseDto> {
+    await this.fileService.uploadUserAvatar(auth.user.id, file);
+
+    return this.getFreshAuthUser(auth.user.id);
+  }
+
+  async deleteAvatar(auth: AuthContext): Promise<CurrentUserResponseDto> {
+    await this.fileService.clearUserAvatar(auth.user.id);
+
+    return this.getFreshAuthUser(auth.user.id);
   }
 
   async requestPasswordReset(dto: PasswordResetRequestDto): Promise<PasswordResetRequestResponseDto> {
@@ -280,6 +295,16 @@ export class AuthService {
         cursorColor: user.cursorColor,
       },
     };
+  }
+
+  private async getFreshAuthUser(userId: string): Promise<CurrentUserResponseDto> {
+    const user = await this.userRepository.getAuthUserById(userId);
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    return user;
   }
 
   private getSessionToken({ headers, queryParams }: ValidateRequest): string | null {
