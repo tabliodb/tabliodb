@@ -28,6 +28,8 @@ import {
   type OrganizationSettingsDto,
   type ProjectMemberDto,
   type ProjectResponseDto,
+  type CommentTargetType,
+  type CommentThreadListItemDto,
   type ReviewSignalEffectiveSettingsDto,
   type ReviewSignalResponseDto,
   type ReviewSignalSettingsDto,
@@ -101,6 +103,8 @@ import {
   UsersRound,
 } from 'lucide-react';
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -140,6 +144,13 @@ import {
   useUpdateProjectMemberMutation,
   useUpdateProjectMutation,
 } from '@/resources/projects';
+import {
+  commentQueries,
+  useCreateCommentThreadMutation,
+  useReplyToCommentThreadMutation,
+  useResolveCommentThreadMutation,
+  useUnresolveCommentThreadMutation,
+} from '@/resources/comments';
 import { snapshotsQueries, useCreateSnapshotMutation } from '@/resources/snapshots';
 import {
   reviewSignalKeys,
@@ -152,6 +163,8 @@ import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model'
 import { SchemaCanvas } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
+
+const CommentComposer = lazy(() => import('./components/CommentComposer'));
 
 const addTableFormSchema = z.object({
   tableName: z.string().trim().max(64, 'Keep the table name under 64 characters.'),
@@ -181,6 +194,12 @@ const importSqlFormSchema = z.object({
 type ImportSqlFormState = z.infer<typeof importSqlFormSchema>;
 
 type EditorImportRequest = Pick<DiagramImportDto, 'content' | 'dialect' | 'source'>;
+
+const commentFormSchema = z.object({
+  body: z.string().trim().min(1, 'Write a comment first.').max(4000, 'Keep the comment under 4000 characters.'),
+});
+
+type CommentFormState = z.infer<typeof commentFormSchema>;
 
 type DiagramExportWarningInput = {
   code: string;
@@ -245,6 +264,8 @@ const organizationRoleOptions = [
 
 const projectMemberPageQuery = { limit: 50 } as const;
 const reviewSignalPageQuery = { limit: 50 } as const;
+const commentThreadPageQuery = { limit: 50 } as const;
+const commentReplyPageQuery = { limit: 50 } as const;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 
@@ -257,6 +278,7 @@ export function EditorPage() {
   const queryClient = useQueryClient();
   const [copiedSql, setCopiedSql] = useState(false);
   const [sqlPreviewOpen, setSqlPreviewOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [importJsonOpen, setImportJsonOpen] = useState(false);
   const [importSqlOpen, setImportSqlOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
@@ -309,6 +331,9 @@ export function EditorPage() {
     : false;
   const canCreateSnapshot = activeProject
     ? hasProjectPermission(activeProject.projectRole, Permission.SnapshotCreate)
+    : false;
+  const canCommentDiagram = activeProject
+    ? hasProjectPermission(activeProject.projectRole, Permission.DiagramComment)
     : false;
 
   const snapshotsQuery = useQuery(
@@ -741,7 +766,7 @@ export function EditorPage() {
         </div>
         <div className="flex items-center gap-1">
           <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
-          <IconButton disabled icon={MessageSquareText} label="Comments coming soon" />
+          <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
           <IconButton disabled icon={History} label="History coming soon" />
           <IconButton disabled icon={GitBranch} label="Branches coming soon" />
           <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
@@ -898,6 +923,17 @@ export function EditorPage() {
           setImportSqlOpen(open);
         }}
         open={importSqlOpen}
+      />
+
+      <CommentsDialog
+        canComment={canCommentDiagram}
+        diagramId={activeDiagram.id}
+        model={model}
+        onFocusTable={handleSelectedTableChange}
+        onOpenChange={setCommentsOpen}
+        open={commentsOpen}
+        projectId={activeProject.id}
+        selectedTableId={selectedTable?.id ?? null}
       />
 
       <div
@@ -1077,6 +1113,544 @@ function updateLiveModelFromDiagram(
   modelRef.current = nextModel;
 
   return nextModel;
+}
+
+function CommentsDialog({
+  canComment,
+  diagramId,
+  model,
+  onFocusTable,
+  onOpenChange,
+  open,
+  projectId,
+  selectedTableId,
+}: {
+  canComment: boolean;
+  diagramId: string;
+  model: DiagramModel;
+  onFocusTable: (tableId: string | null) => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  projectId: string;
+  selectedTableId: string | null;
+}) {
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const createForm = useForm<CommentFormState>({
+    defaultValues: { body: '' },
+    mode: 'onBlur',
+    resolver: zodResolver(commentFormSchema),
+  });
+  const replyForm = useForm<CommentFormState>({
+    defaultValues: { body: '' },
+    mode: 'onBlur',
+    resolver: zodResolver(commentFormSchema),
+  });
+  const activeTarget = useMemo(() => getActiveCommentTarget(model, selectedTableId), [model, selectedTableId]);
+  const threadQueryOptions = commentQueries.listThreads(diagramId, commentThreadPageQuery);
+  const threadsQuery = useQuery({
+    ...threadQueryOptions,
+    // Comments panel menjadi fetch boundary supaya editor awal tidak membawa traffic diskusi ketika user belum membukanya.
+    enabled: open && threadQueryOptions.enabled !== false,
+  });
+  const threads = threadsQuery.data?.items ?? [];
+  const activeThread = activeThreadId ? (threads.find((thread) => thread.id === activeThreadId) ?? null) : null;
+  const threadCommentsQueryOptions = commentQueries.listThreadComments(activeThreadId ?? '', commentReplyPageQuery);
+  const threadCommentsQuery = useQuery({
+    ...threadCommentsQueryOptions,
+    enabled: open && Boolean(activeThreadId) && threadCommentsQueryOptions.enabled !== false,
+  });
+  const mentionMembersQueryOptions = projectsQueries.members(projectId, projectMemberPageQuery);
+  const mentionMembersQuery = useQuery({
+    ...mentionMembersQueryOptions,
+    // Mention suggestions memakai project members dan baru dibutuhkan ketika dialog komentar dibuka.
+    enabled: open && mentionMembersQueryOptions.enabled !== false,
+  });
+  const comments = threadCommentsQuery.data?.items ?? [];
+  const mentionUsers = mentionMembersQuery.data?.items ?? [];
+  const createThreadMutation = useCreateCommentThreadMutation();
+  const replyMutation = useReplyToCommentThreadMutation();
+  const resolveThreadMutation = useResolveCommentThreadMutation();
+  const unresolveThreadMutation = useUnresolveCommentThreadMutation();
+  const isMutationPending =
+    createThreadMutation.isPending ||
+    replyMutation.isPending ||
+    resolveThreadMutation.isPending ||
+    unresolveThreadMutation.isPending;
+
+  useEffect(() => {
+    if (!open) {
+      setActiveThreadId(null);
+      return;
+    }
+
+    if (activeThreadId && threads.some((thread) => thread.id === activeThreadId)) {
+      return;
+    }
+
+    setActiveThreadId(threads[0]?.id ?? null);
+  }, [activeThreadId, open, threads]);
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && isMutationPending) {
+      return;
+    }
+
+    onOpenChange(nextOpen);
+
+    if (!nextOpen) {
+      createForm.reset({ body: '' });
+      replyForm.reset({ body: '' });
+      createThreadMutation.reset();
+      replyMutation.reset();
+      resolveThreadMutation.reset();
+      unresolveThreadMutation.reset();
+    }
+  }
+
+  function handleCreateThread(values: CommentFormState) {
+    if (!canComment) {
+      return;
+    }
+
+    createThreadMutation.mutate(
+      {
+        body: {
+          body: values.body,
+          diagramId,
+          targetId: activeTarget.targetId,
+          targetType: activeTarget.targetType,
+        },
+      },
+      {
+        onSuccess: (response) => {
+          setActiveThreadId(response.thread.id);
+          createForm.reset({ body: '' });
+        },
+      },
+    );
+  }
+
+  function handleReply(values: CommentFormState) {
+    if (!canComment || !activeThread) {
+      return;
+    }
+
+    replyMutation.mutate(
+      {
+        body: { body: values.body },
+        threadId: activeThread.id,
+      },
+      {
+        onSuccess: () => {
+          replyForm.reset({ body: '' });
+        },
+      },
+    );
+  }
+
+  function handleToggleResolved() {
+    if (!activeThread || !canComment) {
+      return;
+    }
+
+    if (activeThread.status === 'resolved') {
+      unresolveThreadMutation.mutate(activeThread.id);
+      return;
+    }
+
+    resolveThreadMutation.mutate(activeThread.id);
+  }
+
+  const mutationError =
+    createThreadMutation.error ?? replyMutation.error ?? resolveThreadMutation.error ?? unresolveThreadMutation.error;
+  const activeThreadTargetLabel = activeThread ? getCommentThreadTargetLabel(model, activeThread) : null;
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogContent className="w-[min(94vw,920px)]">
+        <DialogHeader>
+          <DialogTitle>Comments</DialogTitle>
+          <DialogDescription>
+            Discuss the diagram or the selected table without losing schema context.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogBody className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <section className="grid min-h-0 gap-4">
+            <form
+              className="rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3"
+              onSubmit={createForm.handleSubmit(handleCreateThread)}
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-extrabold">New thread</div>
+                  <p className="mt-1 truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {activeTarget.detail}: {activeTarget.label}
+                  </p>
+                </div>
+                <Badge variant={activeTarget.targetType === 'table' ? 'green' : 'blue'}>
+                  {formatCommentTargetType(activeTarget.targetType)}
+                </Badge>
+              </div>
+              <Controller
+                control={createForm.control}
+                name="body"
+                render={({ field }) => (
+                  <Suspense
+                    fallback={
+                      <CommentComposerFallback
+                        invalid={Boolean(createForm.formState.errors.body)}
+                        placeholder={canComment ? 'Leave a note with @teammate' : 'Your role can read comments only'}
+                      />
+                    }
+                  >
+                    <CommentComposer
+                      aria-invalid={Boolean(createForm.formState.errors.body)}
+                      disabled={!canComment || createThreadMutation.isPending}
+                      mentionUsers={mentionUsers}
+                      onBlur={field.onBlur}
+                      onChange={field.onChange}
+                      placeholder={canComment ? 'Leave a note with @teammate' : 'Your role can read comments only'}
+                      value={field.value}
+                    />
+                  </Suspense>
+                )}
+              />
+              <FieldError>{createForm.formState.errors.body?.message}</FieldError>
+              <Button className="mt-3 w-full" disabled={!canComment || createThreadMutation.isPending} type="submit">
+                {createThreadMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <MessageSquareText className="size-4" />
+                )}
+                Start thread
+              </Button>
+            </form>
+
+            <div className="min-h-0 rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-3 py-2">
+                <div>
+                  <div className="text-[13px] font-extrabold">Threads</div>
+                  <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {threadsQuery.data?.totalCount ?? threads.length} total
+                  </p>
+                </div>
+                <Badge variant="neutral">{threadsQuery.isFetching ? 'Syncing' : 'Live'}</Badge>
+              </div>
+              <div className="tabliodb-scrollbar max-h-80 overflow-y-auto p-2">
+                {threadsQuery.isPending ? (
+                  <div className="flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading threads
+                  </div>
+                ) : threadsQuery.error ? (
+                  <div className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                    {getErrorMessage(threadsQuery.error)}
+                  </div>
+                ) : threads.length === 0 ? (
+                  <div className="rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    No comments yet
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {threads.map((thread) => (
+                      <button
+                        aria-pressed={activeThreadId === thread.id}
+                        className={cn(
+                          'w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border-2 p-3 text-left transition',
+                          activeThreadId === thread.id
+                            ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
+                            : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]',
+                        )}
+                        key={thread.id}
+                        onClick={() => {
+                          setActiveThreadId(thread.id);
+                          focusCommentTarget(model, thread, onFocusTable);
+                        }}
+                        title={`Open ${getCommentThreadTargetLabel(model, thread)}`}
+                        type="button"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-[13px] font-extrabold">
+                              {getCommentThreadTargetLabel(model, thread)}
+                            </div>
+                            <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                              {formatDateTime(thread.updatedAt)}
+                            </p>
+                          </div>
+                          <Badge variant={thread.status === 'resolved' ? 'green' : 'yellow'}>{thread.status}</Badge>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="flex min-h-[420px] flex-col rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4 py-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-extrabold">{activeThreadTargetLabel ?? 'Select a thread'}</div>
+                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {activeThread
+                    ? `${formatCommentTargetType(activeThread.targetType)} discussion`
+                    : 'Choose a thread from the list or start a new one.'}
+                </p>
+              </div>
+              {activeThread ? (
+                <Button
+                  disabled={!canComment || isMutationPending}
+                  onClick={handleToggleResolved}
+                  size="sm"
+                  type="button"
+                  variant={activeThread.status === 'resolved' ? 'secondary' : 'primary'}
+                >
+                  {resolveThreadMutation.isPending || unresolveThreadMutation.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Check className="size-4" />
+                  )}
+                  {activeThread.status === 'resolved' ? 'Reopen' : 'Resolve'}
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+              {!activeThread ? (
+                <div className="grid h-full place-items-center rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  Comments stay anchored to the diagram objects your team is reviewing.
+                </div>
+              ) : threadCommentsQuery.isPending ? (
+                <div className="flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading replies
+                </div>
+              ) : threadCommentsQuery.error ? (
+                <div className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                  {getErrorMessage(threadCommentsQuery.error)}
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {comments.map((comment) => (
+                    <article
+                      className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3"
+                      key={comment.id}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="grid size-9 shrink-0 place-items-center rounded-[13px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
+                          style={
+                            comment.author.avatarColor ? { backgroundColor: comment.author.avatarColor } : undefined
+                          }
+                        >
+                          {getMemberInitials(comment.author)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[13px] font-extrabold">{comment.author.name}</span>
+                            <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                              {formatDateTime(comment.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
+                            {comment.body}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <form
+              className="shrink-0 border-t border-[rgb(var(--tabliodb-border))] p-3"
+              onSubmit={replyForm.handleSubmit(handleReply)}
+            >
+              <Controller
+                control={replyForm.control}
+                name="body"
+                render={({ field }) => (
+                  <Suspense
+                    fallback={
+                      <CommentComposerFallback
+                        invalid={Boolean(replyForm.formState.errors.body)}
+                        placeholder={
+                          activeThread
+                            ? canComment
+                              ? 'Reply with @teammate'
+                              : 'Your role can read this thread only'
+                            : 'Select a thread before replying'
+                        }
+                      />
+                    }
+                  >
+                    <CommentComposer
+                      aria-invalid={Boolean(replyForm.formState.errors.body)}
+                      disabled={!activeThread || !canComment || replyMutation.isPending}
+                      mentionUsers={mentionUsers}
+                      menuPlacement="top"
+                      onBlur={field.onBlur}
+                      onChange={field.onChange}
+                      placeholder={
+                        activeThread
+                          ? canComment
+                            ? 'Reply with @teammate'
+                            : 'Your role can read this thread only'
+                          : 'Select a thread before replying'
+                      }
+                      value={field.value}
+                    />
+                  </Suspense>
+                )}
+              />
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-h-5">
+                  <FieldError>{replyForm.formState.errors.body?.message}</FieldError>
+                  {mutationError ? <FieldError>{getErrorMessage(mutationError)}</FieldError> : null}
+                </div>
+                <Button disabled={!activeThread || !canComment || replyMutation.isPending} size="sm" type="submit">
+                  {replyMutation.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <MessageSquareText className="size-4" />
+                  )}
+                  Reply
+                </Button>
+              </div>
+            </form>
+          </section>
+        </DialogBody>
+
+        <DialogFooter>
+          <Button
+            disabled={isMutationPending}
+            onClick={() => handleOpenChange(false)}
+            type="button"
+            variant="secondary"
+          >
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CommentComposerFallback({ invalid, placeholder }: { invalid: boolean; placeholder: string }) {
+  return (
+    <div
+      className={cn(
+        'min-h-20 rounded-[var(--tabliodb-radius-md)] border bg-white px-3 py-2 text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink-subtle))]',
+        invalid ? 'border-[rgb(var(--tabliodb-danger-border))]' : 'border-[rgb(var(--tabliodb-border-strong))]',
+      )}
+    >
+      {placeholder}
+    </div>
+  );
+}
+
+function getActiveCommentTarget(
+  model: DiagramModel,
+  selectedTableId: string | null,
+): { detail: string; label: string; targetId: string | null; targetType: CommentTargetType } {
+  const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
+
+  if (selectedTable) {
+    return {
+      detail: 'Selected table',
+      label: selectedTable.name,
+      targetId: selectedTable.id,
+      targetType: 'table',
+    };
+  }
+
+  return {
+    detail: 'Diagram',
+    label: model.metadata.name,
+    targetId: null,
+    targetType: 'diagram',
+  };
+}
+
+function getCommentThreadTargetLabel(model: DiagramModel, thread: CommentThreadListItemDto): string {
+  if (thread.targetType === 'diagram') {
+    return `Diagram: ${model.metadata.name}`;
+  }
+
+  if (!thread.targetId) {
+    return formatCommentTargetType(thread.targetType);
+  }
+
+  const targetName =
+    thread.targetType === 'table'
+      ? model.tables[thread.targetId]?.name
+      : thread.targetType === 'column'
+        ? model.columns[thread.targetId]?.name
+        : thread.targetType === 'relationship'
+          ? model.relationships[thread.targetId]?.name
+          : thread.targetType === 'index'
+            ? model.indexes[thread.targetId]?.name
+            : thread.targetType === 'check'
+              ? model.checks[thread.targetId]?.name
+              : thread.targetType === 'enum'
+                ? model.enums[thread.targetId]?.name
+                : thread.targetType === 'note'
+                  ? model.notes[thread.targetId]?.text.slice(0, 32)
+                  : thread.targetType === 'group'
+                    ? model.groups[thread.targetId]?.name
+                    : null;
+
+  return `${formatCommentTargetType(thread.targetType)}: ${targetName ?? thread.targetId}`;
+}
+
+function focusCommentTarget(
+  model: DiagramModel,
+  thread: CommentThreadListItemDto,
+  onFocusTable: (tableId: string | null) => void,
+) {
+  const tableId = getCommentTargetTableId(model, thread);
+
+  if (tableId) {
+    onFocusTable(tableId);
+  }
+}
+
+function getCommentTargetTableId(model: DiagramModel, thread: CommentThreadListItemDto): string | null {
+  if (!thread.targetId) {
+    return null;
+  }
+
+  if (thread.targetType === 'table') {
+    return model.tables[thread.targetId] ? thread.targetId : null;
+  }
+
+  if (thread.targetType === 'column') {
+    return model.columns[thread.targetId]?.tableId ?? null;
+  }
+
+  if (thread.targetType === 'index') {
+    return model.indexes[thread.targetId]?.tableId ?? null;
+  }
+
+  if (thread.targetType === 'check') {
+    return model.checks[thread.targetId]?.tableId ?? null;
+  }
+
+  if (thread.targetType === 'relationship') {
+    return model.relationships[thread.targetId]?.sourceTableId ?? null;
+  }
+
+  return null;
+}
+
+function formatCommentTargetType(targetType: CommentTargetType): string {
+  return targetType
+    .split('_')
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
 }
 
 function SidebarRail({

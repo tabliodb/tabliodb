@@ -1,13 +1,16 @@
-import { Body, Controller, Get, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import {
+  CommentListResponseDto,
+  CommentReplyCreateDto,
   CommentThreadCreateDto,
   CommentThreadListQueryDto,
   CommentThreadListResponseDto,
   CommentThreadResponseDto,
+  CommentThreadStatusResponseDto,
 } from '../dtos/comment.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
@@ -41,5 +44,43 @@ export class CommentController {
     @Query() query: CommentThreadListQueryDto,
   ) {
     return this.service.getThreads(auth, diagramId, query);
+  }
+
+  @Get('threads/:threadId/comments')
+  @ApiParam({ name: 'threadId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getThreadComments' })
+  @ZodResponse({ type: CommentListResponseDto })
+  getThreadComments(
+    @Auth() auth: AuthContext,
+    @Param('threadId') threadId: string,
+    @Query() query: CommentThreadListQueryDto,
+  ) {
+    return this.service.getThreadComments(auth, threadId, query);
+  }
+
+  @Post('threads/:threadId/comments')
+  @ApiParam({ name: 'threadId', type: String })
+  @ApiBody({ type: CommentReplyCreateDto })
+  @ApiOperation({ operationId: 'replyToCommentThread' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: CommentThreadResponseDto })
+  replyToThread(@Auth() auth: AuthContext, @Param('threadId') threadId: string, @Body() dto: CommentReplyCreateDto) {
+    return this.service.replyToThread(auth, threadId, dto);
+  }
+
+  @Patch('threads/:threadId/resolve')
+  @ApiParam({ name: 'threadId', type: String })
+  @ApiOperation({ operationId: 'resolveCommentThread' })
+  @ZodResponse({ type: CommentThreadStatusResponseDto })
+  resolveThread(@Auth() auth: AuthContext, @Param('threadId') threadId: string) {
+    return this.service.resolveThread(auth, threadId);
+  }
+
+  @Patch('threads/:threadId/unresolve')
+  @ApiParam({ name: 'threadId', type: String })
+  @ApiOperation({ operationId: 'unresolveCommentThread' })
+  @ZodResponse({ type: CommentThreadStatusResponseDto })
+  unresolveThread(@Auth() auth: AuthContext, @Param('threadId') threadId: string) {
+    return this.service.unresolveThread(auth, threadId);
   }
 }

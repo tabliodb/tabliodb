@@ -71,43 +71,78 @@ export type ApiKeyCreateResponseDtoOutput = {
   };
 };
 export type CommentThreadCreateDto = {
-  diagramId: string;
-  targetType: TargetType;
-  targetId: string | null;
   body: string;
+  diagramId: string;
+  targetId: string | null;
+  targetType: TargetType;
+};
+export type CommentResponseDtoOutput = {
+  author: {
+    avatarColor: string | null;
+    email: string;
+    id: string;
+    name: string;
+  };
+  body: string;
+  bodyFormat: BodyFormat;
+  createdAt: string;
+  createdById: string;
+  editedAt: string | null;
+  id: string;
+  threadId: string;
+  updatedAt: string;
 };
 export type CommentThreadResponseDtoOutput = {
   thread: {
-    id: string;
+    createdAt: string;
+    createdById: string;
     diagramId: string;
-    targetType: string;
-    targetId: string | null;
-    resolvedAt: string | null;
-    createdAt: string;
-    updatedAt: string;
-  };
-  comment: {
     id: string;
-    threadId: string;
-    body: string;
-    createdAt: string;
+    resolvedAt: string | null;
+    resolvedById: string | null;
+    status: Status;
+    targetId: string | null;
+    targetType: TargetType;
     updatedAt: string;
   };
+  comment: CommentResponseDtoOutput;
 };
 export type CommentThreadListItemDtoOutput = {
-  id: string;
-  diagramId: string;
-  targetType: string;
-  targetId: string | null;
-  status: string;
-  resolvedAt: string | null;
   createdAt: string;
+  createdById: string;
+  diagramId: string;
+  id: string;
+  resolvedAt: string | null;
+  resolvedById: string | null;
+  status: Status;
+  targetId: string | null;
+  targetType: TargetType;
   updatedAt: string;
 };
 export type CommentThreadListResponseDtoOutput = {
   items: CommentThreadListItemDtoOutput[];
   nextCursor: string | null;
   totalCount: number;
+};
+export type CommentListResponseDtoOutput = {
+  items: CommentResponseDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type CommentReplyCreateDto = {
+  body: string;
+};
+export type CommentThreadStatusResponseDtoOutput = {
+  createdAt: string;
+  createdById: string;
+  diagramId: string;
+  id: string;
+  resolvedAt: string | null;
+  resolvedById: string | null;
+  status: Status;
+  targetId: string | null;
+  targetType: TargetType;
+  updatedAt: string;
 };
 export type DiagramCreateDto = {
   projectId: string;
@@ -323,7 +358,7 @@ export type InvitationDtoOutput = {
   revokedAt: string | null;
   expiresAt: string;
   createdAt: string;
-  status: Status;
+  status: Status2;
 };
 export type InvitationCreateResponseDtoOutput = {
   invitation: InvitationDtoOutput;
@@ -338,7 +373,7 @@ export type InvitationPublicDtoOutput = {
   projectRole: ProjectRole | null;
   message: string | null;
   expiresAt: string;
-  status: Status;
+  status: Status2;
 };
 export type InvitationAcceptDto = {
   token: string;
@@ -387,7 +422,7 @@ export type OrganizationMemberDtoOutput = {
   joinedAt: string | null;
   name: string;
   role: Role;
-  status: Status2;
+  status: Status3;
   updatedAt: string;
   userId: string;
 };
@@ -1071,6 +1106,95 @@ export function getCommentThreads(
         ...opts,
       },
     ),
+  );
+}
+export function getThreadComments(
+  {
+    cursor,
+    limit,
+    threadId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    threadId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentListResponseDtoOutput;
+    }>(
+      `/comments/threads/${encodeURIComponent(threadId)}/comments${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function replyToCommentThread(
+  {
+    threadId,
+    commentReplyCreateDto,
+  }: {
+    threadId: string;
+    commentReplyCreateDto: CommentReplyCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: CommentThreadResponseDtoOutput;
+    }>(
+      `/comments/threads/${encodeURIComponent(threadId)}/comments`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: commentReplyCreateDto,
+      }),
+    ),
+  );
+}
+export function resolveCommentThread(
+  {
+    threadId,
+  }: {
+    threadId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentThreadStatusResponseDtoOutput;
+    }>(`/comments/threads/${encodeURIComponent(threadId)}/resolve`, {
+      ...opts,
+      method: 'PATCH',
+    }),
+  );
+}
+export function unresolveCommentThread(
+  {
+    threadId,
+  }: {
+    threadId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentThreadStatusResponseDtoOutput;
+    }>(`/comments/threads/${encodeURIComponent(threadId)}/unresolve`, {
+      ...opts,
+      method: 'PATCH',
+    }),
   );
 }
 export function createDiagram(
@@ -2032,12 +2156,22 @@ export enum Permissions {
   ApiKeyManage = 'api-key.manage',
 }
 export enum TargetType {
+  Diagram = 'diagram',
   Table = 'table',
   Column = 'column',
   Relationship = 'relationship',
+  Index = 'index',
   Enum = 'enum',
+  Check = 'check',
   Note = 'note',
-  Diagram = 'diagram',
+  Group = 'group',
+}
+export enum Status {
+  Open = 'open',
+  Resolved = 'resolved',
+}
+export enum BodyFormat {
+  Markdown = 'markdown',
 }
 export enum Dialect {
   Postgresql = 'postgresql',
@@ -2132,7 +2266,7 @@ export enum ProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status {
+export enum Status2 {
   Pending = 'pending',
   Accepted = 'accepted',
   Revoked = 'revoked',
@@ -2149,7 +2283,7 @@ export enum DefaultProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status2 {
+export enum Status3 {
   Pending = 'pending',
   Active = 'active',
   Suspended = 'suspended',
