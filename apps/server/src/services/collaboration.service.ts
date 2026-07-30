@@ -8,6 +8,7 @@ import {
   isGranted,
   parseDiagramDocumentName,
   permissionsForProjectRole,
+  type AwarenessState,
 } from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
 import { AuthService } from './auth.service.js';
@@ -62,11 +63,31 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
 
         // The context becomes available to later Hocuspocus hooks and gives us a clean boundary for authorization.
         return {
+          user: {
+            avatarUrl: auth.user.avatarUrl,
+            cursorColor: auth.user.cursorColor,
+            id: auth.user.id,
+            name: auth.user.name,
+          },
           userId: auth.user.id,
           diagramId: parsed.diagramId,
           role: role.role,
           readOnly,
         } satisfies CollaborationContext;
+      },
+      beforeHandleAwareness: async ({ context, states }) => {
+        const collaborationContext = readCollaborationContext(context);
+
+        if (!collaborationContext) {
+          states.clear();
+          return;
+        }
+
+        for (const [clientId, state] of states.entries()) {
+          // Awareness is supplied by the client, but identity is a server-owned boundary.
+          // Cursor, viewport, and selection may pass through; user identity is rewritten from the authenticated session.
+          states.set(clientId, sanitizeAwarenessState(state, collaborationContext));
+        }
       },
       extensions: [
         new Database({
@@ -126,6 +147,7 @@ type CollaborationContext = {
   diagramId: string;
   readOnly: boolean;
   role: ProjectRole;
+  user: AwarenessState['user'];
   userId: string;
 };
 
@@ -140,6 +162,7 @@ function readCollaborationContext(value: unknown): CollaborationContext | null {
     typeof context.diagramId === 'string' &&
     typeof context.readOnly === 'boolean' &&
     typeof context.userId === 'string' &&
+    isAwarenessUser(context.user) &&
     context.role &&
     Object.values(ProjectRole).includes(context.role)
   ) {
@@ -147,6 +170,84 @@ function readCollaborationContext(value: unknown): CollaborationContext | null {
   }
 
   return null;
+}
+
+function sanitizeAwarenessState(state: Record<string, unknown>, context: CollaborationContext): AwarenessState {
+  return {
+    cursor: readCursor(state.cursor),
+    selection: readSelection(state.selection),
+    user: context.user,
+    viewport: readViewport(state.viewport),
+  };
+}
+
+function isAwarenessUser(value: unknown): value is AwarenessState['user'] {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const user = value as Partial<AwarenessState['user']>;
+
+  return (
+    typeof user.id === 'string' &&
+    typeof user.name === 'string' &&
+    typeof user.cursorColor === 'string' &&
+    (typeof user.avatarUrl === 'string' || user.avatarUrl === null)
+  );
+}
+
+function readCursor(value: unknown): AwarenessState['cursor'] {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const cursor = value as Partial<NonNullable<AwarenessState['cursor']>>;
+
+  return typeof cursor.x === 'number' && typeof cursor.y === 'number' ? { x: cursor.x, y: cursor.y } : undefined;
+}
+
+function readSelection(value: unknown): AwarenessState['selection'] {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const selection = value as Partial<NonNullable<AwarenessState['selection']>>;
+  const targetTypes = [
+    'check',
+    'column',
+    'diagram',
+    'enum',
+    'group',
+    'index',
+    'note',
+    'relationship',
+    'table',
+  ] as const;
+
+  if (
+    (typeof selection.targetId === 'string' || selection.targetId === null) &&
+    selection.targetType &&
+    targetTypes.includes(selection.targetType)
+  ) {
+    return {
+      targetId: selection.targetId,
+      targetType: selection.targetType,
+    };
+  }
+
+  return undefined;
+}
+
+function readViewport(value: unknown): AwarenessState['viewport'] {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const viewport = value as Partial<NonNullable<AwarenessState['viewport']>>;
+
+  return typeof viewport.x === 'number' && typeof viewport.y === 'number' && typeof viewport.zoom === 'number'
+    ? { x: viewport.x, y: viewport.y, zoom: viewport.zoom }
+    : undefined;
 }
 
 function headersToIncomingHttpHeaders(headers: Headers): IncomingHttpHeaders {

@@ -2,12 +2,22 @@ export const REALTIME_DOCUMENT_PREFIX = 'diagram';
 
 export type RealtimeDocumentName = `${typeof REALTIME_DOCUMENT_PREFIX}:${string}`;
 
-export type AwarenessState = {
-  userId: string;
+export type AwarenessUser = {
+  avatarUrl: string | null;
+  cursorColor: string;
+  id: string;
   name: string;
-  color: string;
+};
+
+export type AwarenessSelection = {
+  targetId: string | null;
+  targetType: 'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
+};
+
+export type AwarenessState = {
+  user: AwarenessUser;
   cursor?: { x: number; y: number };
-  selectedEntityId?: string;
+  selection?: AwarenessSelection;
   viewport?: { x: number; y: number; zoom: number };
 };
 

@@ -34,6 +34,7 @@ import {
   type ReviewSignalResponseDto,
   type ReviewSignalSettingsDto,
 } from '@tabliodb/sdk';
+import type { AwarenessState } from '@tabliodb/shared';
 import {
   generateCreateSchemaSqlWithWarnings,
   parseCreateSchemaSql,
@@ -113,15 +114,17 @@ import {
   useState,
   type ChangeEvent,
   type ComponentType,
+  type PointerEvent as ReactPointerEvent,
   type SVGProps,
 } from 'react';
 import { Controller, useForm, type Control, type FieldValues, type Path } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
+import type { DiagramCollaboration, RemoteAwarenessState } from '@/features/collaboration/collaboration-client';
 import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
-import { useLogoutMutation } from '@/resources/auth';
+import { authQueries, useLogoutMutation } from '@/resources/auth';
 import {
   defaultDiagramName,
   diagramsQueries,
@@ -297,7 +300,12 @@ export function EditorPage() {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   // Inspector starts collapsed so the editor opens with more canvas room while keeping the right rail discoverable.
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [remoteAwarenessStates, setRemoteAwarenessStates] = useState<RemoteAwarenessState[]>([]);
+  const collaborationRef = useRef<DiagramCollaboration | null>(null);
+  const latestCursorRef = useRef<AwarenessState['cursor']>(undefined);
+  const latestAwarenessSentAtRef = useRef(0);
 
+  const currentUserQuery = useQuery(authQueries.me());
   const organizationsQuery = useQuery(organizationsQueries.list({ limit: 50 }));
   const organizations = organizationsQuery.data?.items ?? [];
   const routeWorkspaceSlug = params.workspaceSlug ?? null;
@@ -333,6 +341,7 @@ export function EditorPage() {
 
   const diagrams = diagramsQuery.data ?? [];
   const activeDiagram = diagrams.find((diagram) => diagram.id === routeDiagramId) ?? diagrams[0] ?? null;
+  const currentUser = currentUserQuery.data ?? null;
   const canEditDiagram = activeProject
     ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate)
     : false;
@@ -370,6 +379,10 @@ export function EditorPage() {
     // Server-backed review signals hanya dipakai untuk draft persisted; edit lokal tetap memakai lint langsung dari model UI.
     return reviewSignalsQuery.data?.items.flatMap(mapReviewSignalResponseToDomainSignal) ?? null;
   }, [model, reviewSignalsQuery.data?.items]);
+  const collaborators = useMemo(
+    () => createCollaboratorPresenceList(remoteAwarenessStates, currentUser?.id ?? null),
+    [currentUser?.id, remoteAwarenessStates],
+  );
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -437,6 +450,87 @@ export function EditorPage() {
       setLeftSidebarOpen(true);
     }
   }, []);
+
+  const publishAwareness = useCallback(
+    (cursor: AwarenessState['cursor'] = latestCursorRef.current) => {
+      if (!currentUser || !activeDiagram) {
+        return;
+      }
+
+      collaborationRef.current?.setAwareness(
+        createEditorAwarenessState(currentUser, activeDiagram.id, selectedCommentTarget, cursor),
+      );
+    },
+    [activeDiagram, currentUser, selectedCommentTarget],
+  );
+
+  const handleEditorPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const cursor = {
+        x: Math.round(event.clientX),
+        y: Math.round(event.clientY),
+      };
+      const now = Date.now();
+
+      latestCursorRef.current = cursor;
+
+      if (now - latestAwarenessSentAtRef.current < 90) {
+        return;
+      }
+
+      latestAwarenessSentAtRef.current = now;
+      publishAwareness(cursor);
+    },
+    [publishAwareness],
+  );
+
+  const handleEditorPointerLeave = useCallback(() => {
+    latestCursorRef.current = undefined;
+    publishAwareness(undefined);
+  }, [publishAwareness]);
+
+  useEffect(() => {
+    if (!activeDiagram || !currentUser) {
+      setRemoteAwarenessStates([]);
+      return;
+    }
+
+    let disposed = false;
+    let collaboration: DiagramCollaboration | null = null;
+    let unsubscribe: () => void = () => undefined;
+
+    void import('@/features/collaboration/collaboration-client').then(({ createDiagramCollaboration }) => {
+      if (disposed) {
+        return;
+      }
+
+      // Hocuspocus/Yjs is loaded only after a real diagram is active so the editor route chunk stays focused on first paint.
+      collaboration = createDiagramCollaboration({ diagramId: activeDiagram.id });
+      collaborationRef.current = collaboration;
+      unsubscribe = collaboration.subscribeAwareness((states) => {
+        setRemoteAwarenessStates(states.filter((state) => !state.isLocal));
+      });
+      collaboration.setAwareness(
+        createEditorAwarenessState(currentUser, activeDiagram.id, selectedCommentTarget, latestCursorRef.current),
+      );
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+      collaboration?.destroy();
+
+      if (collaborationRef.current === collaboration) {
+        collaborationRef.current = null;
+      }
+
+      setRemoteAwarenessStates([]);
+    };
+  }, [activeDiagram?.id, currentUser?.avatarUrl, currentUser?.cursorColor, currentUser?.id, currentUser?.name]);
+
+  useEffect(() => {
+    publishAwareness();
+  }, [publishAwareness]);
 
   useEffect(() => {
     if (organizations.length === 0 || organizationsQuery.isPending) {
@@ -779,7 +873,11 @@ export function EditorPage() {
   const rightSidebarWidth = rightSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
 
   return (
-    <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
+    <main
+      className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]"
+      onPointerLeave={handleEditorPointerLeave}
+      onPointerMove={handleEditorPointerMove}
+    >
       <header className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] bg-white px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex shrink-0 items-center gap-2">
@@ -799,6 +897,7 @@ export function EditorPage() {
         </div>
         <div className="flex items-center gap-1">
           <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
+          <CollaborationPresence collaborators={collaborators} />
           <div className="relative">
             <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
             {openCommentThreadCount > 0 ? (
@@ -3864,6 +3963,54 @@ type AvatarIdentity = {
   name: string;
 };
 
+type CurrentAwarenessUser = {
+  avatarUrl: string | null;
+  cursorColor: string;
+  email: string;
+  id: string;
+  name: string;
+};
+
+type CollaboratorPresence = {
+  clientIds: number[];
+  cursor?: AwarenessState['cursor'];
+  selection?: AwarenessState['selection'];
+  user: AwarenessState['user'] & { email: string };
+};
+
+function CollaborationPresence({ collaborators }: { collaborators: CollaboratorPresence[] }) {
+  const visibleCollaborators = collaborators.slice(0, 4);
+  const overflowCount = Math.max(0, collaborators.length - visibleCollaborators.length);
+
+  return (
+    <div className="hidden items-center gap-2 rounded-full border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] px-2 py-1 sm:flex">
+      <span className="relative grid size-2.5 place-items-center">
+        <span className="absolute inline-flex size-2.5 animate-ping rounded-full bg-[rgb(var(--tabliodb-primary))] opacity-40" />
+        <span className="relative inline-flex size-2.5 rounded-full bg-[rgb(var(--tabliodb-primary))]" />
+      </span>
+      <span className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+        {collaborators.length > 0 ? `${collaborators.length} live` : 'Live'}
+      </span>
+      {visibleCollaborators.length > 0 ? (
+        <div className="flex -space-x-2">
+          {visibleCollaborators.map((collaborator) => (
+            <UserAvatar
+              className="size-7 rounded-[11px] bg-white text-[10px] ring-2 ring-white"
+              key={collaborator.user.id}
+              user={collaborator.user}
+            />
+          ))}
+          {overflowCount > 0 ? (
+            <div className="grid size-7 place-items-center rounded-[11px] border-2 border-white bg-[rgb(var(--tabliodb-ink))] text-[10px] font-extrabold text-white ring-2 ring-white">
+              +{overflowCount}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function UserAvatar({ className, user }: { className?: string; user: AvatarIdentity }) {
   return (
     <div
@@ -3880,6 +4027,68 @@ function UserAvatar({ className, user }: { className?: string; user: AvatarIdent
       )}
     </div>
   );
+}
+
+function createEditorAwarenessState(
+  currentUser: CurrentAwarenessUser,
+  diagramId: string,
+  selectedTarget: EditorCommentTarget | null,
+  cursor?: AwarenessState['cursor'],
+): AwarenessState {
+  return {
+    cursor,
+    selection: selectedTarget
+      ? {
+          targetId: selectedTarget.targetId,
+          targetType: selectedTarget.targetType,
+        }
+      : {
+          targetId: diagramId,
+          targetType: 'diagram',
+        },
+    user: {
+      avatarUrl: currentUser.avatarUrl,
+      cursorColor: currentUser.cursorColor,
+      id: currentUser.id,
+      name: currentUser.name,
+    },
+  };
+}
+
+function createCollaboratorPresenceList(
+  states: RemoteAwarenessState[],
+  currentUserId: string | null,
+): CollaboratorPresence[] {
+  const collaboratorsByUser = new Map<string, CollaboratorPresence>();
+
+  for (const awareness of states) {
+    const user = awareness.state.user;
+
+    if (user.id === currentUserId) {
+      continue;
+    }
+
+    const existing = collaboratorsByUser.get(user.id);
+
+    if (existing) {
+      existing.clientIds.push(awareness.clientId);
+      existing.cursor = awareness.state.cursor ?? existing.cursor;
+      existing.selection = awareness.state.selection ?? existing.selection;
+      continue;
+    }
+
+    collaboratorsByUser.set(user.id, {
+      clientIds: [awareness.clientId],
+      cursor: awareness.state.cursor,
+      selection: awareness.state.selection,
+      user: {
+        ...user,
+        email: '',
+      },
+    });
+  }
+
+  return Array.from(collaboratorsByUser.values()).sort((left, right) => left.user.name.localeCompare(right.user.name));
 }
 
 function getMemberInitials(member: Pick<ProjectMemberDto, 'email' | 'name'>): string {
