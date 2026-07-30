@@ -18,7 +18,8 @@ import {
   type DiagramModel,
 } from '@tabliodb/schema-core';
 import type { CommentThreadListItemDto } from '@tabliodb/sdk';
-import { useEffect, useRef } from 'react';
+import type { AwarenessState } from '@tabliodb/shared';
+import { useEffect, useRef, useState } from 'react';
 import {
   createCommentMarkerSummary,
   formatCommentMarkerCount,
@@ -62,10 +63,18 @@ export type SchemaCanvasProps = {
   fitSignal: number;
   fitKey: string;
   model: DiagramModel;
+  onLocalCursorChange?: (cursor: AwarenessState['cursor']) => void;
   selectedTableId: string | null;
   onModelChange: (model: DiagramModel) => void;
   onSelectedTableChange: (tableId: string | null) => void;
+  remoteCursors?: RemoteCanvasCursor[];
   readOnly?: boolean;
+};
+
+export type RemoteCanvasCursor = {
+  clientIds: number[];
+  cursor: NonNullable<AwarenessState['cursor']>;
+  user: AwarenessState['user'];
 };
 
 type TableNodeData = {
@@ -98,22 +107,32 @@ type RelationshipPlan = {
   terminalsByTable: Map<string, RelationshipTerminal[]>;
 };
 
+type RemoteCanvasCursorPosition = RemoteCanvasCursor & {
+  left: number;
+  top: number;
+};
+
 export function SchemaCanvas({
   commentThreads = [],
   fitKey,
   fitSignal,
   model,
+  onLocalCursorChange,
   onModelChange,
   onSelectedTableChange,
   readOnly = false,
+  remoteCursors = [],
   selectedTableId,
 }: SchemaCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const fitKeyRef = useRef<string | null>(null);
   const modelRef = useRef(model);
+  const onLocalCursorChangeRef = useRef(onLocalCursorChange);
   const onModelChangeRef = useRef(onModelChange);
   const onSelectedTableChangeRef = useRef(onSelectedTableChange);
+  const remoteCursorsRef = useRef(remoteCursors);
+  const [remoteCursorPositions, setRemoteCursorPositions] = useState<RemoteCanvasCursorPosition[]>([]);
 
   useEffect(() => {
     modelRef.current = model;
@@ -124,8 +143,16 @@ export function SchemaCanvas({
   }, [onModelChange]);
 
   useEffect(() => {
+    onLocalCursorChangeRef.current = onLocalCursorChange;
+  }, [onLocalCursorChange]);
+
+  useEffect(() => {
     onSelectedTableChangeRef.current = onSelectedTableChange;
   }, [onSelectedTableChange]);
+
+  useEffect(() => {
+    remoteCursorsRef.current = remoteCursors;
+  }, [remoteCursors]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -256,6 +283,24 @@ export function SchemaCanvas({
 
     container.addEventListener('mousedown', handleResizeMouseDown, true);
 
+    const handleCursorPointerMove = (event: PointerEvent) => {
+      const point = graph.clientToLocal(event.clientX, event.clientY);
+
+      // Awareness cursor disimpan dalam coordinate system local X6 supaya posisi remote user tetap akurat saat canvas di-pan atau di-zoom.
+      onLocalCursorChangeRef.current?.({
+        x: Math.round(point.x),
+        y: Math.round(point.y),
+      });
+    };
+
+    const handleCursorPointerLeave = () => {
+      // Menghapus cursor ketika pointer keluar canvas mencegah user lain melihat pointer stale di diagram.
+      onLocalCursorChangeRef.current?.(undefined);
+    };
+
+    container.addEventListener('pointerleave', handleCursorPointerLeave);
+    container.addEventListener('pointermove', handleCursorPointerMove);
+
     graph.on('node:moved', ({ node }) => {
       if (readOnly) {
         return;
@@ -287,6 +332,8 @@ export function SchemaCanvas({
 
     return () => {
       container.removeEventListener('mousedown', handleResizeMouseDown, true);
+      container.removeEventListener('pointerleave', handleCursorPointerLeave);
+      container.removeEventListener('pointermove', handleCursorPointerMove);
       graph.dispose();
       graphRef.current = null;
     };
@@ -315,11 +362,132 @@ export function SchemaCanvas({
     }
   }, [fitSignal]);
 
+  useEffect(() => {
+    const graph = graphRef.current;
+    const container = containerRef.current;
+
+    if (!graph || !container || remoteCursors.length === 0) {
+      setRemoteCursorPositions([]);
+      return;
+    }
+
+    let animationFrameId = 0;
+    let disposed = false;
+
+    const syncRemoteCursorPositions = () => {
+      if (disposed) {
+        return;
+      }
+
+      const nextPositions = createRemoteCursorPositions(graph, container, remoteCursorsRef.current);
+      setRemoteCursorPositions((currentPositions) =>
+        areRemoteCursorPositionsEqual(currentPositions, nextPositions) ? currentPositions : nextPositions,
+      );
+
+      // X6 pan/zoom updates can happen outside React renders, so the lightweight RAF sync keeps cursor overlays glued to the live graph matrix.
+      animationFrameId = window.requestAnimationFrame(syncRemoteCursorPositions);
+    };
+
+    syncRemoteCursorPositions();
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [remoteCursors.length]);
+
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden bg-[rgb(var(--tabliodb-canvas))]">
       <div className="tabliodb-x6-canvas absolute inset-0" ref={containerRef} />
+      {remoteCursorPositions.length > 0 ? (
+        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+          {remoteCursorPositions.map((cursor) => (
+            <div
+              className="absolute left-0 top-0 flex max-w-[180px] items-start gap-1.5"
+              key={`${cursor.user.id}:${cursor.clientIds.join('-')}`}
+              style={{ transform: `translate3d(${cursor.left}px, ${cursor.top}px, 0)` }}
+            >
+              <svg
+                aria-hidden="true"
+                className="size-5 shrink-0 drop-shadow-[0_2px_0_rgba(15,23,42,0.18)]"
+                style={{ color: cursor.user.cursorColor }}
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M4 3.5 19.5 11 12.7 13.2 10.4 20.2 4 3.5Z"
+                  fill="currentColor"
+                  stroke="white"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                />
+              </svg>
+              <span
+                className="mt-4 max-w-[140px] truncate rounded-full border-2 border-white px-2.5 py-1 text-[11px] font-extrabold leading-none text-white shadow-[0_2px_0_rgba(15,23,42,0.18)]"
+                style={{ backgroundColor: cursor.user.cursorColor }}
+              >
+                {cursor.user.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function createRemoteCursorPositions(
+  graph: Graph,
+  container: HTMLElement,
+  remoteCursors: RemoteCanvasCursor[],
+): RemoteCanvasCursorPosition[] {
+  const containerRect = container.getBoundingClientRect();
+
+  return remoteCursors.flatMap<RemoteCanvasCursorPosition>((cursor) => {
+    const point = graph.localToClient(cursor.cursor.x, cursor.cursor.y);
+    const left = Math.round(point.x - containerRect.left);
+    const top = Math.round(point.y - containerRect.top);
+
+    if (left < -80 || top < -80 || left > containerRect.width + 180 || top > containerRect.height + 80) {
+      return [];
+    }
+
+    return [
+      {
+        ...cursor,
+        left,
+        top,
+      },
+    ];
+  });
+}
+
+function areRemoteCursorPositionsEqual(
+  currentPositions: RemoteCanvasCursorPosition[],
+  nextPositions: RemoteCanvasCursorPosition[],
+): boolean {
+  if (currentPositions.length !== nextPositions.length) {
+    return false;
+  }
+
+  return currentPositions.every((current, index) => {
+    const next = nextPositions[index];
+
+    if (!next) {
+      return false;
+    }
+
+    return (
+      current.left === next.left &&
+      current.top === next.top &&
+      current.cursor.x === next.cursor.x &&
+      current.cursor.y === next.cursor.y &&
+      current.user.id === next.user.id &&
+      current.user.name === next.user.name &&
+      current.user.cursorColor === next.user.cursorColor &&
+      current.user.avatarUrl === next.user.avatarUrl &&
+      current.clientIds.join(',') === next.clientIds.join(',')
+    );
+  });
 }
 
 function registerTableNodeShape(): void {

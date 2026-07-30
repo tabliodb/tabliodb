@@ -114,7 +114,6 @@ import {
   useState,
   type ChangeEvent,
   type ComponentType,
-  type PointerEvent as ReactPointerEvent,
   type SVGProps,
 } from 'react';
 import { Controller, useForm, type Control, type FieldValues, type Path } from 'react-hook-form';
@@ -164,7 +163,7 @@ import {
   useUpdateProjectReviewSignalSettingsMutation,
 } from '@/resources/review-signals';
 import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
-import { SchemaCanvas } from './components/SchemaCanvas';
+import { SchemaCanvas, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
 
@@ -383,6 +382,10 @@ export function EditorPage() {
     () => createCollaboratorPresenceList(remoteAwarenessStates, currentUser?.id ?? null),
     [currentUser?.id, remoteAwarenessStates],
   );
+  const remoteCanvasCursors = useMemo(
+    () => createRemoteCanvasCursorList(remoteAwarenessStates, currentUser?.id ?? null),
+    [currentUser?.id, remoteAwarenessStates],
+  );
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -464,17 +467,13 @@ export function EditorPage() {
     [activeDiagram, currentUser, selectedCommentTarget],
   );
 
-  const handleEditorPointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => {
-      const cursor = {
-        x: Math.round(event.clientX),
-        y: Math.round(event.clientY),
-      };
+  const handleCanvasCursorChange = useCallback(
+    (cursor: AwarenessState['cursor']) => {
       const now = Date.now();
 
       latestCursorRef.current = cursor;
 
-      if (now - latestAwarenessSentAtRef.current < 90) {
+      if (cursor && now - latestAwarenessSentAtRef.current < 90) {
         return;
       }
 
@@ -483,11 +482,6 @@ export function EditorPage() {
     },
     [publishAwareness],
   );
-
-  const handleEditorPointerLeave = useCallback(() => {
-    latestCursorRef.current = undefined;
-    publishAwareness(undefined);
-  }, [publishAwareness]);
 
   useEffect(() => {
     if (!activeDiagram || !currentUser) {
@@ -873,11 +867,7 @@ export function EditorPage() {
   const rightSidebarWidth = rightSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
 
   return (
-    <main
-      className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]"
-      onPointerLeave={handleEditorPointerLeave}
-      onPointerMove={handleEditorPointerMove}
-    >
+    <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
       <header className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] bg-white px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex shrink-0 items-center gap-2">
@@ -1195,9 +1185,11 @@ export function EditorPage() {
             fitKey={activeDiagram?.id ?? 'empty'}
             fitSignal={fitSignal}
             model={model}
+            onLocalCursorChange={handleCanvasCursorChange}
             onModelChange={handleModelChange}
             onSelectedTableChange={handleSelectedTableChange}
             readOnly={!canEditDiagram}
+            remoteCursors={remoteCanvasCursors}
             selectedTableId={selectedTableId}
           />
         </section>
@@ -4089,6 +4081,38 @@ function createCollaboratorPresenceList(
   }
 
   return Array.from(collaboratorsByUser.values()).sort((left, right) => left.user.name.localeCompare(right.user.name));
+}
+
+function createRemoteCanvasCursorList(
+  states: RemoteAwarenessState[],
+  currentUserId: string | null,
+): RemoteCanvasCursor[] {
+  const cursorsByUser = new Map<string, RemoteCanvasCursor>();
+
+  for (const awareness of states) {
+    const { cursor, user } = awareness.state;
+
+    if (!cursor || user.id === currentUserId) {
+      continue;
+    }
+
+    const existing = cursorsByUser.get(user.id);
+
+    if (existing) {
+      existing.clientIds.push(awareness.clientId);
+      // Satu user bisa membuka beberapa tab; posisi terakhir yang aktif dipakai supaya overlay tidak menggambar nama yang sama berkali-kali.
+      existing.cursor = cursor;
+      continue;
+    }
+
+    cursorsByUser.set(user.id, {
+      clientIds: [awareness.clientId],
+      cursor,
+      user,
+    });
+  }
+
+  return Array.from(cursorsByUser.values()).sort((left, right) => left.user.name.localeCompare(right.user.name));
 }
 
 function getMemberInitials(member: Pick<ProjectMemberDto, 'email' | 'name'>): string {
