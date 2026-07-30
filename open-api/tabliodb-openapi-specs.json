@@ -456,6 +456,137 @@
         ]
       }
     },
+    "/diagrams/{diagramId}/export": {
+      "get": {
+        "operationId": "exportDiagram",
+        "parameters": [
+          {
+            "name": "includeComments",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dialect",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "postgresql",
+                "mysql",
+                "sqlite",
+                "mariadb",
+                "sqlserver"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "tabliodb_json",
+                "sql",
+                "markdown",
+                "svg"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramExportResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
+    "/diagrams/{diagramId}/import": {
+      "post": {
+        "operationId": "importDiagram",
+        "parameters": [
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagramImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramImportResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
     "/invitations": {
       "post": {
         "operationId": "createInvitation",
@@ -2497,6 +2628,785 @@
             ]
           }
         }
+      },
+      "DiagramExportResponseDto_Output": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tabliodb_json",
+              "sql",
+              "markdown",
+              "svg"
+            ]
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "statement": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "content",
+          "filename",
+          "format",
+          "mediaType",
+          "warnings"
+        ],
+        "additionalProperties": false
+      },
+      "DiagramImportDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "mysql",
+              "sqlite",
+              "mariadb",
+              "sqlserver"
+            ]
+          },
+          "mode": {
+            "default": "replace",
+            "type": "string",
+            "enum": [
+              "replace"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "tabliodb_json",
+              "sql"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "source"
+        ]
+      },
+      "DiagramImportResponseDto_Output": {
+        "type": "object",
+        "properties": {
+          "diagram": {
+            "$ref": "#/components/schemas/DiagramResponseDto_Output"
+          },
+          "model": {
+            "type": "object",
+            "properties": {
+              "schemaVersion": {
+                "default": 1,
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991,
+                "minimum": 0
+              },
+              "dialect": {
+                "type": "string",
+                "enum": [
+                  "postgresql",
+                  "mysql",
+                  "sqlite",
+                  "mariadb",
+                  "sqlserver"
+                ]
+              },
+              "tables": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "schema": {
+                      "type": "string"
+                    },
+                    "position": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "number"
+                        },
+                        "y": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "width": {
+                      "default": 288,
+                      "type": "integer",
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991,
+                      "minimum": 0
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "collapsed": {
+                      "type": "boolean"
+                    },
+                    "displayMode": {
+                      "type": "string",
+                      "enum": [
+                        "all_columns",
+                        "pk_fk_only",
+                        "header_only"
+                      ]
+                    },
+                    "columnIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "indexIds": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "groupId": {
+                      "type": "string"
+                    },
+                    "comment": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "columnIds",
+                    "indexIds"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "columns": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tableId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "object",
+                      "properties": {
+                        "family": {
+                          "type": "string",
+                          "enum": [
+                            "bigint",
+                            "boolean",
+                            "date",
+                            "decimal",
+                            "enum",
+                            "float",
+                            "integer",
+                            "json",
+                            "text",
+                            "time",
+                            "timestamp",
+                            "uuid",
+                            "varchar"
+                          ]
+                        },
+                        "length": {
+                          "type": "integer",
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991,
+                          "minimum": 0
+                        },
+                        "precision": {
+                          "type": "integer",
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991,
+                          "minimum": 0
+                        },
+                        "scale": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "enumId": {
+                          "type": "string"
+                        },
+                        "raw": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "family"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "primaryKey": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "nullable": {
+                      "default": true,
+                      "type": "boolean"
+                    },
+                    "unique": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "autoIncrement": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "unsigned": {
+                      "type": "boolean"
+                    },
+                    "defaultValue": {
+                      "type": "string"
+                    },
+                    "generatedExpression": {
+                      "type": "string"
+                    },
+                    "collation": {
+                      "type": "string"
+                    },
+                    "comment": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "type",
+                    "primaryKey",
+                    "nullable",
+                    "unique",
+                    "autoIncrement"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "indexes": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tableId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "columnId": {
+                            "type": "string"
+                          },
+                          "order": {
+                            "type": "string",
+                            "enum": [
+                              "asc",
+                              "desc"
+                            ]
+                          },
+                          "nulls": {
+                            "type": "string",
+                            "enum": [
+                              "first",
+                              "last"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "columnId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "unique": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "btree",
+                        "hash",
+                        "gin",
+                        "gist",
+                        "brin"
+                      ]
+                    },
+                    "where": {
+                      "type": "string"
+                    },
+                    "includeColumnIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "comment": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "columns",
+                    "unique"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "relationships": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sourceTableId": {
+                      "type": "string"
+                    },
+                    "sourceColumnIds": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "targetTableId": {
+                      "type": "string"
+                    },
+                    "targetColumnIds": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "cardinality": {
+                      "type": "string",
+                      "enum": [
+                        "one_to_one",
+                        "one_to_many",
+                        "many_to_many"
+                      ]
+                    },
+                    "onDelete": {
+                      "type": "string",
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
+                    },
+                    "onUpdate": {
+                      "type": "string",
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "deferrable": {
+                      "type": "boolean"
+                    },
+                    "matchType": {
+                      "type": "string",
+                      "enum": [
+                        "simple",
+                        "full",
+                        "partial"
+                      ]
+                    },
+                    "comment": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sourceTableId",
+                    "sourceColumnIds",
+                    "targetTableId",
+                    "targetColumnIds",
+                    "cardinality"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "enums": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "schema": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "comment": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "checks": {
+                "default": {},
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tableId": {
+                      "type": "string"
+                    },
+                    "columnId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "expression": {
+                      "type": "string"
+                    },
+                    "comment": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "expression"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "notes": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "position": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "number"
+                        },
+                        "y": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "width": {
+                      "type": "integer",
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991,
+                      "minimum": 0
+                    },
+                    "color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "text",
+                    "position"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "groups": {
+                "default": {},
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "position": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "number"
+                        },
+                        "y": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "width": {
+                      "type": "integer",
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991,
+                      "minimum": 0
+                    },
+                    "height": {
+                      "type": "integer",
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991,
+                      "minimum": 0
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "tableIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "height",
+                    "tableIds"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "updatedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "viewport": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "zoom": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y",
+                      "zoom"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "gridSize": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991,
+                    "minimum": 0
+                  },
+                  "tableMinWidth": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991,
+                    "minimum": 0
+                  },
+                  "relationshipRouting": {
+                    "type": "string",
+                    "enum": [
+                      "smart_orthogonal",
+                      "straight",
+                      "manual"
+                    ]
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "dialect",
+              "tables",
+              "columns",
+              "indexes",
+              "relationships",
+              "enums",
+              "checks",
+              "notes",
+              "groups",
+              "metadata"
+            ],
+            "additionalProperties": false
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "statement": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "diagram",
+          "model",
+          "warnings"
+        ],
+        "additionalProperties": false
       },
       "InvitationCreateDto": {
         "type": "object",

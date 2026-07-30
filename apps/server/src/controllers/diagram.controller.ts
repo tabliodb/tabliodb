@@ -1,9 +1,17 @@
-import { Body, Controller, HttpStatus, Param, Patch, Post } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
-import { DiagramCreateDto, DiagramResponseDto, DiagramUpdateDto } from '../dtos/diagram.dto.js';
+import {
+  DiagramCreateDto,
+  DiagramExportQueryDto,
+  DiagramExportResponseDto,
+  DiagramImportDto,
+  DiagramImportResponseDto,
+  DiagramResponseDto,
+  DiagramUpdateDto,
+} from '../dtos/diagram.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
 import { DiagramService } from '../services/diagram.service.js';
@@ -31,5 +39,32 @@ export class DiagramController {
   @ZodResponse({ type: DiagramResponseDto })
   updateDiagram(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string, @Body() dto: DiagramUpdateDto) {
     return this.service.update(auth, diagramId, dto);
+  }
+
+  @Get(':diagramId/export')
+  @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiQuery({ enum: ['tabliodb_json', 'sql', 'markdown', 'svg'], name: 'format', required: false })
+  @ApiQuery({ enum: ['postgresql', 'mysql', 'sqlite', 'mariadb', 'sqlserver'], name: 'dialect', required: false })
+  @ApiQuery({ name: 'includeComments', required: false, type: Boolean })
+  @ApiOperation({ operationId: 'exportDiagram' })
+  @ZodResponse({ type: DiagramExportResponseDto })
+  exportDiagram(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Query() query: DiagramExportQueryDto,
+  ) {
+    return this.service.exportDiagram(auth, diagramId, query);
+  }
+
+  @Post(':diagramId/import')
+  @RequirePermission(Permission.DiagramUpdate, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @HttpCode(HttpStatus.OK)
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiBody({ type: DiagramImportDto })
+  @ApiOperation({ operationId: 'importDiagram' })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramImportResponseDto })
+  importDiagram(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string, @Body() dto: DiagramImportDto) {
+    return this.service.importDiagram(auth, diagramId, dto);
   }
 }

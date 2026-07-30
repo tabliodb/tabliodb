@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { createStarterDiagramModel, encodeDiagramModelAsYjsUpdate } from '@tabliodb/schema-core';
 import { Permission, ProjectRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
@@ -42,10 +43,14 @@ const diagram = {
 };
 
 describe(DiagramService.name, () => {
+  const collaborationRepository = {
+    loadDocument: vi.fn(),
+  };
   const diagramRepository = {
     create: vi.fn(),
     getById: vi.fn(),
     getByProject: vi.fn(),
+    replaceDocumentModel: vi.fn(),
     update: vi.fn(),
   };
   const projectRepository = {
@@ -57,7 +62,11 @@ describe(DiagramService.name, () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    service = new DiagramService(diagramRepository as never, projectRepository as never);
+    service = new DiagramService(
+      collaborationRepository as never,
+      diagramRepository as never,
+      projectRepository as never,
+    );
   });
 
   it('blocks a project viewer from creating diagrams', async () => {
@@ -162,5 +171,64 @@ describe(DiagramService.name, () => {
       dialect: 'mysql',
       name: 'Warehouse schema',
     });
+  });
+
+  it('allows a project viewer to export a diagram as SQL', async () => {
+    const model = createStarterDiagramModel('Library System', 'postgresql');
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    collaborationRepository.loadDocument.mockResolvedValue(encodeDiagramModelAsYjsUpdate(model));
+
+    const response = await service.exportDiagram(auth, 'diagram-id', {
+      format: 'sql',
+    });
+
+    expect(response).toMatchObject({
+      filename: 'library-system.postgresql.sql',
+      format: 'sql',
+      mediaType: 'application/sql',
+    });
+    expect(response.content).toContain('CREATE TABLE');
+  });
+
+  it('blocks a project viewer from importing a diagram', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+
+    await expect(
+      service.importDiagram(auth, 'diagram-id', {
+        content: '{"schemaVersion":1}',
+        mode: 'replace',
+        source: 'tabliodb_json',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(diagramRepository.replaceDocumentModel).not.toHaveBeenCalled();
+  });
+
+  it('allows a project editor to import SQL into a diagram draft', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    diagramRepository.replaceDocumentModel.mockResolvedValue({
+      ...diagram,
+      name: 'Main schema',
+      updatedAt: new Date('2026-07-29T12:30:00.000Z'),
+    });
+
+    const response = await service.importDiagram(auth, 'diagram-id', {
+      content: 'CREATE TABLE authors (id uuid PRIMARY KEY, name varchar(120) NOT NULL);',
+      dialect: 'postgresql',
+      mode: 'replace',
+      source: 'sql',
+    });
+
+    expect(diagramRepository.replaceDocumentModel).toHaveBeenCalledWith(
+      'diagram-id',
+      expect.objectContaining({
+        dialect: 'postgresql',
+        metadata: expect.objectContaining({ name: 'Main schema' }),
+      }),
+      'user-id',
+    );
+    expect(Object.values(response.model.tables)).toContainEqual(expect.objectContaining({ name: 'authors' }));
   });
 });

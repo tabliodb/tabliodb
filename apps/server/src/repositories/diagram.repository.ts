@@ -1,8 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import type { DatabaseDialect } from '@tabliodb/schema-core';
+import {
+  encodeDiagramModelAsYjsUpdate,
+  serializeDiagramModel,
+  type DatabaseDialect,
+  type DiagramModel,
+} from '@tabliodb/schema-core';
 import { Insertable, Kysely } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
-import type { DB, DiagramTable } from '../schema/index.js';
+import type { DB, DiagramTable, JsonValue } from '../schema/index.js';
 import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
 
 export type DiagramListOptions = {
@@ -87,5 +92,45 @@ export class DiagramRepository {
 
     // Fetch the row through getById so every public repository read keeps one archived-filtering rule.
     return diagram ? this.getById(diagram.id) : undefined;
+  }
+
+  async replaceDocumentModel(diagramId: string, model: DiagramModel, updatedById: string) {
+    const normalizedModel = serializeDiagramModel(model);
+    const now = new Date();
+    const yjsState = Buffer.from(encodeDiagramModelAsYjsUpdate(normalizedModel));
+
+    await this.db.transaction().execute(async (tx) => {
+      await tx
+        .insertInto('diagram_documents')
+        .values({
+          diagramId,
+          schemaCache: normalizedModel as unknown as JsonValue,
+          updatedById,
+          yjsState,
+        })
+        .onConflict((oc) =>
+          oc.column('diagramId').doUpdateSet((eb) => ({
+            schemaCache: normalizedModel as unknown as JsonValue,
+            updatedAt: now,
+            updatedById,
+            version: eb('diagram_documents.version', '+', 1),
+            yjsState,
+          })),
+        )
+        .execute();
+
+      await tx
+        .updateTable('diagrams')
+        .set({
+          dialect: normalizedModel.dialect,
+          name: normalizedModel.metadata.name,
+          updatedAt: now,
+        })
+        .where('id', '=', diagramId)
+        .where('archivedAt', 'is', null)
+        .execute();
+    });
+
+    return this.getById(diagramId);
   }
 }

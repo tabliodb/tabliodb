@@ -1,5 +1,11 @@
 import { Permission, isGranted, permissionsForProjectRole, type PaginationQuery } from '@tabliodb/shared';
-import type { DiagramListResponseDto, DiagramResponseDto, ProjectResponseDto } from '@tabliodb/sdk';
+import type {
+  DiagramExportQuery,
+  DiagramExportResponseDto,
+  DiagramListResponseDto,
+  DiagramResponseDto,
+  ProjectResponseDto,
+} from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { diagramsKeys } from './diagram.keys';
@@ -7,6 +13,10 @@ import { diagramsKeys } from './diagram.keys';
 export const defaultDiagramName = 'Main schema';
 
 type DiagramsQueries = {
+  exportByDiagram: (
+    diagramId: string,
+    query?: DiagramExportQuery,
+  ) => AppQueryOptions<DiagramExportResponseDto, ReturnType<typeof diagramsKeys.exportByDiagram>>;
   listByProject: (
     projectId: string,
     query?: PaginationQuery,
@@ -17,6 +27,13 @@ type DiagramsQueries = {
 };
 
 export const diagramsQueries: DiagramsQueries = {
+  exportByDiagram: (diagramId: string, query: DiagramExportQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(diagramId),
+      queryFn: () => sdk.diagrams.export(diagramId, query),
+      queryKey: diagramsKeys.exportByDiagram(diagramId, query),
+    }),
+
   listByProject: (projectId: string, query: PaginationQuery = {}) =>
     appQueryOptions({
       enabled: Boolean(projectId),

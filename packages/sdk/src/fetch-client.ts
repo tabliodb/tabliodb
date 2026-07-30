@@ -126,6 +126,176 @@ export type DiagramUpdateDto = {
   name?: string;
   dialect?: Dialect;
 };
+export type DiagramExportResponseDtoOutput = {
+  content: string;
+  filename: string;
+  format: Format;
+  mediaType: string;
+  warnings: {
+    code: string;
+    message: string;
+    statement?: string;
+    target?: {
+      id: string;
+      type: string;
+    };
+  }[];
+};
+export type DiagramImportDto = {
+  content: string;
+  dialect?: Dialect;
+  mode?: Mode;
+  source: Source;
+};
+export type DiagramImportResponseDtoOutput = {
+  diagram: DiagramResponseDtoOutput;
+  model: {
+    schemaVersion: number;
+    dialect: Dialect;
+    tables: {
+      [key: string]: {
+        id: string;
+        name: string;
+        schema?: string;
+        position: {
+          x: number;
+          y: number;
+        };
+        width: number;
+        color?: string;
+        collapsed?: boolean;
+        displayMode?: DisplayMode;
+        columnIds: string[];
+        indexIds: string[];
+        groupId?: string;
+        comment?: string;
+      };
+    };
+    columns: {
+      [key: string]: {
+        id: string;
+        tableId: string;
+        name: string;
+        type: {
+          family: Family;
+          length?: number;
+          precision?: number;
+          scale?: number;
+          enumId?: string;
+          raw?: string;
+        };
+        primaryKey: boolean;
+        nullable: boolean;
+        unique: boolean;
+        autoIncrement: boolean;
+        unsigned?: boolean;
+        defaultValue?: string;
+        generatedExpression?: string;
+        collation?: string;
+        comment?: string;
+      };
+    };
+    indexes: {
+      [key: string]: {
+        id: string;
+        tableId: string;
+        name: string;
+        columns: {
+          columnId: string;
+          order?: Order;
+          nulls?: Nulls;
+        }[];
+        unique: boolean;
+        method?: Method;
+        where?: string;
+        includeColumnIds?: string[];
+        comment?: string;
+      };
+    };
+    relationships: {
+      [key: string]: {
+        id: string;
+        sourceTableId: string;
+        sourceColumnIds: string[];
+        targetTableId: string;
+        targetColumnIds: string[];
+        cardinality: Cardinality;
+        onDelete?: OnDelete;
+        onUpdate?: OnUpdate;
+        name?: string;
+        deferrable?: boolean;
+        matchType?: MatchType;
+        comment?: string;
+      };
+    };
+    enums: {
+      [key: string]: {
+        id: string;
+        name: string;
+        schema?: string;
+        values: string[];
+        comment?: string;
+      };
+    };
+    checks: {
+      [key: string]: {
+        id: string;
+        tableId: string;
+        columnId?: string;
+        name: string;
+        expression: string;
+        comment?: string;
+      };
+    };
+    notes: {
+      [key: string]: {
+        id: string;
+        text: string;
+        position: {
+          x: number;
+          y: number;
+        };
+        width?: number;
+        color?: string;
+      };
+    };
+    groups: {
+      [key: string]: {
+        id: string;
+        name: string;
+        position: {
+          x: number;
+          y: number;
+        };
+        width: number;
+        height: number;
+        color?: string;
+        tableIds: string[];
+      };
+    };
+    metadata: {
+      name: string;
+      updatedAt?: string;
+      viewport?: {
+        x: number;
+        y: number;
+        zoom: number;
+      };
+      gridSize?: number;
+      tableMinWidth?: number;
+      relationshipRouting?: RelationshipRouting;
+    };
+  };
+  warnings: {
+    code: string;
+    message: string;
+    statement?: string;
+    target?: {
+      id: string;
+      type: string;
+    };
+  }[];
+};
 export type InvitationCreateDto = {
   email: string;
   organizationId?: string;
@@ -919,6 +1089,62 @@ export function updateDiagram(
     ),
   );
 }
+export function exportDiagram(
+  {
+    includeComments,
+    dialect,
+    format,
+    diagramId,
+  }: {
+    includeComments?: boolean;
+    dialect?: 'postgresql' | 'mysql' | 'sqlite' | 'mariadb' | 'sqlserver';
+    format?: 'tabliodb_json' | 'sql' | 'markdown' | 'svg';
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: DiagramExportResponseDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/export${QS.query(
+        QS.explode({
+          includeComments,
+          dialect,
+          format,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function importDiagram(
+  {
+    diagramId,
+    diagramImportDto,
+  }: {
+    diagramId: string;
+    diagramImportDto: DiagramImportDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramImportResponseDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/import`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: diagramImportDto,
+      }),
+    ),
+  );
+}
 export function createInvitation(
   {
     invitationCreateDto,
@@ -1640,55 +1866,18 @@ export enum Dialect {
   Mariadb = 'mariadb',
   Sqlserver = 'sqlserver',
 }
-export enum OrganizationRole {
-  Admin = 'admin',
-  Member = 'member',
+export enum Format {
+  TabliodbJson = 'tabliodb_json',
+  Sql = 'sql',
+  Markdown = 'markdown',
+  Svg = 'svg',
 }
-export enum ProjectRole {
-  Editor = 'editor',
-  Commenter = 'commenter',
-  Viewer = 'viewer',
+export enum Mode {
+  Replace = 'replace',
 }
-export enum Status {
-  Pending = 'pending',
-  Accepted = 'accepted',
-  Revoked = 'revoked',
-  Expired = 'expired',
-}
-export enum Role {
-  Owner = 'owner',
-  Admin = 'admin',
-  Member = 'member',
-  Guest = 'guest',
-}
-export enum DefaultProjectRole {
-  Editor = 'editor',
-  Commenter = 'commenter',
-  Viewer = 'viewer',
-}
-export enum Status2 {
-  Pending = 'pending',
-  Active = 'active',
-  Suspended = 'suspended',
-}
-export enum ProjectRole2 {
-  Owner = 'owner',
-  Editor = 'editor',
-  Commenter = 'commenter',
-  Viewer = 'viewer',
-}
-export enum Role2 {
-  Owner = 'owner',
-  Editor = 'editor',
-  Commenter = 'commenter',
-  Viewer = 'viewer',
-}
-export enum SignupPolicy {
-  SignupDisabled = 'signup_disabled',
-  InviteOnly = 'invite_only',
-  AllowedDomains = 'allowed_domains',
-  SsoOnly = 'sso_only',
-  PublicSignup = 'public_signup',
+export enum Source {
+  TabliodbJson = 'tabliodb_json',
+  Sql = 'sql',
 }
 export enum DisplayMode {
   AllColumns = 'all_columns',
@@ -1753,6 +1942,56 @@ export enum RelationshipRouting {
   SmartOrthogonal = 'smart_orthogonal',
   Straight = 'straight',
   Manual = 'manual',
+}
+export enum OrganizationRole {
+  Admin = 'admin',
+  Member = 'member',
+}
+export enum ProjectRole {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum Status {
+  Pending = 'pending',
+  Accepted = 'accepted',
+  Revoked = 'revoked',
+  Expired = 'expired',
+}
+export enum Role {
+  Owner = 'owner',
+  Admin = 'admin',
+  Member = 'member',
+  Guest = 'guest',
+}
+export enum DefaultProjectRole {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum Status2 {
+  Pending = 'pending',
+  Active = 'active',
+  Suspended = 'suspended',
+}
+export enum ProjectRole2 {
+  Owner = 'owner',
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum Role2 {
+  Owner = 'owner',
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum SignupPolicy {
+  SignupDisabled = 'signup_disabled',
+  InviteOnly = 'invite_only',
+  AllowedDomains = 'allowed_domains',
+  SsoOnly = 'sso_only',
+  PublicSignup = 'public_signup',
 }
 export enum InstanceRole {
   Owner = 'owner',
