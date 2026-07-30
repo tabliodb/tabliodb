@@ -170,7 +170,8 @@ export function EditorPage() {
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  // Inspector starts collapsed so the editor opens with more canvas room while keeping the right rail discoverable.
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
 
   const organizationsQuery = useQuery(organizationsQueries.list({ limit: 50 }));
   const organizations = organizationsQuery.data?.items ?? [];
@@ -393,9 +394,11 @@ export function EditorPage() {
   }
 
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
-  // Sidebars live below the global toolbar so the navbar stays continuous; compact controls inside each panel preserve canvas space.
-  const leftSidebarWidth = leftSidebarOpen ? '272px' : '48px';
-  const rightSidebarWidth = rightSidebarOpen ? '332px' : '48px';
+  // Expanded sidebars share one comfortable width so table controls do not collapse into cramped rows.
+  const expandedSidebarWidth = '332px';
+  const collapsedSidebarWidth = '48px';
+  const leftSidebarWidth = leftSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
+  const rightSidebarWidth = rightSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
 
   return (
     <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">

@@ -51,10 +51,10 @@ const columnTypeFamilyOptions = [
 ] as const satisfies readonly ColumnTypeFamily[];
 
 const inlineInputClassName =
-  'h-8 rounded-[12px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-2 text-sm font-extrabold shadow-none outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-60';
+  'h-9 rounded-[13px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-sm font-extrabold shadow-none outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-primary)/0.16)] disabled:cursor-not-allowed disabled:opacity-60';
 
 const compactSelectClassName =
-  'h-8 rounded-[12px] border-2 border-[rgb(var(--tabliodb-border-strong))] px-2 text-xs shadow-none';
+  'h-9 rounded-[13px] border-2 border-[rgb(var(--tabliodb-border-strong))] px-3 text-sm shadow-none';
 
 export type TableStructureSidebarProps = {
   model: DiagramModel;
@@ -191,26 +191,26 @@ export function TableStructureSidebar({
         <IconButton icon={X} label="Back to projects" onClick={onClearTableSelection} variant="ghost" />
       </div>
 
-      <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
         {readOnly ? (
           <div className="mb-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-xs font-extrabold text-[rgb(var(--tabliodb-gold-text))]">
             Your role can inspect this table but cannot edit schema details.
           </div>
         ) : null}
 
-        <section className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
+        <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-4">
           <label className="block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Table name
           </label>
           <InlineTextInput className="mt-2" disabled={readOnly} onCommit={handleTableNameCommit} value={table.name} />
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex items-center gap-2.5">
             <Palette className="size-4 text-[rgb(var(--tabliodb-ink-muted))]" />
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5">
               {tableColorOptions.map((color) => (
                 <button
                   aria-label={`Use ${color}`}
                   className={cn(
-                    'size-7 cursor-pointer rounded-full border-2 border-white shadow-[0_0_0_2px_rgb(var(--tabliodb-border-strong))] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60',
+                    'size-8 cursor-pointer rounded-full border-2 border-white shadow-[0_0_0_2px_rgb(var(--tabliodb-border-strong))] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60',
                     table.color === color && 'shadow-[0_0_0_3px_rgb(var(--tabliodb-primary))]',
                   )}
                   disabled={readOnly}
@@ -223,7 +223,7 @@ export function TableStructureSidebar({
             </div>
           </div>
           <Button
-            className="mt-3 h-11 w-full justify-start text-sm"
+            className="mt-4 h-12 w-full justify-start text-sm"
             disabled={readOnly}
             onClick={handleDeleteTable}
             variant="danger"
@@ -292,7 +292,7 @@ function ColumnEditorRow({
   return (
     <div
       className={cn(
-        'rounded-[14px] border-2 bg-white p-2 transition',
+        'rounded-[16px] border-2 bg-white p-3 transition',
         selected
           ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
           : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
@@ -300,7 +300,7 @@ function ColumnEditorRow({
       onFocus={() => onSelect(column.id)}
       onMouseDown={() => onSelect(column.id)}
     >
-      <div className="grid grid-cols-[12px_minmax(0,1fr)_28px] items-center gap-1">
+      <div className="grid grid-cols-[16px_minmax(0,1fr)_32px] items-center gap-2">
         <GripVertical className="size-4 text-[rgb(var(--tabliodb-ink-subtle))]" />
         <InlineTextInput
           className="min-w-0"
@@ -318,7 +318,7 @@ function ColumnEditorRow({
           <DropdownMenuTrigger asChild>
             <button
               aria-label={`Column actions for ${column.name}`}
-              className="grid size-7 cursor-pointer place-items-center rounded-[12px] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="grid size-8 cursor-pointer place-items-center rounded-[12px] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
               disabled={disabled}
               type="button"
             >
@@ -336,7 +336,7 @@ function ColumnEditorRow({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_26px_26px_32px] items-center gap-1">
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_34px_34px_42px] items-center gap-2">
         <Select
           className={compactSelectClassName}
           disabled={disabled}
@@ -407,7 +407,7 @@ function ColumnAttributesPanel({
   const enumOptions = Object.values(model.enums);
 
   return (
-    <section className="mt-4 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-3 shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))]">
+    <section className="mt-4 rounded-[18px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white p-4 shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))]">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-extrabold">Column attributes</h2>
@@ -505,7 +505,7 @@ function ColumnToggle({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        'grid h-8 w-full cursor-pointer place-items-center rounded-[12px] border-2 text-[10px] font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60',
+        'grid h-9 w-full cursor-pointer place-items-center rounded-[13px] border-2 text-xs font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60',
         active
           ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_2px_0_rgb(var(--tabliodb-primary-shadow))]'
           : 'border-[rgb(var(--tabliodb-border))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface))]',
