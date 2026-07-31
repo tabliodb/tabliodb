@@ -118,6 +118,7 @@ import {
   useState,
   type ChangeEvent,
   type ComponentType,
+  type ReactNode,
   type SVGProps,
 } from 'react';
 import { Controller, useForm, type Control, type FieldValues, type Path } from 'react-hook-form';
@@ -1537,6 +1538,27 @@ function CommentsDialog({
     );
   }
 
+  function handleReplyTargetSelect(comment: CommentResponseDto) {
+    if (!canComment) {
+      return;
+    }
+
+    if (replyParentComment?.id !== comment.id) {
+      replyForm.reset(createEmptyCommentFormBody());
+      replyMutation.reset();
+    }
+
+    stopCommentTyping();
+    setReplyParentComment(comment);
+  }
+
+  function handleInlineReplyCancel() {
+    replyForm.reset(createEmptyCommentFormBody());
+    replyMutation.reset();
+    setReplyParentComment(null);
+    stopCommentTyping();
+  }
+
   function handleToggleResolved() {
     if (!activeThread || !canComment) {
       return;
@@ -1624,6 +1646,72 @@ function CommentsDialog({
         : 'Reply with @teammate'
       : 'Your role can read this thread only'
     : 'Select a thread before replying';
+
+  function renderInlineReplyComposer(comment: CommentResponseDto): ReactNode {
+    if (replyParentComment?.id !== comment.id) {
+      return null;
+    }
+
+    return (
+      <form
+        className="mt-1 rounded-(--tabliodb-radius-md) border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-2"
+        onSubmit={replyForm.handleSubmit(handleReply)}
+      >
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
+            Replying to {comment.author.name}
+          </div>
+          <button
+            className="shrink-0 cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))] hover:bg-white/70"
+            onClick={handleInlineReplyCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
+        <Controller
+          control={replyForm.control}
+          name="body"
+          render={({ field }) => (
+            <Suspense
+              fallback={
+                <CommentComposerFallback
+                  density="compact"
+                  invalid={Boolean(replyForm.formState.errors.body)}
+                  placeholder={replyPlaceholder}
+                />
+              }
+            >
+              <CommentComposer
+                aria-invalid={Boolean(replyForm.formState.errors.body)}
+                density="compact"
+                disabled={!activeThread || !canComment || replyMutation.isPending}
+                mentionUsers={mentionUsers}
+                onBlur={() => handleReplyComposerBlur(field.onBlur)}
+                onChange={(value, bodyJson) => handleReplyComposerChange(value, bodyJson, field.onChange)}
+                placeholder={replyPlaceholder}
+                value={field.value}
+              />
+            </Suspense>
+          )}
+        />
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-h-5">
+            <FieldError>{replyForm.formState.errors.body?.message}</FieldError>
+            {mutationError ? <FieldError>{getErrorMessage(mutationError)}</FieldError> : null}
+          </div>
+          <Button disabled={!activeThread || !canComment || replyMutation.isPending} size="sm" type="submit">
+            {replyMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <MessageSquareText className="size-4" />
+            )}
+            Reply
+          </Button>
+        </div>
+      </form>
+    );
+  }
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
@@ -1855,7 +1943,8 @@ function CommentsDialog({
                         comment={comment}
                         depth={0}
                         key={comment.id}
-                        onReply={setReplyParentComment}
+                        onReply={handleReplyTargetSelect}
+                        renderReplyComposer={renderInlineReplyComposer}
                       />
                     ))}
                   </div>
@@ -1863,71 +1952,54 @@ function CommentsDialog({
               </div>
             </div>
 
-            <form
-              className="shrink-0 border-t border-[rgb(var(--tabliodb-border))] bg-white/95 p-2.5"
-              onSubmit={replyForm.handleSubmit(handleReply)}
-            >
-              {replyParentComment ? (
-                <div className="mb-2 flex items-start justify-between gap-3 rounded-(--tabliodb-radius-md) border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-3 py-2">
-                  <div className="min-w-0">
-                    <div className="text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
-                      Replying to {replyParentComment.author.name}
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                      {replyParentComment.body}
-                    </p>
-                  </div>
-                  <button
-                    className="shrink-0 cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))] hover:bg-white/70"
-                    onClick={() => setReplyParentComment(null)}
-                    type="button"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : null}
-              <Controller
-                control={replyForm.control}
-                name="body"
-                render={({ field }) => (
-                  <Suspense
-                    fallback={
-                      <CommentComposerFallback
+            {replyParentComment ? null : (
+              <form
+                className="shrink-0 border-t border-[rgb(var(--tabliodb-border))] bg-white/95 p-2.5"
+                onSubmit={replyForm.handleSubmit(handleReply)}
+              >
+                <Controller
+                  control={replyForm.control}
+                  name="body"
+                  render={({ field }) => (
+                    <Suspense
+                      fallback={
+                        <CommentComposerFallback
+                          density="compact"
+                          invalid={Boolean(replyForm.formState.errors.body)}
+                          placeholder={replyPlaceholder}
+                        />
+                      }
+                    >
+                      <CommentComposer
+                        aria-invalid={Boolean(replyForm.formState.errors.body)}
                         density="compact"
-                        invalid={Boolean(replyForm.formState.errors.body)}
+                        disabled={!activeThread || !canComment || replyMutation.isPending}
+                        mentionUsers={mentionUsers}
+                        menuPlacement="top"
+                        onBlur={() => handleReplyComposerBlur(field.onBlur)}
+                        onChange={(value, bodyJson) => handleReplyComposerChange(value, bodyJson, field.onChange)}
                         placeholder={replyPlaceholder}
+                        value={field.value}
                       />
-                    }
-                  >
-                    <CommentComposer
-                      aria-invalid={Boolean(replyForm.formState.errors.body)}
-                      density="compact"
-                      disabled={!activeThread || !canComment || replyMutation.isPending}
-                      mentionUsers={mentionUsers}
-                      menuPlacement="top"
-                      onBlur={() => handleReplyComposerBlur(field.onBlur)}
-                      onChange={(value, bodyJson) => handleReplyComposerChange(value, bodyJson, field.onChange)}
-                      placeholder={replyPlaceholder}
-                      value={field.value}
-                    />
-                  </Suspense>
-                )}
-              />
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-h-5">
-                  <FieldError>{replyForm.formState.errors.body?.message}</FieldError>
-                  {mutationError ? <FieldError>{getErrorMessage(mutationError)}</FieldError> : null}
-                </div>
-                <Button disabled={!activeThread || !canComment || replyMutation.isPending} size="sm" type="submit">
-                  {replyMutation.isPending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <MessageSquareText className="size-4" />
+                    </Suspense>
                   )}
-                  Reply
-                </Button>
-              </div>
-            </form>
+                />
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-h-5">
+                    <FieldError>{replyForm.formState.errors.body?.message}</FieldError>
+                    {mutationError ? <FieldError>{getErrorMessage(mutationError)}</FieldError> : null}
+                  </div>
+                  <Button disabled={!activeThread || !canComment || replyMutation.isPending} size="sm" type="submit">
+                    {replyMutation.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <MessageSquareText className="size-4" />
+                    )}
+                    Reply
+                  </Button>
+                </div>
+              </form>
+            )}
           </section>
         </DialogBody>
       </DialogContent>
@@ -1944,16 +2016,20 @@ function ThreadCommentItem({
   comment,
   depth,
   onReply,
+  renderReplyComposer,
 }: {
   canComment: boolean;
   comment: ThreadCommentNode;
   depth: number;
   onReply: (comment: CommentResponseDto) => void;
+  renderReplyComposer: (comment: CommentResponseDto) => ReactNode;
 }) {
   const hasReplies = comment.replies.length > 0;
+  const inlineReplyComposer = renderReplyComposer(comment);
   const avatarBottomClass = depth === 0 ? 'top-[44px]' : 'top-[40px]';
   const avatarCenterClass = depth === 0 ? 'left-[26px]' : 'left-[24px]';
   const replySpineIndentClass = depth === 0 ? 'ml-[26px]' : 'ml-[24px]';
+  const inlineReplyIndentClass = depth === 0 ? 'ml-[56px]' : 'ml-[52px]';
 
   return (
     <div
@@ -2017,6 +2093,10 @@ function ThreadCommentItem({
         </div>
       </article>
 
+      {inlineReplyComposer ? (
+        <div className={cn('pb-2 pr-2', inlineReplyIndentClass)}>{inlineReplyComposer}</div>
+      ) : null}
+
       {hasReplies ? (
         <div className={cn('relative -mt-1 pl-8.5', replySpineIndentClass)}>
           {/* The spine sits on the parent avatar centerline, while each elbow overlaps the child avatar edge so nested replies feel physically connected. */}
@@ -2032,6 +2112,7 @@ function ThreadCommentItem({
                 depth={depth + 1}
                 key={reply.id}
                 onReply={onReply}
+                renderReplyComposer={renderReplyComposer}
               />
             ))}
           </div>
