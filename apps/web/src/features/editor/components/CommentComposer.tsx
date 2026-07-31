@@ -84,7 +84,7 @@ export function CommentComposer({
             <ContentEditable
               aria-invalid={ariaInvalid}
               className={cn(
-                'tabliodb-scrollbar overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink))] outline-none',
+                'tabliodb-scrollbar overflow-y-auto whitespace-pre-wrap wrap-break-word px-3 py-2 text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink))] outline-none',
                 density === 'compact' ? 'max-h-28 min-h-14' : 'max-h-40 min-h-20',
               )}
             />
@@ -260,7 +260,7 @@ function CommentMentionPlugin({
   return (
     <div
       className={cn(
-        'absolute left-2 right-2 z-[70] overflow-hidden rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-border-strong))] bg-white shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_32px_rgb(15_23_42/0.14)]',
+        'absolute left-2 right-2 z-70 overflow-hidden rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-border-strong))] bg-white shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_32px_rgb(15_23_42/0.14)]',
         menuPlacement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
       )}
     >
@@ -281,7 +281,7 @@ function CommentMentionPlugin({
           type="button"
         >
           <span
-            className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-[12px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[11px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
+            className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-xl border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[11px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]"
             style={user.cursorColor ? { backgroundColor: user.cursorColor } : undefined}
           >
             {user.avatarUrl ? (
