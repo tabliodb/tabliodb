@@ -1335,6 +1335,24 @@ export function updateComment(
     ),
   );
 }
+export function deleteComment(
+  {
+    commentId,
+  }: {
+    commentId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentResponseDtoOutput;
+    }>(`/comments/comments/${encodeURIComponent(commentId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
 export function getCommentThreadReadState(
   {
     threadId,

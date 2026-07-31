@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
@@ -88,6 +88,14 @@ export class CommentController {
   @ZodResponse({ type: CommentResponseDto })
   updateComment(@Auth() auth: AuthContext, @Param('commentId') commentId: string, @Body() dto: CommentUpdateDto) {
     return this.service.updateComment(auth, commentId, dto);
+  }
+
+  @Delete('comments/:commentId')
+  @ApiParam({ name: 'commentId', type: String })
+  @ApiOperation({ operationId: 'deleteComment' })
+  @ZodResponse({ type: CommentResponseDto })
+  deleteComment(@Auth() auth: AuthContext, @Param('commentId') commentId: string) {
+    return this.service.deleteComment(auth, commentId);
   }
 
   @Get('threads/:threadId/read-state')

@@ -7,6 +7,7 @@ import type {
 } from '../fetch-client.js';
 import {
   createCommentThread as createCommentThreadRequest,
+  deleteComment as deleteCommentRequest,
   getCommentDiagramSummary as getCommentDiagramSummaryRequest,
   getCommentThreadReadState,
   getCommentThreads,
@@ -178,6 +179,7 @@ export type CommentListResponseDto = Paginated<CommentResponseDto>;
 
 export type CommentsResource = {
   createThread: (body: CommentThreadCreateDto) => Promise<CommentThreadResponseDto>;
+  deleteComment: (commentId: string) => Promise<CommentResponseDto>;
   getDiagramSummary: (diagramId: string) => Promise<CommentDiagramSummaryDto>;
   getThreadReadState: (threadId: string) => Promise<CommentThreadReadStateDto>;
   listThreadComments: (threadId: string, query?: PaginationQuery) => Promise<CommentListResponseDto>;
@@ -199,6 +201,8 @@ export function createCommentsResource(opts?: RequestOpts): CommentsResource {
       ) as unknown as Promise<CommentThreadResponseDto>,
     getThreadReadState: (threadId: string) =>
       getCommentThreadReadState({ threadId }, opts) as unknown as Promise<CommentThreadReadStateDto>,
+    deleteComment: (commentId: string) =>
+      deleteCommentRequest({ commentId }, opts) as unknown as Promise<CommentResponseDto>,
     getDiagramSummary: (diagramId: string) =>
       getCommentDiagramSummaryRequest({ diagramId }, opts) as unknown as Promise<CommentDiagramSummaryDto>,
     listThreadComments: (threadId: string, query: PaginationQuery = {}) =>

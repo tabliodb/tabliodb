@@ -2,12 +2,14 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import type { Selectable } from 'kysely';
 import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
+import { AuditAction } from '../constants.js';
 import {
   CommentReplyCreateDto,
   CommentThreadCreateDto,
   CommentThreadListQueryDto,
   CommentUpdateDto,
 } from '../dtos/comment.dto.js';
+import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { CommentRepository } from '../repositories/comment.repository.js';
 import type { CommentThreadTable, JsonValue } from '../schema/index.js';
 import {
@@ -23,10 +25,12 @@ import { DiagramService } from './diagram.service.js';
 type CommentTargetType =
   'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
 type CommentThreadRow = Selectable<CommentThreadTable>;
+type CommentResponseRow = NonNullable<Awaited<ReturnType<CommentRepository['getCommentForResponse']>>>;
 
 @Injectable()
 export class CommentService {
   constructor(
+    private readonly auditLogRepository: AuditLogRepository,
     private readonly commentRepository: CommentRepository,
     private readonly diagramService: DiagramService,
   ) {}
@@ -223,6 +227,48 @@ export class CommentService {
     };
   }
 
+  async deleteComment(auth: AuthContext, commentId: string) {
+    const comment = await this.commentRepository.getCommentWithThread(commentId);
+
+    if (!comment) {
+      throw new NotFoundException('Comment was not found.');
+    }
+
+    await this.diagramService.requireDiagram(auth, comment.diagramId, Permission.DiagramComment);
+
+    if (comment.createdById !== auth.user.id) {
+      // Author delete hanya membutuhkan hak comment; moderasi comment orang lain membutuhkan hak update diagram.
+      await this.diagramService.requireDiagram(auth, comment.diagramId, Permission.DiagramUpdate);
+    }
+
+    await this.commentRepository.deleteComment(comment.id);
+    await this.auditLogRepository.create({
+      action: AuditAction.CommentDeleted,
+      actorId: auth.user.id,
+      diagramId: comment.diagramId,
+      entityId: comment.id,
+      entityType: 'comment',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: {
+        deletedByAuthor: comment.createdById === auth.user.id,
+        parentCommentId: comment.parentCommentId,
+        threadId: comment.threadId,
+      },
+      organizationId: comment.organizationId,
+      projectId: comment.projectId,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
+
+    const deletedComment = await this.commentRepository.getCommentForResponse(comment.id);
+
+    if (!deletedComment) {
+      throw new NotFoundException('Deleted comment was not found.');
+    }
+
+    return this.serializeComment(deletedComment);
+  }
+
   async resolveThread(auth: AuthContext, threadId: string) {
     const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramComment);
     const updatedThread = await this.commentRepository.resolveThread(thread.id, auth.user.id);
@@ -266,7 +312,7 @@ export class CommentService {
     };
   }
 
-  private serializeComment(comment: Awaited<ReturnType<CommentRepository['getComments']>>['items'][number]) {
+  private serializeComment(comment: CommentResponseRow) {
     const isDeleted = Boolean(comment.deletedAt);
     const bodyText = isDeleted ? '' : comment.bodyText;
 

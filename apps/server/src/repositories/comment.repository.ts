@@ -130,6 +130,8 @@ export class CommentRepository {
     return this.db
       .selectFrom('comments')
       .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
+      .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
+      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
       .select([
         'comments.id',
         'comments.threadId',
@@ -137,6 +139,8 @@ export class CommentRepository {
         'comments.createdById',
         'comments.deletedAt',
         'comment_threads.diagramId',
+        'diagrams.projectId',
+        'projects.organizationId',
       ])
       .where('comments.id', '=', commentId)
       .where('comments.deletedAt', 'is', null)
@@ -181,6 +185,26 @@ export class CommentRepository {
         ...comment,
         replyCount: Number(replyCountRow.count),
       };
+    });
+  }
+
+  async deleteComment(commentId: string) {
+    return this.db.transaction().execute(async (tx) => {
+      const now = new Date();
+      const comment = await tx
+        .updateTable('comments')
+        .set({
+          deletedAt: now,
+          updatedAt: now,
+        })
+        .where('id', '=', commentId)
+        .where('deletedAt', 'is', null)
+        .returning(['id', 'threadId'])
+        .executeTakeFirstOrThrow();
+
+      // Deleted comments are hidden as tombstones, so mention rows should no longer feed mention inbox/notifications.
+      await tx.deleteFrom('comment_mentions').where('commentId', '=', commentId).execute();
+      await tx.updateTable('comment_threads').set({ updatedAt: now }).where('id', '=', comment.threadId).execute();
     });
   }
 
@@ -369,6 +393,10 @@ export class CommentRepository {
     };
   }
 
+  getCommentForResponse(commentId: string) {
+    return this.createCommentResponseQuery().where('comments.id', '=', commentId).executeTakeFirst();
+  }
+
   async getThreadReadState(threadId: string, userId: string) {
     const readState = await this.db
       .selectFrom('comment_thread_reads')
@@ -486,6 +514,47 @@ export class CommentRepository {
       .where('id', '=', threadId)
       .returningAll()
       .executeTakeFirstOrThrow();
+  }
+
+  private createCommentResponseQuery() {
+    return this.db
+      .selectFrom('comments')
+      .innerJoin('users', 'users.id', 'comments.createdById')
+      .select([
+        'comments.id',
+        'comments.threadId',
+        'comments.parentCommentId',
+        'comments.bodyJson',
+        'comments.bodyText',
+        'comments.bodyFormat',
+        'comments.createdById',
+        'comments.deletedAt',
+        'comments.editedAt',
+        'comments.createdAt',
+        'comments.updatedAt',
+        'users.id as authorId',
+        'users.email as authorEmail',
+        'users.name as authorName',
+        sql<string | null>`case
+          when users.avatar_file_id is null then null
+          else concat('/api/files/', users.avatar_file_id::text)
+        end`.as('authorAvatarUrl'),
+        'users.cursorColor as authorCursorColor',
+        sql<number>`(
+          SELECT count(*)::int
+          FROM comments replies
+          WHERE replies.parent_comment_id = comments.id
+            AND replies.deleted_at IS NULL
+        )`.as('replyCount'),
+        sql<string[]>`coalesce(
+          (
+            SELECT array_agg(comment_mentions.mentioned_user_id ORDER BY comment_mentions.created_at ASC)
+            FROM comment_mentions
+            WHERE comment_mentions.comment_id = comments.id
+          ),
+          '{}'::uuid[]
+        )`.as('mentionedUserIds'),
+      ]);
   }
 }
 

@@ -156,6 +156,7 @@ import {
 import {
   commentQueries,
   useCreateCommentThreadMutation,
+  useDeleteCommentMutation,
   useMarkCommentThreadReadMutation,
   useReplyToCommentThreadMutation,
   useResolveCommentThreadMutation,
@@ -1141,6 +1142,7 @@ export function EditorPage() {
 
       <CommentsDialog
         canComment={canCommentDiagram}
+        canModerateComments={canEditDiagram}
         currentUserId={currentUser.id}
         diagramId={activeDiagram.id}
         model={model}
@@ -1347,6 +1349,7 @@ function updateLiveModelFromDiagram(
 
 function CommentsDialog({
   canComment,
+  canModerateComments,
   currentUserId,
   diagramId,
   model,
@@ -1362,6 +1365,7 @@ function CommentsDialog({
   selectedTableId,
 }: {
   canComment: boolean;
+  canModerateComments: boolean;
   currentUserId: string;
   diagramId: string;
   model: DiagramModel;
@@ -1377,6 +1381,7 @@ function CommentsDialog({
   selectedTableId: string | null;
 }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [deleteConfirmCommentId, setDeleteConfirmCommentId] = useState<string | null>(null);
   const [editingComment, setEditingComment] = useState<CommentResponseDto | null>(null);
   const [replyParentComment, setReplyParentComment] = useState<CommentResponseDto | null>(null);
   const [typingTick, setTypingTick] = useState(0);
@@ -1440,6 +1445,7 @@ function CommentsDialog({
   const activeThreadTypingPresences = activeThreadId ? (typingPresencesByThreadId.get(activeThreadId) ?? []) : [];
   const mentionUsers = mentionMembersQuery.data?.items ?? [];
   const createThreadMutation = useCreateCommentThreadMutation();
+  const deleteCommentMutation = useDeleteCommentMutation();
   const replyMutation = useReplyToCommentThreadMutation();
   const resolveThreadMutation = useResolveCommentThreadMutation();
   const unresolveThreadMutation = useUnresolveCommentThreadMutation();
@@ -1447,6 +1453,7 @@ function CommentsDialog({
   const updateCommentMutation = useUpdateCommentMutation();
   const isMutationPending =
     createThreadMutation.isPending ||
+    deleteCommentMutation.isPending ||
     replyMutation.isPending ||
     resolveThreadMutation.isPending ||
     unresolveThreadMutation.isPending ||
@@ -1534,6 +1541,7 @@ function CommentsDialog({
     // Parent reply selalu scoped ke thread aktif; pindah thread menghapus quote preview agar payload tidak mengarah ke thread lama.
     stopCommentTyping();
     setEditingComment(null);
+    setDeleteConfirmCommentId(null);
     setReplyParentComment(null);
     editForm.reset(createEmptyCommentFormBody());
     replyForm.reset(createEmptyCommentFormBody());
@@ -1556,10 +1564,12 @@ function CommentsDialog({
       createForm.reset(createEmptyCommentFormBody());
       editForm.reset(createEmptyCommentFormBody());
       replyForm.reset(createEmptyCommentFormBody());
+      setDeleteConfirmCommentId(null);
       setEditingComment(null);
       setReplyParentComment(null);
       stopCommentTyping();
       createThreadMutation.reset();
+      deleteCommentMutation.reset();
       replyMutation.reset();
       resolveThreadMutation.reset();
       unresolveThreadMutation.reset();
@@ -1619,6 +1629,7 @@ function CommentsDialog({
     }
 
     setEditingComment(null);
+    setDeleteConfirmCommentId(null);
     editForm.reset(createEmptyCommentFormBody());
 
     if (replyParentComment?.id !== comment.id) {
@@ -1637,6 +1648,7 @@ function CommentsDialog({
 
     stopCommentTyping();
     setReplyParentComment(null);
+    setDeleteConfirmCommentId(null);
     replyForm.reset(createEmptyCommentFormBody());
     replyMutation.reset();
     updateCommentMutation.reset();
@@ -1651,6 +1663,38 @@ function CommentsDialog({
     editForm.reset(createEmptyCommentFormBody());
     updateCommentMutation.reset();
     setEditingComment(null);
+  }
+
+  function handleDeleteTargetSelect(comment: CommentResponseDto) {
+    if (!canComment || comment.deletedAt || (comment.createdById !== currentUserId && !canModerateComments)) {
+      return;
+    }
+
+    setEditingComment(null);
+    setReplyParentComment(null);
+    editForm.reset(createEmptyCommentFormBody());
+    replyForm.reset(createEmptyCommentFormBody());
+    replyMutation.reset();
+    deleteCommentMutation.reset();
+    stopCommentTyping();
+    setDeleteConfirmCommentId(comment.id);
+  }
+
+  function handleDeleteCancel() {
+    deleteCommentMutation.reset();
+    setDeleteConfirmCommentId(null);
+  }
+
+  function handleDeleteConfirm(comment: CommentResponseDto) {
+    if (!canComment || comment.deletedAt || deleteCommentMutation.isPending) {
+      return;
+    }
+
+    deleteCommentMutation.mutate(comment.id, {
+      onSuccess: () => {
+        setDeleteConfirmCommentId(null);
+      },
+    });
   }
 
   function handleEditComment(values: CommentFormState) {
@@ -2141,11 +2185,20 @@ function CommentsDialog({
                   <div className="grid gap-1">
                     {commentTree.map((comment) => (
                       <ThreadCommentItem
+                        canModerateComments={canModerateComments}
                         canComment={canComment}
                         comment={comment}
                         currentUserId={currentUserId}
+                        deleteConfirmCommentId={deleteConfirmCommentId}
+                        deleteError={deleteCommentMutation.error}
+                        deletingCommentId={
+                          deleteCommentMutation.isPending ? (deleteCommentMutation.variables ?? null) : null
+                        }
                         depth={0}
                         key={comment.id}
+                        onDeleteCancel={handleDeleteCancel}
+                        onDeleteConfirm={handleDeleteConfirm}
+                        onDelete={handleDeleteTargetSelect}
                         onEdit={handleEditTargetSelect}
                         onReply={handleReplyTargetSelect}
                         renderEditComposer={renderInlineEditComposer}
@@ -2217,19 +2270,33 @@ type ThreadCommentNode = CommentResponseDto & {
 };
 
 function ThreadCommentItem({
+  canModerateComments,
   canComment,
   comment,
   currentUserId,
+  deleteConfirmCommentId,
+  deleteError,
+  deletingCommentId,
   depth,
+  onDelete,
+  onDeleteCancel,
+  onDeleteConfirm,
   onEdit,
   onReply,
   renderEditComposer,
   renderReplyComposer,
 }: {
+  canModerateComments: boolean;
   canComment: boolean;
   comment: ThreadCommentNode;
   currentUserId: string;
+  deleteConfirmCommentId: string | null;
+  deleteError: unknown;
+  deletingCommentId: string | null;
   depth: number;
+  onDelete: (comment: CommentResponseDto) => void;
+  onDeleteCancel: () => void;
+  onDeleteConfirm: (comment: CommentResponseDto) => void;
   onEdit: (comment: CommentResponseDto) => void;
   onReply: (comment: CommentResponseDto) => void;
   renderEditComposer: (comment: CommentResponseDto) => ReactNode;
@@ -2239,6 +2306,9 @@ function ThreadCommentItem({
   const isDeleted = Boolean(comment.deletedAt);
   const [areRepliesExpanded, setAreRepliesExpanded] = useState(true);
   const canEdit = canComment && !isDeleted && comment.createdById === currentUserId;
+  const canDelete = canComment && !isDeleted && (comment.createdById === currentUserId || canModerateComments);
+  const isDeleteConfirming = deleteConfirmCommentId === comment.id;
+  const isDeleting = deletingCommentId === comment.id;
   const inlineEditComposer = isDeleted ? null : renderEditComposer(comment);
   const inlineReplyComposer = isDeleted ? null : renderReplyComposer(comment);
   // Replies dibuka secara default agar thread lama tetap terasa familiar, tetapi cabang ramai bisa ditutup per comment.
@@ -2342,6 +2412,37 @@ function ThreadCommentItem({
                     Edit
                   </button>
                 ) : null}
+                {canDelete ? (
+                  isDeleteConfirming ? (
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      <button
+                        className="cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-surface))]"
+                        disabled={isDeleting}
+                        onClick={onDeleteCancel}
+                        type="button"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[rgb(var(--tabliodb-danger))] px-2 py-1 text-xs font-extrabold text-white transition hover:bg-[rgb(var(--tabliodb-danger-hover))] disabled:cursor-wait disabled:opacity-70"
+                        disabled={isDeleting}
+                        onClick={() => onDeleteConfirm(comment)}
+                        type="button"
+                      >
+                        {isDeleting ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+                        Delete
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      className="cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-danger-soft))] hover:text-[rgb(var(--tabliodb-danger-text))]"
+                      onClick={() => onDelete(comment)}
+                      type="button"
+                    >
+                      Delete
+                    </button>
+                  )
+                ) : null}
                 {hasReplies ? (
                   <button
                     aria-expanded={areRepliesExpanded}
@@ -2353,6 +2454,11 @@ function ThreadCommentItem({
                   </button>
                 ) : null}
               </div>
+              {isDeleteConfirming && deleteError ? (
+                <div className="mt-1">
+                  <FieldError>{getErrorMessage(deleteError)}</FieldError>
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -2372,11 +2478,18 @@ function ThreadCommentItem({
           <div className="grid gap-0.5">
             {comment.replies.map((reply) => (
               <ThreadCommentItem
+                canModerateComments={canModerateComments}
                 canComment={canComment}
                 comment={reply}
                 currentUserId={currentUserId}
+                deleteConfirmCommentId={deleteConfirmCommentId}
+                deleteError={deleteError}
+                deletingCommentId={deletingCommentId}
                 depth={depth + 1}
                 key={reply.id}
+                onDelete={onDelete}
+                onDeleteCancel={onDeleteCancel}
+                onDeleteConfirm={onDeleteConfirm}
                 onEdit={onEdit}
                 onReply={onReply}
                 renderEditComposer={renderEditComposer}
@@ -4771,6 +4884,10 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     return changedFields.length > 0 ? `Updated workspace ${changedFields.join(', ')}` : 'Updated workspace settings';
   }
 
+  if (auditLog.action === 'comment.deleted') {
+    return readMetadataBoolean(auditLog.metadata, 'deletedByAuthor') ? 'Deleted own comment' : 'Moderated a comment';
+  }
+
   if (auditLog.action === 'user.disabled') {
     return `Disabled user ${readMetadataString(auditLog.metadata, 'email', 'user')}`;
   }
@@ -4796,6 +4913,7 @@ function formatAuditLogAction(action: string): string {
       'organization.settings_updated': 'Workspace',
       'organization.member_removed': 'Removed',
       'organization.member_role_updated': 'Role',
+      'comment.deleted': 'Comment',
       'project.archived': 'Archived',
       'project.created': 'Created',
       'project.member_added': 'Member',
@@ -4816,6 +4934,7 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
 
   if (
     action === 'organization.member_removed' ||
+    action === 'comment.deleted' ||
     action === 'project.archived' ||
     action === 'project.member_removed' ||
     action === 'user.disabled'
@@ -4844,6 +4963,10 @@ function readMetadataRecord(metadata: Record<string, unknown>, key: string): Rec
 function readMetadataString(metadata: Record<string, unknown>, key: string, fallback: string): string {
   const value = metadata[key];
   return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+}
+
+function readMetadataBoolean(metadata: Record<string, unknown>, key: string): boolean {
+  return metadata[key] === true;
 }
 
 function formatProjectRoleValue(role: string): string {

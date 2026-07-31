@@ -23,6 +23,8 @@ const updateCommentMutationFn = (variables: {
   body: CommentUpdateDto;
   commentId: string;
 }): Promise<CommentResponseDto> => sdk.comments.updateComment(variables.commentId, variables.body);
+const deleteCommentMutationFn = (commentId: string): Promise<CommentResponseDto> =>
+  sdk.comments.deleteComment(commentId);
 const resolveCommentThreadMutationFn = (threadId: string): Promise<CommentThreadDto> =>
   sdk.comments.resolveThread(threadId);
 const unresolveCommentThreadMutationFn = (threadId: string): Promise<CommentThreadDto> =>
@@ -81,6 +83,24 @@ export function useUpdateCommentMutation(params: UseUpdateCommentMutationParams 
     onSuccess: (data, variables, onMutateResult, context) => {
       // Edited comments keep the same thread but change the visible comment tree and mention metadata.
       queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
+      queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+type UseDeleteCommentMutationParams = {
+  mutationConfig?: MutationConfig<typeof deleteCommentMutationFn>;
+};
+
+export function useDeleteCommentMutation(params: UseDeleteCommentMutationParams = {}) {
+  return useMutation({
+    mutationFn: deleteCommentMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Soft delete turns the message into a tombstone and can change marker/unread counts, so every comment aggregate is refreshed.
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
+      queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },

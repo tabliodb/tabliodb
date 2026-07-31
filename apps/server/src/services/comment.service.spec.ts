@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Permission } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import { createPlainTextCommentLexicalDocument } from '../utils/comment-body.js';
 import { CommentService } from './comment.service.js';
@@ -44,10 +45,15 @@ const comment = {
 };
 
 describe(CommentService.name, () => {
+  const auditLogRepository = {
+    create: vi.fn(),
+  };
   const commentRepository = {
     createCommentReply: vi.fn(),
     createThreadWithComment: vi.fn(),
+    deleteComment: vi.fn(),
     getCommentInThread: vi.fn(),
+    getCommentForResponse: vi.fn(),
     getCommentWithThread: vi.fn(),
     getComments: vi.fn(),
     getDiagramSummary: vi.fn(),
@@ -68,7 +74,7 @@ describe(CommentService.name, () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    service = new CommentService(commentRepository as never, diagramService as never);
+    service = new CommentService(auditLogRepository as never, commentRepository as never, diagramService as never);
   });
 
   function commentBody(bodyText: string) {
@@ -188,6 +194,88 @@ describe(CommentService.name, () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(commentRepository.updateComment).not.toHaveBeenCalled();
+  });
+
+  it('soft deletes an author-owned comment and records audit metadata', async () => {
+    commentRepository.getCommentWithThread.mockResolvedValue({
+      createdById: 'user-id',
+      deletedAt: null,
+      diagramId: 'diagram-id',
+      id: 'comment-id',
+      organizationId: 'organization-id',
+      parentCommentId: 'parent-comment-id',
+      projectId: 'project-id',
+      threadId: 'thread-id',
+    });
+    commentRepository.getCommentForResponse.mockResolvedValue({
+      ...comment,
+      authorAvatarUrl: null,
+      authorCursorColor: '#58cc02',
+      authorEmail: 'commenter@tabliodb.local',
+      authorId: 'user-id',
+      authorName: 'Commenter User',
+      bodyJson: createPlainTextCommentLexicalDocument('Sensitive deleted detail.'),
+      bodyText: 'Sensitive deleted detail.',
+      deletedAt: new Date('2026-07-30T08:12:00.000Z'),
+      mentionedUserIds: ['teammate-id'],
+      parentCommentId: 'parent-comment-id',
+      replyCount: 1,
+      updatedAt: new Date('2026-07-30T08:12:00.000Z'),
+    });
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+
+    await expect(service.deleteComment(auth, 'comment-id')).resolves.toMatchObject({
+      body: '',
+      bodyText: '',
+      deletedAt: '2026-07-30T08:12:00.000Z',
+      id: 'comment-id',
+      mentionedUserIds: [],
+      parentCommentId: 'parent-comment-id',
+      replyCount: 1,
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledTimes(1);
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramComment);
+    expect(commentRepository.deleteComment).toHaveBeenCalledWith('comment-id');
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.CommentDeleted,
+        actorId: 'user-id',
+        diagramId: 'diagram-id',
+        entityId: 'comment-id',
+        entityType: 'comment',
+        metadata: {
+          deletedByAuthor: true,
+          parentCommentId: 'parent-comment-id',
+          threadId: 'thread-id',
+        },
+        organizationId: 'organization-id',
+        projectId: 'project-id',
+      }),
+    );
+  });
+
+  it('rejects deleting another user comment without diagram update permission', async () => {
+    commentRepository.getCommentWithThread.mockResolvedValue({
+      createdById: 'other-user-id',
+      deletedAt: null,
+      diagramId: 'diagram-id',
+      id: 'comment-id',
+      organizationId: 'organization-id',
+      parentCommentId: null,
+      projectId: 'project-id',
+      threadId: 'thread-id',
+    });
+    diagramService.requireDiagram
+      .mockResolvedValueOnce({ id: 'diagram-id' })
+      .mockRejectedValueOnce(new ForbiddenException());
+
+    await expect(service.deleteComment(auth, 'comment-id')).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(diagramService.requireDiagram).toHaveBeenNthCalledWith(1, auth, 'diagram-id', Permission.DiagramComment);
+    expect(diagramService.requireDiagram).toHaveBeenNthCalledWith(2, auth, 'diagram-id', Permission.DiagramUpdate);
+    expect(commentRepository.deleteComment).not.toHaveBeenCalled();
+    expect(auditLogRepository.create).not.toHaveBeenCalled();
   });
 
   it('strips unknown Lexical nodes and stores server-derived plain text', async () => {
