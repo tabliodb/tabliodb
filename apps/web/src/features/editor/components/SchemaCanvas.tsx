@@ -17,7 +17,7 @@ import {
   type DatabaseTable,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import type { CommentThreadListItemDto } from '@tabliodb/sdk';
+import type { CommentTargetType, CommentThreadListItemDto } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -64,6 +64,7 @@ export type SchemaCanvasProps = {
   fitKey: string;
   model: DiagramModel;
   onLocalCursorChange?: (cursor: AwarenessState['cursor']) => void;
+  onCommentTargetOpen?: (target: { targetId: string; targetType: CommentTargetType }) => void;
   selectedTableId: string | null;
   onModelChange: (model: DiagramModel) => void;
   onSelectedTableChange: (tableId: string | null) => void;
@@ -117,6 +118,7 @@ export function SchemaCanvas({
   fitKey,
   fitSignal,
   model,
+  onCommentTargetOpen,
   onLocalCursorChange,
   onModelChange,
   onSelectedTableChange,
@@ -129,6 +131,7 @@ export function SchemaCanvas({
   const fitKeyRef = useRef<string | null>(null);
   const modelRef = useRef(model);
   const onLocalCursorChangeRef = useRef(onLocalCursorChange);
+  const onCommentTargetOpenRef = useRef(onCommentTargetOpen);
   const onModelChangeRef = useRef(onModelChange);
   const onSelectedTableChangeRef = useRef(onSelectedTableChange);
   const remoteCursorsRef = useRef(remoteCursors);
@@ -145,6 +148,10 @@ export function SchemaCanvas({
   useEffect(() => {
     onLocalCursorChangeRef.current = onLocalCursorChange;
   }, [onLocalCursorChange]);
+
+  useEffect(() => {
+    onCommentTargetOpenRef.current = onCommentTargetOpen;
+  }, [onCommentTargetOpen]);
 
   useEffect(() => {
     onSelectedTableChangeRef.current = onSelectedTableChange;
@@ -224,6 +231,44 @@ export function SchemaCanvas({
       onSelectedTableChangeRef.current(null);
     });
 
+    const getCommentMarkerFromEvent = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement)) {
+        return null;
+      }
+
+      return target.closest<HTMLElement>('.tabliodb-table-node__comment-marker');
+    };
+
+    const handleCommentMarkerMouseDown = (event: MouseEvent) => {
+      if (!getCommentMarkerFromEvent(event)) {
+        return;
+      }
+
+      // Marker komentar adalah action di dalam HTML node; event ditahan di DOM agar X6 tidak memulai drag node.
+      event.stopPropagation();
+    };
+
+    const handleCommentMarkerClick = (event: MouseEvent) => {
+      const marker = getCommentMarkerFromEvent(event);
+
+      if (!marker) {
+        return;
+      }
+
+      const targetId = marker.dataset.commentTargetId;
+      const targetType = marker.dataset.commentTargetType;
+
+      if (!targetId || !isCanvasCommentTargetType(targetType)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      onCommentTargetOpenRef.current?.({ targetId, targetType });
+    };
+
     const handleResizeMouseDown = (event: MouseEvent) => {
       const target = event.target;
 
@@ -281,6 +326,8 @@ export function SchemaCanvas({
       window.addEventListener('mouseup', handleMouseUp);
     };
 
+    container.addEventListener('mousedown', handleCommentMarkerMouseDown, true);
+    container.addEventListener('click', handleCommentMarkerClick, true);
     container.addEventListener('mousedown', handleResizeMouseDown, true);
 
     const handleCursorPointerMove = (event: PointerEvent) => {
@@ -331,6 +378,8 @@ export function SchemaCanvas({
     graphRef.current = graph;
 
     return () => {
+      container.removeEventListener('mousedown', handleCommentMarkerMouseDown, true);
+      container.removeEventListener('click', handleCommentMarkerClick, true);
       container.removeEventListener('mousedown', handleResizeMouseDown, true);
       container.removeEventListener('pointerleave', handleCursorPointerLeave);
       container.removeEventListener('pointermove', handleCursorPointerMove);
@@ -1084,7 +1133,7 @@ function fitGraphContent(graph: Graph): void {
 
 function renderTableNode(data: TableNodeData): string {
   const rows = data.columns.map((column) => renderColumnRow(column, data.columnCommentMarkers[column.id])).join('');
-  const commentMarker = renderCommentMarker(data.commentMarker, `table ${data.tableName}`);
+  const commentMarker = renderCommentMarker(data.commentMarker, `table ${data.tableName}`, 'table', data.tableId);
   const resizeHandle = data.readOnly
     ? ''
     : '<button aria-label="Resize table" class="tabliodb-table-node__resize-handle" type="button"></button>';
@@ -1106,7 +1155,7 @@ function renderTableNode(data: TableNodeData): string {
 }
 
 function renderColumnRow(column: DatabaseColumn, commentMarkerCount: CommentMarkerCount | undefined): string {
-  const commentMarker = renderCommentMarker(commentMarkerCount, `column ${column.name}`);
+  const commentMarker = renderCommentMarker(commentMarkerCount, `column ${column.name}`, 'column', column.id);
   const badges = [
     column.primaryKey ? '<span class="tabliodb-table-node__badge">PK</span>' : '',
     column.unique ? '<span class="tabliodb-table-node__badge">UQ</span>' : '',
@@ -1122,12 +1171,21 @@ function renderColumnRow(column: DatabaseColumn, commentMarkerCount: CommentMark
   `;
 }
 
-function renderCommentMarker(count: CommentMarkerCount | undefined, label: string): string {
+function renderCommentMarker(
+  count: CommentMarkerCount | undefined,
+  label: string,
+  targetType: CommentTargetType,
+  targetId: string,
+): string {
   if (!count || !hasOpenCommentMarkers(count)) {
     return '';
   }
 
-  return `<span aria-label="${escapeHtml(formatCommentMarkerTitle(count, label))}" class="tabliodb-table-node__comment-marker">${escapeHtml(formatCommentMarkerCount(count))}</span>`;
+  return `<button aria-label="${escapeHtml(formatCommentMarkerTitle(count, label))}" class="tabliodb-table-node__comment-marker" data-comment-target-id="${escapeHtml(targetId)}" data-comment-target-type="${escapeHtml(targetType)}" type="button">${escapeHtml(formatCommentMarkerCount(count))}</button>`;
+}
+
+function isCanvasCommentTargetType(value: string | undefined): value is CommentTargetType {
+  return value === 'table' || value === 'column';
 }
 
 function escapeHtml(value: string): string {

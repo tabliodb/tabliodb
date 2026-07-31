@@ -4,6 +4,7 @@ import {
   diagramReviewRuleDefinitions,
   diagramReviewSignalCodes,
   getDiagramModelIntegrityWarnings,
+  getRelationshipColumnPairs,
   parseDiagramModel,
   stringifyDiagramModel,
   type DatabaseDialect,
@@ -210,6 +211,16 @@ type EditorCommentTarget = {
   targetType: CommentTargetType;
 };
 
+type CommentTargetReference = {
+  targetId: string | null;
+  targetType: CommentTargetType;
+};
+
+type CommentThreadOpenRequest = {
+  requestId: number;
+  target: EditorCommentTarget;
+};
+
 const commentFormSchema = z.object({
   body: z.string().trim().min(1, 'Write a comment first.').max(4000, 'Keep the comment under 4000 characters.'),
   bodyJson: z.custom<CommentLexicalDocumentDto>(),
@@ -306,6 +317,7 @@ export function EditorPage() {
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedCommentTarget, setSelectedCommentTarget] = useState<EditorCommentTarget | null>(null);
+  const [commentThreadOpenRequest, setCommentThreadOpenRequest] = useState<CommentThreadOpenRequest | null>(null);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   // Inspector starts collapsed so the editor opens with more canvas room while keeping the right rail discoverable.
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
@@ -314,6 +326,7 @@ export function EditorPage() {
   const latestCursorRef = useRef<AwarenessState['cursor']>(undefined);
   const latestCommentTypingRef = useRef<AwarenessState['commentTyping']>(undefined);
   const latestAwarenessSentAtRef = useRef(0);
+  const commentThreadOpenRequestIdRef = useRef(0);
 
   const currentUserQuery = useQuery(authQueries.me());
   const organizationsQuery = useQuery(organizationsQueries.list({ limit: 50 }));
@@ -507,6 +520,31 @@ export function EditorPage() {
       publishAwareness(latestCursorRef.current, commentTyping);
     },
     [publishAwareness],
+  );
+
+  const handleCommentMarkerOpen = useCallback(
+    (target: EditorCommentTarget) => {
+      if (!modelRef.current) {
+        return;
+      }
+
+      const tableId = getCommentTargetTableId(modelRef.current, target);
+
+      if (tableId) {
+        setSelectedTableId(tableId);
+        setLeftSidebarOpen(true);
+      }
+
+      setSelectedCommentTarget(target);
+      setCommentsOpen(true);
+      // Request id membuat dialog bisa membedakan klik marker berulang pada target yang sama.
+      commentThreadOpenRequestIdRef.current += 1;
+      setCommentThreadOpenRequest({
+        requestId: commentThreadOpenRequestIdRef.current,
+        target,
+      });
+    },
+    [],
   );
 
   useEffect(() => {
@@ -1110,6 +1148,7 @@ export function EditorPage() {
         model={model}
         onFocusTable={handleSelectedTableChange}
         onCommentTargetSelect={setSelectedCommentTarget}
+        openRequest={commentThreadOpenRequest}
         onOpenChange={setCommentsOpen}
         onTypingChange={handleCommentTypingChange}
         open={commentsOpen}
@@ -1232,6 +1271,7 @@ export function EditorPage() {
             fitKey={activeDiagram?.id ?? 'empty'}
             fitSignal={fitSignal}
             model={model}
+            onCommentTargetOpen={handleCommentMarkerOpen}
             onLocalCursorChange={handleCanvasCursorChange}
             onModelChange={handleModelChange}
             onSelectedTableChange={handleSelectedTableChange}
@@ -1317,6 +1357,7 @@ function CommentsDialog({
   onOpenChange,
   onTypingChange,
   open,
+  openRequest,
   projectId,
   remoteTypingPresences,
   selectedCommentTarget,
@@ -1331,6 +1372,7 @@ function CommentsDialog({
   onOpenChange: (open: boolean) => void;
   onTypingChange: (typing: AwarenessState['commentTyping']) => void;
   open: boolean;
+  openRequest: CommentThreadOpenRequest | null;
   projectId: string;
   remoteTypingPresences: CommentTypingPresence[];
   selectedCommentTarget: EditorCommentTarget | null;
@@ -1341,6 +1383,7 @@ function CommentsDialog({
   const [typingTick, setTypingTick] = useState(0);
   const typingStopTimeoutRef = useRef<number | null>(null);
   const lastMarkedReadSignatureRef = useRef<string | null>(null);
+  const handledOpenRequestIdRef = useRef<number | null>(null);
   const createForm = useForm<CommentFormState>({
     defaultValues: createEmptyCommentFormBody(),
     mode: 'onBlur',
@@ -1406,6 +1449,7 @@ function CommentsDialog({
   useEffect(() => {
     if (!open) {
       setActiveThreadId(null);
+      handledOpenRequestIdRef.current = null;
       stopCommentTyping();
       return;
     }
@@ -1414,6 +1458,26 @@ function CommentsDialog({
       setActiveThreadId(null);
     }
   }, [activeThreadId, open, threads]);
+
+  useEffect(() => {
+    if (!open || !openRequest || threadsQuery.isPending || threadsQuery.error) {
+      return;
+    }
+
+    if (handledOpenRequestIdRef.current === openRequest.requestId) {
+      return;
+    }
+
+    handledOpenRequestIdRef.current = openRequest.requestId;
+    const matchingThread = findCommentThreadForTarget(model, threads, openRequest.target);
+
+    if (!matchingThread) {
+      setActiveThreadId(null);
+      return;
+    }
+
+    handleThreadSelect(matchingThread);
+  }, [model, open, openRequest, threads, threadsQuery.error, threadsQuery.isPending]);
 
   useEffect(() => {
     lastMarkedReadSignatureRef.current = null;
@@ -2403,6 +2467,95 @@ function getCommentThreadTargetLabel(model: DiagramModel, thread: CommentThreadL
   return `${formatCommentTargetType(thread.targetType)}: ${targetName ?? thread.targetId}`;
 }
 
+function findCommentThreadForTarget(
+  model: DiagramModel,
+  threads: CommentThreadListItemDto[],
+  target: CommentTargetReference,
+): CommentThreadListItemDto | null {
+  const openExactThread = threads.find(
+    (thread) => thread.status === 'open' && isExactCommentTarget(thread, target),
+  );
+
+  if (openExactThread) {
+    return openExactThread;
+  }
+
+  const exactThread = threads.find((thread) => isExactCommentTarget(thread, target));
+
+  if (exactThread) {
+    return exactThread;
+  }
+
+  // Canvas marker count is intentionally aggregated, so table/column badges can represent related index/check/relationship threads.
+  return (
+    threads.find((thread) => thread.status === 'open' && isCommentThreadRelatedToTarget(model, thread, target)) ??
+    threads.find((thread) => isCommentThreadRelatedToTarget(model, thread, target)) ??
+    null
+  );
+}
+
+function isExactCommentTarget(thread: CommentThreadListItemDto, target: CommentTargetReference): boolean {
+  return thread.targetType === target.targetType && (thread.targetId ?? null) === (target.targetId ?? null);
+}
+
+function isCommentThreadRelatedToTarget(
+  model: DiagramModel,
+  thread: CommentThreadListItemDto,
+  target: CommentTargetReference,
+): boolean {
+  if (isExactCommentTarget(thread, target)) {
+    return true;
+  }
+
+  if (!target.targetId || !thread.targetId) {
+    return false;
+  }
+
+  if (target.targetType === 'table') {
+    return getCommentTargetTableId(model, thread) === target.targetId;
+  }
+
+  if (target.targetType === 'column') {
+    return isCommentThreadRelatedToColumn(model, thread, target.targetId);
+  }
+
+  return false;
+}
+
+function isCommentThreadRelatedToColumn(
+  model: DiagramModel,
+  thread: CommentThreadListItemDto,
+  columnId: string,
+): boolean {
+  if (!thread.targetId) {
+    return false;
+  }
+
+  if (thread.targetType === 'column') {
+    return thread.targetId === columnId;
+  }
+
+  if (thread.targetType === 'index') {
+    return model.indexes[thread.targetId]?.columns.some((column) => column.columnId === columnId) ?? false;
+  }
+
+  if (thread.targetType === 'check') {
+    return model.checks[thread.targetId]?.columnId === columnId;
+  }
+
+  if (thread.targetType === 'relationship') {
+    const relationship = model.relationships[thread.targetId];
+
+    return relationship
+      ? getRelationshipColumnPairs(relationship).some(
+          (columnPair) => columnPair.sourceColumnId === columnId || columnPair.targetColumnId === columnId,
+        )
+      : false;
+  }
+
+  return false;
+}
+
 function focusCommentTarget(
   model: DiagramModel,
   thread: CommentThreadListItemDto,
@@ -2415,29 +2568,29 @@ function focusCommentTarget(
   }
 }
 
-function getCommentTargetTableId(model: DiagramModel, thread: CommentThreadListItemDto): string | null {
-  if (!thread.targetId) {
+function getCommentTargetTableId(model: DiagramModel, target: CommentTargetReference): string | null {
+  if (!target.targetId) {
     return null;
   }
 
-  if (thread.targetType === 'table') {
-    return model.tables[thread.targetId] ? thread.targetId : null;
+  if (target.targetType === 'table') {
+    return model.tables[target.targetId] ? target.targetId : null;
   }
 
-  if (thread.targetType === 'column') {
-    return model.columns[thread.targetId]?.tableId ?? null;
+  if (target.targetType === 'column') {
+    return model.columns[target.targetId]?.tableId ?? null;
   }
 
-  if (thread.targetType === 'index') {
-    return model.indexes[thread.targetId]?.tableId ?? null;
+  if (target.targetType === 'index') {
+    return model.indexes[target.targetId]?.tableId ?? null;
   }
 
-  if (thread.targetType === 'check') {
-    return model.checks[thread.targetId]?.tableId ?? null;
+  if (target.targetType === 'check') {
+    return model.checks[target.targetId]?.tableId ?? null;
   }
 
-  if (thread.targetType === 'relationship') {
-    return model.relationships[thread.targetId]?.sourceTableId ?? null;
+  if (target.targetType === 'relationship') {
+    return model.relationships[target.targetId]?.sourceTableId ?? null;
   }
 
   return null;

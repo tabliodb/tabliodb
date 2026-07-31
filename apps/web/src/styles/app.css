@@ -246,9 +246,22 @@ body {
   background: rgb(var(--tabliodb-sky-soft));
   box-shadow: 0 1px 0 rgb(var(--tabliodb-sky-border));
   color: rgb(var(--tabliodb-sky-text));
+  cursor: pointer;
   font-size: 8px;
   font-weight: 900;
   line-height: 1;
+  padding: 0 4px;
+  transition:
+    background 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.tabliodb-table-node__comment-marker:hover {
+  background: rgb(var(--tabliodb-sky));
+  box-shadow: 0 2px 0 rgb(var(--tabliodb-sky-text));
+  color: white;
+  transform: translateY(-1px);
 }
 
 .tabliodb-table-node__badge {
