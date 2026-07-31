@@ -911,11 +911,11 @@ export function EditorPage() {
 
   return (
     <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
-      <header className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] bg-white px-4">
+      <header className="flex h-(--tabliodb-header-height) shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] bg-white px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex shrink-0 items-center gap-2">
             <div className="grid size-8 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-              <Database className="size-[18px]" />
+              <Database className="size-4.5" />
             </div>
             <span className="text-[15px] font-extrabold">Tabliodb</span>
           </div>
@@ -1142,7 +1142,7 @@ export function EditorPage() {
             />
           ) : (
             <div className="flex h-full min-h-0 flex-col">
-              <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4">
+              <div className="flex h-(--tabliodb-header-height) shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4">
                 <div className="grid size-8 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
                   <Database className="size-4" />
                 </div>
@@ -1189,14 +1189,14 @@ export function EditorPage() {
                   />
                 </div>
                 {filteredProjects.length === 0 ? (
-                  <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="rounded-(--tabliodb-radius-md) border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                     No matching projects
                   </div>
                 ) : (
                   <div className="space-y-1">
                     {filteredProjects.map((project) => (
                       <button
-                        className={`flex w-full cursor-pointer items-center justify-between rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-left text-[13px] font-bold transition ${
+                        className={`flex w-full cursor-pointer items-center justify-between rounded-(--tabliodb-radius-md) border px-3 py-2 text-left text-[13px] font-bold transition ${
                           project.id === activeProject?.id
                             ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]'
                             : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
@@ -1650,7 +1650,7 @@ function CommentsDialog({
         <DialogBody className="grid min-h-0 flex-1 grid-rows-[minmax(190px,0.72fr)_minmax(420px,1.28fr)] gap-3 overflow-hidden px-3 py-3 lg:grid-cols-[300px_minmax(0,1fr)] lg:grid-rows-none">
           <section className="flex min-h-0 flex-col gap-3 overflow-hidden">
             <form
-              className="shrink-0 rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-2.5"
+              className="shrink-0 rounded-(--tabliodb-radius-lg) border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-2.5"
               onSubmit={createForm.handleSubmit(handleCreateThread)}
             >
               <div className="mb-2.5 flex items-start justify-between gap-3">
@@ -1704,7 +1704,7 @@ function CommentsDialog({
               </Button>
             </form>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--tabliodb-radius-lg) border-2 border-[rgb(var(--tabliodb-border))] bg-white">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-3 py-2">
                 <div>
                   <div className="text-[13px] font-extrabold">Threads</div>
@@ -1714,18 +1714,18 @@ function CommentsDialog({
                 </div>
                 <Badge variant="neutral">{threadsQuery.isFetching ? 'Syncing' : 'Live'}</Badge>
               </div>
-              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 [scrollbar-gutter:stable]">
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 scrollbar-gutter-stable">
                 {threadsQuery.isPending ? (
-                  <div className="flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="flex items-center gap-2 rounded-(--tabliodb-radius-md) p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
                     <Loader2 className="size-4 animate-spin" />
                     Loading threads
                   </div>
                 ) : threadsQuery.error ? (
-                  <div className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                  <div className="rounded-(--tabliodb-radius-md) border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                     {getErrorMessage(threadsQuery.error)}
                   </div>
                 ) : threads.length === 0 ? (
-                  <div className="rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="rounded-(--tabliodb-radius-md) border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                     No comments yet
                   </div>
                 ) : (
@@ -1737,7 +1737,7 @@ function CommentsDialog({
                         <button
                           aria-pressed={activeThreadId === thread.id}
                           className={cn(
-                            'w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border-2 p-3 text-left transition',
+                            'w-full cursor-pointer rounded-(--tabliodb-radius-md) border-2 p-3 text-left transition',
                             activeThreadId === thread.id
                               ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
                               : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]',
@@ -1775,7 +1775,7 @@ function CommentsDialog({
             </div>
           </section>
 
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-(--tabliodb-radius-lg) border-2 border-[rgb(var(--tabliodb-border))] bg-white">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4 py-2.5">
               <div className="min-w-0">
                 <div className="truncate text-sm font-extrabold">{activeThreadTargetLabel ?? 'Select a thread'}</div>
@@ -1829,22 +1829,22 @@ function CommentsDialog({
                   {formatTypingPresenceText(activeThreadTypingPresences)}
                 </div>
               ) : null}
-              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-gutter:stable]">
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 scrollbar-gutter-stable">
                 {!activeThread ? (
-                  <div className="grid h-full place-items-center rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="grid h-full place-items-center rounded-(--tabliodb-radius-md) border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                     Comments stay anchored to the diagram objects your team is reviewing.
                   </div>
                 ) : threadCommentsQuery.isPending ? (
-                  <div className="flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="flex items-center gap-2 rounded-(--tabliodb-radius-md) p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
                     <Loader2 className="size-4 animate-spin" />
                     Loading replies
                   </div>
                 ) : threadCommentsQuery.error ? (
-                  <div className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                  <div className="rounded-(--tabliodb-radius-md) border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                     {getErrorMessage(threadCommentsQuery.error)}
                   </div>
                 ) : comments.length === 0 ? (
-                  <div className="grid h-full place-items-center rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <div className="grid h-full place-items-center rounded-(--tabliodb-radius-md) border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                     This thread is ready for the first reply.
                   </div>
                 ) : (
@@ -1868,7 +1868,7 @@ function CommentsDialog({
               onSubmit={replyForm.handleSubmit(handleReply)}
             >
               {replyParentComment ? (
-                <div className="mb-2 flex items-start justify-between gap-3 rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-3 py-2">
+                <div className="mb-2 flex items-start justify-between gap-3 rounded-(--tabliodb-radius-md) border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-3 py-2">
                   <div className="min-w-0">
                     <div className="text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
                       Replying to {replyParentComment.author.name}
@@ -1957,24 +1957,21 @@ function ThreadCommentItem({
 
   return (
     <div
-      className={cn(
-        'relative',
-        depth > 4 && 'rounded-l-[var(--tabliodb-radius-sm)] bg-[rgb(var(--tabliodb-surface))]/60',
-      )}
+      className={cn('relative', depth > 4 && 'rounded-l-(--tabliodb-radius-sm) bg-[rgb(var(--tabliodb-surface))]/60')}
     >
       {depth > 0 ? (
         <span
           aria-hidden="true"
-          className="absolute -left-[34px] top-0 h-6 w-11 rounded-bl-[18px] border-b-2 border-l-2 border-[rgb(var(--tabliodb-border-strong))]"
+          className="absolute -left-8.5 top-0 h-6 w-11 rounded-bl-[18px] border-b-2 border-l-2 border-[rgb(var(--tabliodb-border-strong))]"
         />
       ) : null}
 
-      <article className="group relative flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] px-2 py-2 transition hover:bg-[rgb(var(--tabliodb-surface))]">
+      <article className="group relative flex items-start gap-3 rounded-(--tabliodb-radius-md) px-2 py-2 transition hover:bg-[rgb(var(--tabliodb-surface))]">
         {hasReplies ? (
           <span
             aria-hidden="true"
             className={cn(
-              'pointer-events-none absolute bottom-[-6px] w-px bg-[rgb(var(--tabliodb-border-strong))]',
+              'pointer-events-none absolute -bottom-1.5 w-px bg-[rgb(var(--tabliodb-border-strong))]',
               avatarBottomClass,
               avatarCenterClass,
             )}
@@ -1994,7 +1991,7 @@ function ThreadCommentItem({
               {formatDateTime(comment.createdAt)}
             </span>
           </div>
-          <p className="mt-1 whitespace-pre-wrap break-words text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
+          <p className="mt-1 whitespace-pre-wrap wrap-break-word text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
             {comment.body}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-3">
@@ -2021,11 +2018,11 @@ function ThreadCommentItem({
       </article>
 
       {hasReplies ? (
-        <div className={cn('relative -mt-1 pl-[34px]', replySpineIndentClass)}>
+        <div className={cn('relative -mt-1 pl-8.5', replySpineIndentClass)}>
           {/* The spine sits on the parent avatar centerline, while each elbow overlaps the child avatar edge so nested replies feel physically connected. */}
           <span
             aria-hidden="true"
-            className="absolute bottom-3 left-0 top-[-6px] w-px bg-[rgb(var(--tabliodb-border-strong))]"
+            className="absolute bottom-3 left-0 -top-1.5 w-px bg-[rgb(var(--tabliodb-border-strong))]"
           />
           <div className="grid gap-0.5">
             {comment.replies.map((reply) => (
@@ -2169,7 +2166,7 @@ function CommentComposerFallback({
   return (
     <div
       className={cn(
-        'rounded-[var(--tabliodb-radius-md)] border bg-white px-3 py-2 text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink-subtle))]',
+        'rounded-(--tabliodb-radius-md) border bg-white px-3 py-2 text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink-subtle))]',
         density === 'compact' ? 'min-h-14' : 'min-h-20',
         invalid ? 'border-[rgb(var(--tabliodb-danger-border))]' : 'border-[rgb(var(--tabliodb-border-strong))]',
       )}
@@ -2643,7 +2640,7 @@ function ImportJsonPreview({ preview }: { preview: ImportJsonDraftPreview }) {
         </div>
       </div>
       {preview.warnings.length > 0 ? (
-        <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
+        <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
           <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
             <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
             Import warnings
@@ -2878,7 +2875,7 @@ function ImportSqlPreview({ preview }: { preview: ImportSqlDraftPreview }) {
         </div>
       </div>
       {preview.warnings.length > 0 ? (
-        <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
+        <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
           <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
             <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
             Import warnings
@@ -2919,10 +2916,10 @@ function WorkspaceSwitcher({
         <WithTooltip content="Switch workspace">
           <DropdownMenuTrigger asChild>
             <button
-              className="flex h-[var(--tabliodb-control-lg)] w-full cursor-pointer items-center gap-2.5 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+              className="flex h-(--tabliodb-control-lg) w-full cursor-pointer items-center gap-2.5 rounded-(--tabliodb-radius-lg) border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
               type="button"
             >
-              <div className="grid size-8 shrink-0 place-items-center rounded-[12px] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
+              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
                 <Building2 className="size-4" />
               </div>
               <div className="min-w-0 flex-1">
@@ -3056,7 +3053,7 @@ function CreateProjectDialog({
                 </span>
                 <ControlledTextarea
                   aria-invalid={Boolean(errors.description)}
-                  className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
+                  className="min-h-24 w-full resize-none rounded-2xl border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                   control={form.control}
                   disabled={!organizationId || createProjectMutation.isPending}
                   name="description"
@@ -3281,7 +3278,7 @@ function WorkspaceSettingsDialog({
               </div>
 
               {membersQuery.isPending ? (
-                <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                   <Loader2 className="size-4 animate-spin" />
                   Loading members
                 </div>
@@ -3290,11 +3287,11 @@ function WorkspaceSettingsDialog({
                   {getErrorMessage(membersQuery.error)}
                 </div>
               ) : workspaceMembers.length === 0 ? (
-                <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                   No workspace members yet
                 </div>
               ) : (
-                <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
                   <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
                     {workspaceMembers.map((member) => (
                       <OrganizationMemberRow
@@ -3318,7 +3315,7 @@ function WorkspaceSettingsDialog({
             </section>
           ) : (
             <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-              <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+              <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
                 Your workspace role is {formatOrganizationRole(organization.role)}. Owner or Admin access is required to
                 manage workspace settings and members.
               </div>
@@ -3338,7 +3335,7 @@ function WorkspaceSettingsDialog({
               </div>
 
               {auditLogsQuery.isPending ? (
-                <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                   <Loader2 className="size-4 animate-spin" />
                   Loading activity
                 </div>
@@ -3347,11 +3344,11 @@ function WorkspaceSettingsDialog({
                   {getErrorMessage(auditLogsQuery.error)}
                 </div>
               ) : auditLogs.length === 0 ? (
-                <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                   No activity yet
                 </div>
               ) : (
-                <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
                   <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
                     {auditLogs.map((auditLog) => (
                       <AuditLogRow auditLog={auditLog} key={auditLog.id} />
@@ -3595,7 +3592,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
               </span>
               <ControlledTextarea
                 aria-invalid={Boolean(errors.description)}
-                className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
+                className="min-h-24 w-full resize-none rounded-2xl border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                 control={form.control}
                 disabled={isProjectMutationPending}
                 name="description"
@@ -3711,7 +3708,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
             </form>
 
             {membersQuery.isPending ? (
-              <div className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                 <Loader2 className="size-4 animate-spin" />
                 Loading members
               </div>
@@ -3720,11 +3717,11 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
                 {getErrorMessage(membersQuery.error)}
               </div>
             ) : members.length === 0 ? (
-              <div className="mt-4 rounded-[16px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                 No project members yet
               </div>
             ) : (
-              <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+              <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
                 <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
                   {members.map((member) => (
                     <ProjectMemberRow
@@ -3910,7 +3907,7 @@ function DiagramSettingsDialog({
                 <FieldError>{errors.dialect?.message}</FieldError>
               </label>
 
-              <section className="rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
+              <section className="rounded-(--tabliodb-radius-lg) border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
                 <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="text-sm font-extrabold">Review rule overrides</h3>
@@ -3991,7 +3988,7 @@ function ReviewSignalSettingsFields<
             return (
               <label
                 className={cn(
-                  'flex cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border-2 bg-white p-3 transition',
+                  'flex cursor-pointer items-start gap-3 rounded-(--tabliodb-radius-md) border-2 bg-white p-3 transition',
                   isChecked
                     ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
                     : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
