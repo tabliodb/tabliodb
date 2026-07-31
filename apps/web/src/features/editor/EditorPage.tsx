@@ -275,6 +275,8 @@ const projectMemberPageQuery = { limit: 50 } as const;
 const reviewSignalPageQuery = { limit: 50 } as const;
 const commentThreadPageQuery = { limit: 50 } as const;
 const commentReplyPageQuery = { limit: 50 } as const;
+const commentTypingFreshnessMs = 8000;
+const commentTypingTimeoutMs = 6500;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 
@@ -303,6 +305,7 @@ export function EditorPage() {
   const [remoteAwarenessStates, setRemoteAwarenessStates] = useState<RemoteAwarenessState[]>([]);
   const collaborationRef = useRef<DiagramCollaboration | null>(null);
   const latestCursorRef = useRef<AwarenessState['cursor']>(undefined);
+  const latestCommentTypingRef = useRef<AwarenessState['commentTyping']>(undefined);
   const latestAwarenessSentAtRef = useRef(0);
 
   const currentUserQuery = useQuery(authQueries.me());
@@ -387,6 +390,10 @@ export function EditorPage() {
     () => createRemoteCanvasCursorList(remoteAwarenessStates, currentUser?.id ?? null),
     [currentUser?.id, remoteAwarenessStates],
   );
+  const remoteCommentTypingPresences = useMemo(
+    () => createRemoteCommentTypingPresenceList(remoteAwarenessStates, currentUser?.id ?? null),
+    [currentUser?.id, remoteAwarenessStates],
+  );
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -456,13 +463,16 @@ export function EditorPage() {
   }, []);
 
   const publishAwareness = useCallback(
-    (cursor: AwarenessState['cursor'] = latestCursorRef.current) => {
+    (
+      cursor: AwarenessState['cursor'] = latestCursorRef.current,
+      commentTyping: AwarenessState['commentTyping'] = latestCommentTypingRef.current,
+    ) => {
       if (!currentUser || !activeDiagram) {
         return;
       }
 
       collaborationRef.current?.setAwareness(
-        createEditorAwarenessState(currentUser, activeDiagram.id, selectedCommentTarget, cursor),
+        createEditorAwarenessState(currentUser, activeDiagram.id, selectedCommentTarget, cursor, commentTyping),
       );
     },
     [activeDiagram, currentUser, selectedCommentTarget],
@@ -484,9 +494,18 @@ export function EditorPage() {
     [publishAwareness],
   );
 
+  const handleCommentTypingChange = useCallback(
+    (commentTyping: AwarenessState['commentTyping']) => {
+      latestCommentTypingRef.current = commentTyping;
+      publishAwareness(latestCursorRef.current, commentTyping);
+    },
+    [publishAwareness],
+  );
+
   useEffect(() => {
     if (!activeDiagram || !currentUser) {
       setRemoteAwarenessStates([]);
+      latestCommentTypingRef.current = undefined;
       return;
     }
 
@@ -506,7 +525,13 @@ export function EditorPage() {
         setRemoteAwarenessStates(states.filter((state) => !state.isLocal));
       });
       collaboration.setAwareness(
-        createEditorAwarenessState(currentUser, activeDiagram.id, selectedCommentTarget, latestCursorRef.current),
+        createEditorAwarenessState(
+          currentUser,
+          activeDiagram.id,
+          selectedCommentTarget,
+          latestCursorRef.current,
+          latestCommentTypingRef.current,
+        ),
       );
     });
 
@@ -520,6 +545,7 @@ export function EditorPage() {
       }
 
       setRemoteAwarenessStates([]);
+      latestCommentTypingRef.current = undefined;
     };
   }, [activeDiagram?.id, currentUser?.avatarUrl, currentUser?.cursorColor, currentUser?.id, currentUser?.name]);
 
@@ -1067,8 +1093,10 @@ export function EditorPage() {
         onFocusTable={handleSelectedTableChange}
         onCommentTargetSelect={setSelectedCommentTarget}
         onOpenChange={setCommentsOpen}
+        onTypingChange={handleCommentTypingChange}
         open={commentsOpen}
         projectId={activeProject.id}
+        remoteTypingPresences={remoteCommentTypingPresences}
         selectedCommentTarget={selectedCommentTarget}
         selectedTableId={selectedTable?.id ?? null}
       />
@@ -1268,8 +1296,10 @@ function CommentsDialog({
   onCommentTargetSelect,
   onFocusTable,
   onOpenChange,
+  onTypingChange,
   open,
   projectId,
+  remoteTypingPresences,
   selectedCommentTarget,
   selectedTableId,
 }: {
@@ -1279,13 +1309,17 @@ function CommentsDialog({
   onCommentTargetSelect: (target: EditorCommentTarget) => void;
   onFocusTable: (tableId: string | null) => void;
   onOpenChange: (open: boolean) => void;
+  onTypingChange: (typing: AwarenessState['commentTyping']) => void;
   open: boolean;
   projectId: string;
+  remoteTypingPresences: CommentTypingPresence[];
   selectedCommentTarget: EditorCommentTarget | null;
   selectedTableId: string | null;
 }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [replyParentComment, setReplyParentComment] = useState<CommentResponseDto | null>(null);
+  const [typingTick, setTypingTick] = useState(0);
+  const typingStopTimeoutRef = useRef<number | null>(null);
   const createForm = useForm<CommentFormState>({
     defaultValues: { body: '' },
     mode: 'onBlur',
@@ -1321,6 +1355,15 @@ function CommentsDialog({
   });
   const comments = threadCommentsQuery.data?.items ?? [];
   const commentTree = useMemo(() => createCommentTree(comments), [comments]);
+  const visibleTypingPresences = useMemo(
+    () => getFreshCommentTypingPresences(remoteTypingPresences, typingTick),
+    [remoteTypingPresences, typingTick],
+  );
+  const typingPresencesByThreadId = useMemo(
+    () => groupTypingPresencesByThreadId(visibleTypingPresences),
+    [visibleTypingPresences],
+  );
+  const activeThreadTypingPresences = activeThreadId ? (typingPresencesByThreadId.get(activeThreadId) ?? []) : [];
   const mentionUsers = mentionMembersQuery.data?.items ?? [];
   const createThreadMutation = useCreateCommentThreadMutation();
   const replyMutation = useReplyToCommentThreadMutation();
@@ -1335,6 +1378,7 @@ function CommentsDialog({
   useEffect(() => {
     if (!open) {
       setActiveThreadId(null);
+      stopCommentTyping();
       return;
     }
 
@@ -1346,10 +1390,27 @@ function CommentsDialog({
   }, [activeThreadId, open, threads]);
 
   useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => setTypingTick((value) => value + 1), 2000);
+
+    return () => window.clearInterval(intervalId);
+  }, [open]);
+
+  useEffect(() => {
     // Parent reply selalu scoped ke thread aktif; pindah thread menghapus quote preview agar payload tidak mengarah ke thread lama.
+    stopCommentTyping();
     setReplyParentComment(null);
     replyForm.reset({ body: '' });
   }, [activeThreadId, replyForm]);
+
+  useEffect(() => {
+    return () => {
+      stopCommentTyping();
+    };
+  }, []);
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && isMutationPending) {
@@ -1362,6 +1423,7 @@ function CommentsDialog({
       createForm.reset({ body: '' });
       replyForm.reset({ body: '' });
       setReplyParentComment(null);
+      stopCommentTyping();
       createThreadMutation.reset();
       replyMutation.reset();
       resolveThreadMutation.reset();
@@ -1409,6 +1471,7 @@ function CommentsDialog({
         onSuccess: () => {
           replyForm.reset({ body: '' });
           setReplyParentComment(null);
+          stopCommentTyping();
         },
       },
     );
@@ -1429,10 +1492,53 @@ function CommentsDialog({
 
   function handleThreadSelect(thread: CommentThreadListItemDto) {
     setActiveThreadId(thread.id);
+    stopCommentTyping();
     setReplyParentComment(null);
     focusCommentTarget(model, thread, onFocusTable);
     // Fokus canvas dapat memilih table induk; target komentar dipasang setelahnya agar anchor detail tidak tertimpa fallback table.
     onCommentTargetSelect({ targetId: thread.targetId, targetType: thread.targetType });
+  }
+
+  function handleReplyComposerChange(value: string, onChange: (value: string) => void) {
+    onChange(value);
+
+    if (!activeThread || !canComment || replyMutation.isPending || value.trim().length === 0) {
+      stopCommentTyping();
+      return;
+    }
+
+    publishCommentTyping(activeThread.id, replyParentComment?.id ?? null);
+  }
+
+  function handleReplyComposerBlur(onBlur?: () => void) {
+    onBlur?.();
+    stopCommentTyping();
+  }
+
+  function publishCommentTyping(threadId: string, parentCommentId: string | null) {
+    clearTypingStopTimeout();
+    onTypingChange({
+      parentCommentId,
+      threadId,
+      updatedAt: Date.now(),
+    });
+    // Typing presence should disappear even if the user stops moving focus without submitting.
+    typingStopTimeoutRef.current = window.setTimeout(() => {
+      onTypingChange(undefined);
+      typingStopTimeoutRef.current = null;
+    }, commentTypingTimeoutMs);
+  }
+
+  function stopCommentTyping() {
+    clearTypingStopTimeout();
+    onTypingChange(undefined);
+  }
+
+  function clearTypingStopTimeout() {
+    if (typingStopTimeoutRef.current !== null) {
+      window.clearTimeout(typingStopTimeoutRef.current);
+      typingStopTimeoutRef.current = null;
+    }
   }
 
   const mutationError =
@@ -1534,34 +1640,40 @@ function CommentsDialog({
                   </div>
                 ) : (
                   <div className="grid gap-2">
-                    {threads.map((thread) => (
-                      <button
-                        aria-pressed={activeThreadId === thread.id}
-                        className={cn(
-                          'w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border-2 p-3 text-left transition',
-                          activeThreadId === thread.id
-                            ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
-                            : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]',
-                        )}
-                        key={thread.id}
-                        onClick={() => handleThreadSelect(thread)}
-                        type="button"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-[13px] font-extrabold">
-                              {getCommentThreadTargetLabel(model, thread)}
+                    {threads.map((thread) => {
+                      const threadTypingPresences = typingPresencesByThreadId.get(thread.id) ?? [];
+
+                      return (
+                        <button
+                          aria-pressed={activeThreadId === thread.id}
+                          className={cn(
+                            'w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border-2 p-3 text-left transition',
+                            activeThreadId === thread.id
+                              ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
+                              : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]',
+                          )}
+                          key={thread.id}
+                          onClick={() => handleThreadSelect(thread)}
+                          type="button"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="truncate text-[13px] font-extrabold">
+                                {getCommentThreadTargetLabel(model, thread)}
+                              </div>
+                              <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                {threadTypingPresences.length > 0
+                                  ? formatTypingPresenceText(threadTypingPresences)
+                                  : formatDateTime(thread.updatedAt)}
+                              </p>
                             </div>
-                            <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {formatDateTime(thread.updatedAt)}
-                            </p>
+                            <Badge variant={thread.status === 'resolved' ? 'purple' : 'green'}>
+                              {formatCommentThreadStatus(thread.status)}
+                            </Badge>
                           </div>
-                          <Badge variant={thread.status === 'resolved' ? 'purple' : 'green'}>
-                            {formatCommentThreadStatus(thread.status)}
-                          </Badge>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1604,6 +1716,15 @@ function CommentsDialog({
                   {comments.length === 1 ? ' message' : ' messages'}
                 </Badge>
               </div>
+              {activeThreadTypingPresences.length > 0 ? (
+                <div className="flex shrink-0 items-center gap-2 border-t border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-4 py-2 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex size-2 animate-ping rounded-full bg-[rgb(var(--tabliodb-sky))] opacity-50" />
+                    <span className="relative inline-flex size-2 rounded-full bg-[rgb(var(--tabliodb-sky))]" />
+                  </span>
+                  {formatTypingPresenceText(activeThreadTypingPresences)}
+                </div>
+              ) : null}
               <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable]">
                 {!activeThread ? (
                   <div className="grid h-full place-items-center rounded-[var(--tabliodb-radius-md)] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
@@ -1678,8 +1799,8 @@ function CommentsDialog({
                       disabled={!activeThread || !canComment || replyMutation.isPending}
                       mentionUsers={mentionUsers}
                       menuPlacement="top"
-                      onBlur={field.onBlur}
-                      onChange={field.onChange}
+                      onBlur={() => handleReplyComposerBlur(field.onBlur)}
+                      onChange={(value) => handleReplyComposerChange(value, field.onChange)}
                       placeholder={replyPlaceholder}
                       value={field.value}
                     />
@@ -1820,6 +1941,43 @@ function createCommentTree(comments: CommentResponseDto[]): ThreadCommentNode[] 
   }
 
   return roots;
+}
+
+function getFreshCommentTypingPresences(
+  presences: CommentTypingPresence[],
+  _typingTick: number,
+): CommentTypingPresence[] {
+  const now = Date.now();
+
+  return presences.filter((presence) => now - presence.updatedAt <= commentTypingFreshnessMs);
+}
+
+function groupTypingPresencesByThreadId(presences: CommentTypingPresence[]): Map<string, CommentTypingPresence[]> {
+  const grouped = new Map<string, CommentTypingPresence[]>();
+
+  for (const presence of presences) {
+    grouped.set(presence.threadId, [...(grouped.get(presence.threadId) ?? []), presence]);
+  }
+
+  return grouped;
+}
+
+function formatTypingPresenceText(presences: CommentTypingPresence[]): string {
+  const names = presences.map((presence) => presence.user.name);
+
+  if (names.length === 0) {
+    return '';
+  }
+
+  if (names.length === 1) {
+    return `${names[0]} is typing`;
+  }
+
+  if (names.length === 2) {
+    return `${names[0]} and ${names[1]} are typing`;
+  }
+
+  return `${names[0]}, ${names[1]}, and ${names.length - 2} more are typing`;
 }
 
 function CommentComposerFallback({ invalid, placeholder }: { invalid: boolean; placeholder: string }) {
@@ -4103,6 +4261,14 @@ type CollaboratorPresence = {
   user: AwarenessState['user'] & { email: string };
 };
 
+type CommentTypingPresence = {
+  clientIds: number[];
+  parentCommentId: string | null;
+  threadId: string;
+  updatedAt: number;
+  user: AwarenessState['user'];
+};
+
 function CollaborationPresence({ collaborators }: { collaborators: CollaboratorPresence[] }) {
   const visibleCollaborators = collaborators.slice(0, 4);
   const overflowCount = Math.max(0, collaborators.length - visibleCollaborators.length);
@@ -4159,8 +4325,10 @@ function createEditorAwarenessState(
   diagramId: string,
   selectedTarget: EditorCommentTarget | null,
   cursor?: AwarenessState['cursor'],
+  commentTyping?: AwarenessState['commentTyping'],
 ): AwarenessState {
   return {
+    commentTyping,
     cursor,
     selection: selectedTarget
       ? {
@@ -4246,6 +4414,41 @@ function createRemoteCanvasCursorList(
   }
 
   return Array.from(cursorsByUser.values()).sort((left, right) => left.user.name.localeCompare(right.user.name));
+}
+
+function createRemoteCommentTypingPresenceList(
+  states: RemoteAwarenessState[],
+  currentUserId: string | null,
+): CommentTypingPresence[] {
+  const typingByUser = new Map<string, CommentTypingPresence>();
+
+  for (const awareness of states) {
+    const { commentTyping, user } = awareness.state;
+
+    if (!commentTyping || user.id === currentUserId) {
+      continue;
+    }
+
+    const existing = typingByUser.get(user.id);
+
+    if (existing) {
+      existing.clientIds.push(awareness.clientId);
+      existing.parentCommentId = commentTyping.parentCommentId;
+      existing.threadId = commentTyping.threadId;
+      existing.updatedAt = Math.max(existing.updatedAt, commentTyping.updatedAt);
+      continue;
+    }
+
+    typingByUser.set(user.id, {
+      clientIds: [awareness.clientId],
+      parentCommentId: commentTyping.parentCommentId,
+      threadId: commentTyping.threadId,
+      updatedAt: commentTyping.updatedAt,
+      user,
+    });
+  }
+
+  return Array.from(typingByUser.values()).sort((left, right) => left.user.name.localeCompare(right.user.name));
 }
 
 function getMemberInitials(member: Pick<ProjectMemberDto, 'email' | 'name'>): string {

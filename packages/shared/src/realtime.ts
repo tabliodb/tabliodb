@@ -14,8 +14,15 @@ export type AwarenessSelection = {
   targetType: 'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
 };
 
+export type AwarenessCommentTyping = {
+  parentCommentId: string | null;
+  threadId: string;
+  updatedAt: number;
+};
+
 export type AwarenessState = {
   user: AwarenessUser;
+  commentTyping?: AwarenessCommentTyping;
   cursor?: { x: number; y: number };
   selection?: AwarenessSelection;
   viewport?: { x: number; y: number; zoom: number };

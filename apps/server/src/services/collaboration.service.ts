@@ -174,6 +174,7 @@ function readCollaborationContext(value: unknown): CollaborationContext | null {
 
 function sanitizeAwarenessState(state: Record<string, unknown>, context: CollaborationContext): AwarenessState {
   return {
+    commentTyping: readCommentTyping(state.commentTyping),
     cursor: readCursor(state.cursor),
     selection: readSelection(state.selection),
     user: context.user,
@@ -204,6 +205,29 @@ function readCursor(value: unknown): AwarenessState['cursor'] {
   const cursor = value as Partial<NonNullable<AwarenessState['cursor']>>;
 
   return typeof cursor.x === 'number' && typeof cursor.y === 'number' ? { x: cursor.x, y: cursor.y } : undefined;
+}
+
+function readCommentTyping(value: unknown): AwarenessState['commentTyping'] {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const typing = value as Partial<NonNullable<AwarenessState['commentTyping']>>;
+
+  if (
+    typeof typing.threadId !== 'string' ||
+    !isUuid(typing.threadId) ||
+    !(typing.parentCommentId === null || (typeof typing.parentCommentId === 'string' && isUuid(typing.parentCommentId)))
+  ) {
+    return undefined;
+  }
+
+  return {
+    parentCommentId: typing.parentCommentId,
+    threadId: typing.threadId,
+    // Server owns the freshness timestamp so clients cannot keep a stale typing indicator alive forever.
+    updatedAt: Date.now(),
+  };
 }
 
 function readSelection(value: unknown): AwarenessState['selection'] {
@@ -248,6 +272,10 @@ function readViewport(value: unknown): AwarenessState['viewport'] {
   return typeof viewport.x === 'number' && typeof viewport.y === 'number' && typeof viewport.zoom === 'number'
     ? { x: viewport.x, y: viewport.y, zoom: viewport.zoom }
     : undefined;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function headersToIncomingHttpHeaders(headers: Headers): IncomingHttpHeaders {
