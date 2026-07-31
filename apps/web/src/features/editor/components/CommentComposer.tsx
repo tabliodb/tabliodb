@@ -73,7 +73,7 @@ export function CommentComposer({
     <LexicalComposer initialConfig={initialConfig}>
       <div
         className={cn(
-          'relative rounded-[var(--tabliodb-radius-md)] border bg-white transition focus-within:border-[rgb(var(--tabliodb-primary))] focus-within:ring-4 focus-within:ring-[rgb(var(--tabliodb-focus-ring))]',
+          'relative rounded-(--tabliodb-radius-md) border bg-white transition focus-within:border-[rgb(var(--tabliodb-primary))] focus-within:ring-4 focus-within:ring-[rgb(var(--tabliodb-focus-ring))]',
           ariaInvalid ? 'border-[rgb(var(--tabliodb-danger-border))]' : 'border-[rgb(var(--tabliodb-border-strong))]',
           disabled && 'bg-[rgb(var(--tabliodb-surface))] opacity-70',
           className,
