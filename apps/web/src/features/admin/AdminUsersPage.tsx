@@ -165,10 +165,6 @@ export function AdminUsersPage() {
     <div className="mx-auto grid w-full max-w-7xl gap-5 px-5 py-5">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="mb-2 inline-flex items-center gap-2 rounded-full border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-3 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
-            <UsersRound className="size-4" />
-            User directory
-          </p>
           <h2 className="text-2xl font-extrabold tracking-normal text-[rgb(var(--tabliodb-ink))]">Manage users</h2>
           <p className="mt-1 max-w-2xl text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
             Create teammates, assign workspace roles, and grant instance admin access.
