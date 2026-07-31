@@ -2025,7 +2025,10 @@ function ThreadCommentItem({
   renderReplyComposer: (comment: CommentResponseDto) => ReactNode;
 }) {
   const hasReplies = comment.replies.length > 0;
+  const [areRepliesExpanded, setAreRepliesExpanded] = useState(true);
   const inlineReplyComposer = renderReplyComposer(comment);
+  // Replies dibuka secara default agar thread lama tetap terasa familiar, tetapi cabang ramai bisa ditutup per comment.
+  const hasVisibleReplies = hasReplies && areRepliesExpanded;
   const avatarBottomClass = depth === 0 ? 'top-[44px]' : 'top-[40px]';
   const avatarCenterClass = depth === 0 ? 'left-[26px]' : 'left-[24px]';
   const replySpineIndentClass = depth === 0 ? 'ml-[26px]' : 'ml-[24px]';
@@ -2043,7 +2046,7 @@ function ThreadCommentItem({
       ) : null}
 
       <article className="group relative flex items-start gap-3 rounded-(--tabliodb-radius-md) px-2 py-2 transition hover:bg-[rgb(var(--tabliodb-surface))]">
-        {hasReplies ? (
+        {hasVisibleReplies ? (
           <span
             aria-hidden="true"
             className={cn(
@@ -2084,10 +2087,15 @@ function ThreadCommentItem({
             >
               Reply
             </button>
-            {comment.replyCount > 0 ? (
-              <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
-                {comment.replyCount} {comment.replyCount === 1 ? 'reply' : 'replies'}
-              </span>
+            {hasReplies ? (
+              <button
+                aria-expanded={areRepliesExpanded}
+                className="cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))] transition hover:bg-[rgb(var(--tabliodb-sky-soft))]"
+                onClick={() => setAreRepliesExpanded((isExpanded) => !isExpanded)}
+                type="button"
+              >
+                {areRepliesExpanded ? 'Hide replies' : `View ${formatCommentReplyCount(comment.replyCount)}`}
+              </button>
             ) : null}
           </div>
         </div>
@@ -2097,7 +2105,7 @@ function ThreadCommentItem({
         <div className={cn('pb-2 pr-2', inlineReplyIndentClass)}>{inlineReplyComposer}</div>
       ) : null}
 
-      {hasReplies ? (
+      {hasVisibleReplies ? (
         <div className={cn('relative -mt-1 pl-8.5', replySpineIndentClass)}>
           {/* The spine sits on the parent avatar centerline, while each elbow overlaps the child avatar edge so nested replies feel physically connected. */}
           <span
@@ -2120,6 +2128,10 @@ function ThreadCommentItem({
       ) : null}
     </div>
   );
+}
+
+function formatCommentReplyCount(replyCount: number): string {
+  return `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`;
 }
 
 function createCommentTree(comments: CommentResponseDto[]): ThreadCommentNode[] {
