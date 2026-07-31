@@ -6,39 +6,127 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ADD COLUMN IF NOT EXISTS body_json jsonb,
       ADD COLUMN IF NOT EXISTS body_text text;
 
-    UPDATE comments
-    SET
-      body_text = coalesce(body_text, body, ''),
-      body_json = coalesce(
-        body_json,
-        jsonb_build_object(
-          'root',
-          jsonb_build_object(
-            'children',
-            jsonb_build_array(
+    DO $$
+    DECLARE
+      has_legacy_body boolean;
+    BEGIN
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'comments'
+          AND column_name = 'body'
+      )
+      INTO has_legacy_body;
+
+      IF has_legacy_body THEN
+        EXECUTE $backfill$
+          UPDATE comments
+          SET
+            body_text = coalesce(body_text, body, ''),
+            body_json = coalesce(
+              body_json,
               jsonb_build_object(
-                'children',
-                CASE
-                  WHEN coalesce(body, '') = '' THEN '[]'::jsonb
-                  ELSE jsonb_build_array(
+                'root',
+                jsonb_build_object(
+                  'children',
+                  jsonb_build_array(
                     jsonb_build_object(
-                      'detail',
-                      0,
+                      'children',
+                      CASE
+                        WHEN coalesce(body_text, body, '') = '' THEN '[]'::jsonb
+                        ELSE jsonb_build_array(
+                          jsonb_build_object(
+                            'detail',
+                            0,
+                            'format',
+                            0,
+                            'mode',
+                            'normal',
+                            'style',
+                            '',
+                            'text',
+                            coalesce(body_text, body, ''),
+                            'type',
+                            'text',
+                            'version',
+                            1
+                          )
+                        )
+                      END,
+                      'direction',
+                      null,
                       'format',
-                      0,
-                      'mode',
-                      'normal',
-                      'style',
                       '',
-                      'text',
-                      body,
+                      'indent',
+                      0,
                       'type',
-                      'text',
+                      'paragraph',
                       'version',
                       1
                     )
+                  ),
+                  'direction',
+                  null,
+                  'format',
+                  '',
+                  'indent',
+                  0,
+                  'type',
+                  'root',
+                  'version',
+                  1
+                )
+              )
+            )
+          WHERE body_json IS NULL OR body_text IS NULL
+        $backfill$;
+      ELSE
+        UPDATE comments
+        SET
+          body_text = coalesce(body_text, ''),
+          body_json = coalesce(
+            body_json,
+            jsonb_build_object(
+              'root',
+              jsonb_build_object(
+                'children',
+                jsonb_build_array(
+                  jsonb_build_object(
+                    'children',
+                    CASE
+                      WHEN coalesce(body_text, '') = '' THEN '[]'::jsonb
+                      ELSE jsonb_build_array(
+                        jsonb_build_object(
+                          'detail',
+                          0,
+                          'format',
+                          0,
+                          'mode',
+                          'normal',
+                          'style',
+                          '',
+                          'text',
+                          coalesce(body_text, ''),
+                          'type',
+                          'text',
+                          'version',
+                          1
+                        )
+                      )
+                    END,
+                    'direction',
+                    null,
+                    'format',
+                    '',
+                    'indent',
+                    0,
+                    'type',
+                    'paragraph',
+                    'version',
+                    1
                   )
-                END,
+                ),
                 'direction',
                 null,
                 'format',
@@ -46,25 +134,15 @@ export async function up(db: Kysely<unknown>): Promise<void> {
                 'indent',
                 0,
                 'type',
-                'paragraph',
+                'root',
                 'version',
                 1
               )
-            ),
-            'direction',
-            null,
-            'format',
-            '',
-            'indent',
-            0,
-            'type',
-            'root',
-            'version',
-            1
+            )
           )
-        )
-      )
-    WHERE body_json IS NULL OR body_text IS NULL;
+        WHERE body_json IS NULL OR body_text IS NULL;
+      END IF;
+    END $$;
 
     ALTER TABLE comments
       ALTER COLUMN body_json SET NOT NULL,
