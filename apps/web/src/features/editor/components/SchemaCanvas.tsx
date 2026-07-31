@@ -422,7 +422,7 @@ export function SchemaCanvas({
                 />
               </svg>
               <span
-                className="mt-4 max-w-[140px] truncate rounded-full border-2 border-white px-2.5 py-1 text-[11px] font-extrabold leading-none text-white shadow-[0_2px_0_rgba(15,23,42,0.18)]"
+                className="mt-4 max-w-35 truncate rounded-full border-2 border-white px-2.5 py-1 text-[11px] font-extrabold leading-none text-white shadow-[0_2px_0_rgba(15,23,42,0.18)]"
                 style={{ backgroundColor: cursor.user.cursorColor }}
               >
                 {cursor.user.name}
