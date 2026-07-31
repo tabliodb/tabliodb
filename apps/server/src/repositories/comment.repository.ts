@@ -126,6 +126,64 @@ export class CommentRepository {
       .executeTakeFirst();
   }
 
+  getCommentWithThread(commentId: string) {
+    return this.db
+      .selectFrom('comments')
+      .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
+      .select([
+        'comments.id',
+        'comments.threadId',
+        'comments.parentCommentId',
+        'comments.createdById',
+        'comments.deletedAt',
+        'comment_threads.diagramId',
+      ])
+      .where('comments.id', '=', commentId)
+      .where('comments.deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  updateComment(options: { bodyJson: JsonValue; bodyText: string; commentId: string; mentionUserIds: string[] }) {
+    return this.db.transaction().execute(async (tx) => {
+      const now = new Date();
+      const comment = await tx
+        .updateTable('comments')
+        .set({
+          bodyJson: options.bodyJson,
+          bodyText: options.bodyText,
+          editedAt: now,
+          updatedAt: now,
+        })
+        .where('id', '=', options.commentId)
+        .where('deletedAt', 'is', null)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      // Mentions are derived from the current sanitized body; replacing rows prevents stale notifications/inbox state.
+      await tx.deleteFrom('comment_mentions').where('commentId', '=', options.commentId).execute();
+
+      if (options.mentionUserIds.length > 0) {
+        await tx
+          .insertInto('comment_mentions')
+          .values(options.mentionUserIds.map((mentionedUserId) => ({ commentId: comment.id, mentionedUserId })))
+          .onConflict((conflict) => conflict.columns(['commentId', 'mentionedUserId']).doNothing())
+          .execute();
+      }
+
+      const replyCountRow = await tx
+        .selectFrom('comments')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('parentCommentId', '=', comment.id)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirstOrThrow();
+
+      return {
+        ...comment,
+        replyCount: Number(replyCountRow.count),
+      };
+    });
+  }
+
   getMentionableUsersForDiagram(diagramId: string) {
     return this.db
       .selectFrom('diagrams')

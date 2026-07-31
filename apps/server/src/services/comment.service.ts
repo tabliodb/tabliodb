@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Selectable } from 'kysely';
 import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
-import { CommentReplyCreateDto, CommentThreadCreateDto, CommentThreadListQueryDto } from '../dtos/comment.dto.js';
+import {
+  CommentReplyCreateDto,
+  CommentThreadCreateDto,
+  CommentThreadListQueryDto,
+  CommentUpdateDto,
+} from '../dtos/comment.dto.js';
 import { CommentRepository } from '../repositories/comment.repository.js';
 import type { CommentThreadTable, JsonValue } from '../schema/index.js';
 import {
@@ -150,6 +155,47 @@ export class CommentService {
         threadId: result.comment.threadId,
         updatedAt: toIsoDateTime(result.comment.updatedAt),
       },
+    };
+  }
+
+  async updateComment(auth: AuthContext, commentId: string, dto: CommentUpdateDto) {
+    const comment = await this.commentRepository.getCommentWithThread(commentId);
+
+    if (!comment) {
+      throw new NotFoundException('Comment was not found.');
+    }
+
+    await this.diagramService.requireDiagram(auth, comment.diagramId, Permission.DiagramComment);
+
+    if (comment.createdById !== auth.user.id) {
+      throw new ForbiddenException('Only the comment author can edit this comment.');
+    }
+
+    const normalizedBody = normalizeCommentLexicalBody(dto.bodyJson);
+    const mentionUserIds = await this.resolveMentionUserIds(comment.diagramId, normalizedBody, auth.user.id);
+    const updatedComment = await this.commentRepository.updateComment({
+      bodyJson: normalizedBody.bodyJson,
+      bodyText: normalizedBody.bodyText,
+      commentId: comment.id,
+      mentionUserIds,
+    });
+
+    return {
+      author: this.serializeAuthor(auth.user),
+      body: updatedComment.bodyText,
+      bodyFormat: updatedComment.bodyFormat,
+      bodyJson: this.serializeCommentBodyJson(updatedComment.bodyJson),
+      bodyText: updatedComment.bodyText,
+      createdAt: toIsoDateTime(updatedComment.createdAt),
+      createdById: updatedComment.createdById,
+      deletedAt: null,
+      editedAt: toNullableIsoDateTime(updatedComment.editedAt),
+      id: updatedComment.id,
+      mentionedUserIds: mentionUserIds,
+      parentCommentId: updatedComment.parentCommentId,
+      replyCount: updatedComment.replyCount,
+      threadId: updatedComment.threadId,
+      updatedAt: toIsoDateTime(updatedComment.updatedAt),
     };
   }
 

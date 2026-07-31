@@ -73,6 +73,12 @@ const CommentReplyCreateSchema = z
   })
   .meta({ id: 'CommentReplyCreateDto' });
 
+const CommentUpdateSchema = z
+  .object({
+    bodyJson: CommentLexicalDocumentSchema,
+  })
+  .meta({ id: 'CommentUpdateDto' });
+
 const CommentThreadResponseSchema = z
   .object({
     thread: CommentThreadSchema,
@@ -134,3 +140,4 @@ export class CommentThreadListQueryDto extends createZodDto(CommentThreadListQue
 export class CommentThreadListResponseDto extends createZodDto(CommentThreadListResponseSchema) {}
 export class CommentThreadResponseDto extends createZodDto(CommentThreadResponseSchema) {}
 export class CommentThreadStatusResponseDto extends createZodDto(CommentThreadStatusResponseSchema) {}
+export class CommentUpdateDto extends createZodDto(CommentUpdateSchema) {}

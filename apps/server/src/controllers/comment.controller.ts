@@ -6,12 +6,14 @@ import type { AuthContext } from '../database.js';
 import {
   CommentListResponseDto,
   CommentReplyCreateDto,
+  CommentResponseDto,
   CommentThreadCreateDto,
   CommentThreadReadStateDto,
   CommentThreadListQueryDto,
   CommentThreadListResponseDto,
   CommentThreadResponseDto,
   CommentThreadStatusResponseDto,
+  CommentUpdateDto,
 } from '../dtos/comment.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
@@ -67,6 +69,15 @@ export class CommentController {
   @ZodResponse({ status: HttpStatus.CREATED, type: CommentThreadResponseDto })
   replyToThread(@Auth() auth: AuthContext, @Param('threadId') threadId: string, @Body() dto: CommentReplyCreateDto) {
     return this.service.replyToThread(auth, threadId, dto);
+  }
+
+  @Patch('comments/:commentId')
+  @ApiParam({ name: 'commentId', type: String })
+  @ApiBody({ type: CommentUpdateDto })
+  @ApiOperation({ operationId: 'updateComment' })
+  @ZodResponse({ type: CommentResponseDto })
+  updateComment(@Auth() auth: AuthContext, @Param('commentId') commentId: string, @Body() dto: CommentUpdateDto) {
+    return this.service.updateComment(auth, commentId, dto);
   }
 
   @Get('threads/:threadId/read-state')

@@ -48,6 +48,7 @@ describe(CommentService.name, () => {
     createCommentReply: vi.fn(),
     createThreadWithComment: vi.fn(),
     getCommentInThread: vi.fn(),
+    getCommentWithThread: vi.fn(),
     getComments: vi.fn(),
     getMentionableUsersForDiagram: vi.fn(),
     getThreadReadState: vi.fn(),
@@ -56,6 +57,7 @@ describe(CommentService.name, () => {
     markThreadRead: vi.fn(),
     resolveThread: vi.fn(),
     unresolveThread: vi.fn(),
+    updateComment: vi.fn(),
   };
   const diagramService = {
     requireDiagram: vi.fn(),
@@ -130,6 +132,61 @@ describe(CommentService.name, () => {
     );
 
     expect(commentRepository.createCommentReply).not.toHaveBeenCalled();
+  });
+
+  it('updates an author-owned comment after diagram comment permission passes', async () => {
+    commentRepository.getCommentWithThread.mockResolvedValue({
+      createdById: 'user-id',
+      deletedAt: null,
+      diagramId: 'diagram-id',
+      id: 'comment-id',
+      parentCommentId: null,
+      threadId: 'thread-id',
+    });
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.updateComment.mockResolvedValue({
+      ...comment,
+      bodyJson: createPlainTextCommentLexicalDocument('Updated comment body.'),
+      bodyText: 'Updated comment body.',
+      editedAt: new Date('2026-07-30T08:08:00.000Z'),
+      replyCount: 2,
+      updatedAt: new Date('2026-07-30T08:08:00.000Z'),
+    });
+
+    await expect(
+      service.updateComment(auth, 'comment-id', { bodyJson: commentBody('Updated comment body.') }),
+    ).resolves.toMatchObject({
+      body: 'Updated comment body.',
+      editedAt: '2026-07-30T08:08:00.000Z',
+      id: 'comment-id',
+      replyCount: 2,
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramComment);
+    expect(commentRepository.updateComment).toHaveBeenCalledWith({
+      bodyJson: createPlainTextCommentLexicalDocument('Updated comment body.'),
+      bodyText: 'Updated comment body.',
+      commentId: 'comment-id',
+      mentionUserIds: [],
+    });
+  });
+
+  it('rejects comment edits from users other than the author', async () => {
+    commentRepository.getCommentWithThread.mockResolvedValue({
+      createdById: 'other-user-id',
+      deletedAt: null,
+      diagramId: 'diagram-id',
+      id: 'comment-id',
+      parentCommentId: null,
+      threadId: 'thread-id',
+    });
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+
+    await expect(
+      service.updateComment(auth, 'comment-id', { bodyJson: commentBody('Not mine.') }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(commentRepository.updateComment).not.toHaveBeenCalled();
   });
 
   it('strips unknown Lexical nodes and stores server-derived plain text', async () => {

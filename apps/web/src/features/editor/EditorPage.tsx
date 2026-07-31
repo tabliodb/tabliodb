@@ -160,6 +160,7 @@ import {
   useReplyToCommentThreadMutation,
   useResolveCommentThreadMutation,
   useUnresolveCommentThreadMutation,
+  useUpdateCommentMutation,
 } from '@/resources/comments';
 import { snapshotsQueries, useCreateSnapshotMutation } from '@/resources/snapshots';
 import {
@@ -522,30 +523,27 @@ export function EditorPage() {
     [publishAwareness],
   );
 
-  const handleCommentMarkerOpen = useCallback(
-    (target: EditorCommentTarget) => {
-      if (!modelRef.current) {
-        return;
-      }
+  const handleCommentMarkerOpen = useCallback((target: EditorCommentTarget) => {
+    if (!modelRef.current) {
+      return;
+    }
 
-      const tableId = getCommentTargetTableId(modelRef.current, target);
+    const tableId = getCommentTargetTableId(modelRef.current, target);
 
-      if (tableId) {
-        setSelectedTableId(tableId);
-        setLeftSidebarOpen(true);
-      }
+    if (tableId) {
+      setSelectedTableId(tableId);
+      setLeftSidebarOpen(true);
+    }
 
-      setSelectedCommentTarget(target);
-      setCommentsOpen(true);
-      // Request id membuat dialog bisa membedakan klik marker berulang pada target yang sama.
-      commentThreadOpenRequestIdRef.current += 1;
-      setCommentThreadOpenRequest({
-        requestId: commentThreadOpenRequestIdRef.current,
-        target,
-      });
-    },
-    [],
-  );
+    setSelectedCommentTarget(target);
+    setCommentsOpen(true);
+    // Request id membuat dialog bisa membedakan klik marker berulang pada target yang sama.
+    commentThreadOpenRequestIdRef.current += 1;
+    setCommentThreadOpenRequest({
+      requestId: commentThreadOpenRequestIdRef.current,
+      target,
+    });
+  }, []);
 
   useEffect(() => {
     if (!activeDiagram || !currentUser) {
@@ -1379,6 +1377,7 @@ function CommentsDialog({
   selectedTableId: string | null;
 }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [editingComment, setEditingComment] = useState<CommentResponseDto | null>(null);
   const [replyParentComment, setReplyParentComment] = useState<CommentResponseDto | null>(null);
   const [typingTick, setTypingTick] = useState(0);
   const typingStopTimeoutRef = useRef<number | null>(null);
@@ -1390,6 +1389,11 @@ function CommentsDialog({
     resolver: zodResolver(commentFormSchema),
   });
   const replyForm = useForm<CommentFormState>({
+    defaultValues: createEmptyCommentFormBody(),
+    mode: 'onBlur',
+    resolver: zodResolver(commentFormSchema),
+  });
+  const editForm = useForm<CommentFormState>({
     defaultValues: createEmptyCommentFormBody(),
     mode: 'onBlur',
     resolver: zodResolver(commentFormSchema),
@@ -1440,11 +1444,13 @@ function CommentsDialog({
   const resolveThreadMutation = useResolveCommentThreadMutation();
   const unresolveThreadMutation = useUnresolveCommentThreadMutation();
   const markThreadReadMutation = useMarkCommentThreadReadMutation();
+  const updateCommentMutation = useUpdateCommentMutation();
   const isMutationPending =
     createThreadMutation.isPending ||
     replyMutation.isPending ||
     resolveThreadMutation.isPending ||
-    unresolveThreadMutation.isPending;
+    unresolveThreadMutation.isPending ||
+    updateCommentMutation.isPending;
 
   useEffect(() => {
     if (!open) {
@@ -1527,9 +1533,11 @@ function CommentsDialog({
   useEffect(() => {
     // Parent reply selalu scoped ke thread aktif; pindah thread menghapus quote preview agar payload tidak mengarah ke thread lama.
     stopCommentTyping();
+    setEditingComment(null);
     setReplyParentComment(null);
+    editForm.reset(createEmptyCommentFormBody());
     replyForm.reset(createEmptyCommentFormBody());
-  }, [activeThreadId, replyForm]);
+  }, [activeThreadId, editForm, replyForm]);
 
   useEffect(() => {
     return () => {
@@ -1546,13 +1554,16 @@ function CommentsDialog({
 
     if (!nextOpen) {
       createForm.reset(createEmptyCommentFormBody());
+      editForm.reset(createEmptyCommentFormBody());
       replyForm.reset(createEmptyCommentFormBody());
+      setEditingComment(null);
       setReplyParentComment(null);
       stopCommentTyping();
       createThreadMutation.reset();
       replyMutation.reset();
       resolveThreadMutation.reset();
       unresolveThreadMutation.reset();
+      updateCommentMutation.reset();
     }
   }
 
@@ -1607,6 +1618,9 @@ function CommentsDialog({
       return;
     }
 
+    setEditingComment(null);
+    editForm.reset(createEmptyCommentFormBody());
+
     if (replyParentComment?.id !== comment.id) {
       replyForm.reset(createEmptyCommentFormBody());
       replyMutation.reset();
@@ -1614,6 +1628,50 @@ function CommentsDialog({
 
     stopCommentTyping();
     setReplyParentComment(comment);
+  }
+
+  function handleEditTargetSelect(comment: CommentResponseDto) {
+    if (!canComment || comment.deletedAt || comment.createdById !== currentUserId) {
+      return;
+    }
+
+    stopCommentTyping();
+    setReplyParentComment(null);
+    replyForm.reset(createEmptyCommentFormBody());
+    replyMutation.reset();
+    updateCommentMutation.reset();
+    editForm.reset({
+      body: comment.body,
+      bodyJson: comment.bodyJson,
+    });
+    setEditingComment(comment);
+  }
+
+  function handleEditCancel() {
+    editForm.reset(createEmptyCommentFormBody());
+    updateCommentMutation.reset();
+    setEditingComment(null);
+  }
+
+  function handleEditComment(values: CommentFormState) {
+    if (!canComment || !editingComment) {
+      return;
+    }
+
+    updateCommentMutation.mutate(
+      {
+        body: {
+          bodyJson: values.bodyJson,
+        },
+        commentId: editingComment.id,
+      },
+      {
+        onSuccess: () => {
+          editForm.reset(createEmptyCommentFormBody());
+          setEditingComment(null);
+        },
+      },
+    );
   }
 
   function handleInlineReplyCancel() {
@@ -1782,6 +1840,75 @@ function CommentsDialog({
               <MessageSquareText className="size-4" />
             )}
             Reply
+          </Button>
+        </div>
+      </form>
+    );
+  }
+
+  function renderInlineEditComposer(comment: CommentResponseDto): ReactNode {
+    if (editingComment?.id !== comment.id) {
+      return null;
+    }
+
+    return (
+      <form
+        className="mt-2 rounded-(--tabliodb-radius-md) border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-2"
+        onSubmit={editForm.handleSubmit(handleEditComment)}
+      >
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0 text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))]">Editing comment</div>
+          <button
+            className="shrink-0 cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))] hover:bg-white/70"
+            onClick={handleEditCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
+        <Controller
+          control={editForm.control}
+          name="body"
+          render={({ field }) => (
+            <Suspense
+              fallback={
+                <CommentComposerFallback
+                  density="compact"
+                  invalid={Boolean(editForm.formState.errors.body)}
+                  placeholder="Update your comment"
+                />
+              }
+            >
+              <CommentComposer
+                aria-invalid={Boolean(editForm.formState.errors.body)}
+                density="compact"
+                disabled={updateCommentMutation.isPending}
+                mentionUsers={mentionUsers}
+                onBlur={field.onBlur}
+                onChange={(value, bodyJson) => {
+                  field.onChange(value);
+                  editForm.setValue('bodyJson', bodyJson, { shouldDirty: true });
+                }}
+                placeholder="Update your comment"
+                value={field.value}
+              />
+            </Suspense>
+          )}
+        />
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-h-5">
+            <FieldError>{editForm.formState.errors.body?.message}</FieldError>
+            {updateCommentMutation.error ? (
+              <FieldError>{getErrorMessage(updateCommentMutation.error)}</FieldError>
+            ) : null}
+          </div>
+          <Button disabled={updateCommentMutation.isPending} size="sm" type="submit">
+            {updateCommentMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Check className="size-4" />
+            )}
+            Save edit
           </Button>
         </div>
       </form>
@@ -2016,9 +2143,12 @@ function CommentsDialog({
                       <ThreadCommentItem
                         canComment={canComment}
                         comment={comment}
+                        currentUserId={currentUserId}
                         depth={0}
                         key={comment.id}
+                        onEdit={handleEditTargetSelect}
                         onReply={handleReplyTargetSelect}
+                        renderEditComposer={renderInlineEditComposer}
                         renderReplyComposer={renderInlineReplyComposer}
                       />
                     ))}
@@ -2089,19 +2219,27 @@ type ThreadCommentNode = CommentResponseDto & {
 function ThreadCommentItem({
   canComment,
   comment,
+  currentUserId,
   depth,
+  onEdit,
   onReply,
+  renderEditComposer,
   renderReplyComposer,
 }: {
   canComment: boolean;
   comment: ThreadCommentNode;
+  currentUserId: string;
   depth: number;
+  onEdit: (comment: CommentResponseDto) => void;
   onReply: (comment: CommentResponseDto) => void;
+  renderEditComposer: (comment: CommentResponseDto) => ReactNode;
   renderReplyComposer: (comment: CommentResponseDto) => ReactNode;
 }) {
   const hasReplies = comment.replies.length > 0;
   const isDeleted = Boolean(comment.deletedAt);
   const [areRepliesExpanded, setAreRepliesExpanded] = useState(true);
+  const canEdit = canComment && !isDeleted && comment.createdById === currentUserId;
+  const inlineEditComposer = isDeleted ? null : renderEditComposer(comment);
   const inlineReplyComposer = isDeleted ? null : renderReplyComposer(comment);
   // Replies dibuka secara default agar thread lama tetap terasa familiar, tetapi cabang ramai bisa ditutup per comment.
   const hasVisibleReplies = hasReplies && areRepliesExpanded;
@@ -2163,42 +2301,60 @@ function ThreadCommentItem({
             <span className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
               {formatDateTime(comment.createdAt)}
             </span>
+            {!isDeleted && comment.editedAt ? (
+              <span className="text-[11px] font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">edited</span>
+            ) : null}
           </div>
-          <p
-            className={cn(
-              'mt-1 whitespace-pre-wrap wrap-break-word text-[13px] font-semibold leading-6',
-              isDeleted ? 'italic text-[rgb(var(--tabliodb-ink-muted))]' : 'text-[rgb(var(--tabliodb-ink))]',
-            )}
-          >
-            {isDeleted ? 'This comment was deleted.' : comment.body}
-          </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-3">
-            {!isDeleted ? (
-              <button
+          {inlineEditComposer ? (
+            inlineEditComposer
+          ) : (
+            <>
+              <p
                 className={cn(
-                  'rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] transition',
-                  canComment
-                    ? 'cursor-pointer hover:bg-[rgb(var(--tabliodb-primary-soft))] hover:text-[rgb(var(--tabliodb-primary-text))]'
-                    : 'cursor-not-allowed opacity-60',
+                  'mt-1 whitespace-pre-wrap wrap-break-word text-[13px] font-semibold leading-6',
+                  isDeleted ? 'italic text-[rgb(var(--tabliodb-ink-muted))]' : 'text-[rgb(var(--tabliodb-ink))]',
                 )}
-                disabled={!canComment}
-                onClick={() => onReply(comment)}
-                type="button"
               >
-                Reply
-              </button>
-            ) : null}
-            {hasReplies ? (
-              <button
-                aria-expanded={areRepliesExpanded}
-                className="cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))] transition hover:bg-[rgb(var(--tabliodb-sky-soft))]"
-                onClick={() => setAreRepliesExpanded((isExpanded) => !isExpanded)}
-                type="button"
-              >
-                {areRepliesExpanded ? 'Hide replies' : `View ${formatCommentReplyCount(comment.replyCount)}`}
-              </button>
-            ) : null}
-          </div>
+                {isDeleted ? 'This comment was deleted.' : comment.body}
+              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                {!isDeleted ? (
+                  <button
+                    className={cn(
+                      'rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] transition',
+                      canComment
+                        ? 'cursor-pointer hover:bg-[rgb(var(--tabliodb-primary-soft))] hover:text-[rgb(var(--tabliodb-primary-text))]'
+                        : 'cursor-not-allowed opacity-60',
+                    )}
+                    disabled={!canComment}
+                    onClick={() => onReply(comment)}
+                    type="button"
+                  >
+                    Reply
+                  </button>
+                ) : null}
+                {canEdit ? (
+                  <button
+                    className="cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-sky-soft))] hover:text-[rgb(var(--tabliodb-sky-text))]"
+                    onClick={() => onEdit(comment)}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                {hasReplies ? (
+                  <button
+                    aria-expanded={areRepliesExpanded}
+                    className="cursor-pointer rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))] transition hover:bg-[rgb(var(--tabliodb-sky-soft))]"
+                    onClick={() => setAreRepliesExpanded((isExpanded) => !isExpanded)}
+                    type="button"
+                  >
+                    {areRepliesExpanded ? 'Hide replies' : `View ${formatCommentReplyCount(comment.replyCount)}`}
+                  </button>
+                ) : null}
+              </div>
+            </>
+          )}
         </div>
       </article>
 
@@ -2218,9 +2374,12 @@ function ThreadCommentItem({
               <ThreadCommentItem
                 canComment={canComment}
                 comment={reply}
+                currentUserId={currentUserId}
                 depth={depth + 1}
                 key={reply.id}
+                onEdit={onEdit}
                 onReply={onReply}
+                renderEditComposer={renderEditComposer}
                 renderReplyComposer={renderReplyComposer}
               />
             ))}
@@ -2518,9 +2677,7 @@ function findCommentThreadForTarget(
   threads: CommentThreadListItemDto[],
   target: CommentTargetReference,
 ): CommentThreadListItemDto | null {
-  const openExactThread = threads.find(
-    (thread) => thread.status === 'open' && isExactCommentTarget(thread, target),
-  );
+  const openExactThread = threads.find((thread) => thread.status === 'open' && isExactCommentTarget(thread, target));
 
   if (openExactThread) {
     return openExactThread;

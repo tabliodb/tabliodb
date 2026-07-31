@@ -3,6 +3,7 @@ import type { RequestOpts } from '@oazapfts/runtime';
 import type {
   CommentReplyCreateDto as GeneratedCommentReplyCreateDto,
   CommentThreadCreateDto as GeneratedCommentThreadCreateDto,
+  CommentUpdateDto as GeneratedCommentUpdateDto,
 } from '../fetch-client.js';
 import {
   createCommentThread as createCommentThreadRequest,
@@ -13,6 +14,7 @@ import {
   replyToCommentThread,
   resolveCommentThread,
   unresolveCommentThread,
+  updateComment as updateCommentRequest,
 } from '../fetch-client.js';
 
 export type CommentTargetType =
@@ -92,6 +94,10 @@ export type CommentReplyCreateDto = {
   parentCommentId?: string | null;
 };
 
+export type CommentUpdateDto = {
+  bodyJson: CommentLexicalDocumentDto;
+};
+
 export type CommentResponseDto = {
   author: CommentAuthorDto;
   body: string;
@@ -158,6 +164,7 @@ export type CommentsResource = {
   replyToThread: (threadId: string, body: CommentReplyCreateDto) => Promise<CommentThreadResponseDto>;
   resolveThread: (threadId: string) => Promise<CommentThreadDto>;
   unresolveThread: (threadId: string) => Promise<CommentThreadDto>;
+  updateComment: (commentId: string, body: CommentUpdateDto) => Promise<CommentResponseDto>;
 };
 
 export function createCommentsResource(opts?: RequestOpts): CommentsResource {
@@ -186,5 +193,10 @@ export function createCommentsResource(opts?: RequestOpts): CommentsResource {
       resolveCommentThread({ threadId }, opts) as unknown as Promise<CommentThreadDto>,
     unresolveThread: (threadId: string) =>
       unresolveCommentThread({ threadId }, opts) as unknown as Promise<CommentThreadDto>,
+    updateComment: (commentId: string, body: CommentUpdateDto) =>
+      updateCommentRequest(
+        { commentId, commentUpdateDto: body as unknown as GeneratedCommentUpdateDto },
+        opts,
+      ) as unknown as Promise<CommentResponseDto>,
   };
 }

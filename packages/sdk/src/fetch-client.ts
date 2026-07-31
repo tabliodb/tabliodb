@@ -163,6 +163,9 @@ export type CommentReplyCreateDto = {
   bodyJson: CommentLexicalDocumentDto;
   parentCommentId?: string | null;
 };
+export type CommentUpdateDto = {
+  bodyJson: CommentLexicalDocumentDto;
+};
 export type CommentThreadReadStateDtoOutput = {
   lastReadAt: string | null;
   lastReadCommentId: string | null;
@@ -1269,6 +1272,30 @@ export function replyToCommentThread(
         ...opts,
         method: 'POST',
         body: commentReplyCreateDto,
+      }),
+    ),
+  );
+}
+export function updateComment(
+  {
+    commentId,
+    commentUpdateDto,
+  }: {
+    commentId: string;
+    commentUpdateDto: CommentUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentResponseDtoOutput;
+    }>(
+      `/comments/comments/${encodeURIComponent(commentId)}`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: commentUpdateDto,
       }),
     ),
   );

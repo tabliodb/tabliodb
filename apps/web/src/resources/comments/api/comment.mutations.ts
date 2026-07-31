@@ -1,10 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import type {
   CommentReplyCreateDto,
+  CommentResponseDto,
   CommentThreadCreateDto,
   CommentThreadDto,
   CommentThreadReadStateDto,
   CommentThreadResponseDto,
+  CommentUpdateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
@@ -17,6 +19,10 @@ const replyToCommentThreadMutationFn = (variables: {
   body: CommentReplyCreateDto;
   threadId: string;
 }): Promise<CommentThreadResponseDto> => sdk.comments.replyToThread(variables.threadId, variables.body);
+const updateCommentMutationFn = (variables: {
+  body: CommentUpdateDto;
+  commentId: string;
+}): Promise<CommentResponseDto> => sdk.comments.updateComment(variables.commentId, variables.body);
 const resolveCommentThreadMutationFn = (threadId: string): Promise<CommentThreadDto> =>
   sdk.comments.resolveThread(threadId);
 const unresolveCommentThreadMutationFn = (threadId: string): Promise<CommentThreadDto> =>
@@ -56,6 +62,22 @@ export function useReplyToCommentThreadMutation(params: UseReplyToCommentThreadM
     onSuccess: (data, variables, onMutateResult, context) => {
       // Reply bisa reopen thread resolved, jadi thread list dan comment list thread perlu disegarkan bersama.
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
+      queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+type UseUpdateCommentMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateCommentMutationFn>;
+};
+
+export function useUpdateCommentMutation(params: UseUpdateCommentMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateCommentMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Edited comments keep the same thread but change the visible comment tree and mention metadata.
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
