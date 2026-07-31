@@ -1733,6 +1733,17 @@ function CommentsDialog({
             Cancel
           </button>
         </div>
+        <div className="mb-2 flex gap-2 rounded-(--tabliodb-radius-sm) border border-[rgb(var(--tabliodb-sky-border))] bg-white/75 px-2.5 py-2">
+          <MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-[rgb(var(--tabliodb-sky-text))]" />
+          <div className="min-w-0">
+            <div className="truncate text-[11px] font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
+              {comment.author.name}
+            </div>
+            <p className="line-clamp-2 whitespace-pre-wrap wrap-break-word text-xs font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+              {getCommentQuotePreview(comment)}
+            </p>
+          </div>
+        </div>
         <Controller
           control={replyForm.control}
           name="body"
@@ -2196,6 +2207,11 @@ function ThreadCommentItem({
 
 function formatCommentReplyCount(replyCount: number): string {
   return `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`;
+}
+
+function getCommentQuotePreview(comment: CommentResponseDto): string {
+  // Quote preview memakai plain text hasil sanitasi server; rendering rich Lexical JSON akan ditambahkan sebagai tahap aman terpisah.
+  return comment.body.trim() || 'No preview available.';
 }
 
 function createCommentTree(comments: CommentResponseDto[]): ThreadCommentNode[] {
