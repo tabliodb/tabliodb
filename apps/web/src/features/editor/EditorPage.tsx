@@ -385,16 +385,16 @@ export function EditorPage() {
     reviewSignalQueries.listByDiagram(activeDiagram?.id ?? '', reviewSignalPageQuery),
   );
   const reviewSignalSettingsQuery = useQuery(reviewSignalQueries.diagramSettings(activeDiagram?.id ?? ''));
-  const commentThreadsQueryOptions = commentQueries.listThreads(activeDiagram?.id ?? '', commentThreadPageQuery);
-  const commentThreadsQuery = useQuery({
-    ...commentThreadsQueryOptions,
-    // Marker canvas/inspector membutuhkan ringkasan thread sejak editor terbuka; dialog memakai query key yang sama sehingga cache tetap menyatu.
-    enabled: Boolean(activeDiagram) && commentThreadsQueryOptions.enabled !== false,
+  const commentSummaryQueryOptions = commentQueries.diagramSummary(activeDiagram?.id ?? '');
+  const commentSummaryQuery = useQuery({
+    ...commentSummaryQueryOptions,
+    // Canvas dan toolbar cukup memakai agregasi target; thread list lengkap baru dimuat ketika dialog komentar dibuka.
+    enabled: Boolean(activeDiagram) && commentSummaryQueryOptions.enabled !== false,
   });
 
   const latestSnapshot = snapshotsQuery.data?.[0] ?? null;
-  const commentThreads = commentThreadsQuery.data?.items ?? [];
-  const openCommentThreadCount = commentThreads.filter((thread) => thread.status === 'open').length;
+  const commentTargetSummaries = commentSummaryQuery.data?.targets ?? [];
+  const openCommentThreadCount = commentSummaryQuery.data?.openCount ?? 0;
   const persistedReviewSignals = useMemo(() => {
     if (!model || !isCurrentDraftPersisted(model)) {
       return null;
@@ -1265,7 +1265,7 @@ export function EditorPage() {
 
         <section className="flex min-h-0 min-w-0">
           <SchemaCanvas
-            commentThreads={commentThreads}
+            commentTargetSummaries={commentTargetSummaries}
             fitKey={activeDiagram?.id ?? 'empty'}
             fitSignal={fitSignal}
             model={model}
@@ -1283,7 +1283,7 @@ export function EditorPage() {
           <SchemaInspector
             // Tombol ignore hanya aktif untuk signal server-backed; draft lokal tetap menampilkan lint langsung supaya user tidak bisa ignore state yang belum tersimpan.
             canIgnoreReviewSignals={canEditDiagram && persistedReviewSignals !== null}
-            commentThreads={commentThreads}
+            commentTargetSummaries={commentTargetSummaries}
             isIgnoringReviewSignal={ignoreReviewSignalMutation.isPending}
             latestSnapshotVersion={latestSnapshot?.version ?? 0}
             model={model}

@@ -429,6 +429,48 @@
         ]
       }
     },
+    "/comments/diagram/{diagramId}/summary": {
+      "get": {
+        "operationId": "getCommentDiagramSummary",
+        "parameters": [
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDiagramSummaryDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
     "/comments/diagram/{diagramId}/threads": {
       "get": {
         "operationId": "getCommentThreads",
@@ -3487,6 +3529,117 @@
         "required": [
           "thread",
           "comment"
+        ],
+        "additionalProperties": false
+      },
+      "CommentThreadTargetSummaryDto_Output": {
+        "type": "object",
+        "properties": {
+          "openCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "resolvedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "targetId": {
+            "type": "string",
+            "nullable": true
+          },
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "diagram",
+              "table",
+              "column",
+              "relationship",
+              "index",
+              "enum",
+              "check",
+              "note",
+              "group"
+            ]
+          },
+          "totalCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "nullable": true
+          }
+        },
+        "required": [
+          "openCount",
+          "resolvedCount",
+          "targetId",
+          "targetType",
+          "totalCount",
+          "unreadCount",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CommentDiagramSummaryDto_Output": {
+        "type": "object",
+        "properties": {
+          "diagramId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "openCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "resolvedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommentThreadTargetSummaryDto_Output"
+            }
+          },
+          "totalCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "nullable": true
+          }
+        },
+        "required": [
+          "diagramId",
+          "openCount",
+          "resolvedCount",
+          "targets",
+          "totalCount",
+          "unreadCount",
+          "updatedAt"
         ],
         "additionalProperties": false
       },

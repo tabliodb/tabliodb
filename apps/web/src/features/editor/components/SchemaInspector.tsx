@@ -18,7 +18,7 @@ import {
   type DiagramReviewSignal,
   type ReferentialAction,
 } from '@tabliodb/schema-core';
-import type { CommentThreadListItemDto } from '@tabliodb/sdk';
+import type { CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
 import {
   Badge,
   Button,
@@ -241,7 +241,7 @@ export type SchemaInspectorCommentTarget = {
 
 export type SchemaInspectorProps = {
   className?: string;
-  commentThreads?: CommentThreadListItemDto[];
+  commentTargetSummaries?: CommentThreadTargetSummaryDto[];
   latestSnapshotVersion: number;
   model: DiagramModel;
   canIgnoreReviewSignals?: boolean;
@@ -259,7 +259,7 @@ export type SchemaInspectorProps = {
 
 export function SchemaInspector({
   className,
-  commentThreads = [],
+  commentTargetSummaries = [],
   latestSnapshotVersion,
   model,
   canIgnoreReviewSignals = false,
@@ -301,8 +301,8 @@ export function SchemaInspector({
     [model, reviewSettings, serverReviewSignals],
   );
   const commentMarkerSummary = useMemo(
-    () => createCommentMarkerSummary(model, commentThreads),
-    [commentThreads, model],
+    () => createCommentMarkerSummary(model, commentTargetSummaries),
+    [commentTargetSummaries, model],
   );
 
   useEffect(() => {

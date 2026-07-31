@@ -136,6 +136,24 @@ export type CommentThreadResponseDtoOutput = {
   };
   comment: CommentResponseDtoOutput;
 };
+export type CommentThreadTargetSummaryDtoOutput = {
+  openCount: number;
+  resolvedCount: number;
+  targetId: string | null;
+  targetType: TargetType;
+  totalCount: number;
+  unreadCount: number;
+  updatedAt: string | null;
+};
+export type CommentDiagramSummaryDtoOutput = {
+  diagramId: string;
+  openCount: number;
+  resolvedCount: number;
+  targets: CommentThreadTargetSummaryDtoOutput[];
+  totalCount: number;
+  unreadCount: number;
+  updatedAt: string | null;
+};
 export type CommentThreadListItemDtoOutput = {
   createdAt: string;
   createdById: string;
@@ -1192,6 +1210,23 @@ export function createCommentThread(
         body: commentThreadCreateDto,
       }),
     ),
+  );
+}
+export function getCommentDiagramSummary(
+  {
+    diagramId,
+  }: {
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentDiagramSummaryDtoOutput;
+    }>(`/comments/diagram/${encodeURIComponent(diagramId)}/summary`, {
+      ...opts,
+    }),
   );
 }
 export function getCommentThreads(

@@ -4,6 +4,7 @@ import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import {
+  CommentDiagramSummaryDto,
   CommentListResponseDto,
   CommentReplyCreateDto,
   CommentResponseDto,
@@ -33,6 +34,15 @@ export class CommentController {
   @ZodResponse({ status: HttpStatus.CREATED, type: CommentThreadResponseDto })
   createThread(@Auth() auth: AuthContext, @Body() dto: CommentThreadCreateDto) {
     return this.service.createThread(auth, dto);
+  }
+
+  @Get('diagram/:diagramId/summary')
+  @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiOperation({ operationId: 'getCommentDiagramSummary' })
+  @ZodResponse({ type: CommentDiagramSummaryDto })
+  getDiagramSummary(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string) {
+    return this.service.getDiagramSummary(auth, diagramId);
   }
 
   @Get('diagram/:diagramId/threads')

@@ -40,6 +40,7 @@ export function useCreateCommentThreadMutation(params: UseCreateCommentThreadMut
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Thread baru mengubah daftar thread diagram dan membuat comment list thread baru tersedia.
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.setQueryData(commentKeys.threadComments(data.thread.id, {}), {
         items: [data.comment],
@@ -61,6 +62,7 @@ export function useReplyToCommentThreadMutation(params: UseReplyToCommentThreadM
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Reply bisa reopen thread resolved, jadi thread list dan comment list thread perlu disegarkan bersama.
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
@@ -78,6 +80,7 @@ export function useUpdateCommentMutation(params: UseUpdateCommentMutationParams 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Edited comments keep the same thread but change the visible comment tree and mention metadata.
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
@@ -94,6 +97,7 @@ export function useMarkCommentThreadReadMutation(params: UseMarkCommentThreadRea
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Read cursor menurunkan unread badge thread list dan menjaga panel aktif punya state "seen by" terbaru.
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.setQueryData(commentKeys.readState(data.threadId), data);
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
@@ -111,6 +115,7 @@ export function useResolveCommentThreadMutation(params: UseResolveCommentThreadM
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Resolve hanya mengubah metadata thread, bukan daftar comment.
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
@@ -127,6 +132,7 @@ export function useUnresolveCommentThreadMutation(params: UseUnresolveCommentThr
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Unresolve mengembalikan thread ke list aktif tanpa mengubah isi diskusi.
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },

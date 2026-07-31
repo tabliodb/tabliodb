@@ -37,6 +37,30 @@ const CommentThreadSchema = z.object({
   updatedAt: DateTimeSchema,
 });
 
+const CommentThreadTargetSummarySchema = z
+  .object({
+    openCount: z.number().int().nonnegative(),
+    resolvedCount: z.number().int().nonnegative(),
+    targetId: z.string().nullable(),
+    targetType: CommentTargetTypeSchema,
+    totalCount: z.number().int().nonnegative(),
+    unreadCount: z.number().int().nonnegative(),
+    updatedAt: DateTimeSchema.nullable(),
+  })
+  .meta({ id: 'CommentThreadTargetSummaryDto' });
+
+const CommentDiagramSummarySchema = z
+  .object({
+    diagramId: z.string().uuid(),
+    openCount: z.number().int().nonnegative(),
+    resolvedCount: z.number().int().nonnegative(),
+    targets: z.array(CommentThreadTargetSummarySchema),
+    totalCount: z.number().int().nonnegative(),
+    unreadCount: z.number().int().nonnegative(),
+    updatedAt: DateTimeSchema.nullable(),
+  })
+  .meta({ id: 'CommentDiagramSummaryDto' });
+
 const CommentResponseSchema = z
   .object({
     author: CommentAuthorSchema,
@@ -132,6 +156,7 @@ const CommentListResponseSchema = z
   .meta({ id: 'CommentListResponseDto' });
 
 export class CommentListResponseDto extends createZodDto(CommentListResponseSchema) {}
+export class CommentDiagramSummaryDto extends createZodDto(CommentDiagramSummarySchema) {}
 export class CommentReplyCreateDto extends createZodDto(CommentReplyCreateSchema) {}
 export class CommentResponseDto extends createZodDto(CommentResponseSchema) {}
 export class CommentThreadCreateDto extends createZodDto(CommentThreadCreateSchema) {}

@@ -17,7 +17,7 @@ import {
   type DatabaseTable,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import type { CommentTargetType, CommentThreadListItemDto } from '@tabliodb/sdk';
+import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -59,7 +59,7 @@ let relationshipRouterRegistered = false;
 let tableShapeRegistered = false;
 
 export type SchemaCanvasProps = {
-  commentThreads?: CommentThreadListItemDto[];
+  commentTargetSummaries?: CommentThreadTargetSummaryDto[];
   fitSignal: number;
   fitKey: string;
   model: DiagramModel;
@@ -114,7 +114,7 @@ type RemoteCanvasCursorPosition = RemoteCanvasCursor & {
 };
 
 export function SchemaCanvas({
-  commentThreads = [],
+  commentTargetSummaries = [],
   fitKey,
   fitSignal,
   model,
@@ -395,13 +395,13 @@ export function SchemaCanvas({
       return;
     }
 
-    syncGraphFromModel(graph, model, selectedTableId, commentThreads, readOnly);
+    syncGraphFromModel(graph, model, selectedTableId, commentTargetSummaries, readOnly);
 
     if (fitKeyRef.current !== fitKey) {
       fitKeyRef.current = fitKey;
       fitGraphContent(graph);
     }
-  }, [commentThreads, fitKey, model, readOnly, selectedTableId]);
+  }, [commentTargetSummaries, fitKey, model, readOnly, selectedTableId]);
 
   useEffect(() => {
     const graph = graphRef.current;
@@ -559,12 +559,12 @@ function syncGraphFromModel(
   graph: Graph,
   model: DiagramModel,
   selectedTableId: string | null,
-  commentThreads: CommentThreadListItemDto[],
+  commentTargetSummaries: CommentThreadTargetSummaryDto[],
   readOnly: boolean,
 ): void {
   const relationshipPlan = createRelationshipPlan(model, selectedTableId);
   // Marker summary dihitung sekali per sync supaya node table tidak mengulang scan thread untuk setiap row.
-  const commentMarkerSummary = createCommentMarkerSummary(model, commentThreads);
+  const commentMarkerSummary = createCommentMarkerSummary(model, commentTargetSummaries);
   const nodeIds = new Set(Object.keys(model.tables));
   const edgeMetadata = createRelationshipEdgeMetadata(model, relationshipPlan);
   const edgeIds = new Set(edgeMetadata.map((edge) => edge.id).filter((id): id is string => Boolean(id)));

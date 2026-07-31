@@ -1,5 +1,5 @@
 import { getRelationshipColumnPairs, type DiagramModel } from '@tabliodb/schema-core';
-import type { CommentTargetType, CommentThreadListItemDto } from '@tabliodb/sdk';
+import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
 
 export type CommentMarkerCount = {
   open: number;
@@ -21,7 +21,7 @@ export const emptyCommentMarkerCount: CommentMarkerCount = {
 
 export function createCommentMarkerSummary(
   model: DiagramModel,
-  threads: CommentThreadListItemDto[],
+  targetSummaries: CommentThreadTargetSummaryDto[],
 ): CommentMarkerSummary {
   const summary: CommentMarkerSummary = {
     byColumnId: new Map(),
@@ -31,21 +31,25 @@ export function createCommentMarkerSummary(
     diagram: { ...emptyCommentMarkerCount },
   };
 
-  for (const thread of threads) {
-    if (thread.targetType === 'diagram') {
-      incrementCount(summary.diagram, thread);
+  for (const targetSummary of targetSummaries) {
+    if (targetSummary.targetType === 'diagram') {
+      incrementCount(summary.diagram, targetSummary);
     }
 
-    if (thread.targetId) {
-      incrementMapCount(summary.byTargetKey, createCommentTargetKey(thread.targetType, thread.targetId), thread);
+    if (targetSummary.targetId) {
+      incrementMapCount(
+        summary.byTargetKey,
+        createCommentTargetKey(targetSummary.targetType, targetSummary.targetId),
+        targetSummary,
+      );
     }
 
     // Marker visual hanya menampilkan thread open supaya resolved discussion tidak memenuhi canvas.
-    if (thread.status !== 'open') {
+    if (targetSummary.openCount === 0) {
       continue;
     }
 
-    addOpenThreadToRelatedEntities(summary, model, thread);
+    addOpenTargetSummaryToRelatedEntities(summary, model, targetSummary);
   }
 
   return summary;
@@ -98,71 +102,76 @@ export function hasOpenCommentMarkers(count: CommentMarkerCount): boolean {
   return count.open > 0;
 }
 
-function addOpenThreadToRelatedEntities(
+function addOpenTargetSummaryToRelatedEntities(
   summary: CommentMarkerSummary,
   model: DiagramModel,
-  thread: CommentThreadListItemDto,
+  targetSummary: CommentThreadTargetSummaryDto,
 ) {
-  if (!thread.targetId) {
+  if (!targetSummary.targetId) {
     return;
   }
 
-  if (thread.targetType === 'table') {
-    if (model.tables[thread.targetId]) {
-      incrementMapCount(summary.byTableId, thread.targetId, thread);
+  const openOnlyCount = {
+    openCount: targetSummary.openCount,
+    totalCount: targetSummary.openCount,
+  };
+
+  if (targetSummary.targetType === 'table') {
+    if (model.tables[targetSummary.targetId]) {
+      incrementMapCount(summary.byTableId, targetSummary.targetId, openOnlyCount);
     }
 
     return;
   }
 
-  if (thread.targetType === 'column') {
-    const column = model.columns[thread.targetId];
+  if (targetSummary.targetType === 'column') {
+    const column = model.columns[targetSummary.targetId];
 
     if (column) {
-      incrementMapCount(summary.byColumnId, column.id, thread);
-      incrementMapCount(summary.byTableId, column.tableId, thread);
+      incrementMapCount(summary.byColumnId, column.id, openOnlyCount);
+      incrementMapCount(summary.byTableId, column.tableId, openOnlyCount);
     }
 
     return;
   }
 
-  if (thread.targetType === 'index') {
-    const index = model.indexes[thread.targetId];
+  if (targetSummary.targetType === 'index') {
+    const index = model.indexes[targetSummary.targetId];
 
     if (index) {
-      incrementMapCount(summary.byTableId, index.tableId, thread);
+      incrementMapCount(summary.byTableId, index.tableId, openOnlyCount);
       // Composite index bisa berisi column yang sama dari hasil import aneh; Set mencegah satu thread menggandakan marker row.
       for (const columnId of new Set(index.columns.map((indexedColumn) => indexedColumn.columnId))) {
-        incrementMapCount(summary.byColumnId, columnId, thread);
+        incrementMapCount(summary.byColumnId, columnId, openOnlyCount);
       }
     }
 
     return;
   }
 
-  if (thread.targetType === 'check') {
-    const check = model.checks[thread.targetId];
+  if (targetSummary.targetType === 'check') {
+    const check = model.checks[targetSummary.targetId];
 
     if (check) {
-      incrementMapCount(summary.byTableId, check.tableId, thread);
+      incrementMapCount(summary.byTableId, check.tableId, openOnlyCount);
 
       if (check.columnId) {
-        incrementMapCount(summary.byColumnId, check.columnId, thread);
+        incrementMapCount(summary.byColumnId, check.columnId, openOnlyCount);
       }
     }
 
     return;
   }
 
-  if (thread.targetType === 'relationship') {
-    const relationship = model.relationships[thread.targetId];
+  if (targetSummary.targetType === 'relationship') {
+    const relationship = model.relationships[targetSummary.targetId];
 
     if (relationship) {
-      incrementMapCount(summary.byRelationshipId, relationship.id, thread);
+      incrementMapCount(summary.byRelationshipId, relationship.id, openOnlyCount);
 
       // Self-relation tetap hanya menaikkan satu marker table/column agar count mewakili jumlah thread, bukan jumlah endpoint.
       for (const tableId of new Set([relationship.sourceTableId, relationship.targetTableId])) {
-        incrementMapCount(summary.byTableId, tableId, thread);
+        incrementMapCount(summary.byTableId, tableId, openOnlyCount);
       }
 
       const columnIds = new Set(
@@ -173,23 +182,27 @@ function addOpenThreadToRelatedEntities(
       );
 
       for (const columnId of columnIds) {
-        incrementMapCount(summary.byColumnId, columnId, thread);
+        incrementMapCount(summary.byColumnId, columnId, openOnlyCount);
       }
     }
   }
 }
 
-function incrementMapCount(map: Map<string, CommentMarkerCount>, key: string, thread: CommentThreadListItemDto) {
+function incrementMapCount(
+  map: Map<string, CommentMarkerCount>,
+  key: string,
+  countSource: Pick<CommentThreadTargetSummaryDto, 'openCount' | 'totalCount'>,
+) {
   const count = map.get(key) ?? { ...emptyCommentMarkerCount };
 
-  incrementCount(count, thread);
+  incrementCount(count, countSource);
   map.set(key, count);
 }
 
-function incrementCount(count: CommentMarkerCount, thread: CommentThreadListItemDto) {
-  count.total += 1;
-
-  if (thread.status === 'open') {
-    count.open += 1;
-  }
+function incrementCount(
+  count: CommentMarkerCount,
+  countSource: Pick<CommentThreadTargetSummaryDto, 'openCount' | 'totalCount'>,
+) {
+  count.open += countSource.openCount;
+  count.total += countSource.totalCount;
 }

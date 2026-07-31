@@ -242,6 +242,74 @@ export class CommentRepository {
     };
   }
 
+  async getDiagramSummary(diagramId: string, userId: string) {
+    const summaryRow = await this.db
+      .selectFrom('comment_threads')
+      .select([
+        sql<number>`count(*)::int`.as('totalCount'),
+        sql<number>`count(*) filter (where status = 'open')::int`.as('openCount'),
+        sql<number>`count(*) filter (where status = 'resolved')::int`.as('resolvedCount'),
+        sql<Date | null>`max(updated_at)`.as('updatedAt'),
+      ])
+      .where('diagramId', '=', diagramId)
+      .executeTakeFirstOrThrow();
+    const targetRows = await this.db
+      .selectFrom('comment_threads')
+      .select([
+        'targetId',
+        'targetType',
+        sql<number>`count(*)::int`.as('totalCount'),
+        sql<number>`count(*) filter (where status = 'open')::int`.as('openCount'),
+        sql<number>`count(*) filter (where status = 'resolved')::int`.as('resolvedCount'),
+        sql<Date | null>`max(updated_at)`.as('updatedAt'),
+      ])
+      .where('diagramId', '=', diagramId)
+      .groupBy(['targetType', 'targetId'])
+      .execute();
+    const targetUnreadRows = await this.db
+      .selectFrom('comment_threads')
+      .innerJoin('comments', 'comments.threadId', 'comment_threads.id')
+      .leftJoin('comment_thread_reads', (join) =>
+        join
+          .onRef('comment_thread_reads.threadId', '=', 'comment_threads.id')
+          .on('comment_thread_reads.userId', '=', userId),
+      )
+      .select([
+        'comment_threads.targetId',
+        'comment_threads.targetType',
+        sql<number>`count(comments.id)::int`.as('unreadCount'),
+      ])
+      .where('comment_threads.diagramId', '=', diagramId)
+      .where('comments.deletedAt', 'is', null)
+      .where('comments.createdById', '<>', userId)
+      .where(sql<boolean>`comments.created_at > coalesce(comment_thread_reads.last_read_at, '-infinity'::timestamptz)`)
+      .groupBy(['comment_threads.targetType', 'comment_threads.targetId'])
+      .execute();
+    const unreadCountByTarget = new Map(
+      targetUnreadRows.map((row) => [
+        createCommentTargetSummaryKey(row.targetType, row.targetId),
+        Number(row.unreadCount),
+      ]),
+    );
+    const targets = targetRows.map((row) => ({
+      ...row,
+      openCount: Number(row.openCount),
+      resolvedCount: Number(row.resolvedCount),
+      totalCount: Number(row.totalCount),
+      unreadCount: unreadCountByTarget.get(createCommentTargetSummaryKey(row.targetType, row.targetId)) ?? 0,
+    }));
+
+    return {
+      openCount: Number(summaryRow.openCount),
+      resolvedCount: Number(summaryRow.resolvedCount),
+      targets,
+      totalCount: Number(summaryRow.totalCount),
+      // Summary unread dihitung dari agregasi target agar canvas dan toolbar berbagi satu sumber angka.
+      unreadCount: targets.reduce((total, target) => total + target.unreadCount, 0),
+      updatedAt: summaryRow.updatedAt,
+    };
+  }
+
   async getComments(threadId: string, options: CommentListOptions) {
     const offset = decodeOffsetCursor(options.cursor);
     const rows = await this.db
@@ -419,4 +487,8 @@ export class CommentRepository {
       .returningAll()
       .executeTakeFirstOrThrow();
   }
+}
+
+function createCommentTargetSummaryKey(targetType: string, targetId: string | null): string {
+  return `${targetType}:${targetId ?? 'diagram'}`;
 }

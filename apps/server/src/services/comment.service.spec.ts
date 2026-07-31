@@ -50,6 +50,7 @@ describe(CommentService.name, () => {
     getCommentInThread: vi.fn(),
     getCommentWithThread: vi.fn(),
     getComments: vi.fn(),
+    getDiagramSummary: vi.fn(),
     getMentionableUsersForDiagram: vi.fn(),
     getThreadReadState: vi.fn(),
     getThreadById: vi.fn(),
@@ -301,6 +302,52 @@ describe(CommentService.name, () => {
       limit: 50,
       userId: 'user-id',
     });
+  });
+
+  it('returns a diagram comment summary without reading the full thread list', async () => {
+    commentRepository.getDiagramSummary.mockResolvedValue({
+      openCount: 2,
+      resolvedCount: 1,
+      targets: [
+        {
+          openCount: 2,
+          resolvedCount: 0,
+          targetId: 'table-id',
+          targetType: 'table',
+          totalCount: 2,
+          unreadCount: 4,
+          updatedAt: new Date('2026-07-30T08:09:00.000Z'),
+        },
+      ],
+      totalCount: 3,
+      unreadCount: 4,
+      updatedAt: new Date('2026-07-30T08:10:00.000Z'),
+    });
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+
+    await expect(service.getDiagramSummary(auth, 'diagram-id')).resolves.toMatchObject({
+      diagramId: 'diagram-id',
+      openCount: 2,
+      resolvedCount: 1,
+      targets: [
+        {
+          openCount: 2,
+          targetId: 'table-id',
+          targetType: 'table',
+          totalCount: 2,
+          unreadCount: 4,
+          updatedAt: '2026-07-30T08:09:00.000Z',
+        },
+      ],
+      totalCount: 3,
+      unreadCount: 4,
+      updatedAt: '2026-07-30T08:10:00.000Z',
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
+    expect(commentRepository.getDiagramSummary).toHaveBeenCalledWith('diagram-id', 'user-id');
+    // Summary endpoint sengaja tidak memakai getThreads supaya marker canvas tidak bergantung pada page pertama thread.
+    expect(commentRepository.getThreads).not.toHaveBeenCalled();
   });
 
   it('returns deleted comments as tombstones without leaking stored body content', async () => {

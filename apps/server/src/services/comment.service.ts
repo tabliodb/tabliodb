@@ -84,6 +84,30 @@ export class CommentService {
     };
   }
 
+  async getDiagramSummary(auth: AuthContext, diagramId: string) {
+    await this.diagramService.requireDiagram(auth, diagramId, Permission.DiagramRead);
+    const summary = await this.commentRepository.getDiagramSummary(diagramId, auth.user.id);
+
+    return {
+      diagramId,
+      openCount: summary.openCount,
+      resolvedCount: summary.resolvedCount,
+      targets: summary.targets.map((target) => ({
+        openCount: target.openCount,
+        resolvedCount: target.resolvedCount,
+        targetId: target.targetId,
+        targetType: target.targetType as CommentTargetType,
+        totalCount: target.totalCount,
+        unreadCount: target.unreadCount,
+        updatedAt: toNullableIsoDateTime(target.updatedAt),
+      })),
+      totalCount: summary.totalCount,
+      unreadCount: summary.unreadCount,
+      // Summary timestamp memberi cache/invalidation UI satu nilai murah tanpa membaca seluruh list thread.
+      updatedAt: toNullableIsoDateTime(summary.updatedAt),
+    };
+  }
+
   async getThreadComments(auth: AuthContext, threadId: string, query: CommentThreadListQueryDto) {
     const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramRead);
     const comments = await this.commentRepository.getComments(thread.id, {

@@ -7,6 +7,7 @@ import type {
 } from '../fetch-client.js';
 import {
   createCommentThread as createCommentThreadRequest,
+  getCommentDiagramSummary as getCommentDiagramSummaryRequest,
   getCommentThreadReadState,
   getCommentThreads,
   getThreadComments,
@@ -130,6 +131,26 @@ export type CommentThreadDto = {
   updatedAt: string;
 };
 
+export type CommentThreadTargetSummaryDto = {
+  openCount: number;
+  resolvedCount: number;
+  targetId: string | null;
+  targetType: CommentTargetType;
+  totalCount: number;
+  unreadCount: number;
+  updatedAt: string | null;
+};
+
+export type CommentDiagramSummaryDto = {
+  diagramId: string;
+  openCount: number;
+  resolvedCount: number;
+  targets: CommentThreadTargetSummaryDto[];
+  totalCount: number;
+  unreadCount: number;
+  updatedAt: string | null;
+};
+
 export type CommentThreadReaderDto = {
   lastReadAt: string;
   lastReadCommentId: string | null;
@@ -157,6 +178,7 @@ export type CommentListResponseDto = Paginated<CommentResponseDto>;
 
 export type CommentsResource = {
   createThread: (body: CommentThreadCreateDto) => Promise<CommentThreadResponseDto>;
+  getDiagramSummary: (diagramId: string) => Promise<CommentDiagramSummaryDto>;
   getThreadReadState: (threadId: string) => Promise<CommentThreadReadStateDto>;
   listThreadComments: (threadId: string, query?: PaginationQuery) => Promise<CommentListResponseDto>;
   listThreads: (diagramId: string, query?: PaginationQuery) => Promise<CommentThreadListResponseDto>;
@@ -177,6 +199,8 @@ export function createCommentsResource(opts?: RequestOpts): CommentsResource {
       ) as unknown as Promise<CommentThreadResponseDto>,
     getThreadReadState: (threadId: string) =>
       getCommentThreadReadState({ threadId }, opts) as unknown as Promise<CommentThreadReadStateDto>,
+    getDiagramSummary: (diagramId: string) =>
+      getCommentDiagramSummaryRequest({ diagramId }, opts) as unknown as Promise<CommentDiagramSummaryDto>,
     listThreadComments: (threadId: string, query: PaginationQuery = {}) =>
       getThreadComments({ threadId, ...query }, opts) as unknown as Promise<CommentListResponseDto>,
     listThreads: (diagramId: string, query: PaginationQuery = {}) =>
