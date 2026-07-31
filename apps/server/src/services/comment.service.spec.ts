@@ -47,8 +47,10 @@ describe(CommentService.name, () => {
     createThreadWithComment: vi.fn(),
     getCommentInThread: vi.fn(),
     getComments: vi.fn(),
+    getThreadReadState: vi.fn(),
     getThreadById: vi.fn(),
     getThreads: vi.fn(),
+    markThreadRead: vi.fn(),
     resolveThread: vi.fn(),
     unresolveThread: vi.fn(),
   };
@@ -104,6 +106,120 @@ describe(CommentService.name, () => {
       parentCommentId: null,
       threadId: 'thread-id',
     });
+  });
+
+  it('returns paginated threads with per-user unread counts', async () => {
+    commentRepository.getThreads.mockResolvedValue({
+      items: [{ ...thread, unreadCount: 3 }],
+      nextCursor: null,
+      totalCount: 1,
+    });
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+
+    await expect(service.getThreads(auth, 'diagram-id', { limit: 50 })).resolves.toMatchObject({
+      items: [
+        {
+          id: 'thread-id',
+          status: 'open',
+          targetType: 'table',
+          unreadCount: 3,
+        },
+      ],
+      totalCount: 1,
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
+    expect(commentRepository.getThreads).toHaveBeenCalledWith('diagram-id', {
+      cursor: undefined,
+      limit: 50,
+      userId: 'user-id',
+    });
+  });
+
+  it('returns the read state for a thread after diagram read permission passes', async () => {
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    commentRepository.getThreadReadState.mockResolvedValue({
+      readState: {
+        lastReadAt: new Date('2026-07-30T08:05:00.000Z'),
+        lastReadCommentId: 'comment-id',
+        threadId: 'thread-id',
+        updatedAt: new Date('2026-07-30T08:06:00.000Z'),
+        userId: 'user-id',
+      },
+      readers: [
+        {
+          lastReadAt: new Date('2026-07-30T08:04:00.000Z'),
+          lastReadCommentId: 'comment-id',
+          updatedAt: new Date('2026-07-30T08:04:30.000Z'),
+          userAvatarUrl: null,
+          userCursorColor: '#1cb0f6',
+          userEmail: 'teammate@tabliodb.local',
+          userId: 'teammate-id',
+          userName: 'Team Mate',
+        },
+      ],
+      totalReaderCount: 2,
+      unreadCount: 0,
+    });
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+
+    await expect(service.getThreadReadState(auth, 'thread-id')).resolves.toMatchObject({
+      lastReadAt: '2026-07-30T08:05:00.000Z',
+      lastReadCommentId: 'comment-id',
+      readers: [
+        {
+          user: {
+            cursorColor: '#1cb0f6',
+            email: 'teammate@tabliodb.local',
+            id: 'teammate-id',
+            name: 'Team Mate',
+          },
+        },
+      ],
+      threadId: 'thread-id',
+      totalReaderCount: 2,
+      unreadCount: 0,
+      updatedAt: '2026-07-30T08:06:00.000Z',
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
+    expect(commentRepository.getThreadReadState).toHaveBeenCalledWith('thread-id', 'user-id');
+  });
+
+  it('marks a thread as read and returns the refreshed read state', async () => {
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    commentRepository.markThreadRead.mockResolvedValue({
+      lastReadAt: new Date('2026-07-30T08:05:00.000Z'),
+      lastReadCommentId: 'comment-id',
+      threadId: 'thread-id',
+      updatedAt: new Date('2026-07-30T08:06:00.000Z'),
+      userId: 'user-id',
+    });
+    commentRepository.getThreadReadState.mockResolvedValue({
+      readState: {
+        lastReadAt: new Date('2026-07-30T08:05:00.000Z'),
+        lastReadCommentId: 'comment-id',
+        threadId: 'thread-id',
+        updatedAt: new Date('2026-07-30T08:06:00.000Z'),
+        userId: 'user-id',
+      },
+      readers: [],
+      totalReaderCount: 1,
+      unreadCount: 0,
+    });
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+
+    await expect(service.markThreadRead(auth, 'thread-id')).resolves.toMatchObject({
+      lastReadAt: '2026-07-30T08:05:00.000Z',
+      lastReadCommentId: 'comment-id',
+      threadId: 'thread-id',
+      totalReaderCount: 1,
+      unreadCount: 0,
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
+    expect(commentRepository.markThreadRead).toHaveBeenCalledWith('thread-id', 'user-id');
+    expect(commentRepository.getThreadReadState).toHaveBeenCalledWith('thread-id', 'user-id');
   });
 
   it('creates a nested reply only after the parent comment is verified inside the same thread', async () => {

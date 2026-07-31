@@ -3,6 +3,7 @@ import type {
   CommentReplyCreateDto,
   CommentThreadCreateDto,
   CommentThreadDto,
+  CommentThreadReadStateDto,
   CommentThreadResponseDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
@@ -20,6 +21,8 @@ const resolveCommentThreadMutationFn = (threadId: string): Promise<CommentThread
   sdk.comments.resolveThread(threadId);
 const unresolveCommentThreadMutationFn = (threadId: string): Promise<CommentThreadDto> =>
   sdk.comments.unresolveThread(threadId);
+const markCommentThreadReadMutationFn = (threadId: string): Promise<CommentThreadReadStateDto> =>
+  sdk.comments.markThreadRead(threadId);
 
 type UseCreateCommentThreadMutationParams = {
   mutationConfig?: MutationConfig<typeof createCommentThreadMutationFn>;
@@ -54,6 +57,23 @@ export function useReplyToCommentThreadMutation(params: UseReplyToCommentThreadM
       // Reply bisa reopen thread resolved, jadi thread list dan comment list thread perlu disegarkan bersama.
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+type UseMarkCommentThreadReadMutationParams = {
+  mutationConfig?: MutationConfig<typeof markCommentThreadReadMutationFn>;
+};
+
+export function useMarkCommentThreadReadMutation(params: UseMarkCommentThreadReadMutationParams = {}) {
+  return useMutation({
+    mutationFn: markCommentThreadReadMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Read cursor menurunkan unread badge thread list dan menjaga panel aktif punya state "seen by" terbaru.
+      queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
+      queryClient.setQueryData(commentKeys.readState(data.threadId), data);
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

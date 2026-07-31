@@ -286,6 +286,14 @@ export interface CommentTable {
   updatedAt: Timestamp;
 }
 
+export interface CommentThreadReadTable {
+  threadId: string;
+  userId: string;
+  lastReadCommentId: NullableColumn<string>;
+  lastReadAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface AuditLogTable {
   id: Generated<string>;
   organizationId: NullableColumn<string>;
@@ -323,6 +331,7 @@ export interface DB {
   diagram_review_signals: DiagramReviewSignalTable;
   comment_threads: CommentThreadTable;
   comments: CommentTable;
+  comment_thread_reads: CommentThreadReadTable;
   audit_logs: AuditLogTable;
 }
 

@@ -1,5 +1,5 @@
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { CommentListResponseDto, CommentThreadListResponseDto } from '@tabliodb/sdk';
+import type { CommentListResponseDto, CommentThreadListResponseDto, CommentThreadReadStateDto } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
 import { commentKeys } from './comment.keys';
@@ -9,6 +9,7 @@ type CommentQueries = {
     threadId: string,
     query?: PaginationQuery,
   ) => AppQueryOptions<CommentListResponseDto, ReturnType<typeof commentKeys.threadComments>>;
+  readState: (threadId: string) => AppQueryOptions<CommentThreadReadStateDto, ReturnType<typeof commentKeys.readState>>;
   listThreads: (
     diagramId: string,
     query?: PaginationQuery,
@@ -21,6 +22,12 @@ export const commentQueries: CommentQueries = {
       enabled: Boolean(threadId),
       queryFn: () => sdk.comments.listThreadComments(threadId, query),
       queryKey: commentKeys.threadComments(threadId, query),
+    }),
+  readState: (threadId: string) =>
+    appQueryOptions({
+      enabled: Boolean(threadId),
+      queryFn: () => sdk.comments.getThreadReadState(threadId),
+      queryKey: commentKeys.readState(threadId),
     }),
   listThreads: (diagramId: string, query: PaginationQuery = {}) =>
     appQueryOptions({

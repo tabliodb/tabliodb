@@ -55,6 +55,7 @@ export class CommentService {
     const threads = await this.commentRepository.getThreads(diagramId, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
+      userId: auth.user.id,
     });
 
     return {
@@ -93,6 +94,22 @@ export class CommentService {
         updatedAt: toIsoDateTime(comment.updatedAt),
       })),
     };
+  }
+
+  async getThreadReadState(auth: AuthContext, threadId: string) {
+    const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramRead);
+    const state = await this.commentRepository.getThreadReadState(thread.id, auth.user.id);
+
+    return this.serializeReadState(thread.id, state);
+  }
+
+  async markThreadRead(auth: AuthContext, threadId: string) {
+    const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramRead);
+
+    await this.commentRepository.markThreadRead(thread.id, auth.user.id);
+    const state = await this.commentRepository.getThreadReadState(thread.id, auth.user.id);
+
+    return this.serializeReadState(thread.id, state);
   }
 
   async replyToThread(auth: AuthContext, threadId: string, dto: CommentReplyCreateDto) {
@@ -170,7 +187,30 @@ export class CommentService {
       status: thread.status,
       targetId: thread.targetId,
       targetType: thread.targetType as CommentTargetType,
+      unreadCount: 'unreadCount' in thread && typeof thread.unreadCount === 'number' ? thread.unreadCount : 0,
       updatedAt: toIsoDateTime(thread.updatedAt),
+    };
+  }
+
+  private serializeReadState(threadId: string, state: Awaited<ReturnType<CommentRepository['getThreadReadState']>>) {
+    return {
+      lastReadAt: state.readState ? toIsoDateTime(state.readState.lastReadAt) : null,
+      lastReadCommentId: state.readState?.lastReadCommentId ?? null,
+      readers: state.readers.map((reader) => ({
+        lastReadAt: toIsoDateTime(reader.lastReadAt),
+        lastReadCommentId: reader.lastReadCommentId,
+        user: {
+          avatarUrl: reader.userAvatarUrl,
+          cursorColor: reader.userCursorColor,
+          email: reader.userEmail,
+          id: reader.userId,
+          name: reader.userName,
+        },
+      })),
+      threadId,
+      totalReaderCount: state.totalReaderCount,
+      unreadCount: state.unreadCount,
+      updatedAt: state.readState ? toIsoDateTime(state.readState.updatedAt) : null,
     };
   }
 

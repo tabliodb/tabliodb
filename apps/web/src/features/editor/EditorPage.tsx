@@ -30,6 +30,7 @@ import {
   type ProjectResponseDto,
   type CommentResponseDto,
   type CommentTargetType,
+  type CommentThreadReaderDto,
   type CommentThreadListItemDto,
   type ReviewSignalEffectiveSettingsDto,
   type ReviewSignalResponseDto,
@@ -151,6 +152,7 @@ import {
 import {
   commentQueries,
   useCreateCommentThreadMutation,
+  useMarkCommentThreadReadMutation,
   useReplyToCommentThreadMutation,
   useResolveCommentThreadMutation,
   useUnresolveCommentThreadMutation,
@@ -845,11 +847,20 @@ export function EditorPage() {
     return <Navigate replace to={routes.login.to()} />;
   }
 
+  if (isUnauthorized(currentUserQuery.error)) {
+    return <Navigate replace to={routes.login.to()} />;
+  }
+
   if (isUnauthorized(organizationsQuery.error)) {
     return <Navigate replace to={routes.login.to()} />;
   }
 
-  const blockingError = organizationsQuery.error ?? projectsQuery.error ?? diagramsQuery.error ?? snapshotsQuery.error;
+  const blockingError =
+    currentUserQuery.error ??
+    organizationsQuery.error ??
+    projectsQuery.error ??
+    diagramsQuery.error ??
+    snapshotsQuery.error;
 
   if (blockingError) {
     return <ErrorState error={blockingError} onRetry={() => queryClient.invalidateQueries()} />;
@@ -860,6 +871,7 @@ export function EditorPage() {
   }
 
   const isLoadingWorkspace =
+    currentUserQuery.isPending ||
     organizationsQuery.isPending ||
     Boolean(activeOrganization && projectsQuery.isPending) ||
     Boolean(activeProject && diagramsQuery.isPending) ||
@@ -881,7 +893,7 @@ export function EditorPage() {
     );
   }
 
-  if (!activeOrganization || !activeProject || !activeDiagram || !model) {
+  if (!currentUser || !activeOrganization || !activeProject || !activeDiagram || !model) {
     return <LoadingState />;
   }
 
@@ -1088,6 +1100,7 @@ export function EditorPage() {
 
       <CommentsDialog
         canComment={canCommentDiagram}
+        currentUserId={currentUser.id}
         diagramId={activeDiagram.id}
         model={model}
         onFocusTable={handleSelectedTableChange}
@@ -1291,6 +1304,7 @@ function updateLiveModelFromDiagram(
 
 function CommentsDialog({
   canComment,
+  currentUserId,
   diagramId,
   model,
   onCommentTargetSelect,
@@ -1304,6 +1318,7 @@ function CommentsDialog({
   selectedTableId,
 }: {
   canComment: boolean;
+  currentUserId: string;
   diagramId: string;
   model: DiagramModel;
   onCommentTargetSelect: (target: EditorCommentTarget) => void;
@@ -1320,6 +1335,7 @@ function CommentsDialog({
   const [replyParentComment, setReplyParentComment] = useState<CommentResponseDto | null>(null);
   const [typingTick, setTypingTick] = useState(0);
   const typingStopTimeoutRef = useRef<number | null>(null);
+  const lastMarkedReadSignatureRef = useRef<string | null>(null);
   const createForm = useForm<CommentFormState>({
     defaultValues: { body: '' },
     mode: 'onBlur',
@@ -1347,6 +1363,12 @@ function CommentsDialog({
     ...threadCommentsQueryOptions,
     enabled: open && Boolean(activeThreadId) && threadCommentsQueryOptions.enabled !== false,
   });
+  const threadReadStateQueryOptions = commentQueries.readState(activeThread?.id ?? '');
+  const threadReadStateQuery = useQuery({
+    ...threadReadStateQueryOptions,
+    // Read receipt hanya diambil untuk thread yang sedang dibuka agar dialog tidak melakukan request tambahan untuk semua thread.
+    enabled: open && Boolean(activeThread) && threadReadStateQueryOptions.enabled !== false,
+  });
   const mentionMembersQueryOptions = projectsQueries.members(projectId, projectMemberPageQuery);
   const mentionMembersQuery = useQuery({
     ...mentionMembersQueryOptions,
@@ -1369,6 +1391,7 @@ function CommentsDialog({
   const replyMutation = useReplyToCommentThreadMutation();
   const resolveThreadMutation = useResolveCommentThreadMutation();
   const unresolveThreadMutation = useUnresolveCommentThreadMutation();
+  const markThreadReadMutation = useMarkCommentThreadReadMutation();
   const isMutationPending =
     createThreadMutation.isPending ||
     replyMutation.isPending ||
@@ -1382,12 +1405,45 @@ function CommentsDialog({
       return;
     }
 
-    if (activeThreadId && threads.some((thread) => thread.id === activeThreadId)) {
+    if (activeThreadId && !threads.some((thread) => thread.id === activeThreadId)) {
+      setActiveThreadId(null);
+    }
+  }, [activeThreadId, open, threads]);
+
+  useEffect(() => {
+    lastMarkedReadSignatureRef.current = null;
+  }, [activeThreadId, open]);
+
+  useEffect(() => {
+    if (
+      !open ||
+      !activeThread ||
+      threadCommentsQuery.isPending ||
+      threadCommentsQuery.error ||
+      markThreadReadMutation.isPending
+    ) {
       return;
     }
 
-    setActiveThreadId(threads[0]?.id ?? null);
-  }, [activeThreadId, open, threads]);
+    const readSignature = `${activeThread.id}:${activeThread.updatedAt}:${
+      threadCommentsQuery.data?.totalCount ?? comments.length
+    }`;
+
+    if (lastMarkedReadSignatureRef.current === readSignature) {
+      return;
+    }
+
+    lastMarkedReadSignatureRef.current = readSignature;
+    markThreadReadMutation.mutate(activeThread.id);
+  }, [
+    activeThread,
+    comments.length,
+    markThreadReadMutation,
+    open,
+    threadCommentsQuery.data?.totalCount,
+    threadCommentsQuery.error,
+    threadCommentsQuery.isPending,
+  ]);
 
   useEffect(() => {
     if (!open) {
@@ -1544,6 +1600,14 @@ function CommentsDialog({
   const mutationError =
     createThreadMutation.error ?? replyMutation.error ?? resolveThreadMutation.error ?? unresolveThreadMutation.error;
   const activeThreadTargetLabel = activeThread ? getCommentThreadTargetLabel(model, activeThread) : null;
+  const readReceiptText = formatReadReceiptText(
+    getVisibleThreadReaders(threadReadStateQuery.data?.readers ?? [], currentUserId),
+    getVisibleThreadReaderCount(
+      threadReadStateQuery.data?.readers ?? [],
+      threadReadStateQuery.data?.totalReaderCount ?? 0,
+      currentUserId,
+    ),
+  );
   const replyPlaceholder = activeThread
     ? canComment
       ? replyParentComment
@@ -1667,9 +1731,14 @@ function CommentsDialog({
                                   : formatDateTime(thread.updatedAt)}
                               </p>
                             </div>
-                            <Badge variant={thread.status === 'resolved' ? 'purple' : 'green'}>
-                              {formatCommentThreadStatus(thread.status)}
-                            </Badge>
+                            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                              {thread.unreadCount > 0 ? (
+                                <Badge variant="yellow">{formatUnreadCount(thread.unreadCount)}</Badge>
+                              ) : null}
+                              <Badge variant={thread.status === 'resolved' ? 'purple' : 'green'}>
+                                {formatCommentThreadStatus(thread.status)}
+                              </Badge>
+                            </div>
                           </div>
                         </button>
                       );
@@ -1710,7 +1779,16 @@ function CommentsDialog({
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="flex shrink-0 items-center justify-between gap-3 bg-[rgb(var(--tabliodb-surface))] px-4 py-2">
-                <span className="text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">Messages</span>
+                <div className="min-w-0">
+                  <span className="text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                    Messages
+                  </span>
+                  {readReceiptText ? (
+                    <p className="mt-0.5 truncate text-[11px] font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
+                      {readReceiptText}
+                    </p>
+                  ) : null}
+                </div>
                 <Badge variant="neutral">
                   {threadCommentsQuery.data?.totalCount ?? comments.length}
                   {comments.length === 1 ? ' message' : ' messages'}
@@ -1978,6 +2056,50 @@ function formatTypingPresenceText(presences: CommentTypingPresence[]): string {
   }
 
   return `${names[0]}, ${names[1]}, and ${names.length - 2} more are typing`;
+}
+
+function formatUnreadCount(unreadCount: number): string {
+  if (unreadCount > 99) {
+    return '99+ new';
+  }
+
+  return `${unreadCount} new`;
+}
+
+function getVisibleThreadReaders(readers: CommentThreadReaderDto[], currentUserId: string): CommentThreadReaderDto[] {
+  return readers.filter((reader) => reader.user.id !== currentUserId);
+}
+
+function getVisibleThreadReaderCount(
+  readers: CommentThreadReaderDto[],
+  totalReaderCount: number,
+  currentUserId: string,
+): number {
+  const currentUserIncluded = readers.some((reader) => reader.user.id === currentUserId);
+
+  return Math.max(readers.length - (currentUserIncluded ? 1 : 0), totalReaderCount - (currentUserIncluded ? 1 : 0));
+}
+
+function formatReadReceiptText(readers: CommentThreadReaderDto[], totalReaderCount: number): string | null {
+  if (totalReaderCount <= 0 || readers.length === 0) {
+    return null;
+  }
+
+  const visibleNames = readers.map((reader) => reader.user.name);
+
+  if (totalReaderCount === 1) {
+    return `Seen by ${visibleNames[0]}`;
+  }
+
+  if (totalReaderCount === 2 && visibleNames.length >= 2) {
+    return `Seen by ${visibleNames[0]} and ${visibleNames[1]}`;
+  }
+
+  if (visibleNames.length >= 2) {
+    return `Seen by ${visibleNames[0]}, ${visibleNames[1]}, and ${totalReaderCount - 2} more`;
+  }
+
+  return `Seen by ${visibleNames[0]} and ${totalReaderCount - 1} more`;
 }
 
 function CommentComposerFallback({ invalid, placeholder }: { invalid: boolean; placeholder: string }) {

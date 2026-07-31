@@ -22,6 +22,20 @@ const CommentAuthorSchema = z.object({
   name: z.string(),
 });
 
+const CommentThreadSchema = z.object({
+  createdAt: DateTimeSchema,
+  createdById: z.string().uuid(),
+  diagramId: z.string().uuid(),
+  id: z.string().uuid(),
+  resolvedAt: DateTimeSchema.nullable(),
+  resolvedById: z.string().uuid().nullable(),
+  status: z.enum(['open', 'resolved']),
+  targetId: z.string().nullable(),
+  targetType: CommentTargetTypeSchema,
+  unreadCount: z.number().int().nonnegative(),
+  updatedAt: DateTimeSchema,
+});
+
 const CommentResponseSchema = z
   .object({
     author: CommentAuthorSchema,
@@ -56,51 +70,32 @@ const CommentReplyCreateSchema = z
 
 const CommentThreadResponseSchema = z
   .object({
-    thread: z.object({
-      createdAt: DateTimeSchema,
-      createdById: z.string().uuid(),
-      diagramId: z.string().uuid(),
-      id: z.string().uuid(),
-      resolvedAt: DateTimeSchema.nullable(),
-      resolvedById: z.string().uuid().nullable(),
-      status: z.enum(['open', 'resolved']),
-      targetId: z.string().nullable(),
-      targetType: CommentTargetTypeSchema,
-      updatedAt: DateTimeSchema,
-    }),
+    thread: CommentThreadSchema,
     comment: CommentResponseSchema,
   })
   .meta({ id: 'CommentThreadResponseDto' });
 
-const CommentThreadStatusResponseSchema = z
-  .object({
-    createdAt: DateTimeSchema,
-    createdById: z.string().uuid(),
-    diagramId: z.string().uuid(),
-    id: z.string().uuid(),
-    resolvedAt: DateTimeSchema.nullable(),
-    resolvedById: z.string().uuid().nullable(),
-    status: z.enum(['open', 'resolved']),
-    targetId: z.string().nullable(),
-    targetType: CommentTargetTypeSchema,
-    updatedAt: DateTimeSchema,
-  })
-  .meta({ id: 'CommentThreadStatusResponseDto' });
+const CommentThreadStatusResponseSchema = CommentThreadSchema.meta({ id: 'CommentThreadStatusResponseDto' });
 
-const CommentThreadListItemSchema = z
+const CommentThreadListItemSchema = CommentThreadSchema.meta({ id: 'CommentThreadListItemDto' });
+
+const CommentThreadReaderSchema = z.object({
+  lastReadAt: DateTimeSchema,
+  lastReadCommentId: z.string().uuid().nullable(),
+  user: CommentAuthorSchema,
+});
+
+const CommentThreadReadStateSchema = z
   .object({
-    createdAt: DateTimeSchema,
-    createdById: z.string().uuid(),
-    diagramId: z.string().uuid(),
-    id: z.string().uuid(),
-    resolvedAt: DateTimeSchema.nullable(),
-    resolvedById: z.string().uuid().nullable(),
-    status: z.enum(['open', 'resolved']),
-    targetId: z.string().nullable(),
-    targetType: CommentTargetTypeSchema,
-    updatedAt: DateTimeSchema,
+    lastReadAt: DateTimeSchema.nullable(),
+    lastReadCommentId: z.string().uuid().nullable(),
+    readers: z.array(CommentThreadReaderSchema),
+    threadId: z.string().uuid(),
+    totalReaderCount: z.number().int().nonnegative(),
+    unreadCount: z.number().int().nonnegative(),
+    updatedAt: DateTimeSchema.nullable(),
   })
-  .meta({ id: 'CommentThreadListItemDto' });
+  .meta({ id: 'CommentThreadReadStateDto' });
 
 const CommentThreadListQuerySchema = z
   .object({
@@ -129,6 +124,7 @@ export class CommentListResponseDto extends createZodDto(CommentListResponseSche
 export class CommentReplyCreateDto extends createZodDto(CommentReplyCreateSchema) {}
 export class CommentResponseDto extends createZodDto(CommentResponseSchema) {}
 export class CommentThreadCreateDto extends createZodDto(CommentThreadCreateSchema) {}
+export class CommentThreadReadStateDto extends createZodDto(CommentThreadReadStateSchema) {}
 export class CommentThreadListQueryDto extends createZodDto(CommentThreadListQuerySchema) {}
 export class CommentThreadListResponseDto extends createZodDto(CommentThreadListResponseSchema) {}
 export class CommentThreadResponseDto extends createZodDto(CommentThreadResponseSchema) {}

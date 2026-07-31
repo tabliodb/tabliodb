@@ -102,7 +102,7 @@ export class CommentRepository {
       .executeTakeFirst();
   }
 
-  async getThreads(diagramId: string, options: CommentThreadListOptions) {
+  async getThreads(diagramId: string, options: CommentThreadListOptions & { userId: string }) {
     const offset = decodeOffsetCursor(options.cursor);
     const rows = await this.db
       .selectFrom('comment_threads')
@@ -117,6 +117,17 @@ export class CommentRepository {
         'createdById',
         'createdAt',
         'updatedAt',
+        sql<number>`(
+          SELECT count(*)::int
+          FROM comments unread_comments
+          LEFT JOIN comment_thread_reads read_state
+            ON read_state.thread_id = comment_threads.id
+            AND read_state.user_id = ${options.userId}
+          WHERE unread_comments.thread_id = comment_threads.id
+            AND unread_comments.deleted_at IS NULL
+            AND unread_comments.created_by_id <> ${options.userId}
+            AND unread_comments.created_at > coalesce(read_state.last_read_at, '-infinity'::timestamptz)
+        )`.as('unreadCount'),
       ])
       .where('diagramId', '=', diagramId)
       .orderBy('updatedAt', 'desc')
@@ -186,6 +197,97 @@ export class CommentRepository {
       nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
       totalCount: Number(totalRow.count),
     };
+  }
+
+  async getThreadReadState(threadId: string, userId: string) {
+    const readState = await this.db
+      .selectFrom('comment_thread_reads')
+      .select(['lastReadAt', 'lastReadCommentId', 'threadId', 'updatedAt', 'userId'])
+      .where('threadId', '=', threadId)
+      .where('userId', '=', userId)
+      .executeTakeFirst();
+    const unreadRow = await this.db
+      .selectFrom('comment_threads')
+      .select(
+        sql<number>`(
+          SELECT count(*)::int
+          FROM comments unread_comments
+          LEFT JOIN comment_thread_reads read_state
+            ON read_state.thread_id = comment_threads.id
+            AND read_state.user_id = ${userId}
+          WHERE unread_comments.thread_id = comment_threads.id
+            AND unread_comments.deleted_at IS NULL
+            AND unread_comments.created_by_id <> ${userId}
+            AND unread_comments.created_at > coalesce(read_state.last_read_at, '-infinity'::timestamptz)
+        )`.as('count'),
+      )
+      .where('id', '=', threadId)
+      .executeTakeFirstOrThrow();
+    const readerRows = await this.db
+      .selectFrom('comment_thread_reads')
+      .innerJoin('users', 'users.id', 'comment_thread_reads.userId')
+      .select([
+        'comment_thread_reads.lastReadAt',
+        'comment_thread_reads.lastReadCommentId',
+        'comment_thread_reads.updatedAt',
+        'users.id as userId',
+        'users.email as userEmail',
+        'users.name as userName',
+        sql<string | null>`case
+          when users.avatar_file_id is null then null
+          else concat('/api/files/', users.avatar_file_id::text)
+        end`.as('userAvatarUrl'),
+        'users.cursorColor as userCursorColor',
+      ])
+      .where('comment_thread_reads.threadId', '=', threadId)
+      .orderBy('comment_thread_reads.updatedAt', 'desc')
+      .limit(8)
+      .execute();
+    const readerCountRow = await this.db
+      .selectFrom('comment_thread_reads')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('threadId', '=', threadId)
+      .executeTakeFirstOrThrow();
+
+    return {
+      readState,
+      readers: readerRows,
+      totalReaderCount: Number(readerCountRow.count),
+      unreadCount: Number(unreadRow.count),
+    };
+  }
+
+  async markThreadRead(threadId: string, userId: string) {
+    const latestComment = await this.db
+      .selectFrom('comments')
+      .select(['createdAt', 'id'])
+      .where('threadId', '=', threadId)
+      .where('deletedAt', 'is', null)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    const now = new Date();
+    const lastReadAt = latestComment?.createdAt ?? now;
+    const lastReadCommentId = latestComment?.id ?? null;
+
+    return this.db
+      .insertInto('comment_thread_reads')
+      .values({
+        lastReadAt,
+        lastReadCommentId,
+        threadId,
+        updatedAt: now,
+        userId,
+      })
+      .onConflict((conflict) =>
+        conflict.columns(['threadId', 'userId']).doUpdateSet({
+          lastReadAt,
+          lastReadCommentId,
+          updatedAt: now,
+        }),
+      )
+      .returningAll()
+      .executeTakeFirstOrThrow();
   }
 
   resolveThread(threadId: string, resolvedById: string) {

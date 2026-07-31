@@ -95,6 +95,8 @@ export type CommentResponseDtoOutput = {
   createdById: string;
   editedAt: string | null;
   id: string;
+  parentCommentId: string | null;
+  replyCount: number;
   threadId: string;
   updatedAt: string;
 };
@@ -109,6 +111,7 @@ export type CommentThreadResponseDtoOutput = {
     status: Status;
     targetId: string | null;
     targetType: TargetType;
+    unreadCount: number;
     updatedAt: string;
   };
   comment: CommentResponseDtoOutput;
@@ -123,6 +126,7 @@ export type CommentThreadListItemDtoOutput = {
   status: Status;
   targetId: string | null;
   targetType: TargetType;
+  unreadCount: number;
   updatedAt: string;
 };
 export type CommentThreadListResponseDtoOutput = {
@@ -137,6 +141,26 @@ export type CommentListResponseDtoOutput = {
 };
 export type CommentReplyCreateDto = {
   body: string;
+  parentCommentId?: string | null;
+};
+export type CommentThreadReadStateDtoOutput = {
+  lastReadAt: string | null;
+  lastReadCommentId: string | null;
+  readers: {
+    lastReadAt: string;
+    lastReadCommentId: string | null;
+    user: {
+      avatarUrl: string | null;
+      cursorColor: string;
+      email: string;
+      id: string;
+      name: string;
+    };
+  }[];
+  threadId: string;
+  totalReaderCount: number;
+  unreadCount: number;
+  updatedAt: string | null;
 };
 export type CommentThreadStatusResponseDtoOutput = {
   createdAt: string;
@@ -148,6 +172,7 @@ export type CommentThreadStatusResponseDtoOutput = {
   status: Status;
   targetId: string | null;
   targetType: TargetType;
+  unreadCount: number;
   updatedAt: string;
 };
 export type DiagramCreateDto = {
@@ -1226,6 +1251,41 @@ export function replyToCommentThread(
         body: commentReplyCreateDto,
       }),
     ),
+  );
+}
+export function getCommentThreadReadState(
+  {
+    threadId,
+  }: {
+    threadId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentThreadReadStateDtoOutput;
+    }>(`/comments/threads/${encodeURIComponent(threadId)}/read-state`, {
+      ...opts,
+    }),
+  );
+}
+export function markCommentThreadRead(
+  {
+    threadId,
+  }: {
+    threadId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentThreadReadStateDtoOutput;
+    }>(`/comments/threads/${encodeURIComponent(threadId)}/read`, {
+      ...opts,
+      method: 'PATCH',
+    }),
   );
 }
 export function resolveCommentThread(

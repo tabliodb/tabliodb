@@ -7,6 +7,7 @@ import {
   CommentListResponseDto,
   CommentReplyCreateDto,
   CommentThreadCreateDto,
+  CommentThreadReadStateDto,
   CommentThreadListQueryDto,
   CommentThreadListResponseDto,
   CommentThreadResponseDto,
@@ -66,6 +67,22 @@ export class CommentController {
   @ZodResponse({ status: HttpStatus.CREATED, type: CommentThreadResponseDto })
   replyToThread(@Auth() auth: AuthContext, @Param('threadId') threadId: string, @Body() dto: CommentReplyCreateDto) {
     return this.service.replyToThread(auth, threadId, dto);
+  }
+
+  @Get('threads/:threadId/read-state')
+  @ApiParam({ name: 'threadId', type: String })
+  @ApiOperation({ operationId: 'getCommentThreadReadState' })
+  @ZodResponse({ type: CommentThreadReadStateDto })
+  getThreadReadState(@Auth() auth: AuthContext, @Param('threadId') threadId: string) {
+    return this.service.getThreadReadState(auth, threadId);
+  }
+
+  @Patch('threads/:threadId/read')
+  @ApiParam({ name: 'threadId', type: String })
+  @ApiOperation({ operationId: 'markCommentThreadRead' })
+  @ZodResponse({ type: CommentThreadReadStateDto })
+  markThreadRead(@Auth() auth: AuthContext, @Param('threadId') threadId: string) {
+    return this.service.markThreadRead(auth, threadId);
   }
 
   @Patch('threads/:threadId/resolve')
