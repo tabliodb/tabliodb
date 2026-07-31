@@ -94,10 +94,6 @@ export function AdminSettingsPage() {
     <div className="mx-auto grid w-full max-w-5xl gap-5 px-5 py-5">
       <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="mb-2 inline-flex items-center gap-2 rounded-full border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] px-3 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
-            <ShieldCheck className="size-4" />
-            Instance settings
-          </p>
           <h2 className="text-2xl font-extrabold tracking-normal text-[rgb(var(--tabliodb-ink))]">Sign-up policy</h2>
           <p className="mt-1 max-w-2xl text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
             Control how new employees can enter this self-hosted Tabliodb instance.
