@@ -2139,7 +2139,7 @@ function CommentsDialog({
                   onClick={handleToggleResolved}
                   size="sm"
                   type="button"
-                  variant={activeThread.status === 'resolved' ? 'primary' : 'purple'}
+                  variant={activeThread.status === 'resolved' ? 'secondary' : 'purple'}
                 >
                   {resolveThreadMutation.isPending || unresolveThreadMutation.isPending ? (
                     <Loader2 className="size-4 animate-spin" />
