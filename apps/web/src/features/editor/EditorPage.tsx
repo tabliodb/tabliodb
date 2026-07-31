@@ -1951,6 +1951,9 @@ function ThreadCommentItem({
   onReply: (comment: CommentResponseDto) => void;
 }) {
   const hasReplies = comment.replies.length > 0;
+  const avatarBottomClass = depth === 0 ? 'top-[44px]' : 'top-[40px]';
+  const avatarCenterClass = depth === 0 ? 'left-[26px]' : 'left-[24px]';
+  const replySpineIndentClass = depth === 0 ? 'ml-[26px]' : 'ml-[24px]';
 
   return (
     <div
@@ -1967,14 +1970,24 @@ function ThreadCommentItem({
       ) : null}
 
       <article className="group relative flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] px-2 py-2 transition hover:bg-[rgb(var(--tabliodb-surface))]">
+        {hasReplies ? (
+          <span
+            aria-hidden="true"
+            className={cn(
+              'pointer-events-none absolute bottom-[-6px] w-px bg-[rgb(var(--tabliodb-border-strong))]',
+              avatarBottomClass,
+              avatarCenterClass,
+            )}
+          />
+        ) : null}
         <UserAvatar
           className={cn(
-            'rounded-full border-[rgb(var(--tabliodb-border))] text-[11px] shadow-[0_2px_0_rgb(var(--tabliodb-border))]',
+            'relative z-10 rounded-full border-[rgb(var(--tabliodb-border))] text-[11px] shadow-[0_2px_0_rgb(var(--tabliodb-border))]',
             depth === 0 ? 'size-9' : 'size-8',
           )}
           user={comment.author}
         />
-        <div className="min-w-0 flex-1">
+        <div className="relative z-10 min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{comment.author.name}</span>
             <span className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
@@ -2008,11 +2021,11 @@ function ThreadCommentItem({
       </article>
 
       {hasReplies ? (
-        <div className="relative -mt-1 ml-[26px] pl-[34px]">
+        <div className={cn('relative -mt-1 pl-[34px]', replySpineIndentClass)}>
           {/* The spine sits on the parent avatar centerline, while each elbow overlaps the child avatar edge so nested replies feel physically connected. */}
           <span
             aria-hidden="true"
-            className="absolute bottom-3 left-0 top-0 w-px bg-[rgb(var(--tabliodb-border-strong))]"
+            className="absolute bottom-3 left-0 top-[-6px] w-px bg-[rgb(var(--tabliodb-border-strong))]"
           />
           <div className="grid gap-0.5">
             {comment.replies.map((reply) => (
