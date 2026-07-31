@@ -188,7 +188,7 @@ export function AdminUsersPage() {
       </section>
 
       {userActionError ? (
-        <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+        <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
           {getErrorMessage(userActionError)}
         </div>
       ) : null}
@@ -236,7 +236,7 @@ export function AdminUsersPage() {
           </div>
         ) : usersQuery.error ? (
           <div className="p-4">
-            <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+            <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
               {getErrorMessage(usersQuery.error)}
             </div>
           </div>
@@ -425,7 +425,7 @@ function InviteUserDialog() {
                 </span>
                 <ControlledTextarea
                   aria-invalid={Boolean(errors.message)}
-                  className="min-h-24 w-full resize-none rounded-[16px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
+                  className="min-h-24 w-full resize-none rounded-2xl border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                   control={form.control}
                   disabled={createInvitationMutation.isPending}
                   name="message"
@@ -434,7 +434,7 @@ function InviteUserDialog() {
               </label>
 
               {createdInvite ? (
-                <div className="rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3">
+                <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3">
                   <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
                     Invitation link
                   </div>
@@ -600,7 +600,7 @@ function CreateUserDialog() {
                 </div>
               </fieldset>
 
-              <label className="flex cursor-pointer items-center gap-3 rounded-[16px] border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
+              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
                 <ControlledCheckbox
                   control={form.control}
                   disabled={createUserMutation.isPending}
@@ -760,7 +760,7 @@ function RoleOption({
   return (
     <button
       className={cn(
-        'cursor-pointer rounded-[16px] border-2 p-3 text-left transition',
+        'cursor-pointer rounded-2xl border-2 p-3 text-left transition',
         checked
           ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
           : 'border-[rgb(var(--tabliodb-border))] bg-white hover:bg-[rgb(var(--tabliodb-surface))]',
@@ -932,7 +932,7 @@ function formatOrganizations(user: UserResponseDto): string {
 
 function UserAvatar({ user }: { user: Pick<UserResponseDto, 'avatarUrl' | 'name'> }) {
   return (
-    <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[16px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+    <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
       {user.avatarUrl ? <img alt="" className="size-full object-cover" src={user.avatarUrl} /> : getInitials(user.name)}
     </div>
   );
