@@ -126,17 +126,12 @@ export function AdminSettingsPage() {
 
             <div className="grid gap-2 sm:grid-cols-2">
               {signupPolicyOptions.map((policy) => (
-                <button
+                <div
                   className={cn(
-                    'cursor-pointer rounded-[18px] border-2 p-3 text-left transition',
-                    selectedPolicy === policy
-                      ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]'
-                      : 'border-[rgb(var(--tabliodb-border))] bg-white hover:bg-[rgb(var(--tabliodb-surface))]',
+                    'rounded-[18px] border-2 p-3 text-left transition',
+                    'border-[rgb(var(--tabliodb-border))] bg-white',
                   )}
-                  disabled={updateAuthSettingsMutation.isPending}
                   key={policy}
-                  onClick={() => form.setValue('signupPolicy', policy, { shouldDirty: true, shouldValidate: true })}
-                  type="button"
                 >
                   <div className="mb-2 flex items-center gap-2 text-sm font-extrabold">
                     <SignupPolicyIcon policy={policy} />
@@ -145,7 +140,7 @@ export function AdminSettingsPage() {
                   <p className="text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
                     {describeSignupPolicy(policy)}
                   </p>
-                </button>
+                </div>
               ))}
             </div>
           </div>
