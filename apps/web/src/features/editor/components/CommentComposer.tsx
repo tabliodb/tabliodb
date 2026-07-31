@@ -260,7 +260,7 @@ function CommentMentionPlugin({
   return (
     <div
       className={cn(
-        'absolute left-2 right-2 z-[70] overflow-hidden rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_32px_rgb(15_23_42/0.14)]',
+        'absolute left-2 right-2 z-[70] overflow-hidden rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-border-strong))] bg-white shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_32px_rgb(15_23_42/0.14)]',
         menuPlacement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
       )}
     >
