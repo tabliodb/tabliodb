@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
-import type { DB } from '../schema/index.js';
+import type { DB, JsonValue } from '../schema/index.js';
 import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
 
 export type CommentThreadListOptions = {
@@ -19,10 +19,11 @@ export class CommentRepository {
   constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
 
   createThreadWithComment(options: {
+    bodyJson: JsonValue;
+    bodyText: string;
     diagramId: string;
     targetType: string;
     targetId: string | null;
-    body: string;
     createdById: string;
   }) {
     return this.db.transaction().execute(async (tx) => {
@@ -42,7 +43,9 @@ export class CommentRepository {
         .values({
           threadId: thread.id,
           parentCommentId: null,
-          body: options.body,
+          bodyFormat: 'lexical',
+          bodyJson: options.bodyJson,
+          bodyText: options.bodyText,
           createdById: options.createdById,
         })
         .returningAll()
@@ -53,7 +56,8 @@ export class CommentRepository {
   }
 
   async createCommentReply(options: {
-    body: string;
+    bodyJson: JsonValue;
+    bodyText: string;
     createdById: string;
     parentCommentId: string | null;
     threadId: string;
@@ -75,7 +79,9 @@ export class CommentRepository {
       const comment = await tx
         .insertInto('comments')
         .values({
-          body: options.body,
+          bodyFormat: 'lexical',
+          bodyJson: options.bodyJson,
+          bodyText: options.bodyText,
           createdById: options.createdById,
           // Parent null keeps the existing flat-thread behavior; a UUID turns this row into a nested reply.
           parentCommentId: options.parentCommentId,
@@ -157,7 +163,8 @@ export class CommentRepository {
         'comments.id',
         'comments.threadId',
         'comments.parentCommentId',
-        'comments.body',
+        'comments.bodyJson',
+        'comments.bodyText',
         'comments.bodyFormat',
         'comments.createdById',
         'comments.editedAt',

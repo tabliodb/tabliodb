@@ -2931,13 +2931,34 @@
         "required": ["secret", "apiKey"],
         "additionalProperties": false
       },
+      "CommentLexicalDocumentDto": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "object",
+            "properties": {
+              "children": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {}
+              },
+              "type": {
+                "type": "string",
+                "enum": ["root"]
+              }
+            },
+            "required": ["children", "type"],
+            "additionalProperties": {}
+          }
+        },
+        "required": ["root"],
+        "additionalProperties": {}
+      },
       "CommentThreadCreateDto": {
         "type": "object",
         "properties": {
-          "body": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4000
+          "bodyJson": {
+            "$ref": "#/components/schemas/CommentLexicalDocumentDto"
           },
           "diagramId": {
             "type": "string",
@@ -2953,7 +2974,7 @@
             "enum": ["diagram", "table", "column", "relationship", "index", "enum", "check", "note", "group"]
           }
         },
-        "required": ["body", "diagramId", "targetId", "targetType"]
+        "required": ["bodyJson", "diagramId", "targetId", "targetType"]
       },
       "CommentResponseDto_Output": {
         "type": "object",
@@ -2990,7 +3011,13 @@
           },
           "bodyFormat": {
             "type": "string",
-            "enum": ["markdown"]
+            "enum": ["lexical"]
+          },
+          "bodyJson": {
+            "$ref": "#/components/schemas/CommentLexicalDocumentDto_Output"
+          },
+          "bodyText": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string",
@@ -3039,6 +3066,8 @@
           "author",
           "body",
           "bodyFormat",
+          "bodyJson",
+          "bodyText",
           "createdAt",
           "createdById",
           "editedAt",
@@ -3049,6 +3078,29 @@
           "updatedAt"
         ],
         "additionalProperties": false
+      },
+      "CommentLexicalDocumentDto_Output": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "object",
+            "properties": {
+              "children": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {}
+              },
+              "type": {
+                "type": "string",
+                "enum": ["root"]
+              }
+            },
+            "required": ["children", "type"],
+            "additionalProperties": {}
+          }
+        },
+        "required": ["root"],
+        "additionalProperties": {}
       },
       "CommentThreadResponseDto_Output": {
         "type": "object",
@@ -3253,10 +3305,8 @@
       "CommentReplyCreateDto": {
         "type": "object",
         "properties": {
-          "body": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4000
+          "bodyJson": {
+            "$ref": "#/components/schemas/CommentLexicalDocumentDto"
           },
           "parentCommentId": {
             "type": "string",
@@ -3265,7 +3315,7 @@
             "nullable": true
           }
         },
-        "required": ["body"]
+        "required": ["bodyJson"]
       },
       "CommentThreadReadStateDto_Output": {
         "type": "object",

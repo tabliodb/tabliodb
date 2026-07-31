@@ -75,11 +75,27 @@ export type ApiKeyCreateResponseDtoOutput = {
     permissions: Permissions[];
   };
 };
+export type CommentLexicalDocumentDto = {
+  root: {
+    children: any[];
+    type: Type;
+    [key: string]: any;
+  };
+  [key: string]: any;
+};
 export type CommentThreadCreateDto = {
-  body: string;
+  bodyJson: CommentLexicalDocumentDto;
   diagramId: string;
   targetId: string | null;
   targetType: TargetType;
+};
+export type CommentLexicalDocumentDtoOutput = {
+  root: {
+    children: any[];
+    type: Type;
+    [key: string]: any;
+  };
+  [key: string]: any;
 };
 export type CommentResponseDtoOutput = {
   author: {
@@ -91,6 +107,8 @@ export type CommentResponseDtoOutput = {
   };
   body: string;
   bodyFormat: BodyFormat;
+  bodyJson: CommentLexicalDocumentDtoOutput;
+  bodyText: string;
   createdAt: string;
   createdById: string;
   editedAt: string | null;
@@ -140,7 +158,7 @@ export type CommentListResponseDtoOutput = {
   totalCount: number;
 };
 export type CommentReplyCreateDto = {
-  body: string;
+  bodyJson: CommentLexicalDocumentDto;
   parentCommentId?: string | null;
 };
 export type CommentThreadReadStateDtoOutput = {
@@ -2296,6 +2314,9 @@ export enum Permissions {
   SnapshotRead = 'snapshot.read',
   ApiKeyManage = 'api-key.manage',
 }
+export enum Type {
+  Root = 'root',
+}
 export enum TargetType {
   Diagram = 'diagram',
   Table = 'table',
@@ -2312,7 +2333,7 @@ export enum Status {
   Resolved = 'resolved',
 }
 export enum BodyFormat {
-  Markdown = 'markdown',
+  Lexical = 'lexical',
 }
 export enum Dialect {
   Postgresql = 'postgresql',

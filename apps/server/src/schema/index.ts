@@ -277,8 +277,9 @@ export interface CommentTable {
   id: Generated<string>;
   threadId: string;
   parentCommentId: NullableColumn<string>;
-  body: string;
-  bodyFormat: Defaulted<'markdown'>;
+  bodyJson: JsonColumn;
+  bodyText: string;
+  bodyFormat: Defaulted<'lexical'>;
   createdById: string;
   editedAt: NullableTimestamp;
   deletedAt: NullableTimestamp;

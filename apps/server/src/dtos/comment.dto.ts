@@ -1,5 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { CommentLexicalDocumentSchema } from '../utils/comment-body.js';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const CommentTargetTypeSchema = z.enum([
@@ -40,7 +41,9 @@ const CommentResponseSchema = z
   .object({
     author: CommentAuthorSchema,
     body: z.string(),
-    bodyFormat: z.literal('markdown'),
+    bodyFormat: z.literal('lexical'),
+    bodyJson: CommentLexicalDocumentSchema,
+    bodyText: z.string(),
     createdAt: DateTimeSchema,
     createdById: z.string().uuid(),
     editedAt: DateTimeSchema.nullable(),
@@ -54,7 +57,7 @@ const CommentResponseSchema = z
 
 const CommentThreadCreateSchema = z
   .object({
-    body: z.string().trim().min(1).max(4000),
+    bodyJson: CommentLexicalDocumentSchema,
     diagramId: z.string().uuid(),
     targetId: z.string().nullable(),
     targetType: CommentTargetTypeSchema,
@@ -63,7 +66,7 @@ const CommentThreadCreateSchema = z
 
 const CommentReplyCreateSchema = z
   .object({
-    body: z.string().trim().min(1).max(4000),
+    bodyJson: CommentLexicalDocumentSchema,
     parentCommentId: z.string().uuid().nullable().optional(),
   })
   .meta({ id: 'CommentReplyCreateDto' });

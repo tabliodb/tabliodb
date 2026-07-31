@@ -7,7 +7,7 @@ import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { PlainTextPlugin } from '@lexical/react/LexicalPlainTextPlugin';
 import { cn } from '@tabliodb/ui';
-import type { ProjectMemberDto } from '@tabliodb/sdk';
+import type { CommentLexicalDocumentDto, ProjectMemberDto } from '@tabliodb/sdk';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -33,7 +33,7 @@ export type CommentComposerProps = {
   mentionUsers?: CommentMentionUser[];
   menuPlacement?: 'bottom' | 'top';
   onBlur?: () => void;
-  onChange: (value: string) => void;
+  onChange: (value: string, bodyJson: CommentLexicalDocumentDto) => void;
   placeholder?: string;
   value: string;
 };
@@ -105,13 +105,18 @@ export function CommentComposer({
 
 export default CommentComposer;
 
-function CommentComposerChangePlugin({ onChange }: { onChange: (value: string) => void }) {
+function CommentComposerChangePlugin({
+  onChange,
+}: {
+  onChange: (value: string, bodyJson: CommentLexicalDocumentDto) => void;
+}) {
   return (
     <OnChangePlugin
       ignoreSelectionChange
       onChange={(editorState) => {
         editorState.read(() => {
-          onChange($getRoot().getTextContent());
+          // Server menyimpan Lexical JSON sebagai source of truth; plain text tetap dikirim untuk RHF validation dan typing UX.
+          onChange($getRoot().getTextContent(), editorState.toJSON() as CommentLexicalDocumentDto);
         });
       }}
     />

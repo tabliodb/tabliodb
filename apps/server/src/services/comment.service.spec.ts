@@ -1,7 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Permission } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
+import { createPlainTextCommentLexicalDocument } from '../utils/comment-body.js';
 import { CommentService } from './comment.service.js';
 
 const auth: AuthContext = {
@@ -28,8 +29,9 @@ const thread = {
 };
 
 const comment = {
-  body: 'Please review this table.',
-  bodyFormat: 'markdown' as const,
+  bodyFormat: 'lexical' as const,
+  bodyJson: createPlainTextCommentLexicalDocument('Please review this table.'),
+  bodyText: 'Please review this table.',
   createdAt: new Date('2026-07-30T08:01:00.000Z'),
   createdById: 'user-id',
   deletedAt: null,
@@ -65,13 +67,17 @@ describe(CommentService.name, () => {
     service = new CommentService(commentRepository as never, diagramService as never);
   });
 
+  function commentBody(bodyText: string) {
+    return createPlainTextCommentLexicalDocument(bodyText) as never;
+  }
+
   it('rejects replies when the user cannot comment on the thread diagram', async () => {
     commentRepository.getThreadById.mockResolvedValue(thread);
     diagramService.requireDiagram.mockRejectedValue(new ForbiddenException());
 
-    await expect(service.replyToThread(auth, 'thread-id', { body: 'Readonly reply' })).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.replyToThread(auth, 'thread-id', { bodyJson: commentBody('Readonly reply') }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
 
     // Route berbasis thread harus resolve diagramId dulu, lalu permission comment dicek sebelum insert reply.
     expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramComment);
@@ -83,7 +89,9 @@ describe(CommentService.name, () => {
     diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
     commentRepository.createCommentReply.mockResolvedValue({ comment, thread });
 
-    await expect(service.replyToThread(auth, 'thread-id', { body: 'Looks good.' })).resolves.toMatchObject({
+    await expect(
+      service.replyToThread(auth, 'thread-id', { bodyJson: commentBody('Looks good.') }),
+    ).resolves.toMatchObject({
       comment: {
         author: {
           email: 'commenter@tabliodb.local',
@@ -91,6 +99,8 @@ describe(CommentService.name, () => {
           name: 'Commenter User',
         },
         body: 'Please review this table.',
+        bodyFormat: 'lexical',
+        bodyText: 'Please review this table.',
         createdAt: '2026-07-30T08:01:00.000Z',
       },
       thread: {
@@ -101,7 +111,63 @@ describe(CommentService.name, () => {
     });
 
     expect(commentRepository.createCommentReply).toHaveBeenCalledWith({
-      body: 'Looks good.',
+      bodyJson: createPlainTextCommentLexicalDocument('Looks good.'),
+      bodyText: 'Looks good.',
+      createdById: 'user-id',
+      parentCommentId: null,
+      threadId: 'thread-id',
+    });
+  });
+
+  it('rejects empty Lexical comment documents before inserting a reply', async () => {
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+
+    await expect(service.replyToThread(auth, 'thread-id', { bodyJson: commentBody('') })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+
+    expect(commentRepository.createCommentReply).not.toHaveBeenCalled();
+  });
+
+  it('strips unknown Lexical nodes and stores server-derived plain text', async () => {
+    const bodyJson = {
+      root: {
+        children: [
+          {
+            children: [
+              { type: 'text', text: 'Visible text', version: 1 },
+              { type: 'unsafe-html', html: '<img src=x onerror=alert(1)>', version: 1 },
+            ],
+            type: 'paragraph',
+            version: 1,
+          },
+        ],
+        type: 'root',
+        version: 1,
+      },
+    };
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.createCommentReply.mockResolvedValue({
+      comment: {
+        ...comment,
+        bodyJson: createPlainTextCommentLexicalDocument('Visible text'),
+        bodyText: 'Visible text',
+      },
+      thread,
+    });
+
+    await expect(service.replyToThread(auth, 'thread-id', { bodyJson: bodyJson as never })).resolves.toMatchObject({
+      comment: {
+        body: 'Visible text',
+        bodyText: 'Visible text',
+      },
+    });
+
+    expect(commentRepository.createCommentReply).toHaveBeenCalledWith({
+      bodyJson: createPlainTextCommentLexicalDocument('Visible text'),
+      bodyText: 'Visible text',
       createdById: 'user-id',
       parentCommentId: null,
       threadId: 'thread-id',
@@ -241,7 +307,10 @@ describe(CommentService.name, () => {
     });
 
     await expect(
-      service.replyToThread(auth, 'thread-id', { body: 'Nested detail.', parentCommentId: 'parent-comment-id' }),
+      service.replyToThread(auth, 'thread-id', {
+        bodyJson: commentBody('Nested detail.'),
+        parentCommentId: 'parent-comment-id',
+      }),
     ).resolves.toMatchObject({
       comment: {
         id: 'nested-comment-id',
@@ -251,7 +320,8 @@ describe(CommentService.name, () => {
 
     expect(commentRepository.getCommentInThread).toHaveBeenCalledWith('parent-comment-id', 'thread-id');
     expect(commentRepository.createCommentReply).toHaveBeenCalledWith({
-      body: 'Nested detail.',
+      bodyJson: createPlainTextCommentLexicalDocument('Nested detail.'),
+      bodyText: 'Nested detail.',
       createdById: 'user-id',
       parentCommentId: 'parent-comment-id',
       threadId: 'thread-id',
@@ -264,7 +334,10 @@ describe(CommentService.name, () => {
     commentRepository.getCommentInThread.mockResolvedValue(undefined);
 
     await expect(
-      service.replyToThread(auth, 'thread-id', { body: 'Wrong parent.', parentCommentId: 'other-thread-comment-id' }),
+      service.replyToThread(auth, 'thread-id', {
+        bodyJson: commentBody('Wrong parent.'),
+        parentCommentId: 'other-thread-comment-id',
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
 
     // Parent validation prevents cross-thread nesting even when the caller already has comment permission on this thread.

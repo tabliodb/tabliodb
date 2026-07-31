@@ -5,6 +5,7 @@ import { AuthContext } from '../database.js';
 import { CommentReplyCreateDto, CommentThreadCreateDto, CommentThreadListQueryDto } from '../dtos/comment.dto.js';
 import { CommentRepository } from '../repositories/comment.repository.js';
 import type { CommentThreadTable } from '../schema/index.js';
+import { normalizeCommentLexicalBody, type CommentLexicalDocument } from '../utils/comment-body.js';
 import { toIsoDateTime, toNullableIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
 import { DiagramService } from './diagram.service.js';
@@ -22,12 +23,14 @@ export class CommentService {
 
   async createThread(auth: AuthContext, dto: CommentThreadCreateDto) {
     await this.diagramService.requireDiagram(auth, dto.diagramId, Permission.DiagramComment);
+    const normalizedBody = normalizeCommentLexicalBody(dto.bodyJson);
 
     const result = await this.commentRepository.createThreadWithComment({
+      bodyJson: normalizedBody.bodyJson,
+      bodyText: normalizedBody.bodyText,
       diagramId: dto.diagramId,
       targetType: dto.targetType,
       targetId: dto.targetId,
-      body: dto.body,
       createdById: auth.user.id,
     });
 
@@ -37,8 +40,10 @@ export class CommentService {
         author: this.serializeAuthor(auth.user),
         id: result.comment.id,
         threadId: result.comment.threadId,
-        body: result.comment.body,
+        body: result.comment.bodyText,
         bodyFormat: result.comment.bodyFormat,
+        bodyJson: this.serializeCommentBodyJson(result.comment.bodyJson),
+        bodyText: result.comment.bodyText,
         createdById: result.comment.createdById,
         editedAt: toNullableIsoDateTime(result.comment.editedAt),
         createdAt: toIsoDateTime(result.comment.createdAt),
@@ -82,8 +87,10 @@ export class CommentService {
           id: comment.authorId,
           name: comment.authorName,
         },
-        body: comment.body,
+        body: comment.bodyText,
         bodyFormat: comment.bodyFormat,
+        bodyJson: this.serializeCommentBodyJson(comment.bodyJson),
+        bodyText: comment.bodyText,
         createdAt: toIsoDateTime(comment.createdAt),
         createdById: comment.createdById,
         editedAt: toNullableIsoDateTime(comment.editedAt),
@@ -115,6 +122,7 @@ export class CommentService {
   async replyToThread(auth: AuthContext, threadId: string, dto: CommentReplyCreateDto) {
     const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramComment);
     const parentCommentId = dto.parentCommentId ?? null;
+    const normalizedBody = normalizeCommentLexicalBody(dto.bodyJson);
 
     if (parentCommentId) {
       const parentComment = await this.commentRepository.getCommentInThread(parentCommentId, thread.id);
@@ -125,7 +133,8 @@ export class CommentService {
     }
 
     const result = await this.commentRepository.createCommentReply({
-      body: dto.body,
+      bodyJson: normalizedBody.bodyJson,
+      bodyText: normalizedBody.bodyText,
       createdById: auth.user.id,
       parentCommentId,
       threadId: thread.id,
@@ -135,8 +144,10 @@ export class CommentService {
       thread: this.serializeThread(result.thread),
       comment: {
         author: this.serializeAuthor(auth.user),
-        body: result.comment.body,
+        body: result.comment.bodyText,
         bodyFormat: result.comment.bodyFormat,
+        bodyJson: this.serializeCommentBodyJson(result.comment.bodyJson),
+        bodyText: result.comment.bodyText,
         createdAt: toIsoDateTime(result.comment.createdAt),
         createdById: result.comment.createdById,
         editedAt: toNullableIsoDateTime(result.comment.editedAt),
@@ -212,6 +223,11 @@ export class CommentService {
       unreadCount: state.unreadCount,
       updatedAt: state.readState ? toIsoDateTime(state.readState.updatedAt) : null,
     };
+  }
+
+  private serializeCommentBodyJson(bodyJson: unknown): CommentLexicalDocument {
+    // DB writes go through normalizeCommentLexicalBody(), so reads can safely expose the stored JSON as the DTO Lexical shape.
+    return bodyJson as CommentLexicalDocument;
   }
 
   private serializeAuthor(user: AuthContext['user']) {

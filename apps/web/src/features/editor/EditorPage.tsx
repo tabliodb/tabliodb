@@ -30,6 +30,7 @@ import {
   type ProjectResponseDto,
   type CommentResponseDto,
   type CommentTargetType,
+  type CommentLexicalDocumentDto,
   type CommentThreadReaderDto,
   type CommentThreadListItemDto,
   type ReviewSignalEffectiveSettingsDto,
@@ -166,6 +167,7 @@ import {
   useUpdateProjectReviewSignalSettingsMutation,
 } from '@/resources/review-signals';
 import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
+import { createEmptyCommentFormBody } from './comment-body';
 import { SchemaCanvas, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
@@ -208,6 +210,7 @@ type EditorCommentTarget = {
 
 const commentFormSchema = z.object({
   body: z.string().trim().min(1, 'Write a comment first.').max(4000, 'Keep the comment under 4000 characters.'),
+  bodyJson: z.custom<CommentLexicalDocumentDto>(),
 });
 
 type CommentFormState = z.infer<typeof commentFormSchema>;
@@ -1337,12 +1340,12 @@ function CommentsDialog({
   const typingStopTimeoutRef = useRef<number | null>(null);
   const lastMarkedReadSignatureRef = useRef<string | null>(null);
   const createForm = useForm<CommentFormState>({
-    defaultValues: { body: '' },
+    defaultValues: createEmptyCommentFormBody(),
     mode: 'onBlur',
     resolver: zodResolver(commentFormSchema),
   });
   const replyForm = useForm<CommentFormState>({
-    defaultValues: { body: '' },
+    defaultValues: createEmptyCommentFormBody(),
     mode: 'onBlur',
     resolver: zodResolver(commentFormSchema),
   });
@@ -1459,7 +1462,7 @@ function CommentsDialog({
     // Parent reply selalu scoped ke thread aktif; pindah thread menghapus quote preview agar payload tidak mengarah ke thread lama.
     stopCommentTyping();
     setReplyParentComment(null);
-    replyForm.reset({ body: '' });
+    replyForm.reset(createEmptyCommentFormBody());
   }, [activeThreadId, replyForm]);
 
   useEffect(() => {
@@ -1476,8 +1479,8 @@ function CommentsDialog({
     onOpenChange(nextOpen);
 
     if (!nextOpen) {
-      createForm.reset({ body: '' });
-      replyForm.reset({ body: '' });
+      createForm.reset(createEmptyCommentFormBody());
+      replyForm.reset(createEmptyCommentFormBody());
       setReplyParentComment(null);
       stopCommentTyping();
       createThreadMutation.reset();
@@ -1495,7 +1498,7 @@ function CommentsDialog({
     createThreadMutation.mutate(
       {
         body: {
-          body: values.body,
+          bodyJson: values.bodyJson,
           diagramId,
           targetId: activeTarget.targetId,
           targetType: activeTarget.targetType,
@@ -1504,7 +1507,7 @@ function CommentsDialog({
       {
         onSuccess: (response) => {
           setActiveThreadId(response.thread.id);
-          createForm.reset({ body: '' });
+          createForm.reset(createEmptyCommentFormBody());
         },
       },
     );
@@ -1518,14 +1521,14 @@ function CommentsDialog({
     replyMutation.mutate(
       {
         body: {
-          body: values.body,
+          bodyJson: values.bodyJson,
           parentCommentId: replyParentComment?.id ?? null,
         },
         threadId: activeThread.id,
       },
       {
         onSuccess: () => {
-          replyForm.reset({ body: '' });
+          replyForm.reset(createEmptyCommentFormBody());
           setReplyParentComment(null);
           stopCommentTyping();
         },
@@ -1555,8 +1558,13 @@ function CommentsDialog({
     onCommentTargetSelect({ targetId: thread.targetId, targetType: thread.targetType });
   }
 
-  function handleReplyComposerChange(value: string, onChange: (value: string) => void) {
+  function handleReplyComposerChange(
+    value: string,
+    bodyJson: CommentLexicalDocumentDto,
+    onChange: (value: string) => void,
+  ) {
     onChange(value);
+    replyForm.setValue('bodyJson', bodyJson, { shouldDirty: true });
 
     if (!activeThread || !canComment || replyMutation.isPending || value.trim().length === 0) {
       stopCommentTyping();
@@ -1660,7 +1668,10 @@ function CommentsDialog({
                       disabled={!canComment || createThreadMutation.isPending}
                       mentionUsers={mentionUsers}
                       onBlur={field.onBlur}
-                      onChange={field.onChange}
+                      onChange={(value, bodyJson) => {
+                        field.onChange(value);
+                        createForm.setValue('bodyJson', bodyJson, { shouldDirty: true });
+                      }}
                       placeholder={canComment ? 'Leave a note with @teammate' : 'Your role can read comments only'}
                       value={field.value}
                     />
@@ -1878,7 +1889,7 @@ function CommentsDialog({
                       mentionUsers={mentionUsers}
                       menuPlacement="top"
                       onBlur={() => handleReplyComposerBlur(field.onBlur)}
-                      onChange={(value) => handleReplyComposerChange(value, field.onChange)}
+                      onChange={(value, bodyJson) => handleReplyComposerChange(value, bodyJson, field.onChange)}
                       placeholder={replyPlaceholder}
                       value={field.value}
                     />
