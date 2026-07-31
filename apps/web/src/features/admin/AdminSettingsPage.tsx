@@ -172,7 +172,7 @@ export function AdminSettingsPage() {
             </span>
             <ControlledTextarea
               aria-invalid={Boolean(errors.allowedDomainsText)}
-              className="min-h-36 w-full resize-y rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-3 text-[13px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-36 w-full resize-y rounded-(--tabliodb-radius-lg) border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-3 text-[13px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60"
               control={form.control}
               disabled={updateAuthSettingsMutation.isPending}
               name="allowedDomainsText"
