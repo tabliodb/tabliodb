@@ -48,6 +48,7 @@ const CommentResponseSchema = z
     createdById: z.string().uuid(),
     editedAt: DateTimeSchema.nullable(),
     id: z.string().uuid(),
+    mentionedUserIds: z.array(z.string().uuid()),
     parentCommentId: z.string().uuid().nullable(),
     replyCount: z.number().int().nonnegative(),
     threadId: z.string().uuid(),

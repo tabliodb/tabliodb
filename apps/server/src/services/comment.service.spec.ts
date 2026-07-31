@@ -49,6 +49,7 @@ describe(CommentService.name, () => {
     createThreadWithComment: vi.fn(),
     getCommentInThread: vi.fn(),
     getComments: vi.fn(),
+    getMentionableUsersForDiagram: vi.fn(),
     getThreadReadState: vi.fn(),
     getThreadById: vi.fn(),
     getThreads: vi.fn(),
@@ -114,6 +115,7 @@ describe(CommentService.name, () => {
       bodyJson: createPlainTextCommentLexicalDocument('Looks good.'),
       bodyText: 'Looks good.',
       createdById: 'user-id',
+      mentionUserIds: [],
       parentCommentId: null,
       threadId: 'thread-id',
     });
@@ -169,6 +171,48 @@ describe(CommentService.name, () => {
       bodyJson: createPlainTextCommentLexicalDocument('Visible text'),
       bodyText: 'Visible text',
       createdById: 'user-id',
+      mentionUserIds: [],
+      parentCommentId: null,
+      threadId: 'thread-id',
+    });
+  });
+
+  it('stores only project-accessible mentions and skips self mentions', async () => {
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    commentRepository.getMentionableUsersForDiagram.mockResolvedValue([
+      { email: 'commenter@tabliodb.local', name: 'Commenter User', userId: 'user-id' },
+      { email: 'teammate@tabliodb.local', name: 'Team Mate', userId: 'teammate-id' },
+    ]);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.createCommentReply.mockResolvedValue({
+      comment: {
+        ...comment,
+        bodyJson: createPlainTextCommentLexicalDocument(
+          'Please ask @Team Mate and @Commenter User plus @outsider@example.local.',
+        ),
+        bodyText: 'Please ask @Team Mate and @Commenter User plus @outsider@example.local.',
+      },
+      thread,
+    });
+
+    await expect(
+      service.replyToThread(auth, 'thread-id', {
+        bodyJson: commentBody('Please ask @Team Mate and @Commenter User plus @outsider@example.local.'),
+      }),
+    ).resolves.toMatchObject({
+      comment: {
+        mentionedUserIds: ['teammate-id'],
+      },
+    });
+
+    expect(commentRepository.getMentionableUsersForDiagram).toHaveBeenCalledWith('diagram-id');
+    expect(commentRepository.createCommentReply).toHaveBeenCalledWith({
+      bodyJson: createPlainTextCommentLexicalDocument(
+        'Please ask @Team Mate and @Commenter User plus @outsider@example.local.',
+      ),
+      bodyText: 'Please ask @Team Mate and @Commenter User plus @outsider@example.local.',
+      createdById: 'user-id',
+      mentionUserIds: ['teammate-id'],
       parentCommentId: null,
       threadId: 'thread-id',
     });
@@ -323,6 +367,7 @@ describe(CommentService.name, () => {
       bodyJson: createPlainTextCommentLexicalDocument('Nested detail.'),
       bodyText: 'Nested detail.',
       createdById: 'user-id',
+      mentionUserIds: [],
       parentCommentId: 'parent-comment-id',
       threadId: 'thread-id',
     });

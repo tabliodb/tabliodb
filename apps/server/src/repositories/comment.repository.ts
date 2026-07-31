@@ -25,6 +25,7 @@ export class CommentRepository {
     targetType: string;
     targetId: string | null;
     createdById: string;
+    mentionUserIds: string[];
   }) {
     return this.db.transaction().execute(async (tx) => {
       const thread = await tx
@@ -51,6 +52,14 @@ export class CommentRepository {
         .returningAll()
         .executeTakeFirstOrThrow();
 
+      if (options.mentionUserIds.length > 0) {
+        await tx
+          .insertInto('comment_mentions')
+          .values(options.mentionUserIds.map((mentionedUserId) => ({ commentId: comment.id, mentionedUserId })))
+          .onConflict((conflict) => conflict.columns(['commentId', 'mentionedUserId']).doNothing())
+          .execute();
+      }
+
       return { thread, comment };
     });
   }
@@ -59,6 +68,7 @@ export class CommentRepository {
     bodyJson: JsonValue;
     bodyText: string;
     createdById: string;
+    mentionUserIds: string[];
     parentCommentId: string | null;
     threadId: string;
   }) {
@@ -90,6 +100,14 @@ export class CommentRepository {
         .returningAll()
         .executeTakeFirstOrThrow();
 
+      if (options.mentionUserIds.length > 0) {
+        await tx
+          .insertInto('comment_mentions')
+          .values(options.mentionUserIds.map((mentionedUserId) => ({ commentId: comment.id, mentionedUserId })))
+          .onConflict((conflict) => conflict.columns(['commentId', 'mentionedUserId']).doNothing())
+          .execute();
+      }
+
       return { comment, thread };
     });
   }
@@ -106,6 +124,18 @@ export class CommentRepository {
       .where('threadId', '=', threadId)
       .where('deletedAt', 'is', null)
       .executeTakeFirst();
+  }
+
+  getMentionableUsersForDiagram(diagramId: string) {
+    return this.db
+      .selectFrom('diagrams')
+      .innerJoin('project_members', 'project_members.projectId', 'diagrams.projectId')
+      .innerJoin('users', 'users.id', 'project_members.userId')
+      .select(['project_members.userId', 'users.email', 'users.name'])
+      .where('diagrams.id', '=', diagramId)
+      .where('diagrams.archivedAt', 'is', null)
+      .where('users.deletedAt', 'is', null)
+      .execute();
   }
 
   async getThreads(diagramId: string, options: CommentThreadListOptions & { userId: string }) {
@@ -184,6 +214,14 @@ export class CommentRepository {
           WHERE replies.parent_comment_id = comments.id
             AND replies.deleted_at IS NULL
         )`.as('replyCount'),
+        sql<string[]>`coalesce(
+          (
+            SELECT array_agg(comment_mentions.mentioned_user_id ORDER BY comment_mentions.created_at ASC)
+            FROM comment_mentions
+            WHERE comment_mentions.comment_id = comments.id
+          ),
+          '{}'::uuid[]
+        )`.as('mentionedUserIds'),
       ])
       .where('comments.threadId', '=', threadId)
       .where('comments.deletedAt', 'is', null)

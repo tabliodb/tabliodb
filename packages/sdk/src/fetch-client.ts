@@ -113,6 +113,7 @@ export type CommentResponseDtoOutput = {
   createdById: string;
   editedAt: string | null;
   id: string;
+  mentionedUserIds: string[];
   parentCommentId: string | null;
   replyCount: number;
   threadId: string;

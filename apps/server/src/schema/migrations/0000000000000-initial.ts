@@ -280,6 +280,13 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now()
     );
 
+    CREATE TABLE IF NOT EXISTS comment_mentions (
+      comment_id uuid NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+      mentioned_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (comment_id, mentioned_user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS comment_thread_reads (
       thread_id uuid NOT NULL REFERENCES comment_threads(id) ON DELETE CASCADE,
       user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -323,6 +330,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     CREATE INDEX IF NOT EXISTS comment_threads_diagram_target_idx ON comment_threads(diagram_id, target_type, target_id);
     CREATE INDEX IF NOT EXISTS comments_thread_created_at_idx ON comments(thread_id, created_at);
     CREATE INDEX IF NOT EXISTS comments_thread_parent_created_idx ON comments(thread_id, parent_comment_id, created_at);
+    CREATE INDEX IF NOT EXISTS comment_mentions_user_created_idx ON comment_mentions(mentioned_user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS comment_thread_reads_user_updated_idx ON comment_thread_reads(user_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS audit_logs_scope_created_at_idx ON audit_logs(organization_id, project_id, created_at DESC);
   `.execute(db);
@@ -336,6 +344,8 @@ export async function down(db: Kysely<unknown>): Promise<void> {
     ALTER TABLE IF EXISTS users DROP COLUMN IF EXISTS avatar_file_id;
 
     DROP TABLE IF EXISTS audit_logs;
+    DROP TABLE IF EXISTS comment_thread_reads;
+    DROP TABLE IF EXISTS comment_mentions;
     DROP TABLE IF EXISTS comments;
     DROP TABLE IF EXISTS comment_threads;
     DROP TABLE IF EXISTS diagram_review_signals;

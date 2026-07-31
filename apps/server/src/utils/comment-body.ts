@@ -69,6 +69,23 @@ export function createPlainTextCommentLexicalDocument(bodyText: string): JsonVal
   };
 }
 
+export function extractCommentMentionUserIds(bodyJson: JsonValue): string[] {
+  const mentionUserIds = new Set<string>();
+
+  visitCommentBodyJson(bodyJson, (value) => {
+    if (
+      isRecord(value) &&
+      value.type === 'mention' &&
+      typeof value.userId === 'string' &&
+      uuidPattern.test(value.userId)
+    ) {
+      mentionUserIds.add(value.userId);
+    }
+  });
+
+  return [...mentionUserIds];
+}
+
 export function normalizeCommentLexicalBody(input: unknown): CommentBodyNormalizationResult {
   assertJsonPayloadSize(input);
 
@@ -317,4 +334,24 @@ function readTextMode(value: unknown): 'normal' | 'segmented' | 'token' {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function visitCommentBodyJson(value: JsonValue, visitor: (value: JsonValue) => void) {
+  visitor(value);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      visitCommentBodyJson(item, visitor);
+    }
+
+    return;
+  }
+
+  if (!isRecord(value)) {
+    return;
+  }
+
+  for (const item of Object.values(value)) {
+    visitCommentBodyJson(item as JsonValue, visitor);
+  }
 }

@@ -287,6 +287,12 @@ export interface CommentTable {
   updatedAt: Timestamp;
 }
 
+export interface CommentMentionTable {
+  commentId: string;
+  mentionedUserId: string;
+  createdAt: Timestamp;
+}
+
 export interface CommentThreadReadTable {
   threadId: string;
   userId: string;
@@ -332,6 +338,7 @@ export interface DB {
   diagram_review_signals: DiagramReviewSignalTable;
   comment_threads: CommentThreadTable;
   comments: CommentTable;
+  comment_mentions: CommentMentionTable;
   comment_thread_reads: CommentThreadReadTable;
   audit_logs: AuditLogTable;
 }

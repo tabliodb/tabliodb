@@ -4,8 +4,12 @@ import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
 import { CommentReplyCreateDto, CommentThreadCreateDto, CommentThreadListQueryDto } from '../dtos/comment.dto.js';
 import { CommentRepository } from '../repositories/comment.repository.js';
-import type { CommentThreadTable } from '../schema/index.js';
-import { normalizeCommentLexicalBody, type CommentLexicalDocument } from '../utils/comment-body.js';
+import type { CommentThreadTable, JsonValue } from '../schema/index.js';
+import {
+  extractCommentMentionUserIds,
+  normalizeCommentLexicalBody,
+  type CommentLexicalDocument,
+} from '../utils/comment-body.js';
 import { toIsoDateTime, toNullableIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
 import { DiagramService } from './diagram.service.js';
@@ -24,6 +28,7 @@ export class CommentService {
   async createThread(auth: AuthContext, dto: CommentThreadCreateDto) {
     await this.diagramService.requireDiagram(auth, dto.diagramId, Permission.DiagramComment);
     const normalizedBody = normalizeCommentLexicalBody(dto.bodyJson);
+    const mentionUserIds = await this.resolveMentionUserIds(dto.diagramId, normalizedBody, auth.user.id);
 
     const result = await this.commentRepository.createThreadWithComment({
       bodyJson: normalizedBody.bodyJson,
@@ -32,6 +37,7 @@ export class CommentService {
       targetType: dto.targetType,
       targetId: dto.targetId,
       createdById: auth.user.id,
+      mentionUserIds,
     });
 
     return {
@@ -39,6 +45,7 @@ export class CommentService {
       comment: {
         author: this.serializeAuthor(auth.user),
         id: result.comment.id,
+        mentionedUserIds: mentionUserIds,
         threadId: result.comment.threadId,
         body: result.comment.bodyText,
         bodyFormat: result.comment.bodyFormat,
@@ -96,6 +103,7 @@ export class CommentService {
         editedAt: toNullableIsoDateTime(comment.editedAt),
         id: comment.id,
         parentCommentId: comment.parentCommentId,
+        mentionedUserIds: comment.mentionedUserIds ?? [],
         replyCount: Number(comment.replyCount),
         threadId: comment.threadId,
         updatedAt: toIsoDateTime(comment.updatedAt),
@@ -123,6 +131,7 @@ export class CommentService {
     const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramComment);
     const parentCommentId = dto.parentCommentId ?? null;
     const normalizedBody = normalizeCommentLexicalBody(dto.bodyJson);
+    const mentionUserIds = await this.resolveMentionUserIds(thread.diagramId, normalizedBody, auth.user.id);
 
     if (parentCommentId) {
       const parentComment = await this.commentRepository.getCommentInThread(parentCommentId, thread.id);
@@ -136,6 +145,7 @@ export class CommentService {
       bodyJson: normalizedBody.bodyJson,
       bodyText: normalizedBody.bodyText,
       createdById: auth.user.id,
+      mentionUserIds,
       parentCommentId,
       threadId: thread.id,
     });
@@ -152,6 +162,7 @@ export class CommentService {
         createdById: result.comment.createdById,
         editedAt: toNullableIsoDateTime(result.comment.editedAt),
         id: result.comment.id,
+        mentionedUserIds: mentionUserIds,
         parentCommentId: result.comment.parentCommentId,
         replyCount: 0,
         threadId: result.comment.threadId,
@@ -230,6 +241,37 @@ export class CommentService {
     return bodyJson as CommentLexicalDocument;
   }
 
+  private async resolveMentionUserIds(
+    diagramId: string,
+    body: { bodyJson: JsonValue; bodyText: string },
+    authorId: string,
+  ): Promise<string[]> {
+    const nodeMentionUserIds = new Set(extractCommentMentionUserIds(body.bodyJson));
+
+    if (nodeMentionUserIds.size === 0 && !body.bodyText.includes('@')) {
+      return [];
+    }
+
+    const mentionableUsers = await this.commentRepository.getMentionableUsersForDiagram(diagramId);
+    const mentionedUserIds = new Set<string>();
+
+    for (const user of mentionableUsers) {
+      if (user.userId === authorId) {
+        continue;
+      }
+
+      if (
+        nodeMentionUserIds.has(user.userId) ||
+        matchesPlainTextMention(body.bodyText, user.name) ||
+        matchesPlainTextMention(body.bodyText, user.email)
+      ) {
+        mentionedUserIds.add(user.userId);
+      }
+    }
+
+    return [...mentionedUserIds];
+  }
+
   private serializeAuthor(user: AuthContext['user']) {
     return {
       avatarUrl: user.avatarUrl,
@@ -239,4 +281,18 @@ export class CommentService {
       name: user.name,
     };
   }
+}
+
+function matchesPlainTextMention(text: string, label: string): boolean {
+  const mentionLabel = label.trim();
+
+  if (mentionLabel.length === 0) {
+    return false;
+  }
+
+  return new RegExp(`(^|[\\s([{])@${escapeRegExp(mentionLabel)}(?=$|[\\s.,:;!?)}\\]])`, 'iu').test(text);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
