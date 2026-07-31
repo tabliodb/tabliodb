@@ -1833,7 +1833,7 @@ function CommentsDialog({
                     This thread is ready for the first reply.
                   </div>
                 ) : (
-                  <div className="grid gap-3">
+                  <div className="grid gap-1">
                     {commentTree.map((comment) => (
                       <ThreadCommentItem
                         canComment={canComment}
@@ -1944,58 +1944,83 @@ function ThreadCommentItem({
   depth: number;
   onReply: (comment: CommentResponseDto) => void;
 }) {
-  const visualDepth = Math.min(depth, 4);
+  const hasReplies = comment.replies.length > 0;
 
   return (
     <div
       className={cn(
-        'grid gap-3',
-        depth > 0 && 'border-l-2 border-[rgb(var(--tabliodb-border))] pl-3',
-        depth > 4 && 'rounded-l-[var(--tabliodb-radius-sm)] bg-[rgb(var(--tabliodb-surface))]/70 py-1',
+        'relative',
+        depth > 4 && 'rounded-l-[var(--tabliodb-radius-sm)] bg-[rgb(var(--tabliodb-surface))]/60',
       )}
-      style={visualDepth > 0 ? { marginLeft: `${visualDepth * 14}px` } : undefined}
     >
-      <article className="rounded-[var(--tabliodb-radius-md)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
-        <div className="flex items-start gap-3">
-          <UserAvatar className="size-9 rounded-[13px] text-xs" user={comment.author} />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] font-extrabold">{comment.author.name}</span>
-              <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                {formatDateTime(comment.createdAt)}
+      {depth > 0 ? (
+        <span
+          aria-hidden="true"
+          className="absolute -left-8 top-1 h-8 w-7 rounded-bl-[18px] border-b-2 border-l-2 border-[rgb(var(--tabliodb-border-strong))]"
+        />
+      ) : null}
+
+      <article className="group relative flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] px-2 py-2 transition hover:bg-[rgb(var(--tabliodb-surface))]">
+        <UserAvatar
+          className={cn(
+            'rounded-full border-[rgb(var(--tabliodb-border))] text-[11px] shadow-[0_2px_0_rgb(var(--tabliodb-border))]',
+            depth === 0 ? 'size-9' : 'size-8',
+          )}
+          user={comment.author}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{comment.author.name}</span>
+            <span className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
+              {formatDateTime(comment.createdAt)}
+            </span>
+          </div>
+          <p className="mt-1 whitespace-pre-wrap break-words text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
+            {comment.body}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-3">
+            <button
+              className={cn(
+                'rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] transition',
+                canComment
+                  ? 'cursor-pointer hover:bg-[rgb(var(--tabliodb-primary-soft))] hover:text-[rgb(var(--tabliodb-primary-text))]'
+                  : 'cursor-not-allowed opacity-60',
+              )}
+              disabled={!canComment}
+              onClick={() => onReply(comment)}
+              type="button"
+            >
+              Reply
+            </button>
+            {comment.replyCount > 0 ? (
+              <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
+                {comment.replyCount} {comment.replyCount === 1 ? 'reply' : 'replies'}
               </span>
-              {comment.parentCommentId ? <Badge variant="blue">reply</Badge> : null}
-            </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
-              {comment.body}
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                className={cn(
-                  'rounded-full bg-white px-2.5 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] shadow-[inset_0_0_0_1px_rgb(var(--tabliodb-border))]',
-                  canComment
-                    ? 'cursor-pointer hover:bg-[rgb(var(--tabliodb-surface-raised))]'
-                    : 'cursor-not-allowed opacity-60',
-                )}
-                disabled={!canComment}
-                onClick={() => onReply(comment)}
-                type="button"
-              >
-                Reply
-              </button>
-              {comment.replyCount > 0 ? (
-                <span className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  {comment.replyCount} {comment.replyCount === 1 ? 'reply' : 'replies'}
-                </span>
-              ) : null}
-            </div>
+            ) : null}
           </div>
         </div>
       </article>
 
-      {comment.replies.map((reply) => (
-        <ThreadCommentItem canComment={canComment} comment={reply} depth={depth + 1} key={reply.id} onReply={onReply} />
-      ))}
+      {hasReplies ? (
+        <div className="relative -mt-0.5 ml-6 pl-8">
+          {/* The vertical spine and curved child connectors make nested replies read like one conversation, not stacked cards. */}
+          <span
+            aria-hidden="true"
+            className="absolute bottom-3 left-0 top-0 w-px bg-[rgb(var(--tabliodb-border-strong))]"
+          />
+          <div className="grid gap-1">
+            {comment.replies.map((reply) => (
+              <ThreadCommentItem
+                canComment={canComment}
+                comment={reply}
+                depth={depth + 1}
+                key={reply.id}
+                onReply={onReply}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
