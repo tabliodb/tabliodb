@@ -403,7 +403,7 @@ export function SchemaCanvas({
         <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
           {remoteCursorPositions.map((cursor) => (
             <div
-              className="absolute left-0 top-0 flex max-w-[180px] items-start gap-1.5"
+              className="absolute left-0 top-0 flex max-w-45 items-start gap-1.5"
               key={`${cursor.user.id}:${cursor.clientIds.join('-')}`}
               style={{ transform: `translate3d(${cursor.left}px, ${cursor.top}px, 0)` }}
             >
