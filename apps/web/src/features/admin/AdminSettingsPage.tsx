@@ -99,9 +99,6 @@ export function AdminSettingsPage() {
             Control how new employees can enter this self-hosted Tabliodb instance.
           </p>
         </div>
-        <Badge variant={selectedPolicy === 'public_signup' ? 'yellow' : 'green'}>
-          {formatSignupPolicy(selectedPolicy)}
-        </Badge>
       </section>
 
       <form className="grid gap-5" onSubmit={form.handleSubmit(handleSubmit)}>
