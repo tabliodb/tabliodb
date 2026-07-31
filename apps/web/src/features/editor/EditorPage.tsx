@@ -74,6 +74,8 @@ import {
   Building2,
   Check,
   ChevronsUpDown,
+  CircleCheck,
+  CircleDot,
   Code2,
   Copy,
   Database,
@@ -2095,7 +2097,19 @@ function CommentsDialog({
                               {thread.unreadCount > 0 ? (
                                 <Badge variant="yellow">{formatUnreadCount(thread.unreadCount)}</Badge>
                               ) : null}
-                              <Badge variant={thread.status === 'resolved' ? 'purple' : 'green'}>
+                              <Badge
+                                className={cn(
+                                  'flex items-center gap-1 text-white',
+                                  thread.status === 'resolved'
+                                    ? 'bg-[rgb(var(--tabliodb-lavender))]'
+                                    : 'bg-[rgb(var(--tabliodb-primary))]',
+                                )}
+                              >
+                                {thread.status === 'resolved' ? (
+                                  <CircleCheck strokeWidth={3} size={12} />
+                                ) : (
+                                  <CircleDot strokeWidth={3} size={12} />
+                                )}
                                 {formatCommentThreadStatus(thread.status)}
                               </Badge>
                             </div>
