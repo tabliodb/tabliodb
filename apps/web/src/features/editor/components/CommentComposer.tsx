@@ -29,6 +29,7 @@ export type CommentComposerProps = {
   'aria-invalid'?: boolean;
   autoFocus?: boolean;
   className?: string;
+  density?: 'default' | 'compact';
   disabled?: boolean;
   mentionUsers?: CommentMentionUser[];
   menuPlacement?: 'bottom' | 'top';
@@ -42,6 +43,7 @@ export function CommentComposer({
   'aria-invalid': ariaInvalid,
   autoFocus = false,
   className,
+  density = 'default',
   disabled = false,
   mentionUsers = [],
   menuPlacement = 'bottom',
@@ -81,7 +83,10 @@ export function CommentComposer({
           contentEditable={
             <ContentEditable
               aria-invalid={ariaInvalid}
-              className="tabliodb-scrollbar max-h-40 min-h-20 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink))] outline-none"
+              className={cn(
+                'tabliodb-scrollbar overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink))] outline-none',
+                density === 'compact' ? 'max-h-28 min-h-14' : 'max-h-40 min-h-20',
+              )}
             />
           }
           ErrorBoundary={LexicalErrorBoundary}
