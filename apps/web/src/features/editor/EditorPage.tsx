@@ -1962,7 +1962,7 @@ function ThreadCommentItem({
       {depth > 0 ? (
         <span
           aria-hidden="true"
-          className="absolute -left-8 top-1 h-8 w-7 rounded-bl-[18px] border-b-2 border-l-2 border-[rgb(var(--tabliodb-border-strong))]"
+          className="absolute -left-[34px] top-0 h-6 w-11 rounded-bl-[18px] border-b-2 border-l-2 border-[rgb(var(--tabliodb-border-strong))]"
         />
       ) : null}
 
@@ -2008,13 +2008,13 @@ function ThreadCommentItem({
       </article>
 
       {hasReplies ? (
-        <div className="relative -mt-0.5 ml-6 pl-8">
-          {/* The vertical spine and curved child connectors make nested replies read like one conversation, not stacked cards. */}
+        <div className="relative -mt-1 ml-[26px] pl-[34px]">
+          {/* The spine sits on the parent avatar centerline, while each elbow overlaps the child avatar edge so nested replies feel physically connected. */}
           <span
             aria-hidden="true"
             className="absolute bottom-3 left-0 top-0 w-px bg-[rgb(var(--tabliodb-border-strong))]"
           />
-          <div className="grid gap-1">
+          <div className="grid gap-0.5">
             {comment.replies.map((reply) => (
               <ThreadCommentItem
                 canComment={canComment}
