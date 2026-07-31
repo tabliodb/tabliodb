@@ -111,6 +111,7 @@ export type CommentResponseDtoOutput = {
   bodyText: string;
   createdAt: string;
   createdById: string;
+  deletedAt: string | null;
   editedAt: string | null;
   id: string;
   mentionedUserIds: string[];

@@ -246,6 +246,49 @@ describe(CommentService.name, () => {
     });
   });
 
+  it('returns deleted comments as tombstones without leaking stored body content', async () => {
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.getComments.mockResolvedValue({
+      items: [
+        {
+          ...comment,
+          authorAvatarUrl: null,
+          authorCursorColor: '#58cc02',
+          authorEmail: 'commenter@tabliodb.local',
+          authorId: 'user-id',
+          authorName: 'Commenter User',
+          bodyJson: createPlainTextCommentLexicalDocument('Sensitive deleted detail.'),
+          bodyText: 'Sensitive deleted detail.',
+          deletedAt: new Date('2026-07-30T08:03:00.000Z'),
+          mentionedUserIds: ['teammate-id'],
+          replyCount: 2,
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    await expect(service.getThreadComments(auth, 'thread-id', { limit: 50 })).resolves.toMatchObject({
+      items: [
+        {
+          body: '',
+          bodyText: '',
+          deletedAt: '2026-07-30T08:03:00.000Z',
+          mentionedUserIds: [],
+          replyCount: 2,
+        },
+      ],
+      totalCount: 1,
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
+    expect(commentRepository.getComments).toHaveBeenCalledWith('thread-id', {
+      cursor: undefined,
+      limit: 50,
+    });
+  });
+
   it('returns the read state for a thread after diagram read permission passes', async () => {
     commentRepository.getThreadById.mockResolvedValue(thread);
     commentRepository.getThreadReadState.mockResolvedValue({

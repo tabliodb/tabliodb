@@ -197,6 +197,7 @@ export class CommentRepository {
         'comments.bodyText',
         'comments.bodyFormat',
         'comments.createdById',
+        'comments.deletedAt',
         'comments.editedAt',
         'comments.createdAt',
         'comments.updatedAt',
@@ -224,7 +225,6 @@ export class CommentRepository {
         )`.as('mentionedUserIds'),
       ])
       .where('comments.threadId', '=', threadId)
-      .where('comments.deletedAt', 'is', null)
       .orderBy('comments.createdAt', 'asc')
       .limit(options.limit + 1)
       .offset(offset)
@@ -233,7 +233,6 @@ export class CommentRepository {
       .selectFrom('comments')
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .where('threadId', '=', threadId)
-      .where('deletedAt', 'is', null)
       .executeTakeFirstOrThrow();
 
     return {

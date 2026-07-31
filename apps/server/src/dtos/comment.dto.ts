@@ -46,6 +46,7 @@ const CommentResponseSchema = z
     bodyText: z.string(),
     createdAt: DateTimeSchema,
     createdById: z.string().uuid(),
+    deletedAt: DateTimeSchema.nullable(),
     editedAt: DateTimeSchema.nullable(),
     id: z.string().uuid(),
     mentionedUserIds: z.array(z.string().uuid()),

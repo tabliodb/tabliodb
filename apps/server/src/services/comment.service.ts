@@ -6,6 +6,7 @@ import { CommentReplyCreateDto, CommentThreadCreateDto, CommentThreadListQueryDt
 import { CommentRepository } from '../repositories/comment.repository.js';
 import type { CommentThreadTable, JsonValue } from '../schema/index.js';
 import {
+  createPlainTextCommentLexicalDocument,
   extractCommentMentionUserIds,
   normalizeCommentLexicalBody,
   type CommentLexicalDocument,
@@ -52,6 +53,7 @@ export class CommentService {
         bodyJson: this.serializeCommentBodyJson(result.comment.bodyJson),
         bodyText: result.comment.bodyText,
         createdById: result.comment.createdById,
+        deletedAt: null,
         editedAt: toNullableIsoDateTime(result.comment.editedAt),
         createdAt: toIsoDateTime(result.comment.createdAt),
         parentCommentId: result.comment.parentCommentId,
@@ -86,28 +88,7 @@ export class CommentService {
 
     return {
       ...comments,
-      items: comments.items.map((comment) => ({
-        author: {
-          avatarUrl: comment.authorAvatarUrl,
-          cursorColor: comment.authorCursorColor,
-          email: comment.authorEmail,
-          id: comment.authorId,
-          name: comment.authorName,
-        },
-        body: comment.bodyText,
-        bodyFormat: comment.bodyFormat,
-        bodyJson: this.serializeCommentBodyJson(comment.bodyJson),
-        bodyText: comment.bodyText,
-        createdAt: toIsoDateTime(comment.createdAt),
-        createdById: comment.createdById,
-        editedAt: toNullableIsoDateTime(comment.editedAt),
-        id: comment.id,
-        parentCommentId: comment.parentCommentId,
-        mentionedUserIds: comment.mentionedUserIds ?? [],
-        replyCount: Number(comment.replyCount),
-        threadId: comment.threadId,
-        updatedAt: toIsoDateTime(comment.updatedAt),
-      })),
+      items: comments.items.map((comment) => this.serializeComment(comment)),
     };
   }
 
@@ -160,6 +141,7 @@ export class CommentService {
         bodyText: result.comment.bodyText,
         createdAt: toIsoDateTime(result.comment.createdAt),
         createdById: result.comment.createdById,
+        deletedAt: null,
         editedAt: toNullableIsoDateTime(result.comment.editedAt),
         id: result.comment.id,
         mentionedUserIds: mentionUserIds,
@@ -211,6 +193,36 @@ export class CommentService {
       targetType: thread.targetType as CommentTargetType,
       unreadCount: 'unreadCount' in thread && typeof thread.unreadCount === 'number' ? thread.unreadCount : 0,
       updatedAt: toIsoDateTime(thread.updatedAt),
+    };
+  }
+
+  private serializeComment(comment: Awaited<ReturnType<CommentRepository['getComments']>>['items'][number]) {
+    const isDeleted = Boolean(comment.deletedAt);
+    const bodyText = isDeleted ? '' : comment.bodyText;
+
+    return {
+      author: {
+        avatarUrl: comment.authorAvatarUrl,
+        cursorColor: comment.authorCursorColor,
+        email: comment.authorEmail,
+        id: comment.authorId,
+        name: comment.authorName,
+      },
+      body: bodyText,
+      bodyFormat: comment.bodyFormat,
+      // Deleted comments stay in the response as tombstones so nested replies do not lose their parent path.
+      bodyJson: this.serializeCommentBodyJson(isDeleted ? createPlainTextCommentLexicalDocument('') : comment.bodyJson),
+      bodyText,
+      createdAt: toIsoDateTime(comment.createdAt),
+      createdById: comment.createdById,
+      deletedAt: toNullableIsoDateTime(comment.deletedAt),
+      editedAt: toNullableIsoDateTime(comment.editedAt),
+      id: comment.id,
+      parentCommentId: comment.parentCommentId,
+      mentionedUserIds: isDeleted ? [] : (comment.mentionedUserIds ?? []),
+      replyCount: Number(comment.replyCount),
+      threadId: comment.threadId,
+      updatedAt: toIsoDateTime(comment.updatedAt),
     };
   }
 

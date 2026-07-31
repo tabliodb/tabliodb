@@ -2100,8 +2100,9 @@ function ThreadCommentItem({
   renderReplyComposer: (comment: CommentResponseDto) => ReactNode;
 }) {
   const hasReplies = comment.replies.length > 0;
+  const isDeleted = Boolean(comment.deletedAt);
   const [areRepliesExpanded, setAreRepliesExpanded] = useState(true);
-  const inlineReplyComposer = renderReplyComposer(comment);
+  const inlineReplyComposer = isDeleted ? null : renderReplyComposer(comment);
   // Replies dibuka secara default agar thread lama tetap terasa familiar, tetapi cabang ramai bisa ditutup per comment.
   const hasVisibleReplies = hasReplies && areRepliesExpanded;
   const avatarBottomClass = depth === 0 ? 'top-[44px]' : 'top-[40px]';
@@ -2120,7 +2121,12 @@ function ThreadCommentItem({
         />
       ) : null}
 
-      <article className="group relative flex items-start gap-3 rounded-(--tabliodb-radius-md) px-2 py-2 transition hover:bg-[rgb(var(--tabliodb-surface))]">
+      <article
+        className={cn(
+          'group relative flex items-start gap-3 rounded-(--tabliodb-radius-md) px-2 py-2 transition hover:bg-[rgb(var(--tabliodb-surface))]',
+          isDeleted && 'text-[rgb(var(--tabliodb-ink-muted))]',
+        )}
+      >
         {hasVisibleReplies ? (
           <span
             aria-hidden="true"
@@ -2131,37 +2137,57 @@ function ThreadCommentItem({
             )}
           />
         ) : null}
-        <UserAvatar
-          className={cn(
-            'relative z-10 rounded-full border-[rgb(var(--tabliodb-border))] text-[11px] shadow-[0_2px_0_rgb(var(--tabliodb-border))]',
-            depth === 0 ? 'size-9' : 'size-8',
-          )}
-          user={comment.author}
-        />
+        {isDeleted ? (
+          <span
+            className={cn(
+              'relative z-10 grid shrink-0 place-items-center rounded-full border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink-subtle))] shadow-[0_2px_0_rgb(var(--tabliodb-border))]',
+              depth === 0 ? 'size-9' : 'size-8',
+            )}
+          >
+            <MessageSquareText className="size-4" />
+          </span>
+        ) : (
+          <UserAvatar
+            className={cn(
+              'relative z-10 rounded-full border-[rgb(var(--tabliodb-border))] text-[11px] shadow-[0_2px_0_rgb(var(--tabliodb-border))]',
+              depth === 0 ? 'size-9' : 'size-8',
+            )}
+            user={comment.author}
+          />
+        )}
         <div className="relative z-10 min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{comment.author.name}</span>
+            <span className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
+              {isDeleted ? 'Deleted comment' : comment.author.name}
+            </span>
             <span className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
               {formatDateTime(comment.createdAt)}
             </span>
           </div>
-          <p className="mt-1 whitespace-pre-wrap wrap-break-word text-[13px] font-semibold leading-6 text-[rgb(var(--tabliodb-ink))]">
-            {comment.body}
+          <p
+            className={cn(
+              'mt-1 whitespace-pre-wrap wrap-break-word text-[13px] font-semibold leading-6',
+              isDeleted ? 'italic text-[rgb(var(--tabliodb-ink-muted))]' : 'text-[rgb(var(--tabliodb-ink))]',
+            )}
+          >
+            {isDeleted ? 'This comment was deleted.' : comment.body}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-3">
-            <button
-              className={cn(
-                'rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] transition',
-                canComment
-                  ? 'cursor-pointer hover:bg-[rgb(var(--tabliodb-primary-soft))] hover:text-[rgb(var(--tabliodb-primary-text))]'
-                  : 'cursor-not-allowed opacity-60',
-              )}
-              disabled={!canComment}
-              onClick={() => onReply(comment)}
-              type="button"
-            >
-              Reply
-            </button>
+            {!isDeleted ? (
+              <button
+                className={cn(
+                  'rounded-full px-2 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))] transition',
+                  canComment
+                    ? 'cursor-pointer hover:bg-[rgb(var(--tabliodb-primary-soft))] hover:text-[rgb(var(--tabliodb-primary-text))]'
+                    : 'cursor-not-allowed opacity-60',
+                )}
+                disabled={!canComment}
+                onClick={() => onReply(comment)}
+                type="button"
+              >
+                Reply
+              </button>
+            ) : null}
             {hasReplies ? (
               <button
                 aria-expanded={areRepliesExpanded}
@@ -2210,6 +2236,10 @@ function formatCommentReplyCount(replyCount: number): string {
 }
 
 function getCommentQuotePreview(comment: CommentResponseDto): string {
+  if (comment.deletedAt) {
+    return 'This comment was deleted.';
+  }
+
   // Quote preview memakai plain text hasil sanitasi server; rendering rich Lexical JSON akan ditambahkan sebagai tahap aman terpisah.
   return comment.body.trim() || 'No preview available.';
 }
