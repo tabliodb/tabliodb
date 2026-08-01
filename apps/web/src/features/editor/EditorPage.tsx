@@ -534,6 +534,18 @@ export function EditorPage() {
     [modelHistoryRevision],
   );
 
+  const syncModelToCollaboration = useCallback(
+    (nextModel: DiagramModel) => {
+      if (!canEditDiagram) {
+        return;
+      }
+
+      // Local edits are written into the shared Y.Doc; the collaboration wrapper tags the transaction origin so it does not echo back into local state.
+      collaborationRef.current?.writeModel(nextModel);
+    },
+    [canEditDiagram],
+  );
+
   const resetModelHistory = useCallback(() => {
     modelHistoryRef.current = { past: [], future: [] };
     setModelHistoryRevision((revision) => revision + 1);
@@ -567,9 +579,10 @@ export function EditorPage() {
     };
     modelRef.current = previousModel;
     setModel(previousModel);
+    syncModelToCollaboration(previousModel);
     reconcileModelSelection(previousModel);
     setModelHistoryRevision((revision) => revision + 1);
-  }, [canEditDiagram, reconcileModelSelection]);
+  }, [canEditDiagram, reconcileModelSelection, syncModelToCollaboration]);
 
   const handleRedoModelChange = useCallback(() => {
     if (!canEditDiagram) {
@@ -590,9 +603,10 @@ export function EditorPage() {
     };
     modelRef.current = nextModel;
     setModel(nextModel);
+    syncModelToCollaboration(nextModel);
     reconcileModelSelection(nextModel);
     setModelHistoryRevision((revision) => revision + 1);
-  }, [canEditDiagram, reconcileModelSelection]);
+  }, [canEditDiagram, reconcileModelSelection, syncModelToCollaboration]);
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -601,6 +615,7 @@ export function EditorPage() {
         modelRef.current = snapshot.snapshot;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshot.snapshot);
         setModel(snapshot.snapshot);
+        syncModelToCollaboration(snapshot.snapshot);
         queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
@@ -612,6 +627,7 @@ export function EditorPage() {
         modelRef.current = snapshot.snapshot;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshot.snapshot);
         setModel(snapshot.snapshot);
+        syncModelToCollaboration(snapshot.snapshot);
         setSelectedTableId(null);
         setSelectedCommentTarget(null);
         resetModelHistory();
@@ -633,6 +649,7 @@ export function EditorPage() {
         modelRef.current = importedModel;
         persistedDraftSignatureRef.current = createDiagramModelSignature(importedModel);
         setModel(importedModel);
+        syncModelToCollaboration(importedModel);
         setSelectedTableId(null);
         setSelectedCommentTarget(null);
         resetModelHistory();
@@ -674,8 +691,9 @@ export function EditorPage() {
       // Keep the latest draft model synchronously available for snapshot clicks that happen immediately after an input blur.
       modelRef.current = nextModel;
       setModel(nextModel);
+      syncModelToCollaboration(nextModel);
     },
-    [canEditDiagram],
+    [canEditDiagram, syncModelToCollaboration],
   );
 
   const handleSelectedTableChange = useCallback((tableId: string | null) => {
@@ -874,6 +892,7 @@ export function EditorPage() {
     let disposed = false;
     let collaboration: DiagramCollaboration | null = null;
     let unsubscribeAwareness: () => void = () => undefined;
+    let unsubscribeModel: () => void = () => undefined;
     let unsubscribeStatus: () => void = () => undefined;
 
     void import('@/features/collaboration/collaboration-client').then(({ createDiagramCollaboration }) => {
@@ -887,6 +906,21 @@ export function EditorPage() {
       unsubscribeStatus = collaboration.subscribeStatus((status) => {
         // Status changes are tiny and user-facing, so the editor owns this state instead of hiding reconnects in the provider wrapper.
         setCollaborationStatus(status);
+      });
+      unsubscribeModel = collaboration.subscribeModel((nextModel) => {
+        const currentSignature = modelRef.current ? createDiagramModelSignature(modelRef.current) : null;
+        const nextSignature = createDiagramModelSignature(nextModel);
+
+        if (currentSignature === nextSignature) {
+          return;
+        }
+
+        // Remote Yjs updates become the visible editor model, but they do not enter this user's local undo stack.
+        modelRef.current = nextModel;
+        persistedDraftSignatureRef.current = null;
+        setModel(nextModel);
+        reconcileModelSelection(nextModel);
+        resetModelHistory();
       });
       unsubscribeAwareness = collaboration.subscribeAwareness((states) => {
         const nextStates = states.filter((state) => !state.isLocal);
@@ -910,6 +944,7 @@ export function EditorPage() {
     return () => {
       disposed = true;
       unsubscribeAwareness();
+      unsubscribeModel();
       unsubscribeStatus();
       collaboration?.destroy();
 
@@ -921,7 +956,15 @@ export function EditorPage() {
       setCollaborationStatus(idleCollaborationStatus);
       latestCommentTypingRef.current = undefined;
     };
-  }, [activeDiagram?.id, currentUser?.avatarUrl, currentUser?.cursorColor, currentUser?.id, currentUser?.name]);
+  }, [
+    activeDiagram?.id,
+    currentUser?.avatarUrl,
+    currentUser?.cursorColor,
+    currentUser?.id,
+    currentUser?.name,
+    reconcileModelSelection,
+    resetModelHistory,
+  ]);
 
   useEffect(() => {
     publishAwareness();
@@ -1464,7 +1507,17 @@ export function EditorPage() {
                 diagram={activeDiagram}
                 model={model}
                 onUpdated={(diagram) => {
-                  setModel((current) => (current ? updateLiveModelFromDiagram(current, diagram, modelRef) : current));
+                  setModel((current) => {
+                    if (!current) {
+                      return current;
+                    }
+
+                    const nextModel = updateLiveModelFromDiagram(current, diagram, modelRef);
+
+                    syncModelToCollaboration(nextModel);
+
+                    return nextModel;
+                  });
                 }}
               />
             </>

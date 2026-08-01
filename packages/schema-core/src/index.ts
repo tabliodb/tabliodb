@@ -456,7 +456,7 @@ export function createStarterDiagramModel(
   );
 }
 
-export function writeDiagramModelToYjsDocument(document: Y.Doc, model: DiagramModel): void {
+export function writeDiagramModelToYjsDocument(document: Y.Doc, model: DiagramModel, origin?: unknown): void {
   const normalizedModel = serializeDiagramModel(model);
 
   document.transact(() => {
@@ -476,7 +476,7 @@ export function writeDiagramModelToYjsDocument(document: Y.Doc, model: DiagramMo
         normalizedModel[collectionKey] as Record<string, YjsRecord>,
       );
     }
-  });
+  }, origin);
 }
 
 export function hasDiagramModelInYjsDocument(document: Y.Doc): boolean {

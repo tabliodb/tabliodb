@@ -69,6 +69,22 @@ describe('schema-core diagram commands', () => {
     expect(readDiagramModelFromYjsDocument(document)).toEqual(serializeDiagramModel(model));
   });
 
+  it('forwards Yjs transaction origin when writing a model', () => {
+    const document = new Y.Doc();
+    const model = createEmptyDiagramModel('Realtime origin test');
+    const origin = Symbol('local-model-write');
+    const origins: unknown[] = [];
+
+    document.on('update', (_update, updateOrigin) => {
+      origins.push(updateOrigin);
+    });
+
+    // The web collaboration bridge uses origin to ignore local Yjs echoes while still accepting remote updates.
+    writeDiagramModelToYjsDocument(document, model, origin);
+
+    expect(origins).toEqual([origin]);
+  });
+
   it('encodes and decodes a diagram model as a portable Yjs update', () => {
     const model = applyDiagramCommand(
       createEmptyDiagramModel('Realtime update test'),

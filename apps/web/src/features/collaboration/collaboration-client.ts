@@ -1,4 +1,10 @@
 import { HocuspocusProvider } from '@hocuspocus/provider';
+import {
+  hasDiagramModelInYjsDocument,
+  readDiagramModelFromYjsDocument,
+  writeDiagramModelToYjsDocument,
+  type DiagramModel,
+} from '@tabliodb/schema-core';
 import { diagramDocumentName, type AwarenessState } from '@tabliodb/shared';
 import * as Y from 'yjs';
 
@@ -15,6 +21,7 @@ export type RemoteAwarenessState = {
 };
 
 export type AwarenessSubscriber = (states: RemoteAwarenessState[]) => void;
+export type DiagramModelSubscriber = (model: DiagramModel) => void;
 
 export type DiagramCollaborationConnection =
   | 'authentication_failed'
@@ -34,6 +41,7 @@ export type DiagramCollaborationStatusSubscriber = (status: DiagramCollaboration
 
 export function createDiagramCollaboration(options: DiagramCollaborationOptions) {
   const document = new Y.Doc();
+  const localModelWriteOrigin = Symbol(`tabliodb:${options.diagramId}:local-model-write`);
   const provider = new HocuspocusProvider({
     document,
     name: diagramDocumentName(options.diagramId),
@@ -95,8 +103,42 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     document,
     localClientId: document.clientID,
     provider,
+    subscribeModel(subscriber: DiagramModelSubscriber) {
+      const emit = () => {
+        if (!hasDiagramModelInYjsDocument(document)) {
+          return;
+        }
+
+        subscriber(readDiagramModelFromYjsDocument(document));
+      };
+      const handleUpdate = (_update: Uint8Array, origin: unknown) => {
+        if (origin === localModelWriteOrigin) {
+          return;
+        }
+
+        emit();
+      };
+      const handleSynced = (event: { state?: unknown }) => {
+        if (event.state === true) {
+          emit();
+        }
+      };
+
+      // Document updates carry remote schema edits, while synced covers the initial server hydration payload.
+      document.on('update', handleUpdate);
+      provider.on('synced', handleSynced);
+      emit();
+
+      return () => {
+        document.off('update', handleUpdate);
+        provider.off('synced', handleSynced);
+      };
+    },
     setAwareness(state: AwarenessState) {
       provider.awareness?.setLocalState(state);
+    },
+    writeModel(model: DiagramModel) {
+      writeDiagramModelToYjsDocument(document, model, localModelWriteOrigin);
     },
     subscribeAwareness(subscriber: AwarenessSubscriber) {
       const awareness = provider.awareness;
