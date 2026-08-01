@@ -64,6 +64,11 @@ export type NotificationSummaryRow = {
   updatedAt: Date | null;
 };
 
+export type CommentNotificationDeliveryRecipients = {
+  mentionUserIds: string[];
+  replyUserId: string | null;
+};
+
 @Injectable()
 export class NotificationRepository {
   constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
@@ -106,6 +111,60 @@ export class NotificationRepository {
     `.execute(this.db);
 
     return result.rows[0] ?? { totalCount: 0, unreadCount: 0, updatedAt: null };
+  }
+
+  async getCommentDeliveryRecipients(options: {
+    actorId: string;
+    commentId: string;
+  }): Promise<CommentNotificationDeliveryRecipients> {
+    const mentionRows = await this.db
+      .selectFrom('comment_mentions')
+      .innerJoin('comments', 'comments.id', 'comment_mentions.commentId')
+      .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
+      .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
+      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .innerJoin('project_members', (join) =>
+        join
+          .onRef('project_members.projectId', '=', 'projects.id')
+          .onRef('project_members.userId', '=', 'comment_mentions.mentionedUserId'),
+      )
+      .innerJoin('users', 'users.id', 'comment_mentions.mentionedUserId')
+      .select('comment_mentions.mentionedUserId')
+      .where('comment_mentions.commentId', '=', options.commentId)
+      .where('comment_mentions.mentionedUserId', '<>', options.actorId)
+      .where('comments.deletedAt', 'is', null)
+      .where('diagrams.archivedAt', 'is', null)
+      .where('projects.archivedAt', 'is', null)
+      .where('users.deletedAt', 'is', null)
+      .execute();
+    const replyRow = await this.db
+      .selectFrom('comments')
+      .innerJoin('comments as parent_comments', 'parent_comments.id', 'comments.parentCommentId')
+      .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
+      .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
+      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .innerJoin('project_members', (join) =>
+        join
+          .onRef('project_members.projectId', '=', 'projects.id')
+          .onRef('project_members.userId', '=', 'parent_comments.createdById'),
+      )
+      .innerJoin('users', 'users.id', 'parent_comments.createdById')
+      .select('parent_comments.createdById as replyUserId')
+      .where('comments.id', '=', options.commentId)
+      .where('comments.createdById', '<>', options.actorId)
+      .where('parent_comments.createdById', '<>', options.actorId)
+      .where('comments.deletedAt', 'is', null)
+      .where('parent_comments.deletedAt', 'is', null)
+      .where('diagrams.archivedAt', 'is', null)
+      .where('projects.archivedAt', 'is', null)
+      .where('users.deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    return {
+      // Mentions and direct-reply recipient are separated so future email/websocket templates can explain why a user was notified.
+      mentionUserIds: [...new Set(mentionRows.map((row) => row.mentionedUserId))],
+      replyUserId: replyRow?.replyUserId ?? null,
+    };
   }
 
   private createMentionInboxSql(userId: string) {

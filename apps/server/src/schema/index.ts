@@ -313,6 +313,27 @@ export interface CommentThreadReadTable {
   updatedAt: Timestamp;
 }
 
+export interface BackgroundJobTable {
+  id: Generated<string>;
+  type: string;
+  queue: Defaulted<string>;
+  status: Defaulted<'queued' | 'running' | 'completed' | 'failed' | 'dead'>;
+  payload: JsonColumn;
+  result: NullableJsonColumn;
+  error: NullableJsonColumn;
+  attempts: Defaulted<number>;
+  maxAttempts: Defaulted<number>;
+  priority: Defaulted<number>;
+  scheduledAt: Timestamp;
+  lockedAt: NullableTimestamp;
+  lockedBy: NullableColumn<string>;
+  startedAt: NullableTimestamp;
+  completedAt: NullableTimestamp;
+  failedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface AuditLogTable {
   id: Generated<string>;
   organizationId: NullableColumn<string>;
@@ -353,6 +374,7 @@ export interface DB {
   comment_edit_history: CommentEditHistoryTable;
   comment_mentions: CommentMentionTable;
   comment_thread_reads: CommentThreadReadTable;
+  background_jobs: BackgroundJobTable;
   audit_logs: AuditLogTable;
 }
 

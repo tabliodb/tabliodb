@@ -24,6 +24,12 @@ export type TabliodbEnv = {
     cookieSecure: boolean;
     exposePasswordResetToken: boolean;
   };
+  backgroundJobs: {
+    batchSize: number;
+    enabled: boolean;
+    lockTtlMs: number;
+    pollIntervalMs: number;
+  };
   storage: {
     localPath: string;
   };
@@ -93,6 +99,12 @@ export function loadEnv(): TabliodbEnv {
       exposePasswordResetToken:
         process.env.TABLIODB_EXPOSE_PASSWORD_RESET_TOKEN === 'true' ||
         (process.env.TABLIODB_EXPOSE_PASSWORD_RESET_TOKEN !== 'false' && process.env.NODE_ENV !== 'production'),
+    },
+    backgroundJobs: {
+      batchSize: numberFromEnv('TABLIODB_BACKGROUND_JOB_BATCH_SIZE', 10),
+      enabled: process.env.TABLIODB_BACKGROUND_JOBS_ENABLED !== 'false',
+      lockTtlMs: numberFromEnv('TABLIODB_BACKGROUND_JOB_LOCK_TTL_MS', 120_000),
+      pollIntervalMs: numberFromEnv('TABLIODB_BACKGROUND_JOB_POLL_INTERVAL_MS', 2_500),
     },
     storage: {
       localPath: path.resolve(process.env.TABLIODB_STORAGE_PATH || path.join(process.cwd(), 'data', 'uploads')),

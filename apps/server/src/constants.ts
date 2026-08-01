@@ -45,4 +45,8 @@ export enum AuditAction {
   UserSessionsRevoked = 'user.sessions_revoked',
 }
 
+export enum BackgroundJobType {
+  CommentNotificationDelivery = 'comment.notification_delivery',
+}
+
 export const SALT_ROUNDS = 12;

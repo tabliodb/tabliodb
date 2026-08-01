@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Selectable } from 'kysely';
 import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
@@ -21,6 +21,7 @@ import {
 } from '../utils/comment-body.js';
 import { toIsoDateTime, toNullableIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
+import { BackgroundJobService } from './background-job.service.js';
 import { DiagramService } from './diagram.service.js';
 
 type CommentTargetType =
@@ -31,8 +32,11 @@ type CommentResponseRow = NonNullable<Awaited<ReturnType<CommentRepository['getC
 
 @Injectable()
 export class CommentService {
+  private readonly logger = new Logger(CommentService.name);
+
   constructor(
     private readonly auditLogRepository: AuditLogRepository,
+    private readonly backgroundJobService: BackgroundJobService,
     private readonly commentRepository: CommentRepository,
     private readonly diagramService: DiagramService,
   ) {}
@@ -50,6 +54,12 @@ export class CommentService {
       targetId: dto.targetId,
       createdById: auth.user.id,
       mentionUserIds,
+    });
+    await this.queueCommentNotificationDelivery({
+      actorId: auth.user.id,
+      commentId: result.comment.id,
+      source: 'comment.created',
+      threadId: result.comment.threadId,
     });
 
     return {
@@ -202,6 +212,12 @@ export class CommentService {
       parentCommentId,
       threadId: thread.id,
     });
+    await this.queueCommentNotificationDelivery({
+      actorId: auth.user.id,
+      commentId: result.comment.id,
+      source: 'comment.created',
+      threadId: result.comment.threadId,
+    });
 
     return {
       thread: this.serializeThread(result.thread),
@@ -282,6 +298,12 @@ export class CommentService {
       projectId: comment.projectId,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
+    });
+    await this.queueCommentNotificationDelivery({
+      actorId: auth.user.id,
+      commentId: updatedComment.id,
+      source: 'comment.updated',
+      threadId: updatedComment.threadId,
     });
 
     return {
@@ -511,6 +533,22 @@ export class CommentService {
     }
 
     return [...mentionedUserIds];
+  }
+
+  private async queueCommentNotificationDelivery(payload: {
+    actorId: string;
+    commentId: string;
+    source: 'comment.created' | 'comment.updated';
+    threadId: string;
+  }): Promise<void> {
+    try {
+      await this.backgroundJobService.enqueueCommentNotificationDelivery(payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      // Comment writes should not fail only because an async delivery side effect cannot be queued.
+      this.logger.warn(`Failed to enqueue comment notification delivery job. ${message}`);
+    }
   }
 
   private serializeAuthor(user: AuthContext['user']) {

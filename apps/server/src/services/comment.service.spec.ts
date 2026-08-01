@@ -54,6 +54,9 @@ describe(CommentService.name, () => {
   const auditLogRepository = {
     create: vi.fn(),
   };
+  const backgroundJobService = {
+    enqueueCommentNotificationDelivery: vi.fn(),
+  };
   const commentRepository = {
     createCommentReply: vi.fn(),
     createThreadWithComment: vi.fn(),
@@ -82,7 +85,12 @@ describe(CommentService.name, () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    service = new CommentService(auditLogRepository as never, commentRepository as never, diagramService as never);
+    service = new CommentService(
+      auditLogRepository as never,
+      backgroundJobService as never,
+      commentRepository as never,
+      diagramService as never,
+    );
   });
 
   function commentBody(bodyText: string) {

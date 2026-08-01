@@ -1,5 +1,6 @@
 import { ApiKeyRepository } from './api-key.repository.js';
 import { AuditLogRepository } from './audit-log.repository.js';
+import { BackgroundJobRepository } from './background-job.repository.js';
 import { CollaborationRepository } from './collaboration.repository.js';
 import { CommentRepository } from './comment.repository.js';
 import { ConfigRepository } from './config.repository.js';
@@ -21,6 +22,7 @@ import { UserRepository } from './user.repository.js';
 export const repositories = [
   ApiKeyRepository,
   AuditLogRepository,
+  BackgroundJobRepository,
   CollaborationRepository,
   CommentRepository,
   ConfigRepository,

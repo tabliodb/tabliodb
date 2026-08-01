@@ -1,4 +1,5 @@
 import { AuthService } from './auth.service.js';
+import { BackgroundJobService } from './background-job.service.js';
 import { CollaborationService } from './collaboration.service.js';
 import { CommentService } from './comment.service.js';
 import { DiagramService } from './diagram.service.js';
@@ -17,6 +18,7 @@ import { UserService } from './user.service.js';
 
 export const services = [
   AuthService,
+  BackgroundJobService,
   CollaborationService,
   CommentService,
   DiagramService,

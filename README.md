@@ -52,6 +52,8 @@ Login Adminer:
 
 Redis dipakai untuk state ephemeral yang memang harus shared antar instance: rate limit REST dan Hocuspocus pub/sub realtime. Default development cukup memakai `REDIS_URL`; `TABLIODB_REALTIME_REDIS_URL` hanya perlu diisi jika realtime ingin diarahkan ke Redis terpisah.
 
+Background worker aktif default lewat `TABLIODB_BACKGROUND_JOBS_ENABLED=true`. Job queue disimpan di PostgreSQL supaya durable saat container restart, sedangkan Redis tetap disiapkan untuk state ephemeral dan realtime fanout yang tidak boleh menjadi source of truth data penting.
+
 Di PowerShell, salin env dengan:
 
 ```powershell
