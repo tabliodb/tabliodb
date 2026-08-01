@@ -1056,6 +1056,73 @@ export type SnapshotDiffResponseDtoOutput = {
   metadataChanged: boolean;
   schemaVersionChanged: boolean;
 };
+export type TeamResponseDtoOutput = {
+  id: string;
+  organizationId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  memberCount: number;
+  projectAccessCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+export type TeamListResponseDtoOutput = {
+  items: TeamResponseDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type TeamCreateDto = {
+  organizationId: string;
+  name: string;
+  description?: string;
+};
+export type TeamUpdateDto = {
+  name?: string;
+  description?: string | null;
+};
+export type TeamArchiveResponseDtoOutput = {
+  successful: boolean;
+};
+export type TeamMemberDtoOutput = {
+  userId: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  cursorColor: string;
+  createdAt: string;
+};
+export type TeamMemberListResponseDtoOutput = {
+  items: TeamMemberDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type TeamMemberCreateDto = {
+  email: string;
+};
+export type TeamMemberRemoveResponseDtoOutput = {
+  successful: boolean;
+};
+export type TeamProjectAccessDtoOutput = {
+  projectId: string;
+  projectName: string;
+  projectSlug: string;
+  role: Role3;
+  createdAt: string;
+  updatedAt: string;
+};
+export type TeamProjectAccessListResponseDtoOutput = {
+  items: TeamProjectAccessDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type TeamProjectAccessUpsertDto = {
+  projectId: string;
+  role?: Role3;
+};
+export type TeamProjectAccessRemoveResponseDtoOutput = {
+  successful: boolean;
+};
 export type UserResponseDtoOutput = {
   id: string;
   email: string;
@@ -2526,6 +2593,243 @@ export function restoreSnapshot(
     }),
   );
 }
+export function getTeams(
+  {
+    cursor,
+    limit,
+  }: {
+    cursor?: string;
+    limit?: number;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: TeamListResponseDtoOutput;
+    }>(
+      `/teams${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function createTeam(
+  {
+    teamCreateDto,
+  }: {
+    teamCreateDto: TeamCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: TeamResponseDtoOutput;
+    }>(
+      '/teams',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: teamCreateDto,
+      }),
+    ),
+  );
+}
+export function updateTeam(
+  {
+    teamId,
+    teamUpdateDto,
+  }: {
+    teamId: string;
+    teamUpdateDto: TeamUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: TeamResponseDtoOutput;
+    }>(
+      `/teams/${encodeURIComponent(teamId)}`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: teamUpdateDto,
+      }),
+    ),
+  );
+}
+export function archiveTeam(
+  {
+    teamId,
+  }: {
+    teamId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: TeamArchiveResponseDtoOutput;
+    }>(`/teams/${encodeURIComponent(teamId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
+export function getTeamMembers(
+  {
+    cursor,
+    limit,
+    teamId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    teamId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: TeamMemberListResponseDtoOutput;
+    }>(
+      `/teams/${encodeURIComponent(teamId)}/members${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function addTeamMember(
+  {
+    teamId,
+    teamMemberCreateDto,
+  }: {
+    teamId: string;
+    teamMemberCreateDto: TeamMemberCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: TeamMemberDtoOutput;
+    }>(
+      `/teams/${encodeURIComponent(teamId)}/members`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: teamMemberCreateDto,
+      }),
+    ),
+  );
+}
+export function removeTeamMember(
+  {
+    userId,
+    teamId,
+  }: {
+    userId: string;
+    teamId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: TeamMemberRemoveResponseDtoOutput;
+    }>(`/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
+export function getTeamProjectAccesses(
+  {
+    cursor,
+    limit,
+    teamId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    teamId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: TeamProjectAccessListResponseDtoOutput;
+    }>(
+      `/teams/${encodeURIComponent(teamId)}/projects${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function upsertTeamProjectAccess(
+  {
+    teamId,
+    teamProjectAccessUpsertDto,
+  }: {
+    teamId: string;
+    teamProjectAccessUpsertDto: TeamProjectAccessUpsertDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: TeamProjectAccessDtoOutput;
+    }>(
+      `/teams/${encodeURIComponent(teamId)}/projects`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: teamProjectAccessUpsertDto,
+      }),
+    ),
+  );
+}
+export function removeTeamProjectAccess(
+  {
+    projectId,
+    teamId,
+  }: {
+    projectId: string;
+    teamId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: TeamProjectAccessRemoveResponseDtoOutput;
+    }>(`/teams/${encodeURIComponent(teamId)}/projects/${encodeURIComponent(projectId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
 export function getUsers(
   {
     search,
@@ -2843,6 +3147,11 @@ export enum SignupPolicy {
   AllowedDomains = 'allowed_domains',
   SsoOnly = 'sso_only',
   PublicSignup = 'public_signup',
+}
+export enum Role3 {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
 }
 export enum InstanceRole {
   Owner = 'owner',

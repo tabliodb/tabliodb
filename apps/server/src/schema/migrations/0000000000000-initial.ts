@@ -165,6 +165,37 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       PRIMARY KEY (project_id, user_id)
     );
 
+    CREATE TABLE IF NOT EXISTS teams (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      name text NOT NULL,
+      slug text NOT NULL,
+      description text,
+      created_by_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      archived_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (organization_id, slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS team_members (
+      team_id uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_by_id uuid REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (team_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS project_team_access (
+      project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      team_id uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      role text NOT NULL CHECK (role IN ('editor', 'commenter', 'viewer')),
+      created_by_id uuid REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (project_id, team_id)
+    );
+
     CREATE TABLE IF NOT EXISTS api_keys (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       key_hash bytea NOT NULL UNIQUE,
@@ -355,6 +386,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     CREATE INDEX IF NOT EXISTS organization_members_user_id_idx ON organization_members(user_id);
     CREATE INDEX IF NOT EXISTS projects_organization_updated_at_idx ON projects(organization_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS project_members_user_id_idx ON project_members(user_id);
+    CREATE INDEX IF NOT EXISTS teams_organization_id_idx ON teams(organization_id);
+    CREATE INDEX IF NOT EXISTS team_members_user_id_idx ON team_members(user_id);
+    CREATE INDEX IF NOT EXISTS project_team_access_team_id_idx ON project_team_access(team_id);
+    CREATE INDEX IF NOT EXISTS project_team_access_project_id_idx ON project_team_access(project_id);
     CREATE INDEX IF NOT EXISTS diagrams_project_updated_at_idx ON diagrams(project_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS diagram_entity_index_diagram_type_idx ON diagram_entity_index(diagram_id, entity_type);
     CREATE INDEX IF NOT EXISTS diagram_entity_index_parent_idx ON diagram_entity_index(diagram_id, parent_entity_id);
@@ -392,6 +427,9 @@ export async function down(db: Kysely<unknown>): Promise<void> {
     DROP TABLE IF EXISTS diagram_documents;
     DROP TABLE IF EXISTS diagrams;
     DROP TABLE IF EXISTS api_keys;
+    DROP TABLE IF EXISTS project_team_access;
+    DROP TABLE IF EXISTS team_members;
+    DROP TABLE IF EXISTS teams;
     DROP TABLE IF EXISTS project_members;
     DROP TABLE IF EXISTS projects;
     DROP TABLE IF EXISTS invitations;

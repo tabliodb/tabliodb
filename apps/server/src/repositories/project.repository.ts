@@ -55,55 +55,99 @@ export class ProjectRepository {
 
   async getVisibleToUser(userId: string, options: ProjectListOptions) {
     const offset = decodeOffsetCursor(options.cursor);
-    const rows = await this.db
-      .selectFrom('projects')
-      .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
-      .innerJoin('project_members', 'project_members.projectId', 'projects.id')
-      .select([
-        'projects.id',
-        'projects.organizationId',
-        'projects.name',
-        'projects.slug',
-        'projects.description',
-        'projects.createdAt',
-        'projects.updatedAt',
-        'organizations.name as organizationName',
-        'organizations.slug as organizationSlug',
-        'project_members.role as projectRole',
-      ])
-      .where('project_members.userId', '=', userId)
-      .where('projects.archivedAt', 'is', null)
-      .$if(Boolean(options.organizationId), (query) =>
-        query.where('projects.organizationId', '=', options.organizationId!),
+    const organizationFilter = options.organizationId
+      ? sql`AND projects.organization_id = ${options.organizationId}`
+      : sql``;
+    const rows = await sql<ProjectVisibleRow>`
+      WITH project_access AS (
+        SELECT project_id, role
+        FROM project_members
+        WHERE user_id = ${userId}
+        UNION ALL
+        SELECT project_team_access.project_id, project_team_access.role
+        FROM project_team_access
+        INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
+        INNER JOIN teams ON teams.id = project_team_access.team_id
+        WHERE team_members.user_id = ${userId}
+          AND teams.archived_at IS NULL
+      ),
+      effective_access AS (
+        SELECT
+          project_id,
+          min(
+            CASE role
+              WHEN 'owner' THEN 1
+              WHEN 'editor' THEN 2
+              WHEN 'commenter' THEN 3
+              WHEN 'viewer' THEN 4
+              ELSE 99
+            END
+          ) AS role_priority
+        FROM project_access
+        GROUP BY project_id
       )
-      .orderBy('projects.updatedAt', 'desc')
-      .limit(options.limit + 1)
-      .offset(offset)
-      .execute();
-    const totalRow = await this.db
-      .selectFrom('projects')
-      .innerJoin('project_members', 'project_members.projectId', 'projects.id')
-      .select((eb) => eb.fn.countAll<number>().as('count'))
-      .where('project_members.userId', '=', userId)
-      .where('projects.archivedAt', 'is', null)
-      .$if(Boolean(options.organizationId), (query) =>
-        query.where('projects.organizationId', '=', options.organizationId!),
+      SELECT
+        projects.id,
+        projects.organization_id AS "organizationId",
+        projects.name,
+        projects.slug,
+        projects.description,
+        projects.created_at AS "createdAt",
+        projects.updated_at AS "updatedAt",
+        organizations.name AS "organizationName",
+        organizations.slug AS "organizationSlug",
+        CASE effective_access.role_priority
+          WHEN 1 THEN 'owner'
+          WHEN 2 THEN 'editor'
+          WHEN 3 THEN 'commenter'
+          ELSE 'viewer'
+        END AS "projectRole"
+      FROM projects
+      INNER JOIN organizations ON organizations.id = projects.organization_id
+      INNER JOIN effective_access ON effective_access.project_id = projects.id
+      WHERE projects.archived_at IS NULL
+        ${organizationFilter}
+      ORDER BY projects.updated_at DESC
+      LIMIT ${options.limit + 1}
+      OFFSET ${offset}
+    `.execute(this.db);
+    const totalRow = await sql<{ count: number }>`
+      WITH project_access AS (
+        SELECT project_id, role
+        FROM project_members
+        WHERE user_id = ${userId}
+        UNION ALL
+        SELECT project_team_access.project_id, project_team_access.role
+        FROM project_team_access
+        INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
+        INNER JOIN teams ON teams.id = project_team_access.team_id
+        WHERE team_members.user_id = ${userId}
+          AND teams.archived_at IS NULL
+      ),
+      effective_access AS (
+        SELECT project_id
+        FROM project_access
+        GROUP BY project_id
       )
-      .executeTakeFirstOrThrow();
+      SELECT count(*)::int AS count
+      FROM projects
+      INNER JOIN effective_access ON effective_access.project_id = projects.id
+      WHERE projects.archived_at IS NULL
+        ${organizationFilter}
+    `.execute(this.db);
 
     return {
       // List project dipaginasi walau editor saat ini hanya memakai page pertama untuk starter workspace.
-      items: rows.slice(0, options.limit),
-      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
-      totalCount: Number(totalRow.count),
+      items: rows.rows.slice(0, options.limit),
+      nextCursor: rows.rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.rows[0]?.count ?? 0),
     };
   }
 
-  getByIdForUser(userId: string, projectId: string) {
-    return this.db
+  async getByIdForUser(userId: string, projectId: string) {
+    const project = await this.db
       .selectFrom('projects')
       .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
-      .innerJoin('project_members', 'project_members.projectId', 'projects.id')
       .select([
         'projects.id',
         'projects.organizationId',
@@ -114,36 +158,50 @@ export class ProjectRepository {
         'projects.updatedAt',
         'organizations.name as organizationName',
         'organizations.slug as organizationSlug',
-        'project_members.role as projectRole',
       ])
-      .where('project_members.userId', '=', userId)
       .where('projects.id', '=', projectId)
       .where('projects.archivedAt', 'is', null)
       .executeTakeFirst();
+    const role = project ? await this.getProjectRole(userId, project.id) : undefined;
+
+    return project && role ? { ...project, projectRole: role.role } : undefined;
   }
 
-  getProjectRole(userId: string, projectId: string) {
-    return this.db
-      .selectFrom('project_members')
-      .innerJoin('projects', 'projects.id', 'project_members.projectId')
-      .select('project_members.role')
-      .where('project_members.userId', '=', userId)
-      .where('project_members.projectId', '=', projectId)
-      .where('projects.archivedAt', 'is', null)
-      .executeTakeFirst();
+  async getProjectRole(userId: string, projectId: string) {
+    const roles = await sql<{ role: ProjectRole }>`
+      SELECT project_members.role
+      FROM project_members
+      INNER JOIN projects ON projects.id = project_members.project_id
+      WHERE project_members.user_id = ${userId}
+        AND project_members.project_id = ${projectId}
+        AND projects.archived_at IS NULL
+      UNION ALL
+      SELECT project_team_access.role
+      FROM project_team_access
+      INNER JOIN projects ON projects.id = project_team_access.project_id
+      INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
+      INNER JOIN teams ON teams.id = project_team_access.team_id
+      WHERE team_members.user_id = ${userId}
+        AND project_team_access.project_id = ${projectId}
+        AND projects.archived_at IS NULL
+        AND teams.archived_at IS NULL
+    `.execute(this.db);
+    const role = resolveHighestProjectRole(roles.rows.map((row) => row.role));
+
+    return role ? { role } : undefined;
   }
 
-  getDiagramRole(userId: string, diagramId: string) {
-    return this.db
+  async getDiagramRole(userId: string, diagramId: string) {
+    const diagram = await this.db
       .selectFrom('diagrams')
-      .innerJoin('project_members', 'project_members.projectId', 'diagrams.projectId')
       .innerJoin('projects', 'projects.id', 'diagrams.projectId')
-      .select('project_members.role')
-      .where('project_members.userId', '=', userId)
+      .select('diagrams.projectId')
       .where('diagrams.id', '=', diagramId)
       .where('projects.archivedAt', 'is', null)
       .where('diagrams.archivedAt', 'is', null)
       .executeTakeFirst();
+
+    return diagram ? this.getProjectRole(userId, diagram.projectId) : undefined;
   }
 
   async update(userId: string, projectId: string, dto: { description?: string | null; name?: string }) {
@@ -298,4 +356,37 @@ export class ProjectRepository {
 
     return Number(row.count);
   }
+}
+
+type ProjectVisibleRow = {
+  createdAt: Date;
+  description: string | null;
+  id: string;
+  name: string;
+  organizationId: string;
+  organizationName: string;
+  organizationSlug: string;
+  projectRole: ProjectRole;
+  slug: string;
+  updatedAt: Date;
+};
+
+function resolveHighestProjectRole(roles: ProjectRole[]): ProjectRole | null {
+  const sortedRoles = roles
+    .map((role) => ({ priority: getProjectRolePriority(role), role }))
+    .filter((entry) => entry.priority < Number.POSITIVE_INFINITY)
+    .sort((left, right) => left.priority - right.priority);
+
+  return sortedRoles[0]?.role ?? null;
+}
+
+function getProjectRolePriority(role: ProjectRole): number {
+  const rolePriority: Record<ProjectRole, number> = {
+    [ProjectRole.Owner]: 1,
+    [ProjectRole.Editor]: 2,
+    [ProjectRole.Commenter]: 3,
+    [ProjectRole.Viewer]: 4,
+  };
+
+  return rolePriority[role] ?? Number.POSITIVE_INFINITY;
 }

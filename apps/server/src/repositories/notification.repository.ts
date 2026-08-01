@@ -117,53 +117,45 @@ export class NotificationRepository {
     actorId: string;
     commentId: string;
   }): Promise<CommentNotificationDeliveryRecipients> {
-    const mentionRows = await this.db
-      .selectFrom('comment_mentions')
-      .innerJoin('comments', 'comments.id', 'comment_mentions.commentId')
-      .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
-      .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
-      .innerJoin('project_members', (join) =>
-        join
-          .onRef('project_members.projectId', '=', 'projects.id')
-          .onRef('project_members.userId', '=', 'comment_mentions.mentionedUserId'),
-      )
-      .innerJoin('users', 'users.id', 'comment_mentions.mentionedUserId')
-      .select('comment_mentions.mentionedUserId')
-      .where('comment_mentions.commentId', '=', options.commentId)
-      .where('comment_mentions.mentionedUserId', '<>', options.actorId)
-      .where('comments.deletedAt', 'is', null)
-      .where('diagrams.archivedAt', 'is', null)
-      .where('projects.archivedAt', 'is', null)
-      .where('users.deletedAt', 'is', null)
-      .execute();
-    const replyRow = await this.db
-      .selectFrom('comments')
-      .innerJoin('comments as parent_comments', 'parent_comments.id', 'comments.parentCommentId')
-      .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
-      .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
-      .innerJoin('project_members', (join) =>
-        join
-          .onRef('project_members.projectId', '=', 'projects.id')
-          .onRef('project_members.userId', '=', 'parent_comments.createdById'),
-      )
-      .innerJoin('users', 'users.id', 'parent_comments.createdById')
-      .select('parent_comments.createdById as replyUserId')
-      .where('comments.id', '=', options.commentId)
-      .where('comments.createdById', '<>', options.actorId)
-      .where('parent_comments.createdById', '<>', options.actorId)
-      .where('comments.deletedAt', 'is', null)
-      .where('parent_comments.deletedAt', 'is', null)
-      .where('diagrams.archivedAt', 'is', null)
-      .where('projects.archivedAt', 'is', null)
-      .where('users.deletedAt', 'is', null)
-      .executeTakeFirst();
+    const mentionRows = await sql<{ mentionedUserId: string }>`
+      SELECT DISTINCT comment_mentions.mentioned_user_id AS "mentionedUserId"
+      FROM comment_mentions
+      INNER JOIN comments ON comments.id = comment_mentions.comment_id
+      INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
+      INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
+      INNER JOIN projects ON projects.id = diagrams.project_id
+      INNER JOIN users ON users.id = comment_mentions.mentioned_user_id
+      WHERE comment_mentions.comment_id = ${options.commentId}
+        AND comment_mentions.mentioned_user_id <> ${options.actorId}
+        AND comments.deleted_at IS NULL
+        AND diagrams.archived_at IS NULL
+        AND projects.archived_at IS NULL
+        AND users.deleted_at IS NULL
+        AND ${this.createProjectAccessExistsSql(sql.ref('comment_mentions.mentioned_user_id'))}
+    `.execute(this.db);
+    const replyRow = await sql<{ replyUserId: string }>`
+      SELECT parent_comments.created_by_id AS "replyUserId"
+      FROM comments
+      INNER JOIN comments parent_comments ON parent_comments.id = comments.parent_comment_id
+      INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
+      INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
+      INNER JOIN projects ON projects.id = diagrams.project_id
+      INNER JOIN users ON users.id = parent_comments.created_by_id
+      WHERE comments.id = ${options.commentId}
+        AND comments.created_by_id <> ${options.actorId}
+        AND parent_comments.created_by_id <> ${options.actorId}
+        AND comments.deleted_at IS NULL
+        AND parent_comments.deleted_at IS NULL
+        AND diagrams.archived_at IS NULL
+        AND projects.archived_at IS NULL
+        AND users.deleted_at IS NULL
+        AND ${this.createProjectAccessExistsSql(sql.ref('parent_comments.created_by_id'))}
+    `.execute(this.db);
 
     return {
       // Mentions and direct-reply recipient are separated so future email/websocket templates can explain why a user was notified.
-      mentionUserIds: [...new Set(mentionRows.map((row) => row.mentionedUserId))],
-      replyUserId: replyRow?.replyUserId ?? null,
+      mentionUserIds: [...new Set(mentionRows.rows.map((row) => row.mentionedUserId))],
+      replyUserId: replyRow.rows[0]?.replyUserId ?? null,
     };
   }
 
@@ -185,6 +177,7 @@ export class NotificationRepository {
         AND comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
         AND projects.archived_at IS NULL
+        AND ${this.createProjectAccessExistsSql(userId)}
     `;
   }
 
@@ -207,6 +200,7 @@ export class NotificationRepository {
         AND parent_comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
         AND projects.archived_at IS NULL
+        AND ${this.createProjectAccessExistsSql(userId)}
         AND NOT EXISTS (
           SELECT 1
           FROM comment_mentions mention_dedupe
@@ -285,12 +279,32 @@ export class NotificationRepository {
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
       INNER JOIN projects ON projects.id = diagrams.project_id
       INNER JOIN organizations ON organizations.id = projects.organization_id
-      INNER JOIN project_members ON project_members.project_id = projects.id
-        AND project_members.user_id = ${userId}
       LEFT JOIN comment_thread_reads ON comment_thread_reads.thread_id = comment_threads.id
         AND comment_thread_reads.user_id = ${userId}
       LEFT JOIN comments parent_comments ON parent_comments.id = comments.parent_comment_id
       LEFT JOIN users parent_users ON parent_users.id = parent_comments.created_by_id
+    `;
+  }
+
+  private createProjectAccessExistsSql(userId: string | ReturnType<typeof sql.ref>) {
+    return sql`
+      (
+        EXISTS (
+          SELECT 1
+          FROM project_members access_project_members
+          WHERE access_project_members.project_id = projects.id
+            AND access_project_members.user_id = ${userId}
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM project_team_access
+          INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
+          INNER JOIN teams ON teams.id = project_team_access.team_id
+          WHERE project_team_access.project_id = projects.id
+            AND team_members.user_id = ${userId}
+            AND teams.archived_at IS NULL
+        )
+      )
     `;
   }
 }

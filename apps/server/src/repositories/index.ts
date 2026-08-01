@@ -17,6 +17,7 @@ import { ReviewSignalRepository } from './review-signal.repository.js';
 import { SessionRepository } from './session.repository.js';
 import { SetupRepository } from './setup.repository.js';
 import { SnapshotRepository } from './snapshot.repository.js';
+import { TeamRepository } from './team.repository.js';
 import { UserRepository } from './user.repository.js';
 
 export const repositories = [
@@ -39,5 +40,6 @@ export const repositories = [
   SessionRepository,
   SetupRepository,
   SnapshotRepository,
+  TeamRepository,
   UserRepository,
 ];

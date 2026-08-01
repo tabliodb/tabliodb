@@ -179,6 +179,34 @@ export interface ProjectMemberTable {
   updatedAt: Timestamp;
 }
 
+export interface TeamTable {
+  id: Generated<string>;
+  organizationId: string;
+  name: string;
+  slug: string;
+  description: NullableColumn<string>;
+  createdById: string;
+  archivedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface TeamMemberTable {
+  teamId: string;
+  userId: string;
+  createdById: NullableColumn<string>;
+  createdAt: Timestamp;
+}
+
+export interface ProjectTeamAccessTable {
+  projectId: string;
+  teamId: string;
+  role: ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+  createdById: NullableColumn<string>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface ApiKeyTable {
   id: Generated<string>;
   keyHash: BinaryColumn;
@@ -363,6 +391,9 @@ export interface DB {
   invitations: InvitationTable;
   projects: ProjectTable;
   project_members: ProjectMemberTable;
+  teams: TeamTable;
+  team_members: TeamMemberTable;
+  project_team_access: ProjectTeamAccessTable;
   api_keys: ApiKeyTable;
   diagrams: DiagramTable;
   diagram_documents: DiagramDocumentTable;

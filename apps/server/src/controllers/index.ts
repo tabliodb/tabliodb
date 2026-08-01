@@ -10,6 +10,7 @@ import { ProjectController } from './project.controller.js';
 import { ReviewSignalController } from './review-signal.controller.js';
 import { SetupController } from './setup.controller.js';
 import { SnapshotController } from './snapshot.controller.js';
+import { TeamController } from './team.controller.js';
 import { UserController } from './user.controller.js';
 
 export const controllers = [
@@ -25,5 +26,6 @@ export const controllers = [
   ReviewSignalController,
   SetupController,
   SnapshotController,
+  TeamController,
   UserController,
 ];

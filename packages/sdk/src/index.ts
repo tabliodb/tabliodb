@@ -11,6 +11,7 @@ export * from './resources/projects.js';
 export * from './resources/review-signals.js';
 export * from './resources/setup.js';
 export * from './resources/snapshots.js';
+export * from './resources/teams.js';
 export * from './resources/users.js';
 
 import { configureTabliodbSdk, type TabliodbClientOptions } from './request-options.js';
@@ -24,6 +25,7 @@ import { createProjectsResource, type ProjectsResource } from './resources/proje
 import { createReviewSignalsResource, type ReviewSignalsResource } from './resources/review-signals.js';
 import { createSetupResource, type SetupResource } from './resources/setup.js';
 import { createSnapshotsResource, type SnapshotsResource } from './resources/snapshots.js';
+import { createTeamsResource, type TeamsResource } from './resources/teams.js';
 import { createUsersResource, type UsersResource } from './resources/users.js';
 
 export type TabliodbSdk = {
@@ -37,6 +39,7 @@ export type TabliodbSdk = {
   reviewSignals: ReviewSignalsResource;
   setup: SetupResource;
   snapshots: SnapshotsResource;
+  teams: TeamsResource;
   users: UsersResource;
 };
 
@@ -54,6 +57,7 @@ export function createTabliodbSdk(options: TabliodbClientOptions = {}): Tabliodb
     reviewSignals: createReviewSignalsResource(requestOptions),
     setup: createSetupResource(requestOptions),
     snapshots: createSnapshotsResource(requestOptions),
+    teams: createTeamsResource(requestOptions),
     users: createUsersResource(requestOptions),
   };
 }

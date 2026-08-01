@@ -32,6 +32,10 @@ import {
   type ProjectResponseDto,
   type SnapshotDiffResponseDto,
   type SnapshotResponseDto,
+  type TeamMemberDto,
+  type TeamProjectAccessDto,
+  type TeamProjectRole,
+  type TeamResponseDto,
   type CommentResponseDto,
   type CommentTargetType,
   type CommentLexicalDocumentDto,
@@ -176,6 +180,16 @@ import {
 } from '@/resources/comments';
 import { snapshotsQueries, useCreateSnapshotMutation, useRestoreSnapshotMutation } from '@/resources/snapshots';
 import {
+  teamsQueries,
+  useAddTeamMemberMutation,
+  useArchiveTeamMutation,
+  useCreateTeamMutation,
+  useRemoveTeamMemberMutation,
+  useRemoveTeamProjectAccessMutation,
+  useUpdateTeamMutation,
+  useUpsertTeamProjectAccessMutation,
+} from '@/resources/teams';
+import {
   reviewSignalKeys,
   reviewSignalQueries,
   useIgnoreReviewSignalMutation,
@@ -295,6 +309,42 @@ const memberFormDefaults: MemberFormState = {
   role: ProjectRole.Viewer,
 };
 
+const teamFormSchema = z.object({
+  description: z.string().trim().max(240, 'Keep the description under 240 characters.').optional(),
+  name: z.string().trim().min(1, 'Team name is required.').max(80, 'Keep the team name under 80 characters.'),
+});
+
+type TeamFormState = z.infer<typeof teamFormSchema>;
+
+const teamFormDefaults: TeamFormState = {
+  description: '',
+  name: '',
+};
+
+const teamMemberFormSchema = z.object({
+  email: z.string().trim().email('Enter a valid email.'),
+});
+
+type TeamMemberFormState = z.infer<typeof teamMemberFormSchema>;
+
+const teamMemberFormDefaults: TeamMemberFormState = {
+  email: '',
+};
+
+const teamProjectAccessRoleOptions = [ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
+
+const teamProjectAccessFormSchema = z.object({
+  projectId: z.string().min(1, 'Select a project.'),
+  role: z.enum(teamProjectAccessRoleOptions),
+});
+
+type TeamProjectAccessFormState = z.infer<typeof teamProjectAccessFormSchema>;
+
+const teamProjectAccessFormDefaults: TeamProjectAccessFormState = {
+  projectId: '',
+  role: ProjectRole.Viewer,
+};
+
 const projectRoleOptions = [ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
 const organizationRoleOptions = [
   OrganizationRole.Owner,
@@ -304,6 +354,9 @@ const organizationRoleOptions = [
 ] as const;
 
 const projectMemberPageQuery = { limit: 50 } as const;
+const teamPageQuery = { limit: 50 } as const;
+const teamMemberPageQuery = { limit: 50 } as const;
+const teamProjectAccessPageQuery = { limit: 50 } as const;
 const reviewSignalPageQuery = { limit: 50 } as const;
 const commentThreadPageQuery = { limit: 50 } as const;
 const commentReplyPageQuery = { limit: 50 } as const;
@@ -4242,13 +4295,38 @@ function WorkspaceSettingsDialog({
   project: ProjectResponseDto;
 }) {
   const [open, setOpen] = useState(false);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const canManageWorkspace = isOrganizationManager(organization);
   const form = useForm<WorkspaceSettingsFormState>({
     defaultValues: getWorkspaceSettingsDefaults(project),
     mode: 'onBlur',
     resolver: zodResolver(workspaceSettingsFormSchema),
   });
+  const teamForm = useForm<TeamFormState>({
+    defaultValues: teamFormDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(teamFormSchema),
+  });
+  const selectedTeamForm = useForm<TeamFormState>({
+    defaultValues: teamFormDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(teamFormSchema),
+  });
+  const teamMemberForm = useForm<TeamMemberFormState>({
+    defaultValues: teamMemberFormDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(teamMemberFormSchema),
+  });
+  const teamProjectAccessForm = useForm<TeamProjectAccessFormState>({
+    defaultValues: teamProjectAccessFormDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(teamProjectAccessFormSchema),
+  });
   const { errors } = form.formState;
+  const { errors: teamErrors } = teamForm.formState;
+  const { errors: selectedTeamErrors } = selectedTeamForm.formState;
+  const { errors: teamMemberErrors } = teamMemberForm.formState;
+  const { errors: teamProjectAccessErrors } = teamProjectAccessForm.formState;
   const settingsQueryOptions = organizationsQueries.settings(project.organizationId);
   const settingsQuery = useQuery({
     ...settingsQueryOptions,
@@ -4266,8 +4344,46 @@ function WorkspaceSettingsDialog({
     // Workspace members are admin-only data, so the dialog becomes the fetch boundary just like audit logs.
     enabled: open && canManageWorkspace && membersQueryOptions.enabled !== false,
   });
+  const teamsQueryOptions = teamsQueries.list({ ...teamPageQuery, organizationId: project.organizationId });
+  const teamsQuery = useQuery({
+    ...teamsQueryOptions,
+    // Teams are workspace-admin data and are only needed in the settings dialog.
+    enabled: open && canManageWorkspace && teamsQueryOptions.enabled !== false,
+  });
+  const selectedTeamMembersQueryOptions = teamsQueries.members(selectedTeamId ?? '', teamMemberPageQuery);
+  const selectedTeamMembersQuery = useQuery({
+    ...selectedTeamMembersQueryOptions,
+    enabled: open && canManageWorkspace && Boolean(selectedTeamId) && selectedTeamMembersQueryOptions.enabled !== false,
+  });
+  const selectedTeamProjectAccessesQueryOptions = teamsQueries.projectAccesses(
+    selectedTeamId ?? '',
+    teamProjectAccessPageQuery,
+  );
+  const selectedTeamProjectAccessesQuery = useQuery({
+    ...selectedTeamProjectAccessesQueryOptions,
+    enabled:
+      open &&
+      canManageWorkspace &&
+      Boolean(selectedTeamId) &&
+      selectedTeamProjectAccessesQueryOptions.enabled !== false,
+  });
+  const teamProjectOptionsQuery = useQuery({
+    ...projectsQueries.list({ limit: 50, organizationId: project.organizationId }),
+    // Project options are used only when granting a team access to a project.
+    enabled: open && canManageWorkspace,
+  });
   const auditLogs = auditLogsQuery.data?.items ?? [];
   const workspaceMembers = membersQuery.data?.items ?? [];
+  const teams = teamsQuery.data?.items ?? [];
+  const selectedTeam = selectedTeamId ? (teams.find((team) => team.id === selectedTeamId) ?? null) : null;
+  const selectedTeamMembers = selectedTeamMembersQuery.data?.items ?? [];
+  const selectedTeamProjectAccesses = selectedTeamProjectAccessesQuery.data?.items ?? [];
+  const teamProjectOptions = teamProjectOptionsQuery.data?.items ?? [];
+  const teamProjectSelectOptions = teamProjectOptions.map((projectOption) => ({
+    disabled: selectedTeamProjectAccesses.some((access) => access.projectId === projectOption.id),
+    label: projectOption.name,
+    value: projectOption.id,
+  }));
   const updateSettingsMutation = useUpdateOrganizationSettingsMutation({
     mutationConfig: {
       onSuccess: (settings) => {
@@ -4279,6 +4395,54 @@ function WorkspaceSettingsDialog({
   const updateMemberMutation = useUpdateOrganizationMemberMutation();
   const removeMemberMutation = useRemoveOrganizationMemberMutation();
   const isWorkspaceMemberMutationPending = updateMemberMutation.isPending || removeMemberMutation.isPending;
+  const createTeamMutation = useCreateTeamMutation({
+    mutationConfig: {
+      onSuccess: (team) => {
+        teamForm.reset(teamFormDefaults);
+        setSelectedTeamId(team.id);
+      },
+    },
+  });
+  const updateTeamMutation = useUpdateTeamMutation({
+    mutationConfig: {
+      onSuccess: (team) => {
+        // The editable detail form follows the saved response so stale local edits do not linger after submit.
+        selectedTeamForm.reset({ description: team.description ?? '', name: team.name });
+      },
+    },
+  });
+  const archiveTeamMutation = useArchiveTeamMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        setSelectedTeamId(null);
+        selectedTeamForm.reset(teamFormDefaults);
+      },
+    },
+  });
+  const addTeamMemberMutation = useAddTeamMemberMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        teamMemberForm.reset(teamMemberFormDefaults);
+      },
+    },
+  });
+  const removeTeamMemberMutation = useRemoveTeamMemberMutation();
+  const upsertTeamProjectAccessMutation = useUpsertTeamProjectAccessMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        teamProjectAccessForm.reset(teamProjectAccessFormDefaults);
+      },
+    },
+  });
+  const removeTeamProjectAccessMutation = useRemoveTeamProjectAccessMutation();
+  const isTeamMutationPending =
+    createTeamMutation.isPending ||
+    updateTeamMutation.isPending ||
+    archiveTeamMutation.isPending ||
+    addTeamMemberMutation.isPending ||
+    removeTeamMemberMutation.isPending ||
+    upsertTeamProjectAccessMutation.isPending ||
+    removeTeamProjectAccessMutation.isPending;
 
   useEffect(() => {
     if (open) {
@@ -4286,11 +4450,32 @@ function WorkspaceSettingsDialog({
       updateSettingsMutation.reset();
       updateMemberMutation.reset();
       removeMemberMutation.reset();
+      createTeamMutation.reset();
+      updateTeamMutation.reset();
+      archiveTeamMutation.reset();
+      addTeamMemberMutation.reset();
+      removeTeamMemberMutation.reset();
+      upsertTeamProjectAccessMutation.reset();
+      removeTeamProjectAccessMutation.reset();
     }
   }, [form, open, project, settingsQuery.data]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (!selectedTeam) {
+      selectedTeamForm.reset(teamFormDefaults);
+      return;
+    }
+
+    // Selection drives the detail form, so switching teams always shows the currently saved team metadata.
+    selectedTeamForm.reset({ description: selectedTeam.description ?? '', name: selectedTeam.name });
+  }, [open, selectedTeam?.description, selectedTeam?.id, selectedTeam?.name, selectedTeamForm]);
+
   function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen && (updateSettingsMutation.isPending || isWorkspaceMemberMutationPending)) {
+    if (!nextOpen && (updateSettingsMutation.isPending || isWorkspaceMemberMutationPending || isTeamMutationPending)) {
       return;
     }
 
@@ -4301,6 +4486,18 @@ function WorkspaceSettingsDialog({
       updateSettingsMutation.reset();
       updateMemberMutation.reset();
       removeMemberMutation.reset();
+      createTeamMutation.reset();
+      updateTeamMutation.reset();
+      archiveTeamMutation.reset();
+      addTeamMemberMutation.reset();
+      removeTeamMemberMutation.reset();
+      upsertTeamProjectAccessMutation.reset();
+      removeTeamProjectAccessMutation.reset();
+      setSelectedTeamId(null);
+      teamForm.reset(teamFormDefaults);
+      selectedTeamForm.reset(teamFormDefaults);
+      teamMemberForm.reset(teamMemberFormDefaults);
+      teamProjectAccessForm.reset(teamProjectAccessFormDefaults);
     }
   }
 
@@ -4338,16 +4535,131 @@ function WorkspaceSettingsDialog({
     });
   }
 
+  function handleCreateTeam(values: TeamFormState) {
+    if (!canManageWorkspace) {
+      return;
+    }
+
+    createTeamMutation.mutate({
+      description: toOptionalDescription(values.description),
+      name: values.name,
+      organizationId: project.organizationId,
+    });
+  }
+
+  function handleArchiveTeam(team: TeamResponseDto) {
+    archiveTeamMutation.mutate({
+      organizationId: project.organizationId,
+      teamId: team.id,
+    });
+  }
+
+  function handleUpdateTeam(values: TeamFormState) {
+    if (!selectedTeam) {
+      return;
+    }
+
+    updateTeamMutation.mutate({
+      body: {
+        description: toOptionalDescription(values.description) ?? null,
+        name: values.name,
+      },
+      teamId: selectedTeam.id,
+    });
+  }
+
+  function handleAddTeamMember(values: TeamMemberFormState) {
+    if (!selectedTeam) {
+      return;
+    }
+
+    addTeamMemberMutation.mutate({
+      body: {
+        email: values.email,
+      },
+      organizationId: project.organizationId,
+      teamId: selectedTeam.id,
+    });
+  }
+
+  function handleRemoveTeamMember(member: TeamMemberDto) {
+    if (!selectedTeam) {
+      return;
+    }
+
+    removeTeamMemberMutation.mutate({
+      organizationId: project.organizationId,
+      teamId: selectedTeam.id,
+      userId: member.userId,
+    });
+  }
+
+  function handleUpsertTeamProjectAccess(values: TeamProjectAccessFormState) {
+    if (!selectedTeam) {
+      return;
+    }
+
+    upsertTeamProjectAccessMutation.mutate({
+      body: {
+        projectId: values.projectId,
+        role: values.role as TeamProjectRole,
+      },
+      organizationId: project.organizationId,
+      teamId: selectedTeam.id,
+    });
+  }
+
+  function handleRemoveTeamProjectAccess(access: TeamProjectAccessDto) {
+    if (!selectedTeam) {
+      return;
+    }
+
+    removeTeamProjectAccessMutation.mutate({
+      organizationId: project.organizationId,
+      projectId: access.projectId,
+      teamId: selectedTeam.id,
+    });
+  }
+
+  function handleUpdateTeamProjectAccessRole(access: TeamProjectAccessDto, role: TeamProjectRole) {
+    if (!selectedTeam || access.role === role) {
+      return;
+    }
+
+    upsertTeamProjectAccessMutation.mutate({
+      body: {
+        projectId: access.projectId,
+        role,
+      },
+      organizationId: project.organizationId,
+      teamId: selectedTeam.id,
+    });
+  }
+
   const memberMutationError = updateMemberMutation.error ?? removeMemberMutation.error;
+  const teamMutationError =
+    createTeamMutation.error ??
+    updateTeamMutation.error ??
+    archiveTeamMutation.error ??
+    addTeamMemberMutation.error ??
+    removeTeamMemberMutation.error ??
+    upsertTeamProjectAccessMutation.error ??
+    removeTeamProjectAccessMutation.error;
   const updatingUserId = updateMemberMutation.isPending ? updateMemberMutation.variables?.userId : null;
   const removingUserId = removeMemberMutation.isPending ? removeMemberMutation.variables?.userId : null;
+  const removingTeamMemberUserId = removeTeamMemberMutation.isPending
+    ? removeTeamMemberMutation.variables?.userId
+    : null;
+  const removingTeamProjectId = removeTeamProjectAccessMutation.isPending
+    ? removeTeamProjectAccessMutation.variables?.projectId
+    : null;
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
         <IconButton icon={Building2} label="Workspace settings" variant="ghost" />
       </DialogTrigger>
-      <DialogContent className="w-[min(94vw,680px)]">
+      <DialogContent className="w-[min(96vw,920px)]">
         <DialogHeader>
           <DialogTitle>Workspace settings</DialogTitle>
           <DialogDescription>Configure the current workspace without changing the Tabliodb brand.</DialogDescription>
@@ -4464,6 +4776,332 @@ function WorkspaceSettingsDialog({
 
           {canManageWorkspace ? (
             <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-extrabold">
+                    <UsersRound className="size-4 text-[rgb(var(--tabliodb-primary-text))]" />
+                    Teams
+                  </h3>
+                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    Manage reusable groups before granting project access.
+                  </p>
+                </div>
+                <Badge variant="green">{teamsQuery.data?.totalCount ?? teams.length} teams</Badge>
+              </div>
+
+              <form
+                className="mt-4 grid gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                onSubmit={teamForm.handleSubmit(handleCreateTeam)}
+              >
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Team name
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(teamErrors.name)}
+                    control={teamForm.control}
+                    disabled={isTeamMutationPending}
+                    name="name"
+                    placeholder="Backend team"
+                  />
+                  <FieldError>{teamErrors.name?.message}</FieldError>
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Description
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(teamErrors.description)}
+                    control={teamForm.control}
+                    disabled={isTeamMutationPending}
+                    name="description"
+                    placeholder="Optional team context"
+                  />
+                  <FieldError>{teamErrors.description?.message}</FieldError>
+                </label>
+                <Button className="self-start sm:mt-6" disabled={isTeamMutationPending} type="submit">
+                  {createTeamMutation.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Plus className="size-4" />
+                  )}
+                  Team
+                </Button>
+              </form>
+
+              {teamsQuery.isPending ? (
+                <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading teams
+                </div>
+              ) : teamsQuery.error ? (
+                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                  {getErrorMessage(teamsQuery.error)}
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+                  <div className="tabliodb-scrollbar max-h-[32rem] overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-2">
+                    {teams.length === 0 ? (
+                      <div className="grid min-h-28 place-items-center rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] px-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                        No teams yet
+                      </div>
+                    ) : (
+                      <div className="grid gap-2">
+                        {teams.map((team) => (
+                          <TeamListItem
+                            isSelected={team.id === selectedTeamId}
+                            key={team.id}
+                            onSelect={(nextTeam) => setSelectedTeamId(nextTeam.id)}
+                            team={team}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                    {selectedTeam ? (
+                      <div className="grid gap-4 p-4">
+                        <div className="flex flex-col gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] pb-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <h4 className="truncate text-sm font-extrabold">{selectedTeam.name}</h4>
+                            <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                              {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} project grants
+                            </p>
+                          </div>
+                          <WithTooltip content={`Archive ${selectedTeam.name}`}>
+                            <Button
+                              aria-label={`Archive ${selectedTeam.name}`}
+                              disabled={isTeamMutationPending}
+                              onClick={() => handleArchiveTeam(selectedTeam)}
+                              size="sm"
+                              type="button"
+                              variant="secondary"
+                            >
+                              {archiveTeamMutation.isPending ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <Archive className="size-4" />
+                              )}
+                              Archive
+                            </Button>
+                          </WithTooltip>
+                        </div>
+
+                        <form
+                          className="grid gap-3 rounded-[14px] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                          onSubmit={selectedTeamForm.handleSubmit(handleUpdateTeam)}
+                        >
+                          <label className="block text-sm">
+                            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                              Name
+                            </span>
+                            <ControlledInput
+                              aria-invalid={Boolean(selectedTeamErrors.name)}
+                              control={selectedTeamForm.control}
+                              disabled={isTeamMutationPending}
+                              name="name"
+                            />
+                            <FieldError>{selectedTeamErrors.name?.message}</FieldError>
+                          </label>
+                          <label className="block text-sm">
+                            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                              Description
+                            </span>
+                            <ControlledInput
+                              aria-invalid={Boolean(selectedTeamErrors.description)}
+                              control={selectedTeamForm.control}
+                              disabled={isTeamMutationPending}
+                              name="description"
+                              placeholder="Optional team context"
+                            />
+                            <FieldError>{selectedTeamErrors.description?.message}</FieldError>
+                          </label>
+                          <Button
+                            className="self-start sm:mt-6"
+                            disabled={isTeamMutationPending}
+                            size="sm"
+                            type="submit"
+                          >
+                            {updateTeamMutation.isPending ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Save className="size-4" />
+                            )}
+                            Save
+                          </Button>
+                        </form>
+
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h5 className="text-sm font-extrabold">Members</h5>
+                                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  People inherited by this team
+                                </p>
+                              </div>
+                              <Badge>{selectedTeamMembers.length} loaded</Badge>
+                            </div>
+
+                            <form
+                              className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+                              onSubmit={teamMemberForm.handleSubmit(handleAddTeamMember)}
+                            >
+                              <label className="block text-sm">
+                                <span className="sr-only">Member email</span>
+                                <ControlledInput
+                                  aria-invalid={Boolean(teamMemberErrors.email)}
+                                  autoComplete="email"
+                                  control={teamMemberForm.control}
+                                  disabled={isTeamMutationPending}
+                                  name="email"
+                                  placeholder="teammate@example.com"
+                                  type="email"
+                                />
+                                <FieldError>{teamMemberErrors.email?.message}</FieldError>
+                              </label>
+                              <Button disabled={isTeamMutationPending} size="sm" type="submit">
+                                {addTeamMemberMutation.isPending ? (
+                                  <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                  <UserPlus className="size-4" />
+                                )}
+                                Add
+                              </Button>
+                            </form>
+
+                            {selectedTeamMembersQuery.isPending ? (
+                              <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                <Loader2 className="size-4 animate-spin" />
+                                Loading members
+                              </div>
+                            ) : selectedTeamMembers.length === 0 ? (
+                              <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                No members in this team
+                              </div>
+                            ) : (
+                              <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
+                                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                                  {selectedTeamMembers.map((member) => (
+                                    <TeamMemberRow
+                                      isRemoving={removingTeamMemberUserId === member.userId}
+                                      key={member.userId}
+                                      member={member}
+                                      onRemove={handleRemoveTeamMember}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </section>
+
+                          <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h5 className="text-sm font-extrabold">Project access</h5>
+                                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  Grants inherited by team members
+                                </p>
+                              </div>
+                              <Badge>{selectedTeamProjectAccesses.length} loaded</Badge>
+                            </div>
+
+                            <form
+                              className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_auto]"
+                              onSubmit={teamProjectAccessForm.handleSubmit(handleUpsertTeamProjectAccess)}
+                            >
+                              <label className="block text-sm">
+                                <span className="sr-only">Project</span>
+                                <ControlledSelect
+                                  aria-invalid={Boolean(teamProjectAccessErrors.projectId)}
+                                  className={selectClassName}
+                                  control={teamProjectAccessForm.control}
+                                  disabled={isTeamMutationPending || teamProjectOptionsQuery.isPending}
+                                  name="projectId"
+                                  options={teamProjectSelectOptions}
+                                  placeholder="Select project"
+                                />
+                                <FieldError>{teamProjectAccessErrors.projectId?.message}</FieldError>
+                              </label>
+                              <label className="block text-sm">
+                                <span className="sr-only">Role</span>
+                                <ControlledSelect
+                                  aria-invalid={Boolean(teamProjectAccessErrors.role)}
+                                  className={selectClassName}
+                                  control={teamProjectAccessForm.control}
+                                  disabled={isTeamMutationPending}
+                                  name="role"
+                                  options={teamProjectAccessRoleOptions.map((role) => ({
+                                    label: formatProjectRole(role),
+                                    value: role,
+                                  }))}
+                                />
+                              </label>
+                              <Button disabled={isTeamMutationPending} size="sm" type="submit">
+                                {upsertTeamProjectAccessMutation.isPending ? (
+                                  <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                  <ShieldCheck className="size-4" />
+                                )}
+                                Grant
+                              </Button>
+                            </form>
+
+                            {selectedTeamProjectAccessesQuery.isPending ? (
+                              <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                <Loader2 className="size-4 animate-spin" />
+                                Loading project access
+                              </div>
+                            ) : selectedTeamProjectAccesses.length === 0 ? (
+                              <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                No project grants yet
+                              </div>
+                            ) : (
+                              <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
+                                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                                  {selectedTeamProjectAccesses.map((access) => (
+                                    <TeamProjectAccessRow
+                                      access={access}
+                                      isRemoving={removingTeamProjectId === access.projectId}
+                                      key={access.projectId}
+                                      onRemove={handleRemoveTeamProjectAccess}
+                                      onRoleChange={handleUpdateTeamProjectAccessRole}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </section>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid min-h-[24rem] place-items-center p-6 text-center">
+                        <div>
+                          <UsersRound className="mx-auto size-8 text-[rgb(var(--tabliodb-primary-text))]" />
+                          <h4 className="mt-3 text-sm font-extrabold">Select a team</h4>
+                          <p className="mt-1 max-w-sm text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                            Pick a team to manage members and project grants, or create a new one above.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {teamMutationError || selectedTeamMembersQuery.error || selectedTeamProjectAccessesQuery.error ? (
+                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                  {getErrorMessage(
+                    teamMutationError ?? selectedTeamMembersQuery.error ?? selectedTeamProjectAccessesQuery.error,
+                  )}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {canManageWorkspace ? (
+            <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-extrabold">Recent activity</h3>
@@ -4502,7 +5140,7 @@ function WorkspaceSettingsDialog({
 
         <DialogFooter>
           <Button
-            disabled={updateSettingsMutation.isPending || isWorkspaceMemberMutationPending}
+            disabled={updateSettingsMutation.isPending || isWorkspaceMemberMutationPending || isTeamMutationPending}
             onClick={() => handleOpenChange(false)}
             type="button"
             variant="secondary"
@@ -4514,6 +5152,7 @@ function WorkspaceSettingsDialog({
               settingsQuery.isPending ||
               updateSettingsMutation.isPending ||
               isWorkspaceMemberMutationPending ||
+              isTeamMutationPending ||
               !canManageWorkspace
             }
             form="workspace-settings-form"
@@ -5230,6 +5869,40 @@ function toOptionalDescription(value: string | undefined): string | undefined {
   return description ? description : undefined;
 }
 
+function TeamListItem({
+  isSelected,
+  onSelect,
+  team,
+}: {
+  isSelected: boolean;
+  onSelect: (team: TeamResponseDto) => void;
+  team: TeamResponseDto;
+}) {
+  return (
+    <button
+      className={cn(
+        'grid cursor-pointer gap-2 rounded-[14px] border-2 p-3 text-left transition hover:bg-[rgb(var(--tabliodb-selected-surface))]',
+        isSelected
+          ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-selected-surface))]'
+          : 'border-transparent bg-white',
+      )}
+      onClick={() => onSelect(team)}
+      type="button"
+    >
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <span className="truncate text-sm font-extrabold">{team.name}</span>
+        <Badge variant={isSelected ? 'green' : 'neutral'}>{team.memberCount} users</Badge>
+      </div>
+      <p className="line-clamp-2 min-h-[2rem] text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+        {team.description || 'No description yet'}
+      </p>
+      <div className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
+        {team.projectAccessCount} project grants
+      </div>
+    </button>
+  );
+}
+
 function AuditLogRow({ auditLog }: { auditLog: AuditLogDto }) {
   return (
     <article className="grid gap-2 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_120px] sm:items-center">
@@ -5240,6 +5913,81 @@ function AuditLogRow({ auditLog }: { auditLog: AuditLogDto }) {
         </p>
       </div>
       <Badge variant={getAuditLogTone(auditLog.action)}>{formatAuditLogAction(auditLog.action)}</Badge>
+    </article>
+  );
+}
+
+function TeamMemberRow({
+  isRemoving,
+  member,
+  onRemove,
+}: {
+  isRemoving: boolean;
+  member: TeamMemberDto;
+  onRemove: (member: TeamMemberDto) => void;
+}) {
+  return (
+    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="flex min-w-0 items-center gap-3">
+        <UserAvatar className="size-9 rounded-[12px] text-[11px]" user={member} />
+        <div className="min-w-0">
+          <h6 className="truncate text-sm font-extrabold">{member.name}</h6>
+          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
+        </div>
+      </div>
+      <WithTooltip content={`Remove ${member.name} from this team`}>
+        <Button
+          aria-label={`Remove ${member.name} from this team`}
+          disabled={isRemoving}
+          onClick={() => onRemove(member)}
+          size="icon"
+          variant="ghost"
+        >
+          {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        </Button>
+      </WithTooltip>
+    </article>
+  );
+}
+
+function TeamProjectAccessRow({
+  access,
+  isRemoving,
+  onRemove,
+  onRoleChange,
+}: {
+  access: TeamProjectAccessDto;
+  isRemoving: boolean;
+  onRemove: (access: TeamProjectAccessDto) => void;
+  onRoleChange: (access: TeamProjectAccessDto, role: TeamProjectRole) => void;
+}) {
+  return (
+    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-center">
+      <div className="min-w-0">
+        <h6 className="truncate text-sm font-extrabold">{access.projectName}</h6>
+        <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">/{access.projectSlug}</p>
+      </div>
+      <Select
+        className={selectClassName}
+        disabled={isRemoving}
+        onValueChange={(role) => onRoleChange(access, role as TeamProjectRole)}
+        options={teamProjectAccessRoleOptions.map((role) => ({
+          label: formatProjectRole(role),
+          value: role,
+        }))}
+        value={access.role}
+      />
+      <WithTooltip content={`Remove ${access.projectName} access from this team`}>
+        <Button
+          aria-label={`Remove ${access.projectName} access from this team`}
+          disabled={isRemoving}
+          onClick={() => onRemove(access)}
+          size="icon"
+          variant="ghost"
+        >
+          {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        </Button>
+      </WithTooltip>
     </article>
   );
 }
@@ -5462,6 +6210,58 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     return changedFields.length > 0 ? `Updated workspace ${changedFields.join(', ')}` : 'Updated workspace settings';
   }
 
+  if (auditLog.action === 'team.created') {
+    return `Created team ${readMetadataString(auditLog.metadata, 'name', 'team')}`;
+  }
+
+  if (auditLog.action === 'team.updated') {
+    const changes = readMetadataRecord(auditLog.metadata, 'changes');
+    const changedFields = Object.keys(changes);
+    return changedFields.length > 0 ? `Updated team ${changedFields.join(', ')}` : 'Updated team details';
+  }
+
+  if (auditLog.action === 'team.archived') {
+    return `Archived team ${readMetadataString(auditLog.metadata, 'name', 'team')}`;
+  }
+
+  if (auditLog.action === 'team.member_added') {
+    return `Added ${readMetadataString(auditLog.metadata, 'email', 'member')} to ${readMetadataString(
+      auditLog.metadata,
+      'teamName',
+      'team',
+    )}`;
+  }
+
+  if (auditLog.action === 'team.member_removed') {
+    return `Removed ${readMetadataString(auditLog.metadata, 'email', 'member')} from ${readMetadataString(
+      auditLog.metadata,
+      'teamName',
+      'team',
+    )}`;
+  }
+
+  if (auditLog.action === 'team.project_access_updated') {
+    const role = auditLog.metadata.role;
+    const teamName = readMetadataString(auditLog.metadata, 'teamName', 'team');
+    const projectName = readMetadataString(auditLog.metadata, 'projectName', 'project');
+
+    if (role && typeof role === 'object' && !Array.isArray(role)) {
+      return `Changed ${teamName} access to ${projectName} from ${formatProjectRoleValue(
+        readMetadataString(role as Record<string, unknown>, 'before', ProjectRole.Viewer),
+      )} to ${formatProjectRoleValue(readMetadataString(role as Record<string, unknown>, 'after', ProjectRole.Viewer))}`;
+    }
+
+    return `Granted ${teamName} ${formatProjectRoleValue(String(role ?? ProjectRole.Viewer))} on ${projectName}`;
+  }
+
+  if (auditLog.action === 'team.project_access_removed') {
+    return `Removed ${readMetadataString(auditLog.metadata, 'teamName', 'team')} access from ${readMetadataString(
+      auditLog.metadata,
+      'projectName',
+      'project',
+    )}`;
+  }
+
   if (auditLog.action === 'comment.deleted') {
     return readMetadataBoolean(auditLog.metadata, 'deletedByAuthor') ? 'Deleted own comment' : 'Moderated a comment';
   }
@@ -5503,6 +6303,13 @@ function formatAuditLogAction(action: string): string {
       'organization.settings_updated': 'Workspace',
       'organization.member_removed': 'Removed',
       'organization.member_role_updated': 'Role',
+      'team.archived': 'Team',
+      'team.created': 'Team',
+      'team.member_added': 'Team user',
+      'team.member_removed': 'Removed',
+      'team.project_access_removed': 'Access',
+      'team.project_access_updated': 'Access',
+      'team.updated': 'Team',
       'comment.deleted': 'Comment',
       'comment.edited': 'Comment',
       'comment_thread.reopened': 'Reopened',
@@ -5525,6 +6332,9 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     action === 'comment_thread.resolved' ||
     action === 'project.created' ||
     action === 'project.member_added' ||
+    action === 'team.created' ||
+    action === 'team.member_added' ||
+    action === 'team.project_access_updated' ||
     action === 'user.enabled'
   ) {
     return 'green';
@@ -5535,6 +6345,9 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     action === 'comment.deleted' ||
     action === 'project.archived' ||
     action === 'project.member_removed' ||
+    action === 'team.archived' ||
+    action === 'team.member_removed' ||
+    action === 'team.project_access_removed' ||
     action === 'user.disabled'
   ) {
     return 'yellow';
@@ -5546,6 +6359,7 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     action === 'comment.edited' ||
     action === 'comment_thread.reopened' ||
     action === 'project.member_role_updated' ||
+    action === 'team.updated' ||
     action === 'user.password_reset' ||
     action === 'user.sessions_revoked'
   ) {
