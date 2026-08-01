@@ -60,6 +60,46 @@ Di PowerShell, salin env dengan:
 Copy-Item docker\example.env .env
 ```
 
+## Production Self-Host
+
+Production compose menjalankan satu container Tabliodb untuk API, frontend static build, realtime server, dan background worker. PostgreSQL dan Redis berjalan di network Docker internal dan tidak dipublish ke host secara default.
+
+```bash
+cp docker/example.prod.env docker/production.env
+docker compose --env-file docker/production.env -f docker/docker-compose.prod.yml up -d --build
+```
+
+Di PowerShell:
+
+```powershell
+Copy-Item docker\example.prod.env docker\production.env
+docker compose --env-file docker\production.env -f docker\docker-compose.prod.yml up -d --build
+```
+
+Setelah `docker/production.env` tersedia, command yang sama bisa dijalankan lewat:
+
+```bash
+npm run docker:prod:up
+npm run docker:prod:logs
+```
+
+Setelah container sehat, buka URL sesuai `TABLIODB_PUBLIC_URL`. Fresh install akan masuk ke setup wizard untuk membuat owner pertama.
+
+Hal yang wajib diganti sebelum server benar-benar dipakai:
+
+- `POSTGRES_PASSWORD`: gunakan password kuat, jangan nilai contoh.
+- `TABLIODB_PUBLIC_URL`: isi URL eksternal yang dipakai user, misalnya `https://tabliodb.example.com`.
+- `TABLIODB_COOKIE_SECURE`: set `true` jika Tabliodb diakses lewat HTTPS.
+
+Migration otomatis berjalan saat container Tabliodb start lewat `TABLIODB_RUN_MIGRATIONS=true`. Untuk deployment multi-replica nanti, jalankan migration hanya di satu job/container migrator lalu set replica app ke `TABLIODB_RUN_MIGRATIONS=false`.
+
+Container app expose:
+
+- HTTP API + web: `${TABLIODB_PORT:-4000}`
+- Realtime Hocuspocus: `${TABLIODB_REALTIME_PORT:-1234}`
+
+Frontend production otomatis mengarah ke realtime URL dengan hostname yang sama dan port `1234`, misalnya `wss://tabliodb.example.com:1234` saat halaman dibuka lewat HTTPS. Jika memakai reverse proxy, pastikan WebSocket Hocuspocus ikut diteruskan ke port realtime tersebut.
+
 ## Database Development
 
 Gunakan migration biasa ketika hanya ingin menerapkan perubahan schema:

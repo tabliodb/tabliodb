@@ -1,0 +1,80 @@
+name: tabliodb
+
+services:
+  tabliodb:
+    image: ${TABLIODB_IMAGE:-tabliodb:local}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      TABLIODB_HOST: 0.0.0.0
+      TABLIODB_PORT: 4000
+      TABLIODB_PUBLIC_URL: ${TABLIODB_PUBLIC_URL:-http://localhost:4000}
+      TABLIODB_COOKIE_SECURE: ${TABLIODB_COOKIE_SECURE:-false}
+      TABLIODB_REALTIME_ENABLED: ${TABLIODB_REALTIME_ENABLED:-true}
+      TABLIODB_REALTIME_PORT: 1234
+      TABLIODB_RUN_MIGRATIONS: ${TABLIODB_RUN_MIGRATIONS:-true}
+      TABLIODB_MIGRATION_RETRIES: ${TABLIODB_MIGRATION_RETRIES:-30}
+      TABLIODB_BACKGROUND_JOBS_ENABLED: ${TABLIODB_BACKGROUND_JOBS_ENABLED:-true}
+      TABLIODB_BACKGROUND_JOB_BATCH_SIZE: ${TABLIODB_BACKGROUND_JOB_BATCH_SIZE:-10}
+      TABLIODB_BACKGROUND_JOB_POLL_INTERVAL_MS: ${TABLIODB_BACKGROUND_JOB_POLL_INTERVAL_MS:-2500}
+      TABLIODB_BACKGROUND_JOB_LOCK_TTL_MS: ${TABLIODB_BACKGROUND_JOB_LOCK_TTL_MS:-120000}
+      TABLIODB_STORAGE_PATH: /data/uploads
+      TABLIODB_WEB_DIST_PATH: /app/apps/server/public
+      DATABASE_URL: postgres://${POSTGRES_USER:-tabliodb}:${POSTGRES_PASSWORD:-tabliodb-change-me}@database:5432/${POSTGRES_DB:-tabliodb}
+      REDIS_URL: redis://redis:6379
+      TABLIODB_REALTIME_REDIS_URL: redis://redis:6379
+    ports:
+      - '${TABLIODB_PORT:-4000}:4000'
+      - '${TABLIODB_REALTIME_PORT:-1234}:1234'
+    volumes:
+      - tabliodb_uploads:/data/uploads
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/api/server/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tabliodb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tabliodb-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-tabliodb}
+    volumes:
+      - tabliodb_postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - tabliodb_redis:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  tabliodb_postgres:
+  tabliodb_redis:
+  tabliodb_uploads:

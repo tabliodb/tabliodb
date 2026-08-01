@@ -8,6 +8,7 @@ export type TabliodbEnv = {
     host?: string;
     port: number;
     publicUrl: string;
+    webDistPath: string;
   };
   database: {
     url: string;
@@ -82,6 +83,9 @@ export function loadEnv(): TabliodbEnv {
       host: process.env.TABLIODB_HOST || undefined,
       port: numberFromEnv('TABLIODB_PORT', 4000),
       publicUrl: process.env.TABLIODB_PUBLIC_URL || 'http://localhost:4000',
+      webDistPath: path.resolve(
+        process.env.TABLIODB_WEB_DIST_PATH || path.join(process.cwd(), 'apps', 'server', 'public'),
+      ),
     },
     database: {
       url: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/tabliodb',

@@ -23,7 +23,7 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     name: diagramDocumentName(options.diagramId),
     // Browser UI relies on the httpOnly session cookie in the WebSocket handshake; explicit tokens remain useful for non-browser clients.
     token: options.token ?? null,
-    url: options.url ?? 'ws://localhost:1234',
+    url: options.url ?? getDefaultRealtimeUrl(),
   });
 
   return {
@@ -59,6 +59,19 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
 }
 
 export type DiagramCollaboration = ReturnType<typeof createDiagramCollaboration>;
+
+function getDefaultRealtimeUrl(): string {
+  if (typeof window === 'undefined') {
+    return 'ws://localhost:1234';
+  }
+
+  const realtimeUrl = new URL(window.location.origin);
+  realtimeUrl.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  realtimeUrl.port = '1234';
+
+  // Production compose exposes realtime on 1234; deriving the host keeps custom domains usable without rebuilding web.
+  return realtimeUrl.toString().replace(/\/$/, '');
+}
 
 function readAwarenessStates(provider: HocuspocusProvider): RemoteAwarenessState[] {
   const awareness = provider.awareness;

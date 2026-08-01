@@ -1,0 +1,15 @@
+.git
+.agents
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+data
+storage
+tmp
+*.log
+npm-debug.log*
+Dockerfile
+docker/production.env
