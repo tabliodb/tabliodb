@@ -23,6 +23,7 @@ import { toIsoDateTime, toNullableIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
 import { BackgroundJobService } from './background-job.service.js';
 import { DiagramService } from './diagram.service.js';
+import { DiagramReviewService } from './diagram-review.service.js';
 
 type CommentTargetType =
   'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
@@ -39,6 +40,7 @@ export class CommentService {
     private readonly backgroundJobService: BackgroundJobService,
     private readonly commentRepository: CommentRepository,
     private readonly diagramService: DiagramService,
+    private readonly diagramReviewService: DiagramReviewService,
   ) {}
 
   async createThread(auth: AuthContext, dto: CommentThreadCreateDto) {
@@ -60,6 +62,10 @@ export class CommentService {
       commentId: result.comment.id,
       source: 'comment.created',
       threadId: result.comment.threadId,
+    });
+    await this.diagramReviewService.recordCommented(auth, dto.diagramId, {
+      commentId: result.comment.id,
+      threadId: result.thread.id,
     });
 
     return {

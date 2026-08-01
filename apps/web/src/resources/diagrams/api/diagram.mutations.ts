@@ -3,11 +3,14 @@ import type {
   DiagramExportQuery,
   DiagramImportDto,
   DiagramListResponseDto,
+  DiagramReviewActionCreateDto,
+  DiagramReviewSummaryDto,
   DiagramResponseDto,
   DiagramUpdateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
+import { commentKeys } from '@/resources/comments';
 import { diagramsKeys } from './diagram.keys';
 
 const updateDiagramMutationFn = (input: { body: DiagramUpdateDto; diagramId: string }) =>
@@ -16,6 +19,10 @@ const importDiagramMutationFn = (input: { body: DiagramImportDto; diagramId: str
   sdk.diagrams.import(input.diagramId, input.body);
 const exportDiagramMutationFn = (input: { diagramId: string; query?: DiagramExportQuery }) =>
   sdk.diagrams.export(input.diagramId, input.query);
+const createDiagramReviewActionMutationFn = (input: {
+  body: DiagramReviewActionCreateDto;
+  diagramId: string;
+}): Promise<DiagramReviewSummaryDto> => sdk.diagrams.createReviewAction(input.diagramId, input.body);
 
 type UseUpdateDiagramMutationParams = {
   mutationConfig?: MutationConfig<typeof updateDiagramMutationFn>;
@@ -61,6 +68,25 @@ export function useImportDiagramMutation(params: UseImportDiagramMutationParams 
         current ? replaceDiagramInList(current, data.diagram) : current,
       );
       queryClient.invalidateQueries({ queryKey: diagramsKeys.all });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+type UseCreateDiagramReviewActionMutationParams = {
+  mutationConfig?: MutationConfig<typeof createDiagramReviewActionMutationFn>;
+};
+
+export function useCreateDiagramReviewActionMutation(params: UseCreateDiagramReviewActionMutationParams = {}) {
+  return useMutation({
+    mutationFn: createDiagramReviewActionMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Review action mutates diagram status and review event history; related cached views should observe the new decision immediately.
+      queryClient.setQueryData(diagramsKeys.reviewSummary(variables.diagramId), data);
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.reviews() });
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

@@ -3,6 +3,7 @@ import { BackgroundJobService } from './background-job.service.js';
 import { CollaborationService } from './collaboration.service.js';
 import { CommentService } from './comment.service.js';
 import { DiagramService } from './diagram.service.js';
+import { DiagramReviewService } from './diagram-review.service.js';
 import { FileService } from './file.service.js';
 import { InvitationService } from './invitation.service.js';
 import { NotificationService } from './notification.service.js';
@@ -23,6 +24,7 @@ export const services = [
   CollaborationService,
   CommentService,
   DiagramService,
+  DiagramReviewService,
   FileService,
   InvitationService,
   NotificationService,

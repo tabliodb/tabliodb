@@ -9,4 +9,9 @@ export const diagramsKeys = {
   lists: () => [...diagramsKeys.all, 'list'] as const,
   listByProject: (projectId: string, query: PaginationQuery = {}) =>
     [...diagramsKeys.lists(), { projectId }, query] as const,
+  reviewEvents: () => [...diagramsKeys.reviews(), 'events'] as const,
+  reviewEventsByDiagram: (diagramId: string, query: PaginationQuery = {}) =>
+    [...diagramsKeys.reviewEvents(), { diagramId }, query] as const,
+  reviewSummary: (diagramId: string) => [...diagramsKeys.reviews(), { diagramId }, 'summary'] as const,
+  reviews: () => [...diagramsKeys.all, 'review'] as const,
 };

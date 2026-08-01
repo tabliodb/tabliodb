@@ -25,6 +25,8 @@ import {
   type DiagramExportQuery,
   type DiagramExportResponseDto,
   type DiagramImportDto,
+  type DiagramReviewAction,
+  type DiagramReviewStatus,
   type DiagramResponseDto,
   type NotificationInboxItemDto,
   type OrganizationDto,
@@ -155,6 +157,7 @@ import { authQueries, useLogoutMutation } from '@/resources/auth';
 import {
   defaultDiagramName,
   diagramsQueries,
+  useCreateDiagramReviewActionMutation,
   useExportDiagramMutation,
   useImportDiagramMutation,
   useUpdateDiagramMutation,
@@ -2402,6 +2405,12 @@ function CommentsDialog({
     () => getActiveCommentTarget(model, selectedTableId, selectedCommentTarget),
     [model, selectedCommentTarget, selectedTableId],
   );
+  const reviewSummaryQueryOptions = diagramsQueries.reviewSummary(diagramId);
+  const reviewSummaryQuery = useQuery({
+    ...reviewSummaryQueryOptions,
+    // Review workflow berada di dialog comments; query ini sengaja lazy agar initial editor render tetap fokus ke canvas.
+    enabled: open && reviewSummaryQueryOptions.enabled !== false,
+  });
   const threadQueryOptions = commentQueries.listThreads(diagramId, commentThreadPageQuery);
   const threadsQuery = useQuery({
     ...threadQueryOptions,
@@ -2443,6 +2452,7 @@ function CommentsDialog({
   const deleteCommentMutation = useDeleteCommentMutation();
   const threadReplyMutation = useReplyToCommentThreadMutation();
   const commentReplyMutation = useReplyToCommentMutation();
+  const reviewActionMutation = useCreateDiagramReviewActionMutation();
   const resolveThreadMutation = useResolveCommentThreadMutation();
   const unresolveThreadMutation = useUnresolveCommentThreadMutation();
   const markThreadReadMutation = useMarkCommentThreadReadMutation();
@@ -2452,6 +2462,7 @@ function CommentsDialog({
     createThreadMutation.isPending ||
     deleteCommentMutation.isPending ||
     isReplyMutationPending ||
+    reviewActionMutation.isPending ||
     resolveThreadMutation.isPending ||
     unresolveThreadMutation.isPending ||
     updateCommentMutation.isPending;
@@ -2569,6 +2580,7 @@ function CommentsDialog({
       deleteCommentMutation.reset();
       resetReplyMutations();
       resolveThreadMutation.reset();
+      reviewActionMutation.reset();
       unresolveThreadMutation.reset();
       updateCommentMutation.reset();
     }
@@ -2747,6 +2759,17 @@ function CommentsDialog({
     resolveThreadMutation.mutate(activeThread.id);
   }
 
+  function handleReviewAction(action: DiagramReviewAction) {
+    if (!canComment || reviewActionMutation.isPending) {
+      return;
+    }
+
+    reviewActionMutation.mutate({
+      body: { action },
+      diagramId,
+    });
+  }
+
   function handleThreadSelect(thread: CommentThreadListItemDto) {
     setActiveThreadId(thread.id);
     stopCommentTyping();
@@ -2822,9 +2845,19 @@ function CommentsDialog({
     createThreadMutation.error ??
     threadReplyMutation.error ??
     commentReplyMutation.error ??
+    reviewActionMutation.error ??
     resolveThreadMutation.error ??
     unresolveThreadMutation.error;
   const activeThreadTargetLabel = activeThread ? getCommentThreadTargetLabel(model, activeThread) : null;
+  const reviewStatus = reviewSummaryQuery.data?.currentStatus ?? 'draft';
+  const latestReviewEvent = reviewSummaryQuery.data?.latestEvent ?? null;
+  const latestReviewText = latestReviewEvent
+    ? `${formatDiagramReviewAction(latestReviewEvent.action)} by ${latestReviewEvent.reviewer.name} at ${formatDateTime(
+        latestReviewEvent.createdAt,
+      )}`
+    : reviewSummaryQuery.isPending
+      ? 'Loading review status'
+      : 'No review action yet';
   const readReceiptText = formatReadReceiptText(
     getVisibleThreadReaders(threadReadStateQuery.data?.readers ?? [], currentUserId),
     getVisibleThreadReaderCount(
@@ -3006,6 +3039,51 @@ function CommentsDialog({
               type="button"
               variant="secondary"
             />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-(--tabliodb-radius-lg) border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] px-3 py-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                  Diagram review
+                </span>
+                <Badge variant={getDiagramReviewStatusBadgeVariant(reviewStatus)}>
+                  {formatDiagramReviewStatus(reviewStatus)}
+                </Badge>
+              </div>
+              <p className="mt-1 truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
+                {reviewSummaryQuery.error ? getErrorMessage(reviewSummaryQuery.error) : latestReviewText}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                disabled={!canComment || reviewActionMutation.isPending || reviewStatus === 'approved'}
+                onClick={() => handleReviewAction('approved')}
+                size="sm"
+                type="button"
+              >
+                {reviewActionMutation.isPending && reviewActionMutation.variables?.body.action === 'approved' ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Check className="size-4" />
+                )}
+                Approve
+              </Button>
+              <Button
+                disabled={!canComment || reviewActionMutation.isPending || reviewStatus === 'changes_requested'}
+                onClick={() => handleReviewAction('changes_requested')}
+                size="sm"
+                type="button"
+                variant="danger"
+              >
+                {reviewActionMutation.isPending &&
+                reviewActionMutation.variables?.body.action === 'changes_requested' ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <FileWarning className="size-4" />
+                )}
+                Request changes
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 
@@ -3940,6 +4018,50 @@ function formatCommentTargetType(targetType: CommentTargetType): string {
 
 function formatCommentThreadStatus(status: CommentThreadListItemDto['status']): string {
   return status === 'resolved' ? 'Resolved' : 'Open';
+}
+
+function formatDiagramReviewStatus(status: DiagramReviewStatus): string {
+  if (status === 'changes_requested') {
+    return 'Changes requested';
+  }
+
+  if (status === 'approved') {
+    return 'Approved';
+  }
+
+  if (status === 'reviewed') {
+    return 'Commented';
+  }
+
+  return 'Draft';
+}
+
+function formatDiagramReviewAction(action: DiagramReviewAction): string {
+  if (action === 'changes_requested') {
+    return 'Requested changes';
+  }
+
+  if (action === 'approved') {
+    return 'Approved';
+  }
+
+  return 'Commented';
+}
+
+function getDiagramReviewStatusBadgeVariant(status: DiagramReviewStatus): 'green' | 'neutral' | 'purple' | 'yellow' {
+  if (status === 'approved') {
+    return 'green';
+  }
+
+  if (status === 'changes_requested') {
+    return 'yellow';
+  }
+
+  if (status === 'reviewed') {
+    return 'purple';
+  }
+
+  return 'neutral';
 }
 
 function SidebarRail({
@@ -6666,6 +6788,18 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     return 'Reopened a comment thread';
   }
 
+  if (auditLog.action === 'diagram_review.approved') {
+    return 'Approved diagram review';
+  }
+
+  if (auditLog.action === 'diagram_review.changes_requested') {
+    return 'Requested diagram changes';
+  }
+
+  if (auditLog.action === 'diagram_review.commented') {
+    return 'Started diagram review discussion';
+  }
+
   if (auditLog.action === 'user.disabled') {
     return `Disabled user ${readMetadataString(auditLog.metadata, 'email', 'user')}`;
   }
@@ -6702,6 +6836,9 @@ function formatAuditLogAction(action: string): string {
       'comment.edited': 'Comment',
       'comment_thread.reopened': 'Reopened',
       'comment_thread.resolved': 'Resolved',
+      'diagram_review.approved': 'Approved',
+      'diagram_review.changes_requested': 'Changes',
+      'diagram_review.commented': 'Review',
       'project.archived': 'Archived',
       'project.created': 'Created',
       'project.member_added': 'Member',
@@ -6718,6 +6855,7 @@ function formatAuditLogAction(action: string): string {
 function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow' {
   if (
     action === 'comment_thread.resolved' ||
+    action === 'diagram_review.approved' ||
     action === 'project.created' ||
     action === 'project.member_added' ||
     action === 'team.created' ||
@@ -6731,6 +6869,7 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
   if (
     action === 'organization.member_removed' ||
     action === 'comment.deleted' ||
+    action === 'diagram_review.changes_requested' ||
     action === 'project.archived' ||
     action === 'project.member_removed' ||
     action === 'team.archived' ||
@@ -6746,6 +6885,7 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     action === 'organization.settings_updated' ||
     action === 'comment.edited' ||
     action === 'comment_thread.reopened' ||
+    action === 'diagram_review.commented' ||
     action === 'project.member_role_updated' ||
     action === 'team.updated' ||
     action === 'user.password_reset' ||

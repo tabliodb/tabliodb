@@ -3,6 +3,8 @@ import type {
   DiagramExportQuery,
   DiagramExportResponseDto,
   DiagramListResponseDto,
+  DiagramReviewEventListResponseDto,
+  DiagramReviewSummaryDto,
   DiagramResponseDto,
   ProjectResponseDto,
 } from '@tabliodb/sdk';
@@ -24,6 +26,11 @@ type DiagramsQueries = {
   listOrCreateStarter: (
     project: ProjectResponseDto | null,
   ) => AppQueryOptions<DiagramResponseDto[], ReturnType<typeof diagramsKeys.listByProject>>;
+  reviewEvents: (
+    diagramId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<DiagramReviewEventListResponseDto, ReturnType<typeof diagramsKeys.reviewEventsByDiagram>>;
+  reviewSummary: (diagramId: string) => AppQueryOptions<DiagramReviewSummaryDto, ReturnType<typeof diagramsKeys.reviewSummary>>;
 };
 
 export const diagramsQueries: DiagramsQueries = {
@@ -46,6 +53,20 @@ export const diagramsQueries: DiagramsQueries = {
       enabled: Boolean(project?.id),
       queryFn: () => listOrCreateStarterDiagrams(project),
       queryKey: diagramsKeys.listByProject(project?.id ?? 'missing-project', { limit: 50 }),
+    }),
+
+  reviewEvents: (diagramId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(diagramId),
+      queryFn: () => sdk.diagrams.listReviewEvents(diagramId, query),
+      queryKey: diagramsKeys.reviewEventsByDiagram(diagramId, query),
+    }),
+
+  reviewSummary: (diagramId: string) =>
+    appQueryOptions({
+      enabled: Boolean(diagramId),
+      queryFn: () => sdk.diagrams.getReviewSummary(diagramId),
+      queryKey: diagramsKeys.reviewSummary(diagramId),
     }),
 };
 

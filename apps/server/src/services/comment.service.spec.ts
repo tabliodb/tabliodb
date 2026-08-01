@@ -80,6 +80,9 @@ describe(CommentService.name, () => {
   const diagramService = {
     requireDiagram: vi.fn(),
   };
+  const diagramReviewService = {
+    recordCommented: vi.fn(),
+  };
 
   let service: CommentService;
 
@@ -90,6 +93,7 @@ describe(CommentService.name, () => {
       backgroundJobService as never,
       commentRepository as never,
       diagramService as never,
+      diagramReviewService as never,
     );
   });
 

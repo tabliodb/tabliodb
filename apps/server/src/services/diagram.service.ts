@@ -237,6 +237,7 @@ export class DiagramService {
       name: diagram.name,
       // Kysely membaca kolom dialect sebagai text karena database menyimpannya generik, sedangkan kontrak API mengekspos union dialect canonical.
       dialect: diagram.dialect as DatabaseDialect,
+      status: diagram.status,
       createdAt: toIsoDateTime(diagram.createdAt),
       updatedAt: toIsoDateTime(diagram.updatedAt),
     };

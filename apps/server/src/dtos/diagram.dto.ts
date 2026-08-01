@@ -3,6 +3,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
+const DiagramStatusSchema = z.enum(['draft', 'reviewed', 'approved', 'changes_requested']);
 
 const DiagramCreateSchema = z
   .object({
@@ -26,6 +27,7 @@ const DiagramResponseSchema = z
     projectId: z.string().uuid(),
     name: z.string(),
     dialect: DatabaseDialectSchema,
+    status: DiagramStatusSchema,
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,
   })

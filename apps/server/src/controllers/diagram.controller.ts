@@ -12,15 +12,25 @@ import {
   DiagramResponseDto,
   DiagramUpdateDto,
 } from '../dtos/diagram.dto.js';
+import {
+  DiagramReviewActionCreateDto,
+  DiagramReviewEventListQueryDto,
+  DiagramReviewEventListResponseDto,
+  DiagramReviewSummaryDto,
+} from '../dtos/diagram-review.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
 import { DiagramService } from '../services/diagram.service.js';
+import { DiagramReviewService } from '../services/diagram-review.service.js';
 
 @ApiTags('diagrams')
 @Controller('diagrams')
 @Authenticated()
 export class DiagramController {
-  constructor(private readonly service: DiagramService) {}
+  constructor(
+    private readonly service: DiagramService,
+    private readonly diagramReviewService: DiagramReviewService,
+  ) {}
 
   @Post()
   @RequirePermission(Permission.DiagramCreate, { key: 'projectId', source: 'body', type: 'project' })
@@ -66,5 +76,42 @@ export class DiagramController {
   @ZodResponse({ status: HttpStatus.OK, type: DiagramImportResponseDto })
   importDiagram(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string, @Body() dto: DiagramImportDto) {
     return this.service.importDiagram(auth, diagramId, dto);
+  }
+
+  @Get(':diagramId/review')
+  @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiOperation({ operationId: 'getDiagramReviewSummary' })
+  @ZodResponse({ type: DiagramReviewSummaryDto })
+  getDiagramReviewSummary(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string) {
+    return this.diagramReviewService.getSummary(auth, diagramId);
+  }
+
+  @Get(':diagramId/review/events')
+  @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiOperation({ operationId: 'getDiagramReviewEvents' })
+  @ZodResponse({ type: DiagramReviewEventListResponseDto })
+  getDiagramReviewEvents(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Query() query: DiagramReviewEventListQueryDto,
+  ) {
+    return this.diagramReviewService.listEvents(auth, diagramId, query);
+  }
+
+  @Post(':diagramId/review/actions')
+  @RequirePermission(Permission.DiagramComment, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @HttpCode(HttpStatus.OK)
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiBody({ type: DiagramReviewActionCreateDto })
+  @ApiOperation({ operationId: 'createDiagramReviewAction' })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramReviewSummaryDto })
+  createDiagramReviewAction(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Body() dto: DiagramReviewActionCreateDto,
+  ) {
+    return this.diagramReviewService.createAction(auth, diagramId, dto);
   }
 }

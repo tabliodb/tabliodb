@@ -238,6 +238,18 @@ export interface DiagramTable {
   updatedAt: Timestamp;
 }
 
+export interface DiagramReviewEventTable {
+  id: Generated<string>;
+  diagramId: string;
+  snapshotId: NullableColumn<string>;
+  action: 'commented' | 'approved' | 'changes_requested';
+  previousStatus: 'draft' | 'reviewed' | 'approved' | 'changes_requested';
+  nextStatus: 'draft' | 'reviewed' | 'approved' | 'changes_requested';
+  message: NullableColumn<string>;
+  createdById: string;
+  createdAt: Timestamp;
+}
+
 export interface DiagramDocumentTable {
   diagramId: string;
   yjsState: NullableBinaryColumn;
@@ -396,6 +408,7 @@ export interface DB {
   project_team_access: ProjectTeamAccessTable;
   api_keys: ApiKeyTable;
   diagrams: DiagramTable;
+  diagram_review_events: DiagramReviewEventTable;
   diagram_documents: DiagramDocumentTable;
   diagram_snapshots: DiagramSnapshotTable;
   diagram_entity_index: DiagramEntityIndexTable;

@@ -237,6 +237,7 @@ export type DiagramResponseDtoOutput = {
   projectId: string;
   name: string;
   dialect: Dialect;
+  status: Status3;
   createdAt: string;
   updatedAt: string;
 };
@@ -414,6 +415,43 @@ export type DiagramImportResponseDtoOutput = {
     };
   }[];
 };
+export type DiagramReviewEventDtoOutput = {
+  action: Action;
+  createdAt: string;
+  createdById: string;
+  diagramId: string;
+  id: string;
+  message: string | null;
+  nextStatus: NextStatus;
+  previousStatus: PreviousStatus;
+  reviewer: {
+    avatarUrl: string | null;
+    cursorColor: string;
+    email: string;
+    id: string;
+    name: string;
+  };
+  snapshotId: string | null;
+};
+export type DiagramReviewSummaryDtoOutput = {
+  approvedCount: number;
+  changesRequestedCount: number;
+  commentedCount: number;
+  currentStatus: CurrentStatus;
+  diagramId: string;
+  eventCount: number;
+  latestEvent: DiagramReviewEventDtoOutput | null;
+  recentEvents: DiagramReviewEventDtoOutput[];
+};
+export type DiagramReviewEventListResponseDtoOutput = {
+  items: DiagramReviewEventDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type DiagramReviewActionCreateDto = {
+  action: Action;
+  message?: string | null;
+};
 export type InvitationCreateDto = {
   email: string;
   organizationId?: string;
@@ -441,7 +479,7 @@ export type InvitationDtoOutput = {
   revokedAt: string | null;
   expiresAt: string;
   createdAt: string;
-  status: Status3;
+  status: Status4;
 };
 export type InvitationCreateResponseDtoOutput = {
   invitation: InvitationDtoOutput;
@@ -456,7 +494,7 @@ export type InvitationPublicDtoOutput = {
   projectRole: ProjectRole | null;
   message: string | null;
   expiresAt: string;
-  status: Status3;
+  status: Status4;
 };
 export type InvitationAcceptDto = {
   token: string;
@@ -521,7 +559,7 @@ export type NotificationInboxItemDtoOutput = {
   };
   thread: {
     id: string;
-    status: Status4;
+    status: Status5;
     targetId: string | null;
     targetType: TargetType;
     updatedAt: string;
@@ -576,7 +614,7 @@ export type OrganizationMemberDtoOutput = {
   joinedAt: string | null;
   name: string;
   role: Role;
-  status: Status5;
+  status: Status6;
   updatedAt: string;
   userId: string;
 };
@@ -1814,6 +1852,64 @@ export function importDiagram(
     ),
   );
 }
+export function getDiagramReviewSummary(
+  {
+    diagramId,
+  }: {
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: DiagramReviewSummaryDtoOutput;
+    }>(`/diagrams/${encodeURIComponent(diagramId)}/review`, {
+      ...opts,
+    }),
+  );
+}
+export function getDiagramReviewEvents(
+  {
+    diagramId,
+  }: {
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: DiagramReviewEventListResponseDtoOutput;
+    }>(`/diagrams/${encodeURIComponent(diagramId)}/review/events`, {
+      ...opts,
+    }),
+  );
+}
+export function createDiagramReviewAction(
+  {
+    diagramId,
+    diagramReviewActionCreateDto,
+  }: {
+    diagramId: string;
+    diagramReviewActionCreateDto: DiagramReviewActionCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramReviewSummaryDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/review/actions`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: diagramReviewActionCreateDto,
+      }),
+    ),
+  );
+}
 export function getFile(
   {
     fileId,
@@ -3028,6 +3124,12 @@ export enum Dialect {
   Mariadb = 'mariadb',
   Sqlserver = 'sqlserver',
 }
+export enum Status3 {
+  Draft = 'draft',
+  Reviewed = 'reviewed',
+  Approved = 'approved',
+  ChangesRequested = 'changes_requested',
+}
 export enum Format {
   TabliodbJson = 'tabliodb_json',
   Sql = 'sql',
@@ -3105,6 +3207,29 @@ export enum RelationshipRouting {
   Straight = 'straight',
   Manual = 'manual',
 }
+export enum CurrentStatus {
+  Draft = 'draft',
+  Reviewed = 'reviewed',
+  Approved = 'approved',
+  ChangesRequested = 'changes_requested',
+}
+export enum Action {
+  Commented = 'commented',
+  Approved = 'approved',
+  ChangesRequested = 'changes_requested',
+}
+export enum NextStatus {
+  Draft = 'draft',
+  Reviewed = 'reviewed',
+  Approved = 'approved',
+  ChangesRequested = 'changes_requested',
+}
+export enum PreviousStatus {
+  Draft = 'draft',
+  Reviewed = 'reviewed',
+  Approved = 'approved',
+  ChangesRequested = 'changes_requested',
+}
 export enum OrganizationRole {
   Admin = 'admin',
   Member = 'member',
@@ -3114,13 +3239,13 @@ export enum ProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status3 {
+export enum Status4 {
   Pending = 'pending',
   Accepted = 'accepted',
   Revoked = 'revoked',
   Expired = 'expired',
 }
-export enum Status4 {
+export enum Status5 {
   Open = 'open',
   Resolved = 'resolved',
 }
@@ -3139,7 +3264,7 @@ export enum DefaultProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status5 {
+export enum Status6 {
   Pending = 'pending',
   Active = 'active',
   Suspended = 'suspended',

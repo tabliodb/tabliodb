@@ -7,6 +7,7 @@ import { ConfigRepository } from './config.repository.js';
 import { CryptoRepository } from './crypto.repository.js';
 import { DatabaseRepository } from './database.repository.js';
 import { DiagramRepository } from './diagram.repository.js';
+import { DiagramReviewRepository } from './diagram-review.repository.js';
 import { FileRepository } from './file.repository.js';
 import { InvitationRepository } from './invitation.repository.js';
 import { NotificationRepository } from './notification.repository.js';
@@ -30,6 +31,7 @@ export const repositories = [
   CryptoRepository,
   DatabaseRepository,
   DiagramRepository,
+  DiagramReviewRepository,
   FileRepository,
   InvitationRepository,
   NotificationRepository,

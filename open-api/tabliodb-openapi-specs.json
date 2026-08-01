@@ -1298,6 +1298,142 @@
         ]
       }
     },
+    "/diagrams/{diagramId}/review": {
+      "get": {
+        "operationId": "getDiagramReviewSummary",
+        "parameters": [
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramReviewSummaryDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
+    "/diagrams/{diagramId}/review/events": {
+      "get": {
+        "operationId": "getDiagramReviewEvents",
+        "parameters": [
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramReviewEventListResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
+    "/diagrams/{diagramId}/review/actions": {
+      "post": {
+        "operationId": "createDiagramReviewAction",
+        "parameters": [
+          {
+            "name": "diagramId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagramReviewActionCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramReviewSummaryDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
     "/files/{fileId}": {
       "get": {
         "operationId": "getFile",
@@ -4997,6 +5133,15 @@
               "sqlserver"
             ]
           },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "reviewed",
+              "approved",
+              "changes_requested"
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -5013,6 +5158,7 @@
           "projectId",
           "name",
           "dialect",
+          "status",
           "createdAt",
           "updatedAt"
         ],
@@ -5816,6 +5962,224 @@
           "warnings"
         ],
         "additionalProperties": false
+      },
+      "DiagramReviewEventDto_Output": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "commented",
+              "approved",
+              "changes_requested"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "createdById": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "diagramId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "nextStatus": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "reviewed",
+              "approved",
+              "changes_requested"
+            ]
+          },
+          "previousStatus": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "reviewed",
+              "approved",
+              "changes_requested"
+            ]
+          },
+          "reviewer": {
+            "type": "object",
+            "properties": {
+              "avatarUrl": {
+                "type": "string",
+                "nullable": true
+              },
+              "cursorColor": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "avatarUrl",
+              "cursorColor",
+              "email",
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "snapshotId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
+          }
+        },
+        "required": [
+          "action",
+          "createdAt",
+          "createdById",
+          "diagramId",
+          "id",
+          "message",
+          "nextStatus",
+          "previousStatus",
+          "reviewer",
+          "snapshotId"
+        ],
+        "additionalProperties": false
+      },
+      "DiagramReviewSummaryDto_Output": {
+        "type": "object",
+        "properties": {
+          "approvedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "changesRequestedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "commentedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "currentStatus": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "reviewed",
+              "approved",
+              "changes_requested"
+            ]
+          },
+          "diagramId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "eventCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "latestEvent": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DiagramReviewEventDto_Output"
+              }
+            ],
+            "nullable": true
+          },
+          "recentEvents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagramReviewEventDto_Output"
+            }
+          }
+        },
+        "required": [
+          "approvedCount",
+          "changesRequestedCount",
+          "commentedCount",
+          "currentStatus",
+          "diagramId",
+          "eventCount",
+          "latestEvent",
+          "recentEvents"
+        ],
+        "additionalProperties": false
+      },
+      "DiagramReviewEventListResponseDto_Output": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagramReviewEventDto_Output"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
+        "additionalProperties": false
+      },
+      "DiagramReviewActionCreateDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "commented",
+              "approved",
+              "changes_requested"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          }
+        },
+        "required": [
+          "action"
+        ]
       },
       "InvitationCreateDto": {
         "type": "object",

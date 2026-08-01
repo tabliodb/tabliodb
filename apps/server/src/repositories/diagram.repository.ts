@@ -34,7 +34,7 @@ export class DiagramRepository {
     const offset = decodeOffsetCursor(options.cursor);
     const rows = await this.db
       .selectFrom('diagrams')
-      .select(['id', 'projectId', 'name', 'dialect', 'createdAt', 'updatedAt'])
+      .select(['id', 'projectId', 'name', 'dialect', 'status', 'createdAt', 'updatedAt'])
       .where('projectId', '=', projectId)
       .where('archivedAt', 'is', null)
       .orderBy('updatedAt', 'desc')
