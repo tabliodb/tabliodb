@@ -20,7 +20,7 @@ import {
 } from '@tabliodb/schema-core';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   createCommentMarkerSummary,
   formatCommentMarkerCount,
@@ -55,6 +55,7 @@ const relationshipPortRadius = 4;
 const relationshipRouteGap = 40;
 const relationshipRouteLaneGap = 8;
 const relationshipRouterName = 'tabliodb-relationship';
+const minimapAspectRatio = 192 / 124;
 
 let relationshipRouterRegistered = false;
 let tableShapeRegistered = false;
@@ -116,6 +117,26 @@ type RemoteCanvasCursorPosition = RemoteCanvasCursor & {
   top: number;
 };
 
+type CanvasRect = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+type CanvasMinimapTable = CanvasRect & {
+  color: string;
+  id: string;
+  name: string;
+  selected: boolean;
+};
+
+type CanvasMinimapState = {
+  tables: CanvasMinimapTable[];
+  viewBox: CanvasRect;
+  viewport: CanvasRect;
+};
+
 export function SchemaCanvas({
   commentTargetSummaries = [],
   fitKey,
@@ -139,6 +160,8 @@ export function SchemaCanvas({
   const onSelectedTableChangeRef = useRef(onSelectedTableChange);
   const remoteCursorsRef = useRef(remoteCursors);
   const [remoteCursorPositions, setRemoteCursorPositions] = useState<RemoteCanvasCursorPosition[]>([]);
+  const [minimapOpen, setMinimapOpen] = useState(true);
+  const [minimapState, setMinimapState] = useState<CanvasMinimapState | null>(null);
 
   useEffect(() => {
     modelRef.current = model;
@@ -448,9 +471,58 @@ export function SchemaCanvas({
     };
   }, [remoteCursors.length]);
 
+  useEffect(() => {
+    const graph = graphRef.current;
+    const container = containerRef.current;
+
+    if (!graph || !container) {
+      setMinimapState(null);
+      return;
+    }
+
+    let animationFrameId = 0;
+    let disposed = false;
+
+    const syncMinimapState = () => {
+      if (disposed) {
+        return;
+      }
+
+      const nextState = createCanvasMinimapState(graph, container, modelRef.current, selectedTableId);
+      setMinimapState((currentState) =>
+        areCanvasMinimapStatesEqual(currentState, nextState) ? currentState : nextState,
+      );
+      // Minimap mengikuti transform X6 live; state React hanya berubah saat viewport/table bounds benar-benar bergeser.
+      animationFrameId = window.requestAnimationFrame(syncMinimapState);
+    };
+
+    syncMinimapState();
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [readOnly, selectedTableId]);
+
+  function handleMinimapCenter(x: number, y: number) {
+    graphRef.current?.centerPoint(x, y);
+  }
+
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden bg-[rgb(var(--tabliodb-canvas))]">
       <div className="tabliodb-x6-canvas absolute inset-0" ref={containerRef} />
+      {minimapState && minimapOpen ? (
+        <CanvasMinimap onCenter={handleMinimapCenter} onClose={() => setMinimapOpen(false)} state={minimapState} />
+      ) : minimapState ? (
+        <button
+          aria-label="Show minimap"
+          className="absolute bottom-4 right-4 z-20 h-9 cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+          onClick={() => setMinimapOpen(true)}
+          type="button"
+        >
+          Map
+        </button>
+      ) : null}
       {remoteCursorPositions.length > 0 ? (
         <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
           {remoteCursorPositions.map((cursor) => (
@@ -485,6 +557,245 @@ export function SchemaCanvas({
       ) : null}
     </div>
   );
+}
+
+function CanvasMinimap({
+  onCenter,
+  onClose,
+  state,
+}: {
+  onCenter: (x: number, y: number) => void;
+  onClose: () => void;
+  state: CanvasMinimapState;
+}) {
+  function centerFromPointer(event: ReactPointerEvent<SVGSVGElement>) {
+    const svgRect = event.currentTarget.getBoundingClientRect();
+    const localX = state.viewBox.x + ((event.clientX - svgRect.left) / svgRect.width) * state.viewBox.width;
+    const localY = state.viewBox.y + ((event.clientY - svgRect.top) / svgRect.height) * state.viewBox.height;
+
+    onCenter(localX, localY);
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    centerFromPointer(event);
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (event.buttons !== 1) {
+      return;
+    }
+
+    centerFromPointer(event);
+  }
+
+  return (
+    <section className="absolute bottom-4 right-4 z-20 w-48 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur">
+      <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+        <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+          Minimap
+        </span>
+        <button
+          aria-label="Hide minimap"
+          className="grid size-5 cursor-pointer place-items-center rounded-full text-[13px] font-extrabold leading-none text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] hover:text-[rgb(var(--tabliodb-ink))]"
+          onClick={onClose}
+          type="button"
+        >
+          x
+        </button>
+      </div>
+      <svg
+        aria-label="Diagram minimap"
+        className="block aspect-[192/124] w-full cursor-crosshair rounded-[10px] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-canvas))]"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        preserveAspectRatio="none"
+        role="img"
+        viewBox={`${state.viewBox.x} ${state.viewBox.y} ${state.viewBox.width} ${state.viewBox.height}`}
+      >
+        <rect
+          fill="rgb(var(--tabliodb-sky-soft))"
+          height={state.viewBox.height}
+          opacity="0.45"
+          width={state.viewBox.width}
+          x={state.viewBox.x}
+          y={state.viewBox.y}
+        />
+        {state.tables.map((table) => (
+          <rect
+            fill={table.color}
+            fillOpacity={table.selected ? 0.32 : 0.16}
+            height={table.height}
+            key={table.id}
+            rx="12"
+            stroke={table.selected ? 'rgb(var(--tabliodb-primary))' : table.color}
+            strokeWidth={table.selected ? 8 : 4}
+            width={table.width}
+            x={table.x}
+            y={table.y}
+          >
+            <title>{table.name}</title>
+          </rect>
+        ))}
+        <rect
+          fill="rgb(var(--tabliodb-primary-soft))"
+          fillOpacity="0.18"
+          height={state.viewport.height}
+          pointerEvents="none"
+          rx="10"
+          stroke="rgb(var(--tabliodb-primary))"
+          strokeDasharray="18 10"
+          strokeWidth="6"
+          width={state.viewport.width}
+          x={state.viewport.x}
+          y={state.viewport.y}
+        />
+      </svg>
+    </section>
+  );
+}
+
+function createCanvasMinimapState(
+  graph: Graph,
+  container: HTMLElement,
+  model: DiagramModel,
+  selectedTableId: string | null,
+): CanvasMinimapState | null {
+  const tables = Object.values(model.tables).map<CanvasMinimapTable>((table) => ({
+    color: getDisplayTableColor(table.color),
+    height: getTableNodeHeight(model, table),
+    id: table.id,
+    name: table.name,
+    selected: table.id === selectedTableId,
+    width: getTableWidth(table),
+    x: table.position.x,
+    y: table.position.y,
+  }));
+
+  if (tables.length === 0) {
+    return null;
+  }
+
+  const viewport = getCanvasViewportRect(graph, container);
+  const contentBounds = getCanvasContentBounds([...tables, viewport]);
+  const viewBox = normalizeRectToAspect(padCanvasRect(contentBounds, 96), minimapAspectRatio);
+
+  return {
+    tables: tables.map(roundCanvasMinimapTable),
+    viewBox: roundCanvasRect(viewBox),
+    viewport: roundCanvasRect(viewport),
+  };
+}
+
+function getCanvasViewportRect(graph: Graph, container: HTMLElement): CanvasRect {
+  const containerRect = container.getBoundingClientRect();
+  const topLeft = graph.clientToLocal(containerRect.left, containerRect.top);
+  const bottomRight = graph.clientToLocal(containerRect.right, containerRect.bottom);
+  const x = Math.min(topLeft.x, bottomRight.x);
+  const y = Math.min(topLeft.y, bottomRight.y);
+
+  return {
+    height: Math.max(1, Math.abs(bottomRight.y - topLeft.y)),
+    width: Math.max(1, Math.abs(bottomRight.x - topLeft.x)),
+    x,
+    y,
+  };
+}
+
+function getCanvasContentBounds(rects: CanvasRect[]): CanvasRect {
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+
+  return {
+    height: Math.max(1, bottom - top),
+    width: Math.max(1, right - left),
+    x: left,
+    y: top,
+  };
+}
+
+function padCanvasRect(rect: CanvasRect, padding: number): CanvasRect {
+  return {
+    height: rect.height + padding * 2,
+    width: rect.width + padding * 2,
+    x: rect.x - padding,
+    y: rect.y - padding,
+  };
+}
+
+function normalizeRectToAspect(rect: CanvasRect, aspectRatio: number): CanvasRect {
+  const currentAspectRatio = rect.width / rect.height;
+
+  if (currentAspectRatio === aspectRatio) {
+    return rect;
+  }
+
+  if (currentAspectRatio < aspectRatio) {
+    const nextWidth = rect.height * aspectRatio;
+
+    return {
+      ...rect,
+      width: nextWidth,
+      x: rect.x - (nextWidth - rect.width) / 2,
+    };
+  }
+
+  const nextHeight = rect.width / aspectRatio;
+
+  return {
+    ...rect,
+    height: nextHeight,
+    y: rect.y - (nextHeight - rect.height) / 2,
+  };
+}
+
+function roundCanvasMinimapTable(table: CanvasMinimapTable): CanvasMinimapTable {
+  return {
+    ...table,
+    ...roundCanvasRect(table),
+  };
+}
+
+function roundCanvasRect(rect: CanvasRect): CanvasRect {
+  return {
+    height: Math.round(rect.height),
+    width: Math.round(rect.width),
+    x: Math.round(rect.x),
+    y: Math.round(rect.y),
+  };
+}
+
+function areCanvasMinimapStatesEqual(
+  currentState: CanvasMinimapState | null,
+  nextState: CanvasMinimapState | null,
+): boolean {
+  if (!currentState || !nextState) {
+    return currentState === nextState;
+  }
+
+  return (
+    areCanvasRectsEqual(currentState.viewBox, nextState.viewBox) &&
+    areCanvasRectsEqual(currentState.viewport, nextState.viewport) &&
+    currentState.tables.length === nextState.tables.length &&
+    currentState.tables.every((table, index) => {
+      const nextTable = nextState.tables[index];
+
+      return (
+        nextTable &&
+        table.id === nextTable.id &&
+        table.name === nextTable.name &&
+        table.color === nextTable.color &&
+        table.selected === nextTable.selected &&
+        areCanvasRectsEqual(table, nextTable)
+      );
+    })
+  );
+}
+
+function areCanvasRectsEqual(left: CanvasRect, right: CanvasRect): boolean {
+  return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height;
 }
 
 function createRemoteCursorPositions(
@@ -712,7 +1023,7 @@ function createTableNodeMetadata(
   const columns = getVisibleTableColumns(model, table);
   const totalColumnCount = table.columnIds.length;
   const displayMode = getEffectiveTableDisplayMode(table);
-  const height = tableHeaderHeight + columns.length * tableColumnHeight + (columns.length > 0 ? tablePaddingBottom : 0);
+  const height = getTableNodeHeight(model, table);
   const width = getTableWidth(table);
 
   return {
@@ -946,6 +1257,12 @@ function createColumnPorts(
 
 function getTableWidth(table: DatabaseTable): number {
   return Math.max(table.width, tableNodeWidth);
+}
+
+function getTableNodeHeight(model: DiagramModel, table: DatabaseTable): number {
+  const columns = getVisibleTableColumns(model, table);
+
+  return tableHeaderHeight + columns.length * tableColumnHeight + (columns.length > 0 ? tablePaddingBottom : 0);
 }
 
 function getEffectiveTableDisplayMode(table: DatabaseTable): TableDisplayMode {
