@@ -18,6 +18,7 @@ import {
 } from '../dtos/comment.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { CommentService } from '../services/comment.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
@@ -28,6 +29,7 @@ export class CommentController {
   constructor(private readonly service: CommentService) {}
 
   @Post('threads')
+  @RateLimit({ key: 'comments:write', limit: 24, windowMs: 60_000 })
   @RequirePermission(Permission.DiagramComment, { key: 'diagramId', source: 'body', type: 'diagram' })
   @ApiBody({ type: CommentThreadCreateDto })
   @ApiOperation({ operationId: 'createCommentThread' })
@@ -73,6 +75,7 @@ export class CommentController {
   }
 
   @Post('threads/:threadId/comments')
+  @RateLimit({ key: 'comments:write', limit: 24, windowMs: 60_000 })
   @ApiParam({ name: 'threadId', type: String })
   @ApiBody({ type: CommentReplyCreateDto })
   @ApiOperation({ operationId: 'replyToCommentThread' })
@@ -82,6 +85,7 @@ export class CommentController {
   }
 
   @Patch('comments/:commentId')
+  @RateLimit({ key: 'comments:write', limit: 24, windowMs: 60_000 })
   @ApiParam({ name: 'commentId', type: String })
   @ApiBody({ type: CommentUpdateDto })
   @ApiOperation({ operationId: 'updateComment' })
