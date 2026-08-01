@@ -12,6 +12,7 @@ import {
 import {
   Button,
   Checkbox,
+  FieldError,
   IconButton,
   Input,
   Popover,
@@ -34,6 +35,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { z } from 'zod';
 import { formatColumnType } from '../diagram-model';
 import { getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
 const columnTypeFamilyOptions = [
@@ -58,6 +60,30 @@ const inlineInputClassName =
 const compactSelectClassName =
   'h-[var(--tabliodb-control-sm)] rounded-[var(--tabliodb-radius-sm)] border border-[rgb(var(--tabliodb-border-strong))] px-2.5 text-[13px] shadow-none';
 const unsetGroupValue = '__no_group__';
+
+const inlineTableNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Table name is required.')
+  .max(64, 'Keep the table name under 64 characters.');
+const inlineGroupNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Module name is required.')
+  .max(64, 'Keep the module name under 64 characters.');
+const inlineColumnNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Column name is required.')
+  .max(64, 'Keep the column name under 64 characters.')
+  .regex(/^[a-z][a-z0-9_]*$/, 'Use lowercase letters, numbers, and underscores.');
+const inlineColumnDefaultSchema = z.string().trim().max(120, 'Keep the default value under 120 characters.');
+const inlineColumnCommentSchema = z.string().trim().max(240, 'Keep the comment under 240 characters.');
+
+type InlineStringValidationResult = {
+  error: string | null;
+  value: string;
+};
 
 export type TableStructureSidebarProps = {
   model: DiagramModel;
@@ -329,7 +355,13 @@ export function TableStructureSidebar({
           <label className="block text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Table name
           </label>
-          <InlineTextInput className="mt-2" disabled={readOnly} onCommit={handleTableNameCommit} value={table.name} />
+          <InlineTextInput
+            className="mt-2"
+            disabled={readOnly}
+            onCommit={handleTableNameCommit}
+            validate={createInlineStringValidator(inlineTableNameSchema)}
+            value={table.name}
+          />
           <div className="mt-3">
             <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Color
@@ -423,6 +455,7 @@ export function TableStructureSidebar({
                   disabled={readOnly}
                   onCommit={handleGroupNameCommit}
                   placeholder="Module name"
+                  validate={createInlineStringValidator(inlineGroupNameSchema)}
                   value={tableGroup.name}
                 />
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -676,12 +709,13 @@ function ColumnEditorRow({
           className="min-w-0"
           disabled={disabled}
           onCommit={(value) => {
-            const name = value.trim();
+            const name = value;
 
             if (name && name !== column.name) {
               onUpdate(column, { name });
             }
           }}
+          validate={createInlineStringValidator(inlineColumnNameSchema)}
           value={column.name}
         />
         <Popover onOpenChange={handleOpenChange} open={attributesOpen}>
@@ -831,6 +865,7 @@ function ColumnAttributesPopoverContent({
             disabled={disabled}
             onCommit={(defaultValue) => onUpdate(column, { defaultValue: normalizeOptionalString(defaultValue) })}
             placeholder="Default value"
+            validate={createInlineStringValidator(inlineColumnDefaultSchema)}
             value={column.defaultValue ?? ''}
           />
         </label>
@@ -842,6 +877,7 @@ function ColumnAttributesPopoverContent({
             disabled={disabled}
             onCommit={(comment) => onUpdate(column, { comment: normalizeOptionalString(comment) })}
             placeholder="Optional description for this column"
+            validate={createInlineStringValidator(inlineColumnCommentSchema)}
             value={column.comment ?? ''}
           />
         </label>
@@ -905,40 +941,67 @@ function InlineTextInput({
   disabled,
   onCommit,
   placeholder,
+  validate,
   value,
 }: {
   className?: string;
   disabled?: boolean;
   onCommit: (value: string) => void;
   placeholder?: string;
+  validate?: (value: string) => InlineStringValidationResult;
   value: string;
 }) {
   const [draft, setDraft] = useState(value);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(value);
+    setError(null);
   }, [value]);
 
   function commit() {
-    if (draft !== value) {
-      onCommit(draft);
+    const validation = validate?.(draft) ?? { error: null, value: draft };
+
+    setError(validation.error);
+
+    if (validation.error) {
+      return;
+    }
+
+    // Inline controls normalize before committing so sidebar edits obey the same Zod contract as dialog forms.
+    setDraft(validation.value);
+
+    if (validation.value !== value) {
+      onCommit(validation.value);
     }
   }
 
   return (
-    <Input
-      className={cn(inlineInputClassName, className)}
-      disabled={disabled}
-      onBlur={commit}
-      onChange={(event) => setDraft(event.currentTarget.value)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.currentTarget.blur();
-        }
-      }}
-      placeholder={placeholder}
-      value={draft}
-    />
+    <div className={className}>
+      <Input
+        aria-invalid={Boolean(error)}
+        className={cn(
+          inlineInputClassName,
+          error
+            ? 'border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] focus:border-[rgb(var(--tabliodb-danger))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-danger-border))]'
+            : undefined,
+        )}
+        disabled={disabled}
+        onBlur={commit}
+        onChange={(event) => {
+          setDraft(event.currentTarget.value);
+          setError(null);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.currentTarget.blur();
+          }
+        }}
+        placeholder={placeholder}
+        value={draft}
+      />
+      <FieldError className="mt-1 text-[10px] leading-4">{error}</FieldError>
+    </div>
   );
 }
 
@@ -1004,37 +1067,80 @@ function InlineTextarea({
   disabled,
   onCommit,
   placeholder,
+  validate,
   value,
 }: {
   className?: string;
   disabled?: boolean;
   onCommit: (value: string) => void;
   placeholder?: string;
+  validate?: (value: string) => InlineStringValidationResult;
   value: string;
 }) {
   const [draft, setDraft] = useState(value);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(value);
+    setError(null);
   }, [value]);
 
+  function commit() {
+    const validation = validate?.(draft) ?? { error: null, value: draft };
+
+    setError(validation.error);
+
+    if (validation.error) {
+      return;
+    }
+
+    setDraft(validation.value);
+
+    if (validation.value !== value) {
+      onCommit(validation.value);
+    }
+  }
+
   return (
-    <textarea
-      className={cn(
-        'min-h-16 w-full resize-none rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-[13px] font-semibold outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60',
-        className,
-      )}
-      disabled={disabled}
-      onBlur={() => {
-        if (draft !== value) {
-          onCommit(draft);
-        }
-      }}
-      onChange={(event) => setDraft(event.currentTarget.value)}
-      placeholder={placeholder}
-      value={draft}
-    />
+    <div className={className}>
+      <textarea
+        aria-invalid={Boolean(error)}
+        className={cn(
+          'min-h-16 w-full resize-none rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-[13px] font-semibold outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60',
+          error
+            ? 'border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] focus:border-[rgb(var(--tabliodb-danger))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-danger-border))]'
+            : undefined,
+        )}
+        disabled={disabled}
+        onBlur={commit}
+        onChange={(event) => {
+          setDraft(event.currentTarget.value);
+          setError(null);
+        }}
+        placeholder={placeholder}
+        value={draft}
+      />
+      <FieldError className="mt-1 text-[10px] leading-4">{error}</FieldError>
+    </div>
   );
+}
+
+function createInlineStringValidator(schema: z.ZodType<string>) {
+  return (value: string): InlineStringValidationResult => {
+    const result = schema.safeParse(value);
+
+    if (!result.success) {
+      return {
+        error: result.error.issues[0]?.message ?? 'Invalid value.',
+        value,
+      };
+    }
+
+    return {
+      error: null,
+      value: result.data,
+    };
+  };
 }
 
 function createColumnTypeForFamily(
