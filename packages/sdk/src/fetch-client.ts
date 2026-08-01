@@ -1036,6 +1036,20 @@ export type SnapshotReferenceDtoOutput = {
   restoredFromSnapshotId: string | null;
   createdAt: string;
 };
+export type SnapshotMigrationSqlWarningDtoOutput = {
+  code: string;
+  message: string;
+  statement?: string;
+  target?: {
+    id: string;
+    type: Type3;
+  };
+};
+export type SnapshotMigrationSqlDtoOutput = {
+  dialect: Dialect;
+  sql: string;
+  warnings: SnapshotMigrationSqlWarningDtoOutput[];
+};
 export type SnapshotTableRenameDtoOutput = {
   id: string;
   fromName: string;
@@ -1055,6 +1069,7 @@ export type SnapshotEntityChangeSummaryDtoOutput = {
 export type SnapshotDiffResponseDtoOutput = {
   fromSnapshot: SnapshotReferenceDtoOutput;
   toSnapshot: SnapshotReferenceDtoOutput;
+  migrationSql: SnapshotMigrationSqlDtoOutput;
   tables: SnapshotTableChangeSummaryDtoOutput;
   columns: SnapshotEntityChangeSummaryDtoOutput;
   relationships: SnapshotEntityChangeSummaryDtoOutput;
@@ -3163,6 +3178,14 @@ export enum SignupPolicy {
   AllowedDomains = 'allowed_domains',
   SsoOnly = 'sso_only',
   PublicSignup = 'public_signup',
+}
+export enum Type3 {
+  Check = 'check',
+  Column = 'column',
+  Enum = 'enum',
+  Index = 'index',
+  Relationship = 'relationship',
+  Table = 'table',
 }
 export enum Role3 {
   Editor = 'editor',

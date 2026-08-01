@@ -29,6 +29,10 @@ export type SqlGenerationWarning = {
   };
 };
 
+export type SqlMigrationWarning = SqlGenerationWarning & {
+  statement?: string;
+};
+
 export type ParseSqlOptions = {
   dialect?: SqlDialect;
   diagramName?: string;
@@ -197,6 +201,60 @@ export function generateCreateSchemaSqlWithWarnings(
     // The generator returns a stable, reviewable SQL script with blank lines between logical schema sections.
     sql: `${statements.filter(Boolean).join('\n\n')}\n`,
     warnings: getSqlGenerationWarnings(normalizedModel, options),
+  };
+}
+
+export function generateMigrationSql(
+  fromModel: DiagramModel,
+  toModel: DiagramModel,
+  options: GenerateSqlOptions,
+): string {
+  return generateMigrationSqlWithWarnings(fromModel, toModel, options).sql;
+}
+
+export function generateMigrationSqlWithWarnings(
+  fromModel: DiagramModel,
+  toModel: DiagramModel,
+  options: GenerateSqlOptions,
+): { sql: string; warnings: SqlMigrationWarning[] } {
+  const from = serializeDiagramModel(DiagramModelSchema.parse(fromModel));
+  const to = serializeDiagramModel(DiagramModelSchema.parse(toModel));
+  const dialect = options.dialect;
+  const warnings: SqlMigrationWarning[] = [];
+  const statements = [
+    ...renderRemovedIndexMigrationStatements(from, to, dialect, warnings),
+    ...renderRemovedRelationshipMigrationStatements(from, to, dialect, warnings),
+    ...renderRemovedCheckMigrationStatements(from, to, dialect, warnings),
+    ...renderRemovedColumnMigrationStatements(from, to, dialect, warnings),
+    ...renderRemovedTableMigrationStatements(from, to, dialect, warnings),
+    ...renderRemovedEnumMigrationStatements(from, to, dialect, warnings),
+    ...renderAddedEnumMigrationStatements(from, to, dialect, warnings),
+    ...renderTableCreateRenameMigrationStatements(from, to, options, warnings),
+    ...renderColumnAddChangeMigrationStatements(from, to, options, warnings),
+    ...renderCheckAddChangeMigrationStatements(from, to, dialect, warnings),
+    ...renderRelationshipAddChangeMigrationStatements(from, to, dialect, warnings),
+    ...renderIndexAddChangeMigrationStatements(from, to, dialect, warnings),
+    ...(options.includeComments ?? true ? renderCommentMigrationStatements(from, to, dialect) : []),
+  ];
+
+  if (from.dialect !== to.dialect) {
+    warnings.push({
+      code: 'dialect_changed',
+      message: `The diagram dialect changed from "${from.dialect}" to "${to.dialect}". Review this preview before applying it to a real database.`,
+    });
+  }
+
+  if (statements.length === 0) {
+    return {
+      sql: '-- No SQL-impacting changes detected between these snapshots.\n',
+      warnings,
+    };
+  }
+
+  return {
+    // Migration preview is intentionally readable rather than minified because users should review it before running anything destructive.
+    sql: `${statements.join('\n\n')}\n`,
+    warnings,
   };
 }
 
@@ -1703,6 +1761,470 @@ function findNextTopLevelConstraintWord(input: string): number {
   return indexes.length > 0 ? Math.min(...indexes) : -1;
 }
 
+function renderRemovedIndexMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  return Object.entries(from.indexes).flatMap(([indexId, index]) => {
+    if (to.indexes[indexId] && areSqlEntitiesEqual(index, to.indexes[indexId])) {
+      return [];
+    }
+
+    const table = from.tables[index.tableId];
+
+    if (!table || !to.tables[index.tableId]) {
+      return [];
+    }
+
+    if (to.indexes[indexId]) {
+      warnings.push({
+        code: 'index_changed_recreated',
+        message: `Index "${index.name}" changed and will be recreated in the migration preview.`,
+        target: { id: index.id, type: 'index' },
+      });
+    }
+
+    return [renderDropIndexStatement(index, table, dialect)];
+  });
+}
+
+function renderRemovedRelationshipMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  return Object.entries(from.relationships).flatMap(([relationshipId, relationship]) => {
+    if (to.relationships[relationshipId] && areSqlEntitiesEqual(relationship, to.relationships[relationshipId])) {
+      return [];
+    }
+
+    const targetTable = from.tables[relationship.targetTableId];
+
+    if (!targetTable || !to.tables[relationship.targetTableId]) {
+      return [];
+    }
+
+    if (to.relationships[relationshipId]) {
+      warnings.push({
+        code: 'relationship_changed_recreated',
+        message: `Relationship "${relationship.name ?? relationship.id}" changed and will be recreated in the migration preview.`,
+        target: { id: relationship.id, type: 'relationship' },
+      });
+    }
+
+    return [renderDropForeignKeyStatement(from, relationship, targetTable, dialect, warnings)];
+  });
+}
+
+function renderRemovedCheckMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  return Object.entries(from.checks).flatMap(([checkId, check]) => {
+    if (to.checks[checkId] && areSqlEntitiesEqual(check, to.checks[checkId])) {
+      return [];
+    }
+
+    const table = from.tables[check.tableId];
+
+    if (!table || !to.tables[check.tableId]) {
+      return [];
+    }
+
+    if (!sqlDialectRegistry[dialect].supportsCheckConstraints) {
+      warnings.push({
+        code: 'check_constraint_not_supported',
+        message: `${dialect} migration preview cannot drop check constraint "${check.name}".`,
+        target: { id: check.id, type: 'check' },
+      });
+      return [];
+    }
+
+    if (to.checks[checkId]) {
+      warnings.push({
+        code: 'check_changed_recreated',
+        message: `Check constraint "${check.name}" changed and will be recreated in the migration preview.`,
+        target: { id: check.id, type: 'check' },
+      });
+    }
+
+    return [renderDropConstraintStatement(table, check.name, dialect)];
+  });
+}
+
+function renderRemovedColumnMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  return Object.entries(from.columns).flatMap(([columnId, column]) => {
+    if (to.columns[columnId] || !to.tables[column.tableId]) {
+      return [];
+    }
+
+    const table = from.tables[column.tableId];
+
+    if (!table) {
+      return [];
+    }
+
+    const statement = `ALTER TABLE ${renderTableName(table, dialect)} DROP COLUMN ${quoteIdentifier(column.name, dialect)};`;
+
+    warnings.push({
+      code: 'column_removed',
+      message: `Dropping column "${table.name}.${column.name}" can permanently remove data.`,
+      statement,
+      target: { id: column.id, type: 'column' },
+    });
+
+    return [statement];
+  });
+}
+
+function renderRemovedTableMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  return Object.entries(from.tables).flatMap(([tableId, table]) => {
+    if (to.tables[tableId]) {
+      return [];
+    }
+
+    const statement = `DROP TABLE ${renderTableName(table, dialect)};`;
+
+    warnings.push({
+      code: 'table_removed',
+      message: `Dropping table "${table.name}" can permanently remove data.`,
+      statement,
+      target: { id: table.id, type: 'table' },
+    });
+
+    return [statement];
+  });
+}
+
+function renderRemovedEnumMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  if (dialect !== 'postgresql') {
+    return [];
+  }
+
+  return Object.entries(from.enums).flatMap(([enumId, databaseEnum]) => {
+    if (to.enums[enumId]) {
+      return [];
+    }
+
+    const statement = `DROP TYPE ${renderQualifiedName(databaseEnum.schema, databaseEnum.name, dialect)};`;
+
+    warnings.push({
+      code: 'enum_removed',
+      message: `Dropping enum type "${databaseEnum.name}" can break dependent columns outside this diagram.`,
+      statement,
+      target: { id: databaseEnum.id, type: 'enum' },
+    });
+
+    return [statement];
+  });
+}
+
+function renderAddedEnumMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  if (dialect !== 'postgresql') {
+    warnChangedEnumsWithoutStandaloneMigration(from, to, dialect, warnings);
+    return [];
+  }
+
+  return Object.entries(to.enums).flatMap(([enumId, databaseEnum]) => {
+    const previousEnum = from.enums[enumId];
+
+    if (!previousEnum) {
+      const enumName = renderQualifiedName(databaseEnum.schema, databaseEnum.name, dialect);
+      const values = databaseEnum.values.map(quoteStringLiteral).join(', ');
+
+      return [`CREATE TYPE ${enumName} AS ENUM (${values});`];
+    }
+
+    if (areSqlEntitiesEqual(previousEnum, databaseEnum)) {
+      return [];
+    }
+
+    const statements: string[] = [];
+    const previousValues = new Set(previousEnum.values);
+    const removedValues = previousEnum.values.filter((value) => !databaseEnum.values.includes(value));
+    const addedValues = databaseEnum.values.filter((value) => !previousValues.has(value));
+
+    if (previousEnum.name !== databaseEnum.name || previousEnum.schema !== databaseEnum.schema) {
+      warnings.push({
+        code: 'enum_rename_manual',
+        message: `Enum "${previousEnum.name}" was renamed or moved. Review the generated enum migration manually.`,
+        target: { id: databaseEnum.id, type: 'enum' },
+      });
+    }
+
+    for (const value of addedValues) {
+      statements.push(
+        `ALTER TYPE ${renderQualifiedName(databaseEnum.schema, databaseEnum.name, dialect)} ADD VALUE IF NOT EXISTS ${quoteStringLiteral(value)};`,
+      );
+    }
+
+    if (removedValues.length > 0) {
+      warnings.push({
+        code: 'enum_value_removed_manual',
+        message: `PostgreSQL cannot safely remove enum value(s) ${removedValues.map(quoteStringLiteral).join(', ')} from "${databaseEnum.name}" with a simple ALTER TYPE.`,
+        target: { id: databaseEnum.id, type: 'enum' },
+      });
+    }
+
+    return statements;
+  });
+}
+
+function renderTableCreateRenameMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  options: GenerateSqlOptions,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  const dialect = options.dialect;
+
+  return Object.entries(to.tables).flatMap(([tableId, table]) => {
+    const previousTable = from.tables[tableId];
+
+    if (!previousTable) {
+      return [renderCreateTableStatement(to, table, options)];
+    }
+
+    const statements: string[] = [];
+
+    if (previousTable.schema !== table.schema) {
+      warnings.push({
+        code: 'table_schema_changed_manual',
+        message: `Table "${table.name}" changed schema. Move/rename schema operations should be reviewed manually.`,
+        target: { id: table.id, type: 'table' },
+      });
+    }
+
+    if (previousTable.name !== table.name) {
+      statements.push(renderRenameTableStatement(previousTable, table, dialect));
+    }
+
+    return statements;
+  });
+}
+
+function renderColumnAddChangeMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  options: GenerateSqlOptions,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  const dialect = options.dialect;
+
+  return Object.entries(to.columns).flatMap(([columnId, column]) => {
+    const table = to.tables[column.tableId];
+    const previousColumn = from.columns[columnId];
+
+    if (!table) {
+      return [];
+    }
+
+    if (!previousColumn) {
+      if (!from.tables[column.tableId]) {
+        return [];
+      }
+
+      return [
+        `ALTER TABLE ${renderTableName(table, dialect)} ADD COLUMN ${renderColumn(column, to, dialect, {
+          includeComments: options.includeComments ?? true,
+          renderInlinePrimaryKey: false,
+          renderInlineUnique: true,
+        })};`,
+      ];
+    }
+
+    if (areSqlEntitiesEqual(previousColumn, column)) {
+      return [];
+    }
+
+    if (previousColumn.tableId !== column.tableId) {
+      warnings.push({
+        code: 'column_moved_manual',
+        message: `Column "${column.name}" moved between tables. The migration preview does not move data between tables automatically.`,
+        target: { id: column.id, type: 'column' },
+      });
+      return [];
+    }
+
+    const previousTable = from.tables[previousColumn.tableId];
+
+    if (!previousTable || !from.tables[column.tableId]) {
+      return [];
+    }
+
+    return renderChangedColumnStatements(previousTable, table, previousColumn, column, to, options, warnings);
+  });
+}
+
+function renderCheckAddChangeMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  return Object.entries(to.checks).flatMap(([checkId, check]) => {
+    const previousCheck = from.checks[checkId];
+
+    if (previousCheck && areSqlEntitiesEqual(previousCheck, check)) {
+      return [];
+    }
+
+    if (!sqlDialectRegistry[dialect].supportsCheckConstraints) {
+      warnings.push({
+        code: 'check_constraint_not_supported',
+        message: `${dialect} migration preview cannot add check constraint "${check.name}".`,
+        target: { id: check.id, type: 'check' },
+      });
+      return [];
+    }
+
+    const table = to.tables[check.tableId];
+
+    if (!table || !from.tables[check.tableId]) {
+      return [];
+    }
+
+    return [`ALTER TABLE ${renderTableName(table, dialect)} ADD ${renderCheckConstraint(check, dialect)};`];
+  });
+}
+
+function renderRelationshipAddChangeMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  return Object.entries(to.relationships).flatMap(([relationshipId, relationship]) => {
+    const previousRelationship = from.relationships[relationshipId];
+
+    if (previousRelationship && areSqlEntitiesEqual(previousRelationship, relationship)) {
+      return [];
+    }
+
+    if (!from.tables[relationship.targetTableId]) {
+      return [];
+    }
+
+    return renderForeignKeyConstraint(to, relationship, dialect).map((constraint) => {
+      const targetTable = to.tables[relationship.targetTableId]!;
+
+      if (relationship.deferrable && !sqlDialectRegistry[dialect].supportsDeferrableConstraints) {
+        warnings.push({
+          code: 'deferrable_not_supported',
+          message: `${dialect} migration preview ignores deferrable setting on relationship "${relationship.name ?? relationship.id}".`,
+          target: { id: relationship.id, type: 'relationship' },
+        });
+      }
+
+      return `ALTER TABLE ${renderTableName(targetTable, dialect)} ADD ${constraint};`;
+    });
+  });
+}
+
+function renderIndexAddChangeMigrationStatements(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  return Object.entries(to.indexes).flatMap(([indexId, index]) => {
+    const previousIndex = from.indexes[indexId];
+
+    if (previousIndex && areSqlEntitiesEqual(previousIndex, index)) {
+      return [];
+    }
+
+    if (!to.tables[index.tableId]) {
+      return [];
+    }
+
+    if (index.includeColumnIds?.length && !sqlDialectRegistry[dialect].supportsIndexInclude) {
+      warnings.push({
+        code: 'index_include_not_supported',
+        message: `${dialect} migration preview ignores INCLUDE columns on index "${index.name}".`,
+        target: { id: index.id, type: 'index' },
+      });
+    }
+
+    if (index.where && !sqlDialectRegistry[dialect].supportsFilteredIndexes) {
+      warnings.push({
+        code: 'filtered_index_not_supported',
+        message: `${dialect} migration preview ignores WHERE clause on index "${index.name}".`,
+        target: { id: index.id, type: 'index' },
+      });
+    }
+
+    const statement = renderCreateIndexStatement(to, index, dialect);
+
+    return statement ? [statement] : [];
+  });
+}
+
+function renderCommentMigrationStatements(from: DiagramModel, to: DiagramModel, dialect: SqlDialect): string[] {
+  if (!sqlDialectRegistry[dialect].supportsSeparateCommentStatements) {
+    return [];
+  }
+
+  return [
+    ...Object.entries(to.enums).flatMap(([enumId, databaseEnum]) =>
+      from.enums[enumId]?.comment !== databaseEnum.comment && databaseEnum.comment
+        ? [
+            `COMMENT ON TYPE ${renderQualifiedName(databaseEnum.schema, databaseEnum.name, dialect)} IS ${quoteStringLiteral(databaseEnum.comment)};`,
+          ]
+        : [],
+    ),
+    ...Object.entries(to.tables).flatMap(([tableId, table]) => {
+      const previousTable = from.tables[tableId];
+      const tableName = renderTableName(table, dialect);
+
+      if (!previousTable) {
+        return [];
+      }
+
+      return previousTable.comment !== table.comment && table.comment
+        ? [`COMMENT ON TABLE ${tableName} IS ${quoteStringLiteral(table.comment)};`]
+        : [];
+    }),
+    ...Object.entries(to.columns).flatMap(([columnId, column]) => {
+      const previousColumn = from.columns[columnId];
+      const table = to.tables[column.tableId];
+
+      if (!previousColumn || !table || previousColumn.comment === column.comment || !column.comment) {
+        return [];
+      }
+
+      return [
+        `COMMENT ON COLUMN ${renderTableName(table, dialect)}.${quoteIdentifier(column.name, dialect)} IS ${quoteStringLiteral(column.comment)};`,
+      ];
+    }),
+  ];
+}
+
 function renderCreateTableStatement(model: DiagramModel, table: DatabaseTable, options: GenerateSqlOptions): string {
   const dialect = options.dialect;
   const includeComments = options.includeComments ?? true;
@@ -1836,42 +2358,322 @@ function renderForeignKeyConstraint(
 
 function renderIndexStatements(model: DiagramModel, dialect: SqlDialect): string[] {
   return Object.values(model.indexes).flatMap((index) => {
-    const table = model.tables[index.tableId];
+    const statement = renderCreateIndexStatement(model, index, dialect);
 
-    if (!table || index.columns.length === 0) {
+    return statement ? [statement] : [];
+  });
+}
+
+function renderCreateIndexStatement(model: DiagramModel, index: DatabaseIndex, dialect: SqlDialect): string | null {
+  const table = model.tables[index.tableId];
+
+  if (!table || index.columns.length === 0) {
+    return null;
+  }
+
+  const renderedColumns = index.columns.flatMap((indexColumn) => {
+    const column = model.columns[indexColumn.columnId];
+
+    if (!column) {
       return [];
     }
 
-    const renderedColumns = index.columns.flatMap((indexColumn) => {
-      const column = model.columns[indexColumn.columnId];
+    const direction = indexColumn.order ? ` ${indexColumn.order.toUpperCase()}` : '';
+    const nulls = indexColumn.nulls && dialect === 'postgresql' ? ` NULLS ${indexColumn.nulls.toUpperCase()}` : '';
 
-      if (!column) {
-        return [];
-      }
+    return [`${quoteIdentifier(column.name, dialect)}${direction}${nulls}`];
+  });
 
-      const direction = indexColumn.order ? ` ${indexColumn.order.toUpperCase()}` : '';
-      const nulls = indexColumn.nulls && dialect === 'postgresql' ? ` NULLS ${indexColumn.nulls.toUpperCase()}` : '';
+  if (renderedColumns.length === 0) {
+    return null;
+  }
 
-      return [`${quoteIdentifier(column.name, dialect)}${direction}${nulls}`];
+  const definition: DialectDefinition = sqlDialectRegistry[dialect];
+  const unique = index.unique ? 'UNIQUE ' : '';
+  const method = renderIndexMethod(index, dialect);
+  const include =
+    index.includeColumnIds?.length && definition.supportsIndexInclude
+      ? ` INCLUDE (${renderIndexIncludeColumns(model, index, dialect).join(', ')})`
+      : '';
+  const where = index.where && definition.supportsFilteredIndexes ? ` WHERE ${index.where}` : '';
+
+  return `CREATE ${unique}INDEX ${quoteIdentifier(index.name, dialect)}${method} ON ${renderTableName(table, dialect)} (${renderedColumns.join(', ')})${include}${where};`;
+}
+
+function renderDropIndexStatement(index: DatabaseIndex, table: DatabaseTable, dialect: SqlDialect): string {
+  if (dialect === 'mysql' || dialect === 'mariadb' || dialect === 'sqlserver') {
+    return `DROP INDEX ${quoteIdentifier(index.name, dialect)} ON ${renderTableName(table, dialect)};`;
+  }
+
+  return `DROP INDEX ${quoteIdentifier(index.name, dialect)};`;
+}
+
+function renderDropForeignKeyStatement(
+  model: DiagramModel,
+  relationship: DatabaseRelationship,
+  targetTable: DatabaseTable,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): string {
+  const constraintName = getRelationshipConstraintName(model, relationship);
+
+  if (dialect === 'sqlite') {
+    const statement = `-- SQLite cannot drop foreign key constraint ${constraintName} without rebuilding table ${targetTable.name}.`;
+
+    warnings.push({
+      code: 'drop_foreign_key_not_supported',
+      message: statement.slice(3),
+      statement,
+      target: { id: relationship.id, type: 'relationship' },
     });
 
-    if (renderedColumns.length === 0) {
-      return [];
-    }
+    return statement;
+  }
 
-    const definition: DialectDefinition = sqlDialectRegistry[dialect];
-    const unique = index.unique ? 'UNIQUE ' : '';
-    const method = renderIndexMethod(index, dialect);
-    const include =
-      index.includeColumnIds?.length && definition.supportsIndexInclude
-        ? ` INCLUDE (${renderIndexIncludeColumns(model, index, dialect).join(', ')})`
-        : '';
-    const where = index.where && definition.supportsFilteredIndexes ? ` WHERE ${index.where}` : '';
+  if (dialect === 'mysql' || dialect === 'mariadb') {
+    return `ALTER TABLE ${renderTableName(targetTable, dialect)} DROP FOREIGN KEY ${quoteIdentifier(constraintName, dialect)};`;
+  }
+
+  return renderDropConstraintStatement(targetTable, constraintName, dialect);
+}
+
+function renderDropConstraintStatement(table: DatabaseTable, constraintName: string, dialect: SqlDialect): string {
+  if (dialect === 'sqlite') {
+    return `-- SQLite cannot drop constraint ${constraintName} without rebuilding table ${table.name}.`;
+  }
+
+  return `ALTER TABLE ${renderTableName(table, dialect)} DROP CONSTRAINT ${quoteIdentifier(constraintName, dialect)};`;
+}
+
+function renderRenameTableStatement(previousTable: DatabaseTable, table: DatabaseTable, dialect: SqlDialect): string {
+  if (dialect === 'sqlserver') {
+    return `EXEC sp_rename ${quoteStringLiteral(renderUnquotedQualifiedName(previousTable))}, ${quoteStringLiteral(table.name)};`;
+  }
+
+  return `ALTER TABLE ${renderTableName(previousTable, dialect)} RENAME TO ${quoteIdentifier(table.name, dialect)};`;
+}
+
+function renderChangedColumnStatements(
+  previousTable: DatabaseTable,
+  table: DatabaseTable,
+  previousColumn: DatabaseColumn,
+  column: DatabaseColumn,
+  model: DiagramModel,
+  options: GenerateSqlOptions,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  const dialect = options.dialect;
+  const statements: string[] = [];
+
+  if (previousColumn.name !== column.name) {
+    statements.push(renderRenameColumnStatement(table, previousColumn.name, column.name, dialect));
+  }
+
+  statements.push(...renderAlterColumnShapeStatements(table, previousColumn, column, model, options, warnings));
+
+  if (previousColumn.primaryKey !== column.primaryKey) {
+    warnings.push({
+      code: 'column_primary_key_changed_manual',
+      message: `Primary key change on "${table.name}.${column.name}" needs manual constraint review.`,
+      target: { id: column.id, type: 'column' },
+    });
+  }
+
+  if (previousColumn.unique !== column.unique) {
+    warnings.push({
+      code: 'column_unique_changed_manual',
+      message: `Unique flag change on "${table.name}.${column.name}" may require adding or dropping a named unique constraint/index manually.`,
+      target: { id: column.id, type: 'column' },
+    });
+  }
+
+  if (previousTable.name !== table.name && statements.length > 0) {
+    // Column alterations are rendered after table rename statements, so following statements intentionally use the new table name.
+    return statements;
+  }
+
+  return statements;
+}
+
+function renderRenameColumnStatement(
+  table: DatabaseTable,
+  previousColumnName: string,
+  nextColumnName: string,
+  dialect: SqlDialect,
+): string {
+  if (dialect === 'sqlserver') {
+    return `EXEC sp_rename ${quoteStringLiteral(`${renderUnquotedQualifiedName(table)}.${previousColumnName}`)}, ${quoteStringLiteral(nextColumnName)}, 'COLUMN';`;
+  }
+
+  return `ALTER TABLE ${renderTableName(table, dialect)} RENAME COLUMN ${quoteIdentifier(previousColumnName, dialect)} TO ${quoteIdentifier(nextColumnName, dialect)};`;
+}
+
+function renderAlterColumnShapeStatements(
+  table: DatabaseTable,
+  previousColumn: DatabaseColumn,
+  column: DatabaseColumn,
+  model: DiagramModel,
+  options: GenerateSqlOptions,
+  warnings: SqlMigrationWarning[],
+): string[] {
+  const dialect = options.dialect;
+  const shapeChanged = !areSqlEntitiesEqual(
+    pickColumnMigrationShape(previousColumn),
+    pickColumnMigrationShape(column),
+  );
+
+  if (!shapeChanged) {
+    return [];
+  }
+
+  warnManualColumnShapeChanges(previousColumn, column, table, warnings);
+
+  if (dialect === 'sqlite') {
+    warnings.push({
+      code: 'alter_column_limited',
+      message: `SQLite cannot alter column "${table.name}.${column.name}" without rebuilding the table.`,
+      target: { id: column.id, type: 'column' },
+    });
+    return [];
+  }
+
+  if (dialect === 'mysql' || dialect === 'mariadb') {
+    return [
+      `ALTER TABLE ${renderTableName(table, dialect)} MODIFY COLUMN ${renderColumn(column, model, dialect, {
+        includeComments: options.includeComments ?? true,
+        renderInlinePrimaryKey: false,
+        renderInlineUnique: true,
+      })};`,
+    ];
+  }
+
+  if (dialect === 'sqlserver') {
+    const nullability = column.nullable ? 'NULL' : 'NOT NULL';
 
     return [
-      `CREATE ${unique}INDEX ${quoteIdentifier(index.name, dialect)}${method} ON ${renderTableName(table, dialect)} (${renderedColumns.join(', ')})${include}${where};`,
+      `ALTER TABLE ${renderTableName(table, dialect)} ALTER COLUMN ${quoteIdentifier(column.name, dialect)} ${renderType(column.type, model, dialect)} ${nullability};`,
     ];
+  }
+
+  const statements: string[] = [];
+
+  if (!areSqlEntitiesEqual(previousColumn.type, column.type)) {
+    statements.push(
+      `ALTER TABLE ${renderTableName(table, dialect)} ALTER COLUMN ${quoteIdentifier(column.name, dialect)} TYPE ${renderType(column.type, model, dialect)};`,
+    );
+  }
+
+  if (previousColumn.nullable !== column.nullable) {
+    statements.push(
+      `ALTER TABLE ${renderTableName(table, dialect)} ALTER COLUMN ${quoteIdentifier(column.name, dialect)} ${
+        column.nullable ? 'DROP' : 'SET'
+      } NOT NULL;`,
+    );
+  }
+
+  if (previousColumn.defaultValue !== column.defaultValue) {
+    statements.push(
+      column.defaultValue
+        ? `ALTER TABLE ${renderTableName(table, dialect)} ALTER COLUMN ${quoteIdentifier(column.name, dialect)} SET DEFAULT ${column.defaultValue};`
+        : `ALTER TABLE ${renderTableName(table, dialect)} ALTER COLUMN ${quoteIdentifier(column.name, dialect)} DROP DEFAULT;`,
+    );
+  }
+
+  return statements;
+}
+
+function warnManualColumnShapeChanges(
+  previousColumn: DatabaseColumn,
+  column: DatabaseColumn,
+  table: DatabaseTable,
+  warnings: SqlMigrationWarning[],
+): void {
+  const manualFields = [
+    ['autoIncrement', previousColumn.autoIncrement, column.autoIncrement],
+    ['collation', previousColumn.collation, column.collation],
+    ['generatedExpression', previousColumn.generatedExpression, column.generatedExpression],
+    ['unsigned', previousColumn.unsigned, column.unsigned],
+  ] as const;
+
+  for (const [field, previousValue, nextValue] of manualFields) {
+    if (previousValue !== nextValue) {
+      warnings.push({
+        code: `column_${field}_changed_manual`,
+        message: `Column "${table.name}.${column.name}" changed ${field}; review the generated migration manually for this dialect.`,
+        target: { id: column.id, type: 'column' },
+      });
+    }
+  }
+}
+
+function pickColumnMigrationShape(column: DatabaseColumn) {
+  return {
+    autoIncrement: column.autoIncrement,
+    collation: column.collation,
+    defaultValue: column.defaultValue,
+    generatedExpression: column.generatedExpression,
+    nullable: column.nullable,
+    type: column.type,
+    unsigned: column.unsigned,
+  };
+}
+
+function warnChangedEnumsWithoutStandaloneMigration(
+  from: DiagramModel,
+  to: DiagramModel,
+  dialect: SqlDialect,
+  warnings: SqlMigrationWarning[],
+): void {
+  for (const [enumId, databaseEnum] of Object.entries(to.enums)) {
+    const previousEnum = from.enums[enumId];
+
+    if (previousEnum && !areSqlEntitiesEqual(previousEnum, databaseEnum)) {
+      warnings.push({
+        code: 'enum_changed_no_standalone_sql',
+        message: `${dialect} stores enum changes through column definitions or application-specific DDL. Review enum "${databaseEnum.name}" manually.`,
+        target: { id: databaseEnum.id, type: 'enum' },
+      });
+    }
+  }
+}
+
+function getRelationshipConstraintName(model: DiagramModel, relationship: DatabaseRelationship): string {
+  const targetTable = model.tables[relationship.targetTableId];
+  const targetColumnNames = relationship.targetColumnIds.flatMap((columnId) => {
+    const column = model.columns[columnId];
+
+    return column ? [column.name] : [];
   });
+
+  return relationship.name ?? `${targetTable?.name ?? 'relationship'}_${targetColumnNames.join('_') || relationship.id}_fkey`;
+}
+
+function renderUnquotedQualifiedName(table: DatabaseTable): string {
+  return table.schema ? `${table.schema}.${table.name}` : table.name;
+}
+
+function areSqlEntitiesEqual(left: unknown, right: unknown): boolean {
+  return stableSqlStringify(left) === stableSqlStringify(right);
+}
+
+function stableSqlStringify(value: unknown): string {
+  return JSON.stringify(sortSqlJsonValue(value));
+}
+
+function sortSqlJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sortSqlJsonValue(item));
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+      .map(([key, item]) => [key, sortSqlJsonValue(item)]),
+  );
 }
 
 function renderIndexMethod(index: DatabaseIndex, dialect: SqlDialect): string {

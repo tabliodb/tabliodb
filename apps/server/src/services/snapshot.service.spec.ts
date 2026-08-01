@@ -97,6 +97,10 @@ describe(SnapshotService.name, () => {
 
     await expect(service.getDiff(auth, fromSnapshot.id, toSnapshot.id)).resolves.toMatchObject({
       dialectChanged: false,
+      migrationSql: {
+        dialect: 'postgresql',
+        sql: expect.stringContaining('ALTER TABLE "users" RENAME TO "accounts";'),
+      },
       tables: {
         changed: 0,
         renamed: [{ fromName: 'users', id: 'users', toName: 'accounts' }],

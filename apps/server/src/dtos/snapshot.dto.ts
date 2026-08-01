@@ -1,4 +1,4 @@
-import { DiagramModelSchema } from '@tabliodb/schema-core';
+import { DatabaseDialectSchema, DiagramModelSchema } from '@tabliodb/schema-core';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -55,10 +55,33 @@ const SnapshotTableChangeSummarySchema = SnapshotEntityChangeSummarySchema.exten
   renamed: z.array(SnapshotTableRenameSchema),
 }).meta({ id: 'SnapshotTableChangeSummaryDto' });
 
+const SnapshotMigrationSqlWarningSchema = z
+  .object({
+    code: z.string(),
+    message: z.string(),
+    statement: z.string().optional(),
+    target: z
+      .object({
+        id: z.string(),
+        type: z.enum(['check', 'column', 'enum', 'index', 'relationship', 'table']),
+      })
+      .optional(),
+  })
+  .meta({ id: 'SnapshotMigrationSqlWarningDto' });
+
+const SnapshotMigrationSqlSchema = z
+  .object({
+    dialect: DatabaseDialectSchema,
+    sql: z.string(),
+    warnings: z.array(SnapshotMigrationSqlWarningSchema),
+  })
+  .meta({ id: 'SnapshotMigrationSqlDto' });
+
 const SnapshotDiffResponseSchema = z
   .object({
     fromSnapshot: SnapshotReferenceSchema,
     toSnapshot: SnapshotReferenceSchema,
+    migrationSql: SnapshotMigrationSqlSchema,
     tables: SnapshotTableChangeSummarySchema,
     columns: SnapshotEntityChangeSummarySchema,
     relationships: SnapshotEntityChangeSummarySchema,

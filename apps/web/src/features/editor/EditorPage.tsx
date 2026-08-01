@@ -2180,6 +2180,13 @@ function SnapshotHistoryEmptyState({ message }: { message: string }) {
 function SnapshotDiffPanel({ diff }: { diff: SnapshotDiffResponseDto }) {
   const changedTotal = getSnapshotDiffTotal(diff);
   const renamedTables = diff.tables.renamed;
+  const [migrationCopied, setMigrationCopied] = useState(false);
+
+  async function handleCopyMigrationSql() {
+    await navigator.clipboard.writeText(diff.migrationSql.sql);
+    setMigrationCopied(true);
+    window.setTimeout(() => setMigrationCopied(false), 1400);
+  }
 
   return (
     <div className="grid gap-4">
@@ -2227,6 +2234,48 @@ function SnapshotDiffPanel({ diff }: { diff: SnapshotDiffResponseDto }) {
           </div>
         </div>
       ) : null}
+
+      <div className="rounded-[18px] border border-[rgb(var(--tabliodb-border))] bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h4 className="flex items-center gap-2 text-[14px] font-extrabold">
+              <Code2 className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+              Migration SQL preview
+            </h4>
+            <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+              Generated for {formatDiagramDialect(diff.migrationSql.dialect)}
+            </p>
+          </div>
+          <Button className="gap-2" onClick={handleCopyMigrationSql} size="sm" type="button" variant="secondary">
+            {migrationCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
+            {migrationCopied ? 'Copied' : 'Copy SQL'}
+          </Button>
+        </div>
+
+        {diff.migrationSql.warnings.length > 0 ? (
+          <section className="mt-3 rounded-[16px] border border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
+            <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
+              <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
+              Review before applying
+            </div>
+            <ul className="grid gap-1.5">
+              {diff.migrationSql.warnings.map((warning) => (
+                <li className="leading-5" key={`${warning.code}:${warning.message}`}>
+                  {warning.message}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <section className="mt-3 rounded-[16px] border border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3 text-[12px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+            No migration warnings for this preview.
+          </section>
+        )}
+
+        <pre className="tabliodb-scrollbar mt-3 max-h-72 overflow-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-ink))] bg-[rgb(var(--tabliodb-ink))] p-4 text-[12px] font-semibold leading-5 text-white shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))]">
+          <code>{diff.migrationSql.sql}</code>
+        </pre>
+      </div>
     </div>
   );
 }

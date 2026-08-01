@@ -1,6 +1,11 @@
 import { createStarterDiagramModel, type DiagramModel } from '@tabliodb/schema-core';
 import { describe, expect, it } from 'vitest';
-import { generateCreateSchemaSql, generateCreateSchemaSqlWithWarnings, parseCreateSchemaSql } from './index.js';
+import {
+  generateCreateSchemaSql,
+  generateCreateSchemaSqlWithWarnings,
+  generateMigrationSqlWithWarnings,
+  parseCreateSchemaSql,
+} from './index.js';
 
 describe('generateCreateSchemaSql', () => {
   it('renders PostgreSQL enum types before dependent tables', () => {
@@ -102,6 +107,86 @@ describe('generateCreateSchemaSql', () => {
     expect(result.warnings.map((warning) => warning.code)).toEqual(
       expect.arrayContaining(['schema_not_supported', 'enum_fallback_to_text', 'index_include_not_supported']),
     );
+  });
+});
+
+describe('generateMigrationSqlWithWarnings', () => {
+  it('renders common PostgreSQL schema changes between snapshots', () => {
+    const fromModel = createStarterDiagramModel('Migration test');
+    const toModel: DiagramModel = {
+      ...fromModel,
+      columns: {
+        ...fromModel.columns,
+        'users-display-name': {
+          autoIncrement: false,
+          id: 'users-display-name',
+          name: 'display_name',
+          nullable: true,
+          primaryKey: false,
+          tableId: 'users',
+          type: { family: 'varchar', length: 120 },
+          unique: false,
+        },
+        'users-email': {
+          ...fromModel.columns['users-email']!,
+          name: 'login_email',
+          nullable: true,
+        },
+      },
+      indexes: {
+        ...fromModel.indexes,
+        'users-display-name-index': {
+          columns: [{ columnId: 'users-display-name' }],
+          id: 'users-display-name-index',
+          name: 'users_display_name_idx',
+          tableId: 'users',
+          unique: false,
+        },
+      },
+      tables: {
+        ...fromModel.tables,
+        users: {
+          ...fromModel.tables.users!,
+          columnIds: [...fromModel.tables.users!.columnIds, 'users-display-name'],
+          name: 'accounts',
+        },
+      },
+    };
+
+    const result = generateMigrationSqlWithWarnings(fromModel, toModel, { dialect: 'postgresql' });
+
+    expect(result.sql).toContain('ALTER TABLE "users" RENAME TO "accounts";');
+    expect(result.sql).toContain('ALTER TABLE "accounts" RENAME COLUMN "email" TO "login_email";');
+    expect(result.sql).toContain('ALTER TABLE "accounts" ALTER COLUMN "login_email" DROP NOT NULL;');
+    expect(result.sql).toContain('ALTER TABLE "accounts" ADD COLUMN "display_name" VARCHAR(120);');
+    expect(result.sql).toContain('CREATE INDEX "users_display_name_idx" ON "accounts" ("display_name");');
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('warns for destructive migration statements', () => {
+    const fromModel = createStarterDiagramModel('Destructive migration test');
+    const toModel: DiagramModel = {
+      ...fromModel,
+      columns: Object.fromEntries(
+        Object.entries(fromModel.columns).filter(([columnId]) => columnId !== 'borrowings-due-at'),
+      ),
+      relationships: Object.fromEntries(
+        Object.entries(fromModel.relationships).filter(([relationshipId]) => relationshipId !== 'books-borrowings'),
+      ),
+      tables: {
+        ...fromModel.tables,
+        borrowings: {
+          ...fromModel.tables.borrowings!,
+          columnIds: fromModel.tables.borrowings!.columnIds.filter((columnId) => columnId !== 'borrowings-due-at'),
+        },
+      },
+    };
+
+    const result = generateMigrationSqlWithWarnings(fromModel, toModel, { dialect: 'postgresql' });
+
+    expect(result.sql).toContain('ALTER TABLE "borrowings" DROP CONSTRAINT "borrowings_book_id_fkey";');
+    expect(result.sql).toContain('ALTER TABLE "borrowings" DROP COLUMN "due_at";');
+    expect(result.warnings.map((warning) => warning.code)).toContain('column_removed');
   });
 });
 

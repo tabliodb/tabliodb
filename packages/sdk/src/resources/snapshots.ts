@@ -43,6 +43,22 @@ export type SnapshotTableChangeSummaryDto = SnapshotEntityChangeSummaryDto & {
   }>;
 };
 
+export type SnapshotMigrationSqlWarningDto = {
+  code: string;
+  message: string;
+  statement?: string;
+  target?: {
+    id: string;
+    type: 'check' | 'column' | 'enum' | 'index' | 'relationship' | 'table';
+  };
+};
+
+export type SnapshotMigrationSqlDto = {
+  dialect: DiagramModel['dialect'];
+  sql: string;
+  warnings: SnapshotMigrationSqlWarningDto[];
+};
+
 export type SnapshotDiffResponseDto = {
   checks: SnapshotEntityChangeSummaryDto;
   columns: SnapshotEntityChangeSummaryDto;
@@ -51,6 +67,7 @@ export type SnapshotDiffResponseDto = {
   fromSnapshot: SnapshotReferenceDto;
   groups: SnapshotEntityChangeSummaryDto;
   indexes: SnapshotEntityChangeSummaryDto;
+  migrationSql: SnapshotMigrationSqlDto;
   metadataChanged: boolean;
   notes: SnapshotEntityChangeSummaryDto;
   relationships: SnapshotEntityChangeSummaryDto;

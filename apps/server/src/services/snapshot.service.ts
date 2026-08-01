@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { DiagramModel } from '@tabliodb/schema-core';
+import { generateMigrationSqlWithWarnings } from '@tabliodb/sql';
 import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
 import { SnapshotCreateDto, SnapshotListQueryDto } from '../dtos/snapshot.dto.js';
@@ -127,10 +128,20 @@ function createSnapshotDiff(fromSnapshot: SnapshotDiffSource, toSnapshot: Snapsh
   const fromModel = fromSnapshot.snapshot;
   const toModel = toSnapshot.snapshot;
   const tableChanges = countRecordChanges(fromModel.tables, toModel.tables, omitTableName);
+  const migrationSql = generateMigrationSqlWithWarnings(fromModel, toModel, {
+    dialect: toModel.dialect,
+    includeComments: true,
+  });
 
   return {
     fromSnapshot: toSnapshotReference(fromSnapshot),
     toSnapshot: toSnapshotReference(toSnapshot),
+    migrationSql: {
+      dialect: toModel.dialect,
+      // The preview is generated from canonical models, not from already summarized counts, so SQL details stay aligned with entity IDs.
+      sql: migrationSql.sql,
+      warnings: migrationSql.warnings,
+    },
     tables: {
       ...tableChanges,
       // Rename dipisahkan dari perubahan visual table seperti position/width/color supaya diff lebih mudah dibaca manusia.
