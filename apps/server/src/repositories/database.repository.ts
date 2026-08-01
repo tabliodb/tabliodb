@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { FileMigrationProvider, Migrator } from 'kysely/migration';
 import { InjectKysely } from 'nestjs-kysely';
 import { promises as fs } from 'node:fs';
@@ -10,6 +10,11 @@ import type { DB } from '../schema/index.js';
 @Injectable()
 export class DatabaseRepository {
   constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
+
+  async ping(): Promise<void> {
+    // Healthcheck memakai query paling murah agar readiness bisa memvalidasi koneksi PostgreSQL tanpa menyentuh domain data.
+    await sql`select 1`.execute(this.db);
+  }
 
   migrateToLatest() {
     const currentDir = path.dirname(fileURLToPath(import.meta.url));

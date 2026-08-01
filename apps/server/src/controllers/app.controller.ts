@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
 import { ServerHealthResponseDto } from '../dtos/server.dto.js';
 import { ServerService } from '../services/server.service.js';
@@ -12,7 +13,12 @@ export class AppController {
   @Get('health')
   @ApiOperation({ operationId: 'getServerHealth' })
   @ZodResponse({ type: ServerHealthResponseDto })
-  getHealth() {
-    return this.service.getHealth();
+  async getHealth(@Res({ passthrough: true }) response: Response) {
+    const health = await this.service.getHealth();
+
+    // Docker healthcheck membaca HTTP status; 503 membuat orchestrator tahu app belum siap menerima traffic.
+    response.status(health.ok ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
+
+    return health;
   }
 }

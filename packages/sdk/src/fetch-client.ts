@@ -14,9 +14,20 @@ const oazapfts = Oazapfts.runtime(defaults);
 export const servers = {
   server1: '/api',
 };
+export type ServerDependencyHealthDtoOutput = {
+  latencyMs?: number;
+  message?: string;
+  status: Status;
+};
 export type ServerHealthResponseDtoOutput = {
+  checkedAt: string;
+  dependencies: {
+    database: ServerDependencyHealthDtoOutput;
+    redis: ServerDependencyHealthDtoOutput;
+  };
   name: string;
   ok: boolean;
+  uptimeSeconds: number;
   version: string;
 };
 export type AuthUserDtoOutput = {
@@ -128,7 +139,7 @@ export type CommentThreadResponseDtoOutput = {
     id: string;
     resolvedAt: string | null;
     resolvedById: string | null;
-    status: Status;
+    status: Status2;
     targetId: string | null;
     targetType: TargetType;
     unreadCount: number;
@@ -161,7 +172,7 @@ export type CommentThreadListItemDtoOutput = {
   id: string;
   resolvedAt: string | null;
   resolvedById: string | null;
-  status: Status;
+  status: Status2;
   targetId: string | null;
   targetType: TargetType;
   unreadCount: number;
@@ -210,7 +221,7 @@ export type CommentThreadStatusResponseDtoOutput = {
   id: string;
   resolvedAt: string | null;
   resolvedById: string | null;
-  status: Status;
+  status: Status2;
   targetId: string | null;
   targetType: TargetType;
   unreadCount: number;
@@ -430,7 +441,7 @@ export type InvitationDtoOutput = {
   revokedAt: string | null;
   expiresAt: string;
   createdAt: string;
-  status: Status2;
+  status: Status3;
 };
 export type InvitationCreateResponseDtoOutput = {
   invitation: InvitationDtoOutput;
@@ -445,7 +456,7 @@ export type InvitationPublicDtoOutput = {
   projectRole: ProjectRole | null;
   message: string | null;
   expiresAt: string;
-  status: Status2;
+  status: Status3;
 };
 export type InvitationAcceptDto = {
   token: string;
@@ -510,7 +521,7 @@ export type NotificationInboxItemDtoOutput = {
   };
   thread: {
     id: string;
-    status: Status3;
+    status: Status4;
     targetId: string | null;
     targetType: TargetType;
     updatedAt: string;
@@ -565,7 +576,7 @@ export type OrganizationMemberDtoOutput = {
   joinedAt: string | null;
   name: string;
   role: Role;
-  status: Status4;
+  status: Status5;
   updatedAt: string;
   userId: string;
 };
@@ -2951,6 +2962,11 @@ export function revokeUserSessions(
     }),
   );
 }
+export enum Status {
+  Disabled = 'disabled',
+  Error = 'error',
+  Ok = 'ok',
+}
 export enum Permissions {
   All = 'all',
   OrganizationRead = 'organization.read',
@@ -2983,7 +2999,7 @@ export enum TargetType {
   Note = 'note',
   Group = 'group',
 }
-export enum Status {
+export enum Status2 {
   Open = 'open',
   Resolved = 'resolved',
 }
@@ -3083,13 +3099,13 @@ export enum ProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status2 {
+export enum Status3 {
   Pending = 'pending',
   Accepted = 'accepted',
   Revoked = 'revoked',
   Expired = 'expired',
 }
-export enum Status3 {
+export enum Status4 {
   Open = 'open',
   Resolved = 'resolved',
 }
@@ -3108,7 +3124,7 @@ export enum DefaultProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status4 {
+export enum Status5 {
   Pending = 'pending',
   Active = 'active',
   Suspended = 'suspended',

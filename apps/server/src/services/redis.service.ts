@@ -74,6 +74,25 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  isConfigured(): boolean {
+    return Boolean(this.client);
+  }
+
+  async ping(): Promise<void> {
+    const client = await this.getReadyClient();
+
+    if (!client) {
+      throw new Error(this.client ? 'Redis client is not ready.' : 'Redis URL is not configured.');
+    }
+
+    // PING menjaga healthcheck Redis tidak bergantung pada key rate-limit/job tertentu yang bisa berubah di masa depan.
+    const response = await client.ping();
+
+    if (response !== 'PONG') {
+      throw new Error('Redis returned an unexpected PING response.');
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
     if (!this.client || this.client.status === 'end') {
       return;
