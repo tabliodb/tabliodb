@@ -828,6 +828,32 @@ export type DeleteGroupCommand = {
   groupId: string;
 };
 
+export type CreateNoteCommand = {
+  type: 'note.create';
+  noteId?: string;
+  text: string;
+  position?: { x: number; y: number };
+  width?: number;
+  color?: string;
+};
+
+export type UpdateNoteCommand = {
+  type: 'note.update';
+  noteId: string;
+  changes: Partial<Omit<DiagramNote, 'id'>>;
+};
+
+export type MoveNoteCommand = {
+  type: 'note.move';
+  noteId: string;
+  position: { x: number; y: number };
+};
+
+export type DeleteNoteCommand = {
+  type: 'note.delete';
+  noteId: string;
+};
+
 export type DiagramCommand =
   | CreateTableCommand
   | RenameTableCommand
@@ -856,7 +882,11 @@ export type DiagramCommand =
   | UpdateGroupCommand
   | AssignTableToGroupCommand
   | RemoveTableFromGroupCommand
-  | DeleteGroupCommand;
+  | DeleteGroupCommand
+  | CreateNoteCommand
+  | UpdateNoteCommand
+  | MoveNoteCommand
+  | DeleteNoteCommand;
 
 export function applyDiagramCommands(
   model: DiagramModel,
@@ -930,6 +960,14 @@ export function applyDiagramCommand(
       return finalizeDiagramModel(removeTableFromGroup(model, command), options);
     case 'group.delete':
       return finalizeDiagramModel(deleteGroup(model, command.groupId), options);
+    case 'note.create':
+      return finalizeDiagramModel(createNote(model, command, idFactory), options);
+    case 'note.update':
+      return finalizeDiagramModel(updateNote(model, command), options);
+    case 'note.move':
+      return finalizeDiagramModel(moveNote(model, command), options);
+    case 'note.delete':
+      return finalizeDiagramModel(deleteNote(model, command.noteId), options);
   }
 }
 
@@ -1748,6 +1786,61 @@ function deleteGroup(model: DiagramModel, groupId: string): DiagramModel {
   };
 }
 
+function createNote(model: DiagramModel, command: CreateNoteCommand, idFactory: DiagramIdFactory): DiagramModel {
+  const noteId = command.noteId ?? idFactory('note');
+  assertMissingEntity(model.notes[noteId], `Note "${noteId}" already exists`);
+  const note = DiagramNoteSchema.parse({
+    color: command.color,
+    id: noteId,
+    position: command.position ?? { x: 0, y: 0 },
+    text: command.text,
+    width: command.width,
+  });
+
+  return {
+    ...model,
+    notes: {
+      ...model.notes,
+      [note.id]: note,
+    },
+  };
+}
+
+function updateNote(model: DiagramModel, command: UpdateNoteCommand): DiagramModel {
+  const note = requireNote(model, command.noteId);
+
+  return {
+    ...model,
+    notes: {
+      ...model.notes,
+      [note.id]: DiagramNoteSchema.parse({
+        ...note,
+        ...command.changes,
+        id: note.id,
+      }),
+    },
+  };
+}
+
+function moveNote(model: DiagramModel, command: MoveNoteCommand): DiagramModel {
+  return updateNote(model, {
+    changes: {
+      position: command.position,
+    },
+    noteId: command.noteId,
+    type: 'note.update',
+  });
+}
+
+function deleteNote(model: DiagramModel, noteId: string): DiagramModel {
+  requireNote(model, noteId);
+
+  return {
+    ...model,
+    notes: omitKey(model.notes, noteId),
+  };
+}
+
 function createColumnFromCommand(
   model: DiagramModel,
   command: CreateColumnCommand,
@@ -2216,6 +2309,15 @@ function requireGroup(model: DiagramModel, groupId: string): DiagramGroup {
   }
 
   return group;
+}
+
+function requireNote(model: DiagramModel, noteId: string): DiagramNote {
+  const note = model.notes[noteId];
+  if (!note) {
+    throw new DiagramCommandError(`Note "${noteId}" does not exist`);
+  }
+
+  return note;
 }
 
 function requireRelationship(model: DiagramModel, relationshipId: string): DatabaseRelationship {

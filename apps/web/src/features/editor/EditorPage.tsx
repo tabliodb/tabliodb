@@ -6,6 +6,7 @@ import {
   getDiagramModelIntegrityWarnings,
   getRelationshipColumnPairs,
   applyDiagramCommand,
+  createDiagramEntityId,
   parseDiagramModel,
   stringifyDiagramModel,
   type DatabaseDialect,
@@ -115,6 +116,7 @@ import {
   Share2,
   ShieldCheck,
   SlidersHorizontal,
+  StickyNote,
   Trash2,
   UserPlus,
   UserRound,
@@ -1168,6 +1170,29 @@ export function EditorPage() {
     setSelectedCommentTarget(nextTableId ? { targetId: nextTableId, targetType: 'table' } : null);
   }
 
+  function handleAddNote() {
+    if (!canEditDiagram || !model) {
+      return;
+    }
+
+    const noteId = createDiagramEntityId('note');
+    const notePosition = createNextNotePosition(model, selectedTableId);
+
+    handleModelChange(
+      applyDiagramCommand(model, {
+        color: '#ffc800',
+        noteId,
+        position: notePosition,
+        text: 'New note',
+        type: 'note.create',
+        width: 260,
+      }),
+    );
+    setSelectedTableId(null);
+    // Note yang baru dibuat langsung menjadi target komentar aktif agar diskusi bisa diarahkan ke annotation tersebut.
+    setSelectedCommentTarget({ targetId: noteId, targetType: 'note' });
+  }
+
   function handleSaveSnapshot() {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
@@ -1426,6 +1451,10 @@ export function EditorPage() {
             </>
           ) : null}
           <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} />
+          <Button className="gap-2" disabled={!canEditDiagram} onClick={handleAddNote} variant="secondary">
+            <StickyNote className="size-4" />
+            Note
+          </Button>
           <Button
             className="gap-2"
             disabled={saveSnapshotMutation.isPending || !canCreateSnapshot}
@@ -1771,6 +1800,44 @@ function getOrganizationSlug(organization: OrganizationDto): string {
 
 function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: string | null): boolean {
   return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
+}
+
+function createNextNotePosition(model: DiagramModel, selectedTableId: string | null): { x: number; y: number } {
+  const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
+
+  if (selectedTable) {
+    return {
+      x: selectedTable.position.x + Math.max(selectedTable.width, 288) + 48,
+      y: selectedTable.position.y,
+    };
+  }
+
+  const positionedEntities = [
+    ...Object.values(model.tables).map((table) => ({
+      height: 38 + table.columnIds.length * 26 + 6,
+      width: Math.max(table.width, 288),
+      x: table.position.x,
+      y: table.position.y,
+    })),
+    ...Object.values(model.notes).map((note) => ({
+      height: 120,
+      width: Math.max(note.width ?? 260, 180),
+      x: note.position.x,
+      y: note.position.y,
+    })),
+  ];
+
+  if (positionedEntities.length === 0) {
+    return { x: 120, y: 120 };
+  }
+
+  const right = Math.max(...positionedEntities.map((entity) => entity.x + entity.width));
+  const top = Math.min(...positionedEntities.map((entity) => entity.y));
+
+  return {
+    x: right + 48,
+    y: top,
+  };
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {

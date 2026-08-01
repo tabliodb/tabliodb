@@ -17,6 +17,7 @@ import {
   type DatabaseTable,
   type DiagramGroup,
   type DiagramModel,
+  type DiagramNote,
   type TableDisplayMode,
 } from '@tabliodb/schema-core';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
@@ -27,6 +28,7 @@ import {
   formatCommentMarkerCount,
   formatCommentMarkerTitle,
   getColumnCommentMarkerCount,
+  getCommentMarkerCountForTarget,
   getTableCommentMarkerCount,
   hasOpenCommentMarkers,
   type CommentMarkerCount,
@@ -36,6 +38,7 @@ import { formatColumnType } from '../diagram-model';
 import { getDisplayTableColor } from '../table-colors';
 
 const tableNodeShape = 'tabliodb-table';
+const noteNodeShape = 'tabliodb-note';
 const groupNodeIdPrefix = 'tabliodb-group:';
 const tableNodeWidth = 288;
 const tableHeaderHeight = 38;
@@ -44,6 +47,9 @@ const tablePaddingBottom = 6;
 const groupPaddingX = 36;
 const groupPaddingBottom = 28;
 const groupHeaderOffset = 42;
+const noteNodeDefaultWidth = 260;
+const noteNodeMinHeight = 118;
+const noteNodeMaxHeight = 220;
 const tableResizeMaxWidth = 720;
 const tableResizeMinWidth = 240;
 const diagramVisualGridSize = 24;
@@ -63,6 +69,7 @@ const relationshipRouterName = 'tabliodb-relationship';
 const minimapAspectRatio = 192 / 124;
 
 let relationshipRouterRegistered = false;
+let noteShapeRegistered = false;
 let tableShapeRegistered = false;
 
 export type SchemaCanvasProps = {
@@ -107,6 +114,15 @@ type GroupNodeData = {
   tableCount: number;
 };
 
+type NoteNodeData = {
+  kind: 'note';
+  color: string;
+  commentMarker: CommentMarkerCount;
+  noteId: string;
+  readOnly: boolean;
+  text: string;
+};
+
 type PortSide = 'left' | 'right';
 
 type RelationshipTerminal = {
@@ -147,6 +163,7 @@ type CanvasMinimapTable = CanvasRect & {
 
 type CanvasMinimapState = {
   groups: CanvasMinimapTable[];
+  notes: CanvasMinimapTable[];
   tables: CanvasMinimapTable[];
   viewBox: CanvasRect;
   viewport: CanvasRect;
@@ -208,6 +225,7 @@ export function SchemaCanvas({
     }
 
     registerTableNodeShape();
+    registerNoteNodeShape();
     registerRelationshipRouter();
 
     const container = containerRef.current;
@@ -242,7 +260,7 @@ export function SchemaCanvas({
       interacting: {
         edgeLabelMovable: false,
         edgeMovable: false,
-        nodeMovable: (cellView) => !readOnly && isTableNodeData(cellView.cell.getData()),
+        nodeMovable: (cellView) => !readOnly && isMovableCanvasNodeData(cellView.cell.getData()),
         vertexAddable: false,
         vertexDeletable: false,
       },
@@ -268,6 +286,11 @@ export function SchemaCanvas({
 
       if (isTableNodeData(data)) {
         onSelectedTableChangeRef.current(data.tableId);
+        return;
+      }
+
+      if (isNoteNodeData(data)) {
+        onSelectedTableChangeRef.current(null);
       }
     });
 
@@ -311,6 +334,96 @@ export function SchemaCanvas({
       event.preventDefault();
       event.stopPropagation();
       onCommentTargetOpenRef.current?.({ targetId, targetType });
+    };
+
+    const handleNoteInteractiveMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      if (target.closest('.tabliodb-note-node__textarea, .tabliodb-note-node__action')) {
+        // Text editing and note actions live inside an X6 HTML node; stopping mousedown keeps the graph from starting a drag.
+        event.stopPropagation();
+      }
+    };
+
+    const handleNoteActionClick = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const actionButton = target.closest<HTMLButtonElement>('[data-note-action]');
+      const noteElement = actionButton?.closest<HTMLElement>('[data-tabliodb-note-id]');
+      const noteId = noteElement?.dataset.tabliodbNoteId;
+
+      if (!actionButton || !noteId) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (actionButton.dataset.noteAction === 'comment') {
+        onCommentTargetOpenRef.current?.({ targetId: noteId, targetType: 'note' });
+        return;
+      }
+
+      if (actionButton.dataset.noteAction === 'delete' && !readOnly) {
+        const note = modelRef.current.notes[noteId];
+
+        if (!note || !window.confirm('Delete this note?')) {
+          return;
+        }
+
+        onModelChangeRef.current(applyDiagramCommand(modelRef.current, { noteId, type: 'note.delete' }));
+      }
+    };
+
+    const handleNoteFocusOut = (event: FocusEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLTextAreaElement) || !target.classList.contains('tabliodb-note-node__textarea')) {
+        return;
+      }
+
+      const noteId = target.closest<HTMLElement>('[data-tabliodb-note-id]')?.dataset.tabliodbNoteId;
+      const note = noteId ? modelRef.current.notes[noteId] : null;
+
+      if (!note || readOnly) {
+        return;
+      }
+
+      const nextText = target.value.trim() || 'New note';
+
+      if (nextText !== note.text) {
+        onModelChangeRef.current(
+          applyDiagramCommand(modelRef.current, {
+            changes: {
+              text: nextText,
+            },
+            noteId: note.id,
+            type: 'note.update',
+          }),
+        );
+      }
+    };
+
+    const handleNoteKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLTextAreaElement) || !target.classList.contains('tabliodb-note-node__textarea')) {
+        return;
+      }
+
+      event.stopPropagation();
+
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        target.blur();
+      }
     };
 
     const handleResizeMouseDown = (event: MouseEvent) => {
@@ -372,6 +485,10 @@ export function SchemaCanvas({
 
     container.addEventListener('mousedown', handleCommentMarkerMouseDown, true);
     container.addEventListener('click', handleCommentMarkerClick, true);
+    container.addEventListener('mousedown', handleNoteInteractiveMouseDown, true);
+    container.addEventListener('click', handleNoteActionClick, true);
+    container.addEventListener('focusout', handleNoteFocusOut, true);
+    container.addEventListener('keydown', handleNoteKeyDown, true);
     container.addEventListener('mousedown', handleResizeMouseDown, true);
 
     const handleCursorPointerMove = (event: PointerEvent) => {
@@ -397,26 +514,42 @@ export function SchemaCanvas({
         return;
       }
 
-      const data = node.getData<TableNodeData>();
-      const table = modelRef.current.tables[data.tableId];
+      const data = node.getData<TableNodeData | NoteNodeData>();
+      const position = node.getPosition();
 
-      if (!table) {
+      if (isTableNodeData(data)) {
+        const table = modelRef.current.tables[data.tableId];
+
+        if (!table) {
+          return;
+        }
+
+        onModelChangeRef.current(
+          applyDiagramCommand(modelRef.current, {
+            type: 'table.move',
+            tableId: table.id,
+            // X6 owns interaction coordinates while the domain model remains the persistence source for table positions.
+            position: {
+              x: position.x,
+              y: position.y,
+            },
+          }),
+        );
         return;
       }
 
-      const position = node.getPosition();
-
-      onModelChangeRef.current(
-        applyDiagramCommand(modelRef.current, {
-          type: 'table.move',
-          tableId: table.id,
-          // X6 owns interaction coordinates while the domain model remains the persistence source for table positions.
-          position: {
-            x: position.x,
-            y: position.y,
-          },
-        }),
-      );
+      if (isNoteNodeData(data) && modelRef.current.notes[data.noteId]) {
+        onModelChangeRef.current(
+          applyDiagramCommand(modelRef.current, {
+            noteId: data.noteId,
+            position: {
+              x: position.x,
+              y: position.y,
+            },
+            type: 'note.move',
+          }),
+        );
+      }
     });
 
     graphRef.current = graph;
@@ -424,6 +557,10 @@ export function SchemaCanvas({
     return () => {
       container.removeEventListener('mousedown', handleCommentMarkerMouseDown, true);
       container.removeEventListener('click', handleCommentMarkerClick, true);
+      container.removeEventListener('mousedown', handleNoteInteractiveMouseDown, true);
+      container.removeEventListener('click', handleNoteActionClick, true);
+      container.removeEventListener('focusout', handleNoteFocusOut, true);
+      container.removeEventListener('keydown', handleNoteKeyDown, true);
       container.removeEventListener('mousedown', handleResizeMouseDown, true);
       container.removeEventListener('pointerleave', handleCursorPointerLeave);
       container.removeEventListener('pointermove', handleCursorPointerMove);
@@ -673,6 +810,22 @@ function CanvasMinimap({
             <title>{table.name}</title>
           </rect>
         ))}
+        {state.notes.map((note) => (
+          <rect
+            fill={note.color}
+            fillOpacity="0.24"
+            height={note.height}
+            key={note.id}
+            rx="12"
+            stroke={note.color}
+            strokeWidth="4"
+            width={note.width}
+            x={note.x}
+            y={note.y}
+          >
+            <title>{note.name}</title>
+          </rect>
+        ))}
         <rect
           fill="rgb(var(--tabliodb-primary-soft))"
           fillOpacity="0.18"
@@ -714,17 +867,28 @@ function createCanvasMinimapState(
     name: group.name,
     selected: false,
   }));
+  const notes = Object.values(model.notes).map<CanvasMinimapTable>((note) => ({
+    color: note.color ?? '#ffc800',
+    height: getNoteNodeHeight(note),
+    id: note.id,
+    name: note.text.slice(0, 32) || 'Note',
+    selected: false,
+    width: getNoteWidth(note),
+    x: note.position.x,
+    y: note.position.y,
+  }));
 
   if (tables.length === 0) {
     return null;
   }
 
   const viewport = getCanvasViewportRect(graph, container);
-  const contentBounds = getCanvasContentBounds([...groups, ...tables, viewport]);
+  const contentBounds = getCanvasContentBounds([...groups, ...tables, ...notes, viewport]);
   const viewBox = normalizeRectToAspect(padCanvasRect(contentBounds, 96), minimapAspectRatio);
 
   return {
     groups: groups.map(roundCanvasMinimapTable),
+    notes: notes.map(roundCanvasMinimapTable),
     tables: tables.map(roundCanvasMinimapTable),
     viewBox: roundCanvasRect(viewBox),
     viewport: roundCanvasRect(viewport),
@@ -823,6 +987,7 @@ function areCanvasMinimapStatesEqual(
     areCanvasRectsEqual(currentState.viewBox, nextState.viewBox) &&
     areCanvasRectsEqual(currentState.viewport, nextState.viewport) &&
     areCanvasMinimapItemsEqual(currentState.groups, nextState.groups) &&
+    areCanvasMinimapItemsEqual(currentState.notes, nextState.notes) &&
     areCanvasMinimapItemsEqual(currentState.tables, nextState.tables)
   );
 }
@@ -919,6 +1084,22 @@ function registerTableNodeShape(): void {
   tableShapeRegistered = true;
 }
 
+function registerNoteNodeShape(): void {
+  if (noteShapeRegistered) {
+    return;
+  }
+
+  Shape.HTML.register({
+    effect: ['data'],
+    height: noteNodeMinHeight,
+    html: (cell: Cell) => renderNoteNode(cell.getData<NoteNodeData>()),
+    shape: noteNodeShape,
+    width: noteNodeDefaultWidth,
+  });
+
+  noteShapeRegistered = true;
+}
+
 function syncGraphFromModel(
   graph: Graph,
   model: DiagramModel,
@@ -930,9 +1111,13 @@ function syncGraphFromModel(
   // Marker summary dihitung sekali per sync supaya node table tidak mengulang scan thread untuk setiap row.
   const commentMarkerSummary = createCommentMarkerSummary(model, commentTargetSummaries);
   const groupMetadata = Object.values(model.groups).map((group) => createGroupNodeMetadata(model, group));
+  const noteMetadata = Object.values(model.notes).map((note) =>
+    createNoteNodeMetadata(note, commentMarkerSummary, readOnly),
+  );
   const nodeIds = new Set([
     ...Object.keys(model.tables),
     ...groupMetadata.map((metadata) => metadata.id).filter((id): id is string => Boolean(id)),
+    ...noteMetadata.map((metadata) => metadata.id).filter((id): id is string => Boolean(id)),
   ]);
   const edgeMetadata = createRelationshipEdgeMetadata(model, relationshipPlan);
   const edgeIds = new Set(edgeMetadata.map((edge) => edge.id).filter((id): id is string => Boolean(id)));
@@ -966,6 +1151,10 @@ function syncGraphFromModel(
           readOnly,
         ),
       );
+    }
+
+    for (const note of noteMetadata) {
+      syncNoteNode(graph, note);
     }
 
     for (const edge of edgeMetadata) {
@@ -1052,6 +1241,64 @@ function syncGroupNode(graph: Graph, metadata: NodeMetadata): void {
   }
 
   existing.setZIndex(metadata.zIndex ?? -20);
+}
+
+function createNoteNodeMetadata(
+  note: DiagramNote,
+  commentMarkerSummary: CommentMarkerSummary,
+  readOnly: boolean,
+): NodeMetadata {
+  const width = getNoteWidth(note);
+
+  return {
+    data: {
+      color: note.color ?? '#ffc800',
+      commentMarker: getCommentMarkerCountForTarget(commentMarkerSummary, 'note', note.id),
+      kind: 'note',
+      noteId: note.id,
+      readOnly,
+      text: note.text,
+    } satisfies NoteNodeData,
+    height: getNoteNodeHeight(note),
+    id: note.id,
+    position: note.position,
+    shape: noteNodeShape,
+    width,
+    zIndex: 3,
+  };
+}
+
+function syncNoteNode(graph: Graph, metadata: NodeMetadata): void {
+  const existing = graph.getCellById(metadata.id!) as X6Node | null | undefined;
+
+  if (!existing?.isNode()) {
+    graph.addNode(metadata);
+    return;
+  }
+
+  const nextData = metadata.data as NoteNodeData;
+  const currentData = existing.getData<NoteNodeData>();
+  const currentPosition = existing.getPosition();
+  const currentSize = existing.getSize();
+  const nextPosition = metadata.position ?? { x: metadata.x ?? 0, y: metadata.y ?? 0 };
+  const nextSize = metadata.size ?? {
+    height: metadata.height ?? noteNodeMinHeight,
+    width: metadata.width ?? noteNodeDefaultWidth,
+  };
+
+  if (!areNoteNodeDataEqual(currentData, nextData)) {
+    existing.setData(nextData, { overwrite: true });
+  }
+
+  if (currentSize.width !== nextSize.width || currentSize.height !== nextSize.height) {
+    existing.resize(nextSize.width, nextSize.height);
+  }
+
+  if (currentPosition.x !== nextPosition.x || currentPosition.y !== nextPosition.y) {
+    existing.position(nextPosition.x, nextPosition.y);
+  }
+
+  existing.setZIndex(metadata.zIndex ?? 3);
 }
 
 function syncTableNode(graph: Graph, metadata: NodeMetadata): void {
@@ -1398,6 +1645,20 @@ function getTableWidth(table: DatabaseTable): number {
   return Math.max(table.width, tableNodeWidth);
 }
 
+function getNoteWidth(note: DiagramNote): number {
+  return Math.max(note.width ?? noteNodeDefaultWidth, 180);
+}
+
+function getNoteNodeHeight(note: DiagramNote): number {
+  const width = getNoteWidth(note);
+  const charactersPerLine = Math.max(24, Math.floor((width - 32) / 7));
+  const lineCount = note.text
+    .split('\n')
+    .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / charactersPerLine)), 0);
+
+  return Math.min(noteNodeMaxHeight, Math.max(noteNodeMinHeight, 48 + lineCount * 19));
+}
+
 function getGroupNodeId(groupId: string): string {
   return `${groupNodeIdPrefix}${groupId}`;
 }
@@ -1488,6 +1749,14 @@ function getRelationshipColumnIdsForTable(model: DiagramModel, tableId: string):
 
 function isTableNodeData(data: unknown): data is TableNodeData {
   return Boolean(data && typeof data === 'object' && 'kind' in data && data.kind === 'table');
+}
+
+function isNoteNodeData(data: unknown): data is NoteNodeData {
+  return Boolean(data && typeof data === 'object' && 'kind' in data && data.kind === 'note');
+}
+
+function isMovableCanvasNodeData(data: unknown): data is TableNodeData | NoteNodeData {
+  return isTableNodeData(data) || isNoteNodeData(data);
 }
 
 function areGroupNodeDataEqual(current: GroupNodeData | undefined, next: GroupNodeData): boolean {
@@ -1699,12 +1968,46 @@ function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNod
   );
 }
 
+function areNoteNodeDataEqual(current: NoteNodeData | undefined, next: NoteNodeData): boolean {
+  return Boolean(
+    current &&
+    current.color === next.color &&
+    current.commentMarker.open === next.commentMarker.open &&
+    current.commentMarker.total === next.commentMarker.total &&
+    current.kind === next.kind &&
+    current.noteId === next.noteId &&
+    current.readOnly === next.readOnly &&
+    current.text === next.text,
+  );
+}
+
 function fitGraphContent(graph: Graph): void {
   graph.zoomToFit({
     maxScale: 1,
     padding: 80,
   });
   graph.centerContent();
+}
+
+function renderNoteNode(data: NoteNodeData): string {
+  const commentMarker = renderCommentMarker(data.commentMarker, 'note', 'note', data.noteId);
+  const deleteButton = data.readOnly
+    ? ''
+    : '<button aria-label="Delete note" class="tabliodb-note-node__action" data-note-action="delete" type="button">x</button>';
+
+  return `
+    <article class="tabliodb-note-node" data-tabliodb-note-id="${escapeHtml(data.noteId)}" style="--note-accent: ${escapeHtml(data.color)}">
+      <header class="tabliodb-note-node__header">
+        <span class="tabliodb-note-node__title">Note</span>
+        <span class="tabliodb-note-node__actions">
+          ${commentMarker}
+          <button aria-label="Discuss note" class="tabliodb-note-node__action" data-note-action="comment" type="button">+</button>
+          ${deleteButton}
+        </span>
+      </header>
+      <textarea class="tabliodb-note-node__textarea" ${data.readOnly ? 'readonly' : ''} spellcheck="true">${escapeHtml(data.text)}</textarea>
+    </article>
+  `;
 }
 
 function renderTableNode(data: TableNodeData): string {

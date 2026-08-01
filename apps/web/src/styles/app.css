@@ -307,3 +307,97 @@ body {
 .tabliodb-table-node__resize-handle:focus-visible::after {
   opacity: 1;
 }
+
+.tabliodb-note-node {
+  --note-accent: #ffc800;
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid color-mix(in srgb, var(--note-accent) 72%, #b88900);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--note-accent) 18%, #ffffff);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--note-accent) 48%, rgb(var(--tabliodb-border-strong))),
+    0 12px 24px rgb(15 23 42 / 10%);
+  color: rgb(var(--tabliodb-ink));
+}
+
+.tabliodb-note-node:focus-within {
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--note-accent) 58%, rgb(var(--tabliodb-border-strong))),
+    0 0 0 3px color-mix(in srgb, var(--note-accent) 28%, transparent),
+    0 14px 24px rgb(15 23 42 / 12%);
+}
+
+.tabliodb-note-node__header {
+  display: flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--note-accent) 24%, rgb(var(--tabliodb-border)));
+  padding: 0 9px 0 12px;
+}
+
+.tabliodb-note-node__title {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--note-accent) 58%, rgb(var(--tabliodb-ink)));
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabliodb-note-node__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tabliodb-note-node__action {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--note-accent) 54%, rgb(var(--tabliodb-border-strong)));
+  border-radius: 999px;
+  background: #ffffff;
+  color: rgb(var(--tabliodb-ink-muted));
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.tabliodb-note-node__action:hover {
+  background: var(--note-accent);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.tabliodb-note-node__textarea {
+  min-height: 0;
+  flex: 1;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: rgb(var(--tabliodb-ink));
+  cursor: text;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  outline: none;
+  padding: 9px 12px 12px;
+}
+
+.tabliodb-note-node__textarea[readonly] {
+  cursor: default;
+}

@@ -488,6 +488,61 @@ describe('schema-core diagram commands', () => {
     expect(deletedGroupModel.tables.orders.groupId).toBeUndefined();
   });
 
+  it('creates, edits, moves, and deletes diagram notes immutably', () => {
+    const model = createEmptyDiagramModel('Note command test');
+    const withNote = applyDiagramCommand(
+      model,
+      {
+        color: '#ffc800',
+        noteId: 'note-design',
+        position: { x: 80, y: 120 },
+        text: 'Normalize user email before import.',
+        type: 'note.create',
+        width: 260,
+      },
+      { now: fixedNow },
+    );
+    const editedNote = applyDiagramCommand(
+      withNote,
+      {
+        changes: {
+          text: 'Normalize user email before import and signup.',
+        },
+        noteId: 'note-design',
+        type: 'note.update',
+      },
+      { now: fixedNow },
+    );
+    const movedNote = applyDiagramCommand(
+      editedNote,
+      {
+        noteId: 'note-design',
+        position: { x: 240, y: 320 },
+        type: 'note.move',
+      },
+      { now: fixedNow },
+    );
+    const deletedNote = applyDiagramCommand(
+      movedNote,
+      {
+        noteId: 'note-design',
+        type: 'note.delete',
+      },
+      { now: fixedNow },
+    );
+
+    expect(model.notes['note-design']).toBeUndefined();
+    expect(withNote.notes['note-design']).toMatchObject({
+      color: '#ffc800',
+      position: { x: 80, y: 120 },
+      text: 'Normalize user email before import.',
+      width: 260,
+    });
+    expect(editedNote.notes['note-design'].text).toBe('Normalize user email before import and signup.');
+    expect(movedNote.notes['note-design'].position).toEqual({ x: 240, y: 320 });
+    expect(deletedNote.notes['note-design']).toBeUndefined();
+  });
+
   it('updates a column without mutating the previous model', () => {
     const model = applyDiagramCommand(
       createEmptyDiagramModel('Column update test'),
