@@ -8,6 +8,7 @@ export enum TabliodbCookie {
 export enum TabliodbHeader {
   ApiKey = 'x-api-key',
   CsrfToken = 'x-csrf-token',
+  RequestId = 'x-request-id',
   SessionToken = 'x-tabliodb-session-token',
   UserToken = 'x-tabliodb-user-token',
 }

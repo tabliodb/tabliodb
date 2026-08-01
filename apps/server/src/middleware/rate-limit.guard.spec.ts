@@ -18,12 +18,16 @@ class RateLimitedController {
 
 describe(RateLimitGuard.name, () => {
   let guard: RateLimitGuard;
+  let redisService: { incrementFixedWindow: ReturnType<typeof vi.fn> };
   let response: Pick<Response, 'setHeader'>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-01T12:00:00.000Z'));
-    guard = new RateLimitGuard(new Reflector());
+    redisService = {
+      incrementFixedWindow: vi.fn().mockResolvedValue(null),
+    };
+    guard = new RateLimitGuard(new Reflector(), redisService as never);
     response = {
       setHeader: vi.fn(),
     };
@@ -33,40 +37,57 @@ describe(RateLimitGuard.name, () => {
     vi.useRealTimers();
   });
 
-  it('does nothing when a route has no rate limit metadata', () => {
-    expect(guard.canActivate(createContext(RateLimitedController.prototype.open, createRequest('user-a')))).toBe(true);
+  it('does nothing when a route has no rate limit metadata', async () => {
+    await expect(
+      guard.canActivate(createContext(RateLimitedController.prototype.open, createRequest('user-a'))),
+    ).resolves.toBe(true);
+    expect(redisService.incrementFixedWindow).not.toHaveBeenCalled();
   });
 
-  it('allows requests until the configured user bucket is exhausted', () => {
+  it('allows requests until the configured user bucket is exhausted', async () => {
     const context = createContext(RateLimitedController.prototype.limited, createRequest('user-a'), response);
 
-    expect(guard.canActivate(context)).toBe(true);
-    expect(guard.canActivate(context)).toBe(true);
-    expect(() => guard.canActivate(context)).toThrow(HttpException);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(HttpException);
     expect(response.setHeader).toHaveBeenCalledWith('Retry-After', '60');
   });
 
-  it('resets the bucket after the configured window', () => {
+  it('resets the bucket after the configured window', async () => {
     const context = createContext(RateLimitedController.prototype.limited, createRequest('user-a'), response);
 
-    expect(guard.canActivate(context)).toBe(true);
-    expect(guard.canActivate(context)).toBe(true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
     vi.advanceTimersByTime(60_000);
 
     // The fixed window starts fresh after resetAt, so legitimate bursts do not stay blocked forever.
-    expect(guard.canActivate(context)).toBe(true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 
-  it('isolates buckets by authenticated user', () => {
+  it('isolates buckets by authenticated user', async () => {
     const userAContext = createContext(RateLimitedController.prototype.limited, createRequest('user-a'), response);
     const userBContext = createContext(RateLimitedController.prototype.limited, createRequest('user-b'), response);
 
-    expect(guard.canActivate(userAContext)).toBe(true);
-    expect(guard.canActivate(userAContext)).toBe(true);
-    expect(() => guard.canActivate(userAContext)).toThrow(HttpException);
+    await expect(guard.canActivate(userAContext)).resolves.toBe(true);
+    await expect(guard.canActivate(userAContext)).resolves.toBe(true);
+    await expect(guard.canActivate(userAContext)).rejects.toBeInstanceOf(HttpException);
 
     // Workspace users should not be throttled by another user's comment burst.
-    expect(guard.canActivate(userBContext)).toBe(true);
+    await expect(guard.canActivate(userBContext)).resolves.toBe(true);
+  });
+
+  it('uses Redis buckets when Redis is available', async () => {
+    const context = createContext(RateLimitedController.prototype.limited, createRequest('user-a'), response);
+
+    redisService.incrementFixedWindow
+      .mockResolvedValueOnce({ count: 1, resetAt: Date.now() + 60_000 })
+      .mockResolvedValueOnce({ count: 3, resetAt: Date.now() + 60_000 });
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(HttpException);
+
+    expect(redisService.incrementFixedWindow).toHaveBeenCalledWith('rate-limit:comments:write:user:user-a', 60_000);
+    expect(response.setHeader).toHaveBeenCalledWith('Retry-After', '60');
   });
 });
 

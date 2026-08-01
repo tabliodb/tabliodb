@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Response } from 'express';
+import { RedisService, type FixedWindowHit } from '../services/redis.service.js';
 import type { AuthRequest } from './auth.guard.js';
 
 const rateLimitMetadataKey = 'tabliodb:rate-limit';
@@ -26,9 +27,12 @@ export class RateLimitGuard implements CanActivate {
   private readonly buckets = new Map<string, RateLimitBucket>();
   private lastPrunedAt = 0;
 
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly redisService: RedisService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const options = this.reflector.getAllAndOverride<RateLimitOptions | undefined>(rateLimitMetadataKey, [
       context.getHandler(),
       context.getClass(),
@@ -41,36 +45,71 @@ export class RateLimitGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthRequest>();
     const response = context.switchToHttp().getResponse<Response>();
     const now = Date.now();
-    const bucketKey = `${options.key}:${getRequestIdentity(request)}`;
-    const bucket = this.buckets.get(bucketKey);
+    const bucketKey = `rate-limit:${options.key}:${getRequestIdentity(request)}`;
+    const redisHit = await this.redisService.incrementFixedWindow(bucketKey, options.windowMs);
 
-    this.pruneExpiredBuckets(now);
+    if (redisHit) {
+      return this.assertBucketAllowsRequest(redisHit, options.limit, response);
+    }
 
-    if (!bucket || now >= bucket.resetAt) {
-      this.buckets.set(bucketKey, {
+    // Redis menjadi store utama untuk deployment multi-instance; fallback memory menjaga dev tetap jalan saat Redis belum hidup.
+    return this.consumeMemoryBucket({
+      bucketKey,
+      limit: options.limit,
+      now,
+      response,
+      windowMs: options.windowMs,
+    });
+  }
+
+  private consumeMemoryBucket(options: {
+    bucketKey: string;
+    limit: number;
+    now: number;
+    response: Response;
+    windowMs: number;
+  }): boolean {
+    const bucket = this.buckets.get(options.bucketKey);
+
+    this.pruneExpiredBuckets(options.now);
+
+    if (!bucket || options.now >= bucket.resetAt) {
+      this.buckets.set(options.bucketKey, {
         count: 1,
-        resetAt: now + options.windowMs,
+        resetAt: options.now + options.windowMs,
       });
 
       return true;
     }
 
     if (bucket.count >= options.limit) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
-
-      response.setHeader('Retry-After', String(retryAfterSeconds));
-      throw new HttpException(
-        {
-          message: `Too many requests. Try again in ${retryAfterSeconds} seconds.`,
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
+      return this.assertBucketAllowsRequest(
+        { count: bucket.count + 1, resetAt: bucket.resetAt },
+        options.limit,
+        options.response,
       );
     }
 
     bucket.count += 1;
 
     return true;
+  }
+
+  private assertBucketAllowsRequest(hit: FixedWindowHit, limit: number, response: Response): boolean {
+    if (hit.count <= limit) {
+      return true;
+    }
+
+    const retryAfterSeconds = Math.max(1, Math.ceil((hit.resetAt - Date.now()) / 1000));
+
+    response.setHeader('Retry-After', String(retryAfterSeconds));
+    throw new HttpException(
+      {
+        message: `Too many requests. Try again in ${retryAfterSeconds} seconds.`,
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 
   private pruneExpiredBuckets(now: number) {

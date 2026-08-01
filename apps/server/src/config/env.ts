@@ -12,6 +12,9 @@ export type TabliodbEnv = {
   database: {
     url: string;
   };
+  redis: {
+    url?: string;
+  };
   realtime: {
     enabled: boolean;
     port: number;
@@ -77,10 +80,13 @@ export function loadEnv(): TabliodbEnv {
     database: {
       url: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/tabliodb',
     },
+    redis: {
+      url: process.env.REDIS_URL || undefined,
+    },
     realtime: {
       enabled: process.env.TABLIODB_REALTIME_ENABLED !== 'false',
       port: numberFromEnv('TABLIODB_REALTIME_PORT', 1234),
-      redisUrl: process.env.REDIS_URL || undefined,
+      redisUrl: process.env.TABLIODB_REALTIME_REDIS_URL || process.env.REDIS_URL || undefined,
     },
     auth: {
       cookieSecure: process.env.TABLIODB_COOKIE_SECURE === 'true',

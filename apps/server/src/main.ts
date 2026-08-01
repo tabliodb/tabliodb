@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import 'reflect-metadata';
 import { AppModule } from './app.module.js';
 import { ConfigRepository } from './repositories/config.repository.js';
+import { requestIdMiddleware } from './middleware/request-id.middleware.js';
 import { setupOpenApi } from './utils/openapi.js';
 
 async function bootstrap() {
@@ -12,6 +13,7 @@ async function bootstrap() {
   const { server } = config.getEnv();
 
   app.setGlobalPrefix('api');
+  app.use(requestIdMiddleware());
   app.use(cookieParser());
   app.use(helmet());
 

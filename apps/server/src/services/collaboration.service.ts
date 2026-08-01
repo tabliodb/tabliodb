@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { Database } from '@hocuspocus/extension-database';
+import { Redis as HocuspocusRedis } from '@hocuspocus/extension-redis';
 import { Server } from '@hocuspocus/server';
+import { Redis as RedisClient } from 'ioredis';
 import type { IncomingHttpHeaders } from 'node:http';
 import {
   Permission,
@@ -32,6 +34,42 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
     const { realtime } = this.configRepository.getEnv();
     if (!realtime.enabled) {
       return;
+    }
+
+    const realtimeRedisUrl = realtime.redisUrl;
+    const extensions = [
+      ...(realtimeRedisUrl
+        ? [
+            new HocuspocusRedis({
+              awaitInitialSyncTimeout: 1000,
+              createClient: () =>
+                new RedisClient(realtimeRedisUrl, {
+                  maxRetriesPerRequest: null,
+                }),
+              // Namespace khusus membuat channel/lock realtime tidak berbenturan dengan rate limit, cache, atau job key lain.
+              prefix: 'tabliodb:hocuspocus',
+            }),
+          ]
+        : []),
+      new Database({
+        fetch: async ({ documentName }) => {
+          const parsed = parseDiagramDocumentName(documentName);
+          return parsed ? this.collaborationRepository.loadDocument(parsed.diagramId) : null;
+        },
+        store: async ({ documentName, lastContext, state }) => {
+          const parsed = parseDiagramDocumentName(documentName);
+          const context = readCollaborationContext(lastContext);
+
+          if (parsed && context && !context.readOnly) {
+            // Realtime persistence only accepts updates from users that can update the diagram, mirroring REST snapshot permissions.
+            await this.collaborationRepository.storeDocument(parsed.diagramId, state);
+          }
+        },
+      }),
+    ];
+
+    if (realtimeRedisUrl) {
+      this.logger.log('Hocuspocus Redis pub/sub enabled for multi-instance realtime sync.');
     }
 
     this.server = new Server({
@@ -89,23 +127,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
           states.set(clientId, sanitizeAwarenessState(state, collaborationContext));
         }
       },
-      extensions: [
-        new Database({
-          fetch: async ({ documentName }) => {
-            const parsed = parseDiagramDocumentName(documentName);
-            return parsed ? this.collaborationRepository.loadDocument(parsed.diagramId) : null;
-          },
-          store: async ({ documentName, lastContext, state }) => {
-            const parsed = parseDiagramDocumentName(documentName);
-            const context = readCollaborationContext(lastContext);
-
-            if (parsed && context && !context.readOnly) {
-              // Realtime persistence only accepts updates from users that can update the diagram, mirroring REST snapshot permissions.
-              await this.collaborationRepository.storeDocument(parsed.diagramId, state);
-            }
-          },
-        }),
-      ],
+      extensions,
     });
 
     await this.server.listen();

@@ -31,6 +31,7 @@ Server default: `http://localhost:4000`
 Web default: `http://localhost:5173`  
 Realtime default: `ws://localhost:1234`  
 PostgreSQL Docker default: `localhost:5433`
+Redis Docker default: `localhost:6379`
 Database UI default: `http://localhost:8080`
 
 Seed development membuat akun dan workspace starter:
@@ -48,6 +49,8 @@ Login Adminer:
 - Username: `postgres`
 - Password: `postgres`
 - Database: `tabliodb`
+
+Redis dipakai untuk state ephemeral yang memang harus shared antar instance: rate limit REST dan Hocuspocus pub/sub realtime. Default development cukup memakai `REDIS_URL`; `TABLIODB_REALTIME_REDIS_URL` hanya perlu diisi jika realtime ingin diarahkan ke Redis terpisah.
 
 Di PowerShell, salin env dengan:
 

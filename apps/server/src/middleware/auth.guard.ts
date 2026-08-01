@@ -9,11 +9,11 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ApiBearerAuth, ApiCookieAuth, ApiSecurity } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { TabliodbHeader } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import { AuthService } from '../services/auth.service.js';
 
 const authMetadataKey = 'tabliodb:auth';
-const requestIdHeader = 'x-request-id';
 
 export type AuthenticatedOptions = {
   permission?: string | false;
@@ -67,7 +67,7 @@ export class AuthGuard implements CanActivate {
       request: {
         // Audit log metadata is attached once at the auth boundary so services can stay independent from Express.
         ipAddress: request.ip ?? null,
-        requestId: readHeader(request.headers[requestIdHeader]),
+        requestId: readHeader(request.headers[TabliodbHeader.RequestId]),
         userAgent: readHeader(request.headers['user-agent']),
       },
     };
