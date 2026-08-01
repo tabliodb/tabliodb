@@ -301,6 +301,9 @@ const commentTypingFreshnessMs = 8000;
 const commentTypingTimeoutMs = 6500;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
+const emptyCommentThreads: CommentThreadListItemDto[] = [];
+const emptyComments: CommentResponseDto[] = [];
+const emptyProjectMembers: ProjectMemberDto[] = [];
 
 const selectClassName =
   'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50';
@@ -520,6 +523,10 @@ export function EditorPage() {
 
   const handleCommentTypingChange = useCallback(
     (commentTyping: AwarenessState['commentTyping']) => {
+      if (areCommentTypingStatesEqual(latestCommentTypingRef.current, commentTyping)) {
+        return;
+      }
+
       latestCommentTypingRef.current = commentTyping;
       publishAwareness(latestCursorRef.current, commentTyping);
     },
@@ -568,7 +575,12 @@ export function EditorPage() {
       collaboration = createDiagramCollaboration({ diagramId: activeDiagram.id });
       collaborationRef.current = collaboration;
       unsubscribe = collaboration.subscribeAwareness((states) => {
-        setRemoteAwarenessStates(states.filter((state) => !state.isLocal));
+        const nextStates = states.filter((state) => !state.isLocal);
+
+        // Local awareness writes can still trigger the subscription; React state only changes when the visible remote payload changes.
+        setRemoteAwarenessStates((currentStates) =>
+          areRemoteAwarenessStatesEqual(currentStates, nextStates) ? currentStates : nextStates,
+        );
       });
       collaboration.setAwareness(
         createEditorAwarenessState(
@@ -1388,6 +1400,7 @@ function CommentsDialog({
   const [replyParentComment, setReplyParentComment] = useState<CommentResponseDto | null>(null);
   const [typingTick, setTypingTick] = useState(0);
   const typingStopTimeoutRef = useRef<number | null>(null);
+  const localCommentTypingRef = useRef<AwarenessState['commentTyping']>(undefined);
   const lastMarkedReadSignatureRef = useRef<string | null>(null);
   const handledOpenRequestIdRef = useRef<number | null>(null);
   const createForm = useForm<CommentFormState>({
@@ -1415,7 +1428,7 @@ function CommentsDialog({
     // Comments panel menjadi fetch boundary supaya editor awal tidak membawa traffic diskusi ketika user belum membukanya.
     enabled: open && threadQueryOptions.enabled !== false,
   });
-  const threads = threadsQuery.data?.items ?? [];
+  const threads = threadsQuery.data?.items ?? emptyCommentThreads;
   const activeThread = activeThreadId ? (threads.find((thread) => thread.id === activeThreadId) ?? null) : null;
   const threadCommentsQueryOptions = commentQueries.listThreadComments(activeThreadId ?? '', commentReplyPageQuery);
   const threadCommentsQuery = useQuery({
@@ -1434,7 +1447,7 @@ function CommentsDialog({
     // Mention suggestions memakai project members dan baru dibutuhkan ketika dialog komentar dibuka.
     enabled: open && mentionMembersQueryOptions.enabled !== false,
   });
-  const comments = threadCommentsQuery.data?.items ?? [];
+  const comments = threadCommentsQuery.data?.items ?? emptyComments;
   const commentTree = useMemo(() => createCommentTree(comments), [comments]);
   const visibleTypingPresences = useMemo(
     () => getFreshCommentTypingPresences(remoteTypingPresences, typingTick),
@@ -1445,7 +1458,7 @@ function CommentsDialog({
     [visibleTypingPresences],
   );
   const activeThreadTypingPresences = activeThreadId ? (typingPresencesByThreadId.get(activeThreadId) ?? []) : [];
-  const mentionUsers = mentionMembersQuery.data?.items ?? [];
+  const mentionUsers = mentionMembersQuery.data?.items ?? emptyProjectMembers;
   const createThreadMutation = useCreateCommentThreadMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
   const replyMutation = useReplyToCommentThreadMutation();
@@ -1772,13 +1785,17 @@ function CommentsDialog({
 
   function publishCommentTyping(threadId: string, parentCommentId: string | null) {
     clearTypingStopTimeout();
-    onTypingChange({
+    const nextTyping = {
       parentCommentId,
       threadId,
       updatedAt: Date.now(),
-    });
+    };
+
+    localCommentTypingRef.current = nextTyping;
+    onTypingChange(nextTyping);
     // Typing presence should disappear even if the user stops moving focus without submitting.
     typingStopTimeoutRef.current = window.setTimeout(() => {
+      localCommentTypingRef.current = undefined;
       onTypingChange(undefined);
       typingStopTimeoutRef.current = null;
     }, commentTypingTimeoutMs);
@@ -1786,6 +1803,12 @@ function CommentsDialog({
 
   function stopCommentTyping() {
     clearTypingStopTimeout();
+
+    if (localCommentTypingRef.current === undefined) {
+      return;
+    }
+
+    localCommentTypingRef.current = undefined;
     onTypingChange(undefined);
   }
 
@@ -5137,6 +5160,38 @@ function createEditorAwarenessState(
       name: currentUser.name,
     },
   };
+}
+
+function areCommentTypingStatesEqual(
+  left: AwarenessState['commentTyping'],
+  right: AwarenessState['commentTyping'],
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.parentCommentId === right.parentCommentId &&
+    left.threadId === right.threadId &&
+    left.updatedAt === right.updatedAt
+  );
+}
+
+function areRemoteAwarenessStatesEqual(left: RemoteAwarenessState[], right: RemoteAwarenessState[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((leftState, index) => {
+    const rightState = right[index];
+
+    if (!rightState || leftState.clientId !== rightState.clientId) {
+      return false;
+    }
+
+    // Awareness state berisi payload kecil; serial comparison menjaga callback realtime tetap idempotent tanpa membuat cache turunan baru.
+    return JSON.stringify(leftState.state) === JSON.stringify(rightState.state);
+  });
 }
 
 function createCollaboratorPresenceList(

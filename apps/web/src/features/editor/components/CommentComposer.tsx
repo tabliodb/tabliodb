@@ -21,7 +21,7 @@ import {
   KEY_DOWN_COMMAND,
   type LexicalEditor,
 } from 'lexical';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export type CommentMentionUser = Pick<ProjectMemberDto, 'avatarUrl' | 'cursorColor' | 'email' | 'name' | 'userId'>;
 
@@ -115,13 +115,24 @@ function CommentComposerChangePlugin({
 }: {
   onChange: (value: string, bodyJson: CommentLexicalDocumentDto) => void;
 }) {
+  const lastEmittedSignatureRef = useRef<string | null>(null);
+
   return (
     <OnChangePlugin
       ignoreSelectionChange
       onChange={(editorState) => {
         editorState.read(() => {
+          const bodyJson = editorState.toJSON() as CommentLexicalDocumentDto;
+          const plainText = $getRoot().getTextContent();
+          const nextSignature = `${plainText}\n${JSON.stringify(bodyJson)}`;
+
+          if (lastEmittedSignatureRef.current === nextSignature) {
+            return;
+          }
+
+          lastEmittedSignatureRef.current = nextSignature;
           // Server menyimpan Lexical JSON sebagai source of truth; plain text tetap dikirim untuk RHF validation dan typing UX.
-          onChange($getRoot().getTextContent(), editorState.toJSON() as CommentLexicalDocumentDto);
+          onChange(plainText, bodyJson);
         });
       }}
     />
@@ -197,14 +208,18 @@ function CommentMentionPlugin({
   const isOpen = !disabled && query !== null && suggestions.length > 0;
 
   useEffect(() => {
-    setSelectedIndex(0);
+    // Query yang sama tidak perlu mereset highlight suggestion karena itu bisa memicu render tambahan ketika Lexical sedang sinkronisasi form.
+    setSelectedIndex((index) => (index === 0 ? index : 0));
   }, [query]);
 
   useEffect(
     () =>
       editor.registerUpdateListener(({ editorState }) => {
         editorState.read(() => {
-          setQuery(readMentionQuery());
+          const nextQuery = readMentionQuery();
+
+          // Lexical update listener bisa terpanggil dari perubahan teks dan sinkronisasi eksternal; state hanya disentuh kalau query benar-benar berubah.
+          setQuery((currentQuery) => (currentQuery === nextQuery ? currentQuery : nextQuery));
         });
       }),
     [editor],
