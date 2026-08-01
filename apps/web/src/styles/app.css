@@ -166,6 +166,10 @@ body {
   color: rgb(var(--tabliodb-ink));
 }
 
+.tabliodb-table-node.is-collapsed .tabliodb-table-node__header {
+  border-bottom: 0;
+}
+
 .tabliodb-table-node__header-meta {
   display: inline-flex;
   align-items: center;

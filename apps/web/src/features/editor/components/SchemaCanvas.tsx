@@ -16,6 +16,7 @@ import {
   type DatabaseColumn,
   type DatabaseTable,
   type DiagramModel,
+  type TableDisplayMode,
 } from '@tabliodb/schema-core';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
@@ -82,7 +83,9 @@ type TableNodeData = {
   color: string;
   columnCommentMarkers: Record<string, CommentMarkerCount>;
   columns: DatabaseColumn[];
+  columnCountLabel: string;
   commentMarker: CommentMarkerCount;
+  displayMode: TableDisplayMode;
   readOnly: boolean;
   selected: boolean;
   tableId: string;
@@ -706,8 +709,10 @@ function createTableNodeMetadata(
   commentMarkerSummary: CommentMarkerSummary,
   readOnly: boolean,
 ): NodeMetadata {
-  const columns = getTableColumns(model, table.id);
-  const height = tableHeaderHeight + columns.length * tableColumnHeight + tablePaddingBottom;
+  const columns = getVisibleTableColumns(model, table);
+  const totalColumnCount = table.columnIds.length;
+  const displayMode = getEffectiveTableDisplayMode(table);
+  const height = tableHeaderHeight + columns.length * tableColumnHeight + (columns.length > 0 ? tablePaddingBottom : 0);
   const width = getTableWidth(table);
 
   return {
@@ -718,7 +723,10 @@ function createTableNodeMetadata(
         columns.map((column) => [column.id, getColumnCommentMarkerCount(commentMarkerSummary, column.id)]),
       ),
       columns,
+      columnCountLabel:
+        displayMode === 'all_columns' ? String(totalColumnCount) : `${columns.length}/${totalColumnCount}`,
       commentMarker: getTableCommentMarkerCount(commentMarkerSummary, table.id),
+      displayMode,
       readOnly,
       selected: table.id === selectedTableId,
       tableId: table.id,
@@ -892,7 +900,7 @@ function createColumnPorts(
   terminals: RelationshipTerminal[],
   readOnly: boolean,
 ): NodeMetadata['ports'] {
-  const columns = getTableColumns(model, table.id);
+  const visibleColumns = getVisibleTableColumns(model, table);
 
   return {
     groups: {
@@ -902,13 +910,11 @@ function createColumnPorts(
       },
     },
     items: terminals.flatMap((terminal) => {
-      const columnIndex = columns.findIndex((column) => column.id === terminal.columnId);
-
-      if (columnIndex < 0) {
-        return [];
-      }
-
-      const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2;
+      const columnIndex = visibleColumns.findIndex((column) => column.id === terminal.columnId);
+      const y =
+        columnIndex >= 0
+          ? tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2
+          : tableHeaderHeight / 2;
       // The vertical lane offset makes several relationships to the same id row visually distinct while keeping every endpoint attached to the real column.
       const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * relationshipEndpointLaneGap;
       const color = terminal.active ? relationshipActiveColor : relationshipNeutralColor;
@@ -940,6 +946,47 @@ function createColumnPorts(
 
 function getTableWidth(table: DatabaseTable): number {
   return Math.max(table.width, tableNodeWidth);
+}
+
+function getEffectiveTableDisplayMode(table: DatabaseTable): TableDisplayMode {
+  if (table.collapsed || table.displayMode === 'header_only') {
+    return 'header_only';
+  }
+
+  return table.displayMode ?? 'all_columns';
+}
+
+function getVisibleTableColumns(model: DiagramModel, table: DatabaseTable): DatabaseColumn[] {
+  const columns = getTableColumns(model, table.id);
+  const displayMode = getEffectiveTableDisplayMode(table);
+
+  if (displayMode === 'header_only') {
+    return [];
+  }
+
+  if (displayMode === 'pk_fk_only') {
+    const relationshipColumnIds = getRelationshipColumnIdsForTable(model, table.id);
+
+    return columns.filter((column) => column.primaryKey || relationshipColumnIds.has(column.id));
+  }
+
+  return columns;
+}
+
+function getRelationshipColumnIdsForTable(model: DiagramModel, tableId: string): Set<string> {
+  const columnIds = new Set<string>();
+
+  for (const relationship of Object.values(model.relationships)) {
+    if (relationship.sourceTableId === tableId) {
+      relationship.sourceColumnIds.forEach((columnId) => columnIds.add(columnId));
+    }
+
+    if (relationship.targetTableId === tableId) {
+      relationship.targetColumnIds.forEach((columnId) => columnIds.add(columnId));
+    }
+  }
+
+  return columnIds;
 }
 
 function registerRelationshipRouter(): void {
@@ -1097,6 +1144,8 @@ function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNod
 
   return (
     current.color === next.color &&
+    current.columnCountLabel === next.columnCountLabel &&
+    current.displayMode === next.displayMode &&
     current.readOnly === next.readOnly &&
     current.selected === next.selected &&
     current.tableId === next.tableId &&
@@ -1134,18 +1183,19 @@ function fitGraphContent(graph: Graph): void {
 function renderTableNode(data: TableNodeData): string {
   const rows = data.columns.map((column) => renderColumnRow(column, data.columnCommentMarkers[column.id])).join('');
   const commentMarker = renderCommentMarker(data.commentMarker, `table ${data.tableName}`, 'table', data.tableId);
+  const displayClass = data.columns.length === 0 ? 'is-collapsed' : '';
   const resizeHandle = data.readOnly
     ? ''
     : '<button aria-label="Resize table" class="tabliodb-table-node__resize-handle" type="button"></button>';
 
   return `
-    <div class="tabliodb-table-node ${data.selected ? 'is-selected' : ''}" data-tabliodb-table-id="${escapeHtml(data.tableId)}" style="--table-accent: ${escapeHtml(data.color)}">
+    <div class="tabliodb-table-node ${data.selected ? 'is-selected' : ''} ${displayClass}" data-tabliodb-table-id="${escapeHtml(data.tableId)}" style="--table-accent: ${escapeHtml(data.color)}">
       <div class="tabliodb-table-node__header">
         <span class="tabliodb-table-node__status"></span>
         <span class="tabliodb-table-node__name">${escapeHtml(data.tableName)}</span>
         <span class="tabliodb-table-node__header-meta">
           ${commentMarker}
-          <span class="tabliodb-table-node__count">${data.columns.length}</span>
+          <span class="tabliodb-table-node__count">${escapeHtml(data.columnCountLabel)}</span>
         </span>
       </div>
       <div class="tabliodb-table-node__columns">${rows}</div>

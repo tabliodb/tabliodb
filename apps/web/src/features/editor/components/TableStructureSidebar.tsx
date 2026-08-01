@@ -5,7 +5,9 @@ import {
   type ColumnTypeFamily,
   type ColumnTypeSpec,
   type DatabaseColumn,
+  type DatabaseTable,
   type DiagramModel,
+  type TableDisplayMode,
 } from '@tabliodb/schema-core';
 import {
   Button,
@@ -19,7 +21,18 @@ import {
   WithTooltip,
   cn,
 } from '@tabliodb/ui';
-import { Columns3, GripVertical, MoreHorizontal, PanelLeftClose, Plus, Trash2, X } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Columns3,
+  GripVertical,
+  KeyRound,
+  MoreHorizontal,
+  PanelLeftClose,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatColumnType } from '../diagram-model';
 import { getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
@@ -121,6 +134,40 @@ export function TableStructureSidebar({
     apply(applyDiagramCommand(model, { type: 'table.changeColor', tableId: table.id, color }));
   }
 
+  function handleDisplayModeChange(displayMode: Extract<TableDisplayMode, 'all_columns' | 'pk_fk_only'>) {
+    const currentDisplayMode = getSidebarDisplayMode(table);
+
+    if (displayMode === currentDisplayMode && !isTableDisplayCollapsed(table)) {
+      return;
+    }
+
+    apply(
+      applyDiagramCommand(model, {
+        changes: {
+          collapsed: false,
+          displayMode,
+        },
+        tableId: table.id,
+        type: 'table.updateDisplay',
+      }),
+    );
+  }
+
+  function handleCollapseToggle() {
+    const collapsed = isTableDisplayCollapsed(table);
+
+    apply(
+      applyDiagramCommand(model, {
+        changes: {
+          collapsed: !collapsed,
+          displayMode: collapsed && table.displayMode === 'header_only' ? 'all_columns' : table.displayMode,
+        },
+        tableId: table.id,
+        type: 'table.updateDisplay',
+      }),
+    );
+  }
+
   function handleAddColumn() {
     const columnId = createDiagramEntityId('column');
     const name = createUniqueColumnName(columns, 'new_column');
@@ -176,6 +223,9 @@ export function TableStructureSidebar({
     apply(applyDiagramCommand(model, { type: 'table.delete', tableId: table.id }));
     onClearTableSelection();
   }
+
+  const tableDisplayMode = getSidebarDisplayMode(table);
+  const tableCollapsed = isTableDisplayCollapsed(table);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -242,6 +292,42 @@ export function TableStructureSidebar({
               })}
             </div>
           </div>
+          <div className="mt-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Canvas view
+              </span>
+              <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                {tableCollapsed ? 'Collapsed' : tableDisplayMode === 'pk_fk_only' ? 'Keys only' : 'All columns'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <TableDisplayModeButton
+                active={!tableCollapsed && tableDisplayMode === 'all_columns'}
+                disabled={readOnly}
+                icon={Columns3}
+                label="All columns"
+                onClick={() => handleDisplayModeChange('all_columns')}
+              />
+              <TableDisplayModeButton
+                active={!tableCollapsed && tableDisplayMode === 'pk_fk_only'}
+                disabled={readOnly}
+                icon={KeyRound}
+                label="Keys only"
+                onClick={() => handleDisplayModeChange('pk_fk_only')}
+              />
+            </div>
+            <Button
+              className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
+              disabled={readOnly}
+              onClick={handleCollapseToggle}
+              size="sm"
+              variant="secondary"
+            >
+              {tableCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+              {tableCollapsed ? 'Expand table' : 'Collapse table'}
+            </Button>
+          </div>
           <Button
             className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-danger-shadow))]"
             disabled={readOnly}
@@ -289,6 +375,49 @@ export function TableStructureSidebar({
       </div>
     </div>
   );
+}
+
+function TableDisplayModeButton({
+  active,
+  disabled,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  disabled: boolean;
+  icon: typeof Columns3;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <WithTooltip content={label}>
+      <button
+        aria-label={label}
+        aria-pressed={active}
+        className={cn(
+          'inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-2 text-[11px] font-extrabold leading-none transition disabled:cursor-not-allowed disabled:opacity-60',
+          active
+            ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_1px_0_rgb(var(--tabliodb-active-chip-border))]'
+            : 'border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+        )}
+        disabled={disabled}
+        onClick={onClick}
+        type="button"
+      >
+        <Icon className="size-3.5" />
+        <span>{label}</span>
+      </button>
+    </WithTooltip>
+  );
+}
+
+function getSidebarDisplayMode(table: DatabaseTable): Extract<TableDisplayMode, 'all_columns' | 'pk_fk_only'> {
+  return table.displayMode === 'pk_fk_only' ? 'pk_fk_only' : 'all_columns';
+}
+
+function isTableDisplayCollapsed(table: DatabaseTable): boolean {
+  return table.collapsed === true || table.displayMode === 'header_only';
 }
 
 function ColumnEditorRow({

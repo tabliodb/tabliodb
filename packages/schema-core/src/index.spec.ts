@@ -394,6 +394,40 @@ describe('schema-core diagram commands', () => {
     expect(nextModel.tables.books.width).toBe(240);
   });
 
+  it('updates table display state without changing schema columns', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Table display test'),
+      {
+        columns: [
+          { id: 'books-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'books-title', name: 'title', nullable: false, type: { family: 'varchar', length: 220 } },
+        ],
+        name: 'books',
+        tableId: 'books',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const nextModel = applyDiagramCommand(
+      model,
+      {
+        changes: {
+          collapsed: true,
+          displayMode: 'pk_fk_only',
+        },
+        tableId: 'books',
+        type: 'table.updateDisplay',
+      },
+      { now: fixedNow },
+    );
+
+    expect(nextModel.tables.books.collapsed).toBe(true);
+    expect(nextModel.tables.books.displayMode).toBe('pk_fk_only');
+    expect(nextModel.tables.books.columnIds).toEqual(['books-id', 'books-title']);
+    expect(model.tables.books.collapsed).toBeUndefined();
+    expect(model.tables.books.displayMode).toBeUndefined();
+  });
+
   it('updates a column without mutating the previous model', () => {
     const model = applyDiagramCommand(
       createEmptyDiagramModel('Column update test'),

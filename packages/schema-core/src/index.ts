@@ -654,6 +654,12 @@ export type ChangeTableColorCommand = {
   color?: string;
 };
 
+export type UpdateTableDisplayCommand = {
+  type: 'table.updateDisplay';
+  tableId: string;
+  changes: Partial<Pick<DatabaseTable, 'collapsed' | 'displayMode'>>;
+};
+
 export type DeleteTableCommand = {
   type: 'table.delete';
   tableId: string;
@@ -794,6 +800,7 @@ export type DiagramCommand =
   | MoveTableCommand
   | ResizeTableCommand
   | ChangeTableColorCommand
+  | UpdateTableDisplayCommand
   | DeleteTableCommand
   | CreateColumnCommand
   | UpdateColumnCommand
@@ -838,6 +845,8 @@ export function applyDiagramCommand(
       return finalizeDiagramModel(resizeTable(model, command), options);
     case 'table.changeColor':
       return finalizeDiagramModel(patchTable(model, command.tableId, { color: command.color }), options);
+    case 'table.updateDisplay':
+      return finalizeDiagramModel(updateTableDisplay(model, command), options);
     case 'table.delete':
       return finalizeDiagramModel(deleteTable(model, command.tableId), options);
     case 'column.create':
@@ -1512,6 +1521,13 @@ function patchTable(model: DiagramModel, tableId: string, changes: Partial<Datab
 function resizeTable(model: DiagramModel, command: ResizeTableCommand): DiagramModel {
   return patchTable(model, command.tableId, {
     width: clampTableWidth(model, command.width),
+  });
+}
+
+function updateTableDisplay(model: DiagramModel, command: UpdateTableDisplayCommand): DiagramModel {
+  return patchTable(model, command.tableId, {
+    collapsed: command.changes.collapsed,
+    displayMode: command.changes.displayMode,
   });
 }
 
