@@ -86,33 +86,11 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
           requestParameters,
           token: String(token || ''),
         });
-        const role = await this.projectRepository.getDiagramRole(auth.user.id, parsed.diagramId);
-        if (!role) {
-          throw new UnauthorizedException('Diagram access denied');
-        }
-
-        this.assertApiKeyRealtimeScope(auth, Permission.DiagramRead);
-
-        const readOnly =
-          !isGranted({
-            current: permissionsForProjectRole(role.role),
-            requested: [Permission.DiagramUpdate],
-          }) || !this.isApiKeyGranted(auth, Permission.DiagramUpdate);
-        connectionConfig.readOnly = readOnly;
+        const context = await this.createConnectionContext(auth, parsed.diagramId);
+        connectionConfig.readOnly = context.readOnly;
 
         // The context becomes available to later Hocuspocus hooks and gives us a clean boundary for authorization.
-        return {
-          user: {
-            avatarUrl: auth.user.avatarUrl,
-            cursorColor: auth.user.cursorColor,
-            id: auth.user.id,
-            name: auth.user.name,
-          },
-          userId: auth.user.id,
-          diagramId: parsed.diagramId,
-          role: role.role,
-          readOnly,
-        } satisfies CollaborationContext;
+        return context;
       },
       beforeHandleAwareness: async ({ context, states }) => {
         const collaborationContext = readCollaborationContext(context);
@@ -197,6 +175,35 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
       headers: headersToIncomingHttpHeaders(options.requestHeaders),
       queryParams: urlSearchParamsToRecord(options.requestParameters),
     });
+  }
+
+  private async createConnectionContext(auth: AuthContext, diagramId: string): Promise<CollaborationContext> {
+    const role = await this.projectRepository.getDiagramRole(auth.user.id, diagramId);
+    if (!role) {
+      throw new UnauthorizedException('Diagram access denied');
+    }
+
+    this.assertApiKeyRealtimeScope(auth, Permission.DiagramRead);
+
+    const readOnly =
+      !isGranted({
+        current: permissionsForProjectRole(role.role),
+        requested: [Permission.DiagramUpdate],
+      }) || !this.isApiKeyGranted(auth, Permission.DiagramUpdate);
+
+    return {
+      user: {
+        avatarUrl: auth.user.avatarUrl,
+        cursorColor: auth.user.cursorColor,
+        id: auth.user.id,
+        name: auth.user.name,
+      },
+      userId: auth.user.id,
+      diagramId,
+      role: role.role,
+      // Hocuspocus enforces this flag before document mutations, so viewer/commenter/API keys without update scope cannot bypass REST permissions through WebSocket.
+      readOnly,
+    };
   }
 
   private assertApiKeyRealtimeScope(auth: AuthContext, permission: Permission): void {

@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { UnauthorizedException } from '@nestjs/common';
+import { Permission, ProjectRole } from '@tabliodb/shared';
+import type { AuthContext } from '../database.js';
 import { CollaborationService } from './collaboration.service.js';
 
 describe(CollaborationService.name, () => {
@@ -10,7 +13,9 @@ describe(CollaborationService.name, () => {
   const configRepository = {
     getEnv: vi.fn(),
   };
-  const projectRepository = {};
+  const projectRepository = {
+    getDiagramRole: vi.fn(),
+  };
 
   let service: CollaborationService;
 
@@ -67,4 +72,71 @@ describe(CollaborationService.name, () => {
     await vi.runOnlyPendingTimersAsync();
     expect(collaborationRepository.storeDocument).toHaveBeenCalledTimes(1);
   });
+
+  it('allows editor realtime connections to mutate the shared document', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+
+    const context = await service['createConnectionContext'](createAuthContext(), 'diagram-id');
+
+    expect(context).toMatchObject({
+      diagramId: 'diagram-id',
+      readOnly: false,
+      role: ProjectRole.Editor,
+      userId: 'user-id',
+    });
+  });
+
+  it('marks viewer realtime connections as read-only', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+
+    const context = await service['createConnectionContext'](createAuthContext(), 'diagram-id');
+
+    expect(context.readOnly).toBe(true);
+    expect(context.role).toBe(ProjectRole.Viewer);
+  });
+
+  it('keeps API key realtime connections read-only when the key lacks diagram update scope', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+
+    const context = await service['createConnectionContext'](
+      createAuthContext({
+        apiKey: {
+          id: 'api-key-id',
+          permissions: [Permission.DiagramRead],
+        },
+      }),
+      'diagram-id',
+    );
+
+    expect(context.readOnly).toBe(true);
+  });
+
+  it('rejects API key realtime connections when the key lacks diagram read scope', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+
+    await expect(
+      service['createConnectionContext'](
+        createAuthContext({
+          apiKey: {
+            id: 'api-key-id',
+            permissions: [],
+          },
+        }),
+        'diagram-id',
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
 });
+
+function createAuthContext(overrides: Partial<AuthContext> = {}): AuthContext {
+  return {
+    user: {
+      avatarUrl: null,
+      cursorColor: '#58cc02',
+      email: 'user@tabliodb.local',
+      id: 'user-id',
+      name: 'Tabliodb User',
+    },
+    ...overrides,
+  };
+}
