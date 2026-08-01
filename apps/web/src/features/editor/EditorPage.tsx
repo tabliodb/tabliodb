@@ -144,7 +144,11 @@ import { Controller, useForm, type Control, type FieldValues, type Path } from '
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
-import type { DiagramCollaboration, RemoteAwarenessState } from '@/features/collaboration/collaboration-client';
+import type {
+  DiagramCollaboration,
+  DiagramCollaborationStatus,
+  RemoteAwarenessState,
+} from '@/features/collaboration/collaboration-client';
 import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { authQueries, useLogoutMutation } from '@/resources/auth';
@@ -377,6 +381,11 @@ const emptyComments: CommentResponseDto[] = [];
 const emptyNotifications: NotificationInboxItemDto[] = [];
 const emptyProjectMembers: ProjectMemberDto[] = [];
 const emptySnapshots: SnapshotResponseDto[] = [];
+const idleCollaborationStatus: DiagramCollaborationStatus = {
+  connection: 'idle',
+  synced: false,
+  unsyncedChanges: 0,
+};
 
 type EditorModelHistory = {
   past: DiagramModel[];
@@ -411,6 +420,8 @@ export function EditorPage() {
   // Inspector starts collapsed so the editor opens with more canvas room while keeping the right rail discoverable.
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [remoteAwarenessStates, setRemoteAwarenessStates] = useState<RemoteAwarenessState[]>([]);
+  const [collaborationStatus, setCollaborationStatus] =
+    useState<DiagramCollaborationStatus>(idleCollaborationStatus);
   const collaborationRef = useRef<DiagramCollaboration | null>(null);
   const latestCursorRef = useRef<AwarenessState['cursor']>(undefined);
   const latestCommentTypingRef = useRef<AwarenessState['commentTyping']>(undefined);
@@ -855,13 +866,15 @@ export function EditorPage() {
   useEffect(() => {
     if (!activeDiagram || !currentUser) {
       setRemoteAwarenessStates([]);
+      setCollaborationStatus(idleCollaborationStatus);
       latestCommentTypingRef.current = undefined;
       return;
     }
 
     let disposed = false;
     let collaboration: DiagramCollaboration | null = null;
-    let unsubscribe: () => void = () => undefined;
+    let unsubscribeAwareness: () => void = () => undefined;
+    let unsubscribeStatus: () => void = () => undefined;
 
     void import('@/features/collaboration/collaboration-client').then(({ createDiagramCollaboration }) => {
       if (disposed) {
@@ -871,7 +884,11 @@ export function EditorPage() {
       // Hocuspocus/Yjs is loaded only after a real diagram is active so the editor route chunk stays focused on first paint.
       collaboration = createDiagramCollaboration({ diagramId: activeDiagram.id });
       collaborationRef.current = collaboration;
-      unsubscribe = collaboration.subscribeAwareness((states) => {
+      unsubscribeStatus = collaboration.subscribeStatus((status) => {
+        // Status changes are tiny and user-facing, so the editor owns this state instead of hiding reconnects in the provider wrapper.
+        setCollaborationStatus(status);
+      });
+      unsubscribeAwareness = collaboration.subscribeAwareness((states) => {
         const nextStates = states.filter((state) => !state.isLocal);
 
         // Local awareness writes can still trigger the subscription; React state only changes when the visible remote payload changes.
@@ -892,7 +909,8 @@ export function EditorPage() {
 
     return () => {
       disposed = true;
-      unsubscribe();
+      unsubscribeAwareness();
+      unsubscribeStatus();
       collaboration?.destroy();
 
       if (collaborationRef.current === collaboration) {
@@ -900,6 +918,7 @@ export function EditorPage() {
       }
 
       setRemoteAwarenessStates([]);
+      setCollaborationStatus(idleCollaborationStatus);
       latestCommentTypingRef.current = undefined;
     };
   }, [activeDiagram?.id, currentUser?.avatarUrl, currentUser?.cursorColor, currentUser?.id, currentUser?.name]);
@@ -1351,7 +1370,7 @@ export function EditorPage() {
               onClick={handleRedoModelChange}
             />
           </div>
-          <CollaborationPresence collaborators={collaborators} />
+          <CollaborationPresence collaborators={collaborators} status={collaborationStatus} />
           <div className="relative">
             <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
             {openCommentThreadCount > 0 ? (
@@ -6715,37 +6734,125 @@ type CommentTypingPresence = {
   user: AwarenessState['user'];
 };
 
-function CollaborationPresence({ collaborators }: { collaborators: CollaboratorPresence[] }) {
+function CollaborationPresence({
+  collaborators,
+  status,
+}: {
+  collaborators: CollaboratorPresence[];
+  status: DiagramCollaborationStatus;
+}) {
   const visibleCollaborators = collaborators.slice(0, 4);
   const overflowCount = Math.max(0, collaborators.length - visibleCollaborators.length);
+  const statusMeta = getCollaborationStatusMeta(status, collaborators.length);
 
   return (
-    <div className="hidden items-center gap-2 rounded-full border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] px-2 py-1 sm:flex">
-      <span className="relative grid size-2.5 place-items-center">
-        <span className="absolute inline-flex size-2.5 animate-ping rounded-full bg-[rgb(var(--tabliodb-primary))] opacity-40" />
-        <span className="relative inline-flex size-2.5 rounded-full bg-[rgb(var(--tabliodb-primary))]" />
-      </span>
-      <span className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-        {collaborators.length > 0 ? `${collaborators.length} live` : 'Live'}
-      </span>
-      {visibleCollaborators.length > 0 ? (
-        <div className="flex -space-x-2">
-          {visibleCollaborators.map((collaborator) => (
-            <UserAvatar
-              className="size-7 rounded-[11px] bg-white text-[10px] ring-2 ring-white"
-              key={collaborator.user.id}
-              user={collaborator.user}
+    <WithTooltip content={statusMeta.tooltip}>
+      <div
+        className={cn(
+          'hidden h-8 items-center gap-2 rounded-full border px-2 py-1 transition sm:flex',
+          statusMeta.containerClassName,
+        )}
+      >
+        <span className="relative grid size-2.5 place-items-center">
+          {statusMeta.pulse ? (
+            <span
+              className={cn(
+                'absolute inline-flex size-2.5 animate-ping rounded-full opacity-40',
+                statusMeta.dotClassName,
+              )}
             />
-          ))}
-          {overflowCount > 0 ? (
-            <div className="grid size-7 place-items-center rounded-[11px] border-2 border-white bg-[rgb(var(--tabliodb-ink))] text-[10px] font-extrabold text-white ring-2 ring-white">
-              +{overflowCount}
-            </div>
           ) : null}
-        </div>
-      ) : null}
-    </div>
+          <span className={cn('relative inline-flex size-2.5 rounded-full', statusMeta.dotClassName)} />
+        </span>
+        <span className="max-w-24 truncate text-xs font-extrabold">{statusMeta.label}</span>
+        {visibleCollaborators.length > 0 ? (
+          <div className="flex -space-x-2">
+            {visibleCollaborators.map((collaborator) => (
+              <UserAvatar
+                className="size-7 rounded-[11px] bg-white text-[10px] ring-2 ring-white"
+                key={collaborator.user.id}
+                user={collaborator.user}
+              />
+            ))}
+            {overflowCount > 0 ? (
+              <div className="grid size-7 place-items-center rounded-[11px] border-2 border-white bg-[rgb(var(--tabliodb-ink))] text-[10px] font-extrabold text-white ring-2 ring-white">
+                +{overflowCount}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </WithTooltip>
   );
+}
+
+function getCollaborationStatusMeta(status: DiagramCollaborationStatus, collaboratorCount: number) {
+  const collaboratorLabel =
+    collaboratorCount === 0 ? 'No other users are viewing this diagram.' : `${collaboratorCount} other user(s) live.`;
+
+  if (status.connection === 'authentication_failed') {
+    return {
+      containerClassName:
+        'border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] text-[rgb(var(--tabliodb-danger-text))]',
+      dotClassName: 'bg-[rgb(var(--tabliodb-danger))]',
+      label: 'Auth failed',
+      pulse: false,
+      tooltip: status.message ?? 'Realtime authentication failed. Refresh after signing in again.',
+    };
+  }
+
+  if (status.connection === 'connecting') {
+    return {
+      containerClassName:
+        'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+      dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
+      label: 'Connecting',
+      pulse: true,
+      tooltip: 'Connecting to the realtime collaboration room.',
+    };
+  }
+
+  if (status.connection === 'disconnected') {
+    return {
+      containerClassName:
+        'border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] text-[rgb(var(--tabliodb-gold-text))]',
+      dotClassName: 'bg-[rgb(var(--tabliodb-gold))]',
+      label: 'Reconnecting',
+      pulse: true,
+      tooltip: 'Realtime is disconnected and will reconnect automatically.',
+    };
+  }
+
+  if (status.connection === 'connected' && (!status.synced || status.unsyncedChanges > 0)) {
+    return {
+      containerClassName:
+        'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+      dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
+      label: 'Syncing',
+      pulse: true,
+      tooltip: `Realtime is connected and syncing ${status.unsyncedChanges} pending change(s). ${collaboratorLabel}`,
+    };
+  }
+
+  if (status.connection === 'connected') {
+    return {
+      containerClassName:
+        'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))]',
+      dotClassName: 'bg-[rgb(var(--tabliodb-primary))]',
+      label: collaboratorCount > 0 ? `${collaboratorCount} live` : 'Live',
+      pulse: collaboratorCount > 0,
+      tooltip: `Realtime is connected and synced. ${collaboratorLabel}`,
+    };
+  }
+
+  return {
+    containerClassName:
+      'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink-muted))]',
+    dotClassName: 'bg-[rgb(var(--tabliodb-ink-subtle))]',
+    label: 'Realtime',
+    pulse: false,
+    tooltip: 'Realtime collaboration is preparing.',
+  };
 }
 
 function UserAvatar({ className, user }: { className?: string; user: AvatarIdentity }) {

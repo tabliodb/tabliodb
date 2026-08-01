@@ -16,6 +16,22 @@ export type RemoteAwarenessState = {
 
 export type AwarenessSubscriber = (states: RemoteAwarenessState[]) => void;
 
+export type DiagramCollaborationConnection =
+  | 'authentication_failed'
+  | 'connected'
+  | 'connecting'
+  | 'disconnected'
+  | 'idle';
+
+export type DiagramCollaborationStatus = {
+  connection: DiagramCollaborationConnection;
+  message?: string;
+  synced: boolean;
+  unsyncedChanges: number;
+};
+
+export type DiagramCollaborationStatusSubscriber = (status: DiagramCollaborationStatus) => void;
+
 export function createDiagramCollaboration(options: DiagramCollaborationOptions) {
   const document = new Y.Doc();
   const provider = new HocuspocusProvider({
@@ -25,6 +41,55 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     token: options.token ?? null,
     url: options.url ?? getDefaultRealtimeUrl(),
   });
+  const statusSubscribers = new Set<DiagramCollaborationStatusSubscriber>();
+  let currentStatus = readProviderStatus(provider);
+
+  function emitStatus(nextStatus: DiagramCollaborationStatus) {
+    currentStatus = nextStatus;
+    statusSubscribers.forEach((subscriber) => subscriber(currentStatus));
+  }
+
+  const handleProviderStatus = (event: { status?: unknown }) => {
+    // Hocuspocus exposes raw websocket strings; the app wrapper maps them once so UI components stay library-agnostic.
+    emitStatus({
+      ...currentStatus,
+      connection: parseConnectionStatus(event.status),
+      message: undefined,
+      synced: provider.synced,
+      unsyncedChanges: provider.unsyncedChanges,
+    });
+  };
+
+  const handleProviderSynced = (event: { state?: unknown }) => {
+    emitStatus({
+      ...currentStatus,
+      message: undefined,
+      synced: event.state === true,
+      unsyncedChanges: provider.unsyncedChanges,
+    });
+  };
+
+  const handleUnsyncedChanges = (event: { number?: unknown }) => {
+    emitStatus({
+      ...currentStatus,
+      synced: provider.synced,
+      unsyncedChanges: typeof event.number === 'number' ? event.number : provider.unsyncedChanges,
+    });
+  };
+
+  const handleAuthenticationFailed = (event: { reason?: unknown }) => {
+    emitStatus({
+      ...currentStatus,
+      connection: 'authentication_failed',
+      message: typeof event.reason === 'string' ? event.reason : 'Realtime authentication failed.',
+      synced: false,
+    });
+  };
+
+  provider.on('status', handleProviderStatus);
+  provider.on('synced', handleProviderSynced);
+  provider.on('unsyncedChanges', handleUnsyncedChanges);
+  provider.on('authenticationFailed', handleAuthenticationFailed);
 
   return {
     document,
@@ -51,7 +116,20 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
         awareness.off('update', emit);
       };
     },
+    subscribeStatus(subscriber: DiagramCollaborationStatusSubscriber) {
+      statusSubscribers.add(subscriber);
+      subscriber(currentStatus);
+
+      return () => {
+        statusSubscribers.delete(subscriber);
+      };
+    },
     destroy() {
+      provider.off('status', handleProviderStatus);
+      provider.off('synced', handleProviderSynced);
+      provider.off('unsyncedChanges', handleUnsyncedChanges);
+      provider.off('authenticationFailed', handleAuthenticationFailed);
+      statusSubscribers.clear();
       provider.destroy();
       document.destroy();
     },
@@ -118,6 +196,7 @@ function parseAwarenessState(value: unknown): AwarenessState | null {
   }
 
   return {
+    commentTyping: readCommentTyping(state.commentTyping),
     cursor: readCursor(state.cursor),
     selection: readSelection(state.selection),
     user: {
@@ -172,6 +251,29 @@ function readSelection(value: unknown): AwarenessState['selection'] {
   return undefined;
 }
 
+function readCommentTyping(value: unknown): AwarenessState['commentTyping'] {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const typing = value as Partial<NonNullable<AwarenessState['commentTyping']>>;
+
+  if (
+    typeof typing.threadId !== 'string' ||
+    !(typing.parentCommentId === null || typeof typing.parentCommentId === 'string') ||
+    typeof typing.updatedAt !== 'number' ||
+    !Number.isFinite(typing.updatedAt)
+  ) {
+    return undefined;
+  }
+
+  return {
+    parentCommentId: typing.parentCommentId,
+    threadId: typing.threadId,
+    updatedAt: typing.updatedAt,
+  };
+}
+
 function readViewport(value: unknown): AwarenessState['viewport'] {
   if (!value || typeof value !== 'object') {
     return undefined;
@@ -182,4 +284,20 @@ function readViewport(value: unknown): AwarenessState['viewport'] {
   return typeof viewport.x === 'number' && typeof viewport.y === 'number' && typeof viewport.zoom === 'number'
     ? { x: viewport.x, y: viewport.y, zoom: viewport.zoom }
     : undefined;
+}
+
+function readProviderStatus(provider: HocuspocusProvider): DiagramCollaborationStatus {
+  return {
+    connection: parseConnectionStatus(provider.configuration.websocketProvider.status),
+    synced: provider.synced,
+    unsyncedChanges: provider.unsyncedChanges,
+  };
+}
+
+function parseConnectionStatus(value: unknown): DiagramCollaborationConnection {
+  if (value === 'connected' || value === 'connecting' || value === 'disconnected') {
+    return value;
+  }
+
+  return 'idle';
 }
