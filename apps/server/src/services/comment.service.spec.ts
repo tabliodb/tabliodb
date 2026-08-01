@@ -29,6 +29,12 @@ const thread = {
   updatedAt: new Date('2026-07-30T08:00:00.000Z'),
 };
 
+const scopedThread = {
+  ...thread,
+  organizationId: 'organization-id',
+  projectId: 'project-id',
+};
+
 const comment = {
   bodyFormat: 'lexical' as const,
   bodyJson: createPlainTextCommentLexicalDocument('Please review this table.'),
@@ -60,6 +66,7 @@ describe(CommentService.name, () => {
     getMentionableUsersForDiagram: vi.fn(),
     getThreadReadState: vi.fn(),
     getThreadById: vi.fn(),
+    getThreadWithScope: vi.fn(),
     getThreads: vi.fn(),
     markThreadRead: vi.fn(),
     resolveThread: vi.fn(),
@@ -147,7 +154,9 @@ describe(CommentService.name, () => {
       deletedAt: null,
       diagramId: 'diagram-id',
       id: 'comment-id',
+      organizationId: 'organization-id',
       parentCommentId: null,
+      projectId: 'project-id',
       threadId: 'thread-id',
     });
     diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
@@ -176,6 +185,22 @@ describe(CommentService.name, () => {
       commentId: 'comment-id',
       mentionUserIds: [],
     });
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.CommentEdited,
+        actorId: 'user-id',
+        diagramId: 'diagram-id',
+        entityId: 'comment-id',
+        entityType: 'comment',
+        metadata: {
+          mentionedUserCount: 0,
+          parentCommentId: null,
+          threadId: 'thread-id',
+        },
+        organizationId: 'organization-id',
+        projectId: 'project-id',
+      }),
+    );
   });
 
   it('rejects comment edits from users other than the author', async () => {
@@ -632,7 +657,7 @@ describe(CommentService.name, () => {
       status: 'resolved' as const,
       updatedAt: new Date('2026-07-30T08:02:00.000Z'),
     };
-    commentRepository.getThreadById.mockResolvedValue(thread);
+    commentRepository.getThreadWithScope.mockResolvedValue(scopedThread);
     diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
     commentRepository.resolveThread.mockResolvedValue(resolvedThread);
 
@@ -644,10 +669,69 @@ describe(CommentService.name, () => {
     });
 
     expect(commentRepository.resolveThread).toHaveBeenCalledWith('thread-id', 'user-id');
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.CommentThreadResolved,
+        actorId: 'user-id',
+        diagramId: 'diagram-id',
+        entityId: 'thread-id',
+        entityType: 'comment_thread',
+        metadata: {
+          previousStatus: 'open',
+          targetId: 'table-id',
+          targetType: 'table',
+        },
+        organizationId: 'organization-id',
+        projectId: 'project-id',
+      }),
+    );
+  });
+
+  it('reopens a resolved thread through diagram comment permission', async () => {
+    const resolvedScopedThread = {
+      ...scopedThread,
+      resolvedAt: new Date('2026-07-30T08:02:00.000Z'),
+      resolvedById: 'user-id',
+      status: 'resolved' as const,
+      updatedAt: new Date('2026-07-30T08:02:00.000Z'),
+    };
+    const reopenedThread = {
+      ...thread,
+      status: 'open' as const,
+      updatedAt: new Date('2026-07-30T08:03:00.000Z'),
+    };
+    commentRepository.getThreadWithScope.mockResolvedValue(resolvedScopedThread);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.unresolveThread.mockResolvedValue(reopenedThread);
+
+    await expect(service.unresolveThread(auth, 'thread-id')).resolves.toMatchObject({
+      id: 'thread-id',
+      resolvedAt: null,
+      resolvedById: null,
+      status: 'open',
+    });
+
+    expect(commentRepository.unresolveThread).toHaveBeenCalledWith('thread-id');
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.CommentThreadReopened,
+        actorId: 'user-id',
+        diagramId: 'diagram-id',
+        entityId: 'thread-id',
+        entityType: 'comment_thread',
+        metadata: {
+          previousStatus: 'resolved',
+          targetId: 'table-id',
+          targetType: 'table',
+        },
+        organizationId: 'organization-id',
+        projectId: 'project-id',
+      }),
+    );
   });
 
   it('returns not found before checking diagram permission for missing threads', async () => {
-    commentRepository.getThreadById.mockResolvedValue(undefined);
+    commentRepository.getThreadWithScope.mockResolvedValue(undefined);
 
     await expect(service.resolveThread(auth, 'missing-thread-id')).rejects.toBeInstanceOf(NotFoundException);
 

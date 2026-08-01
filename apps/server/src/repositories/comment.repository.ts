@@ -116,6 +116,29 @@ export class CommentRepository {
     return this.db.selectFrom('comment_threads').selectAll().where('id', '=', threadId).executeTakeFirst();
   }
 
+  getThreadWithScope(threadId: string) {
+    return this.db
+      .selectFrom('comment_threads')
+      .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
+      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .select([
+        'comment_threads.id',
+        'comment_threads.diagramId',
+        'comment_threads.targetType',
+        'comment_threads.targetId',
+        'comment_threads.status',
+        'comment_threads.resolvedById',
+        'comment_threads.resolvedAt',
+        'comment_threads.createdById',
+        'comment_threads.createdAt',
+        'comment_threads.updatedAt',
+        'diagrams.projectId',
+        'projects.organizationId',
+      ])
+      .where('comment_threads.id', '=', threadId)
+      .executeTakeFirst();
+  }
+
   getCommentInThread(commentId: string, threadId: string) {
     return this.db
       .selectFrom('comments')

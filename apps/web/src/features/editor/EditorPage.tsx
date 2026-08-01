@@ -4902,6 +4902,18 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     return readMetadataBoolean(auditLog.metadata, 'deletedByAuthor') ? 'Deleted own comment' : 'Moderated a comment';
   }
 
+  if (auditLog.action === 'comment.edited') {
+    return 'Edited a comment';
+  }
+
+  if (auditLog.action === 'comment_thread.resolved') {
+    return 'Resolved a comment thread';
+  }
+
+  if (auditLog.action === 'comment_thread.reopened') {
+    return 'Reopened a comment thread';
+  }
+
   if (auditLog.action === 'user.disabled') {
     return `Disabled user ${readMetadataString(auditLog.metadata, 'email', 'user')}`;
   }
@@ -4928,6 +4940,9 @@ function formatAuditLogAction(action: string): string {
       'organization.member_removed': 'Removed',
       'organization.member_role_updated': 'Role',
       'comment.deleted': 'Comment',
+      'comment.edited': 'Comment',
+      'comment_thread.reopened': 'Reopened',
+      'comment_thread.resolved': 'Resolved',
       'project.archived': 'Archived',
       'project.created': 'Created',
       'project.member_added': 'Member',
@@ -4942,7 +4957,12 @@ function formatAuditLogAction(action: string): string {
 }
 
 function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow' {
-  if (action === 'project.created' || action === 'project.member_added' || action === 'user.enabled') {
+  if (
+    action === 'comment_thread.resolved' ||
+    action === 'project.created' ||
+    action === 'project.member_added' ||
+    action === 'user.enabled'
+  ) {
     return 'green';
   }
 
@@ -4959,6 +4979,8 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
   if (
     action === 'organization.member_role_updated' ||
     action === 'organization.settings_updated' ||
+    action === 'comment.edited' ||
+    action === 'comment_thread.reopened' ||
     action === 'project.member_role_updated' ||
     action === 'user.password_reset' ||
     action === 'user.sessions_revoked'

@@ -25,6 +25,7 @@ import { DiagramService } from './diagram.service.js';
 type CommentTargetType =
   'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
 type CommentThreadRow = Selectable<CommentThreadTable>;
+type CommentThreadScopedRow = NonNullable<Awaited<ReturnType<CommentRepository['getThreadWithScope']>>>;
 type CommentResponseRow = NonNullable<Awaited<ReturnType<CommentRepository['getCommentForResponse']>>>;
 
 @Injectable()
@@ -207,6 +208,24 @@ export class CommentService {
       commentId: comment.id,
       mentionUserIds,
     });
+    await this.auditLogRepository.create({
+      action: AuditAction.CommentEdited,
+      actorId: auth.user.id,
+      diagramId: comment.diagramId,
+      entityId: comment.id,
+      entityType: 'comment',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: {
+        // Audit log tidak menyimpan body comment supaya perubahan sensitif tidak ikut tersebar ke workspace activity.
+        mentionedUserCount: mentionUserIds.length,
+        parentCommentId: comment.parentCommentId,
+        threadId: comment.threadId,
+      },
+      organizationId: comment.organizationId,
+      projectId: comment.projectId,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
 
     return {
       author: this.serializeAuthor(auth.user),
@@ -270,15 +289,19 @@ export class CommentService {
   }
 
   async resolveThread(auth: AuthContext, threadId: string) {
-    const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramComment);
+    const thread = await this.requireCommentThreadWithScope(auth, threadId, Permission.DiagramComment);
     const updatedThread = await this.commentRepository.resolveThread(thread.id, auth.user.id);
+
+    await this.recordThreadAudit(auth, thread, AuditAction.CommentThreadResolved);
 
     return this.serializeThread(updatedThread);
   }
 
   async unresolveThread(auth: AuthContext, threadId: string) {
-    const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramComment);
+    const thread = await this.requireCommentThreadWithScope(auth, threadId, Permission.DiagramComment);
     const updatedThread = await this.commentRepository.unresolveThread(thread.id);
+
+    await this.recordThreadAudit(auth, thread, AuditAction.CommentThreadReopened);
 
     return this.serializeThread(updatedThread);
   }
@@ -294,6 +317,39 @@ export class CommentService {
     await this.diagramService.requireDiagram(auth, thread.diagramId, permission);
 
     return thread;
+  }
+
+  private async requireCommentThreadWithScope(auth: AuthContext, threadId: string, permission: Permission) {
+    const thread = await this.commentRepository.getThreadWithScope(threadId);
+
+    if (!thread) {
+      throw new NotFoundException('Comment thread was not found.');
+    }
+
+    // Audit entries need project/workspace scope, so this variant returns thread scope while preserving the same permission path.
+    await this.diagramService.requireDiagram(auth, thread.diagramId, permission);
+
+    return thread;
+  }
+
+  private recordThreadAudit(auth: AuthContext, thread: CommentThreadScopedRow, action: AuditAction) {
+    return this.auditLogRepository.create({
+      action,
+      actorId: auth.user.id,
+      diagramId: thread.diagramId,
+      entityId: thread.id,
+      entityType: 'comment_thread',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: {
+        previousStatus: thread.status,
+        targetId: thread.targetId,
+        targetType: thread.targetType,
+      },
+      organizationId: thread.organizationId,
+      projectId: thread.projectId,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
   }
 
   private serializeThread(thread: CommentThreadRow) {
