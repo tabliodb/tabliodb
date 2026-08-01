@@ -175,6 +175,7 @@ import {
 } from '@/resources/review-signals';
 import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
 import { createEmptyCommentFormBody } from './comment-body';
+import { CommentBody } from './components/CommentBody';
 import { SchemaCanvas, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
@@ -2416,14 +2417,7 @@ function ThreadCommentItem({
             inlineEditComposer
           ) : (
             <>
-              <p
-                className={cn(
-                  'mt-1 whitespace-pre-wrap wrap-break-word text-[13px] font-semibold leading-6',
-                  isDeleted ? 'italic text-[rgb(var(--tabliodb-ink-muted))]' : 'text-[rgb(var(--tabliodb-ink))]',
-                )}
-              >
-                {isDeleted ? 'This comment was deleted.' : comment.body}
-              </p>
+              <CommentBody bodyJson={comment.bodyJson} deleted={isDeleted} fallbackText={comment.body} />
               <div className="mt-1.5 flex flex-wrap items-center gap-3">
                 {!isDeleted ? (
                   <button
