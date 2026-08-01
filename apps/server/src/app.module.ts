@@ -5,6 +5,7 @@ import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { loadEnv } from './config/env.js';
 import { controllers } from './controllers/index.js';
 import { AuthGuard } from './middleware/auth.guard.js';
+import { CsrfGuard } from './middleware/csrf.guard.js';
 import { GlobalExceptionFilter } from './middleware/global-exception.filter.js';
 import { LoggingInterceptor } from './middleware/logging.interceptor.js';
 import { PermissionGuard } from './middleware/permission.guard.js';
@@ -23,6 +24,7 @@ const env = loadEnv();
     ...services,
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },

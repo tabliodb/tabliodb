@@ -1,11 +1,13 @@
 export enum TabliodbCookie {
   AccessToken = 'tabliodb_access_token',
   AuthType = 'tabliodb_auth_type',
+  CsrfToken = 'tabliodb_csrf_token',
   IsAuthenticated = 'tabliodb_is_authenticated',
 }
 
 export enum TabliodbHeader {
   ApiKey = 'x-api-key',
+  CsrfToken = 'x-csrf-token',
   SessionToken = 'x-tabliodb-session-token',
   UserToken = 'x-tabliodb-user-token',
 }

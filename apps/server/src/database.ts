@@ -10,6 +10,7 @@ export type AuthUser = {
 
 export type AuthSession = {
   id: string;
+  source: 'bearer' | 'cookie' | 'header' | 'query';
 };
 
 export type AuthApiKey = {

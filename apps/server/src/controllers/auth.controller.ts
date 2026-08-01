@@ -35,7 +35,7 @@ import { RequirePermission } from '../middleware/permission.guard.js';
 import { AuthService } from '../services/auth.service.js';
 import { AVATAR_MAX_BYTES, type UploadedAvatarFile } from '../services/file.service.js';
 import { AuthType } from '../constants.js';
-import { clearAuthCookies, respondWithAuthCookies } from '../utils/response.js';
+import { clearAuthCookies, respondWithAuthCookies, setCsrfCookie } from '../utils/response.js';
 import type { AuthContext } from '../database.js';
 
 @ApiTags('auth')
@@ -47,7 +47,12 @@ export class AuthController {
   @Authenticated()
   @ApiOperation({ operationId: 'getCurrentUser' })
   @ZodResponse({ type: CurrentUserResponseDto })
-  getCurrentUser(@Auth() auth: AuthContext): CurrentUserResponseDto {
+  getCurrentUser(@Res({ passthrough: true }) res: Response, @Auth() auth: AuthContext): CurrentUserResponseDto {
+    if (auth.session?.source === 'cookie') {
+      // Existing cookie sessions from older dev builds receive a CSRF token during the normal bootstrap /auth/me probe.
+      setCsrfCookie(res, { secure: this.service.getCookieSecureDefault() });
+    }
+
     return auth.user;
   }
 

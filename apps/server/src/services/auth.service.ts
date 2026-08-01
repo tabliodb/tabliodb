@@ -43,6 +43,13 @@ export type ValidateRequest = {
   queryParams: Record<string, string | undefined>;
 };
 
+type SessionTokenSource = 'bearer' | 'cookie' | 'header' | 'query';
+
+type SessionTokenCandidate = {
+  source: SessionTokenSource;
+  token: string;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -247,7 +254,7 @@ export class AuthService {
   async authenticate(request: ValidateRequest): Promise<AuthContext> {
     const sessionToken = this.getSessionToken(request);
     if (sessionToken) {
-      return this.validateSessionToken(sessionToken);
+      return this.validateSessionToken(sessionToken.token, sessionToken.source);
     }
 
     const apiKey = this.getApiKey(request);
@@ -258,7 +265,7 @@ export class AuthService {
     throw new UnauthorizedException('Authentication required');
   }
 
-  async validateSessionToken(token: string): Promise<AuthContext> {
+  async validateSessionToken(token: string, source: SessionTokenSource = 'header'): Promise<AuthContext> {
     const hashed = this.cryptoRepository.hashSha256(token);
     const session = await this.sessionRepository.getByToken(hashed);
     if (!session?.user) {
@@ -267,7 +274,7 @@ export class AuthService {
 
     return {
       user: session.user,
-      session: { id: session.id },
+      session: { id: session.id, source },
     };
   }
 
@@ -329,17 +336,16 @@ export class AuthService {
     return user;
   }
 
-  private getSessionToken({ headers, queryParams }: ValidateRequest): string | null {
+  private getSessionToken({ headers, queryParams }: ValidateRequest): SessionTokenCandidate | null {
     const bearer = this.getBearerToken(headers);
     const cookies = parse(headers.cookie || '');
 
     return (
-      (headers[TabliodbHeader.UserToken] as string | undefined) ||
-      (headers[TabliodbHeader.SessionToken] as string | undefined) ||
-      queryParams[TabliodbQuery.SessionKey] ||
-      bearer ||
-      cookies[TabliodbCookie.AccessToken] ||
-      null
+      readSessionToken(headers[TabliodbHeader.UserToken], 'header') ??
+      readSessionToken(headers[TabliodbHeader.SessionToken], 'header') ??
+      readSessionToken(queryParams[TabliodbQuery.SessionKey], 'query') ??
+      readSessionToken(bearer, 'bearer') ??
+      readSessionToken(cookies[TabliodbCookie.AccessToken], 'cookie')
     );
   }
 
@@ -399,4 +405,20 @@ export class AuthService {
 
     throw new BadRequestException('This Tabliodb instance is invite only');
   }
+}
+
+function readSessionToken(
+  value: string | string[] | undefined | null,
+  source: SessionTokenSource,
+): SessionTokenCandidate | null {
+  const token = Array.isArray(value) ? value[0] : value;
+
+  if (!token || token.trim().length === 0) {
+    return null;
+  }
+
+  return {
+    source,
+    token,
+  };
 }
