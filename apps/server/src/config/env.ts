@@ -18,6 +18,7 @@ export type TabliodbEnv = {
   };
   realtime: {
     enabled: boolean;
+    persistDebounceMs: number;
     port: number;
     redisUrl?: string;
   };
@@ -95,6 +96,7 @@ export function loadEnv(): TabliodbEnv {
     },
     realtime: {
       enabled: process.env.TABLIODB_REALTIME_ENABLED !== 'false',
+      persistDebounceMs: numberFromEnv('TABLIODB_REALTIME_PERSIST_DEBOUNCE_MS', 1_000),
       port: numberFromEnv('TABLIODB_REALTIME_PORT', 1234),
       redisUrl: process.env.TABLIODB_REALTIME_REDIS_URL || process.env.REDIS_URL || undefined,
     },

@@ -21,6 +21,7 @@ import { ProjectRepository } from '../repositories/project.repository.js';
 @Injectable()
 export class CollaborationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CollaborationService.name);
+  private readonly pendingDocumentStores = new Map<string, PendingDocumentStore>();
   private server?: Server;
 
   constructor(
@@ -62,7 +63,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
 
           if (parsed && context && !context.readOnly) {
             // Realtime persistence only accepts updates from users that can update the diagram, mirroring REST snapshot permissions.
-            await this.collaborationRepository.storeDocument(parsed.diagramId, state);
+            this.scheduleDocumentStore(parsed.diagramId, state);
           }
         },
       }),
@@ -135,7 +136,51 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    await this.flushPendingDocumentStores();
     await this.server?.destroy();
+  }
+
+  private scheduleDocumentStore(diagramId: string, state: Uint8Array): void {
+    const { realtime } = this.configRepository.getEnv();
+    const existingStore = this.pendingDocumentStores.get(diagramId);
+
+    if (existingStore?.timer) {
+      clearTimeout(existingStore.timer);
+    }
+
+    const timer = setTimeout(() => {
+      void this.flushPendingDocumentStore(diagramId);
+    }, Math.max(realtime.persistDebounceMs, 0));
+
+    timer.unref?.();
+    this.pendingDocumentStores.set(diagramId, {
+      // Hocuspocus may reuse buffers internally, so the pending write keeps an owned copy of the newest document state.
+      state: new Uint8Array(state),
+      timer,
+    });
+  }
+
+  private async flushPendingDocumentStores(): Promise<void> {
+    const pendingDiagramIds = Array.from(this.pendingDocumentStores.keys());
+
+    await Promise.all(pendingDiagramIds.map((diagramId) => this.flushPendingDocumentStore(diagramId)));
+  }
+
+  private async flushPendingDocumentStore(diagramId: string): Promise<void> {
+    const pendingStore = this.pendingDocumentStores.get(diagramId);
+
+    if (!pendingStore) {
+      return;
+    }
+
+    clearTimeout(pendingStore.timer);
+    this.pendingDocumentStores.delete(diagramId);
+
+    try {
+      await this.collaborationRepository.storeDocument(diagramId, pendingStore.state);
+    } catch (error) {
+      this.logger.warn(`Failed to persist realtime document "${diagramId}". ${formatErrorMessage(error)}`);
+    }
   }
 
   private authenticateRealtimeConnection(options: {
@@ -171,6 +216,11 @@ type CollaborationContext = {
   role: ProjectRole;
   user: AwarenessState['user'];
   userId: string;
+};
+
+type PendingDocumentStore = {
+  state: Uint8Array;
+  timer: NodeJS.Timeout;
 };
 
 function readCollaborationContext(value: unknown): CollaborationContext | null {
@@ -298,6 +348,10 @@ function readViewport(value: unknown): AwarenessState['viewport'] {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function headersToIncomingHttpHeaders(headers: Headers): IncomingHttpHeaders {
