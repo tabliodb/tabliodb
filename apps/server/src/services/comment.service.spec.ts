@@ -183,6 +183,7 @@ describe(CommentService.name, () => {
       bodyJson: createPlainTextCommentLexicalDocument('Updated comment body.'),
       bodyText: 'Updated comment body.',
       commentId: 'comment-id',
+      editedById: 'user-id',
       mentionUserIds: [],
     });
     expect(auditLogRepository.create).toHaveBeenCalledWith(

@@ -206,6 +206,7 @@ export class CommentService {
       bodyJson: normalizedBody.bodyJson,
       bodyText: normalizedBody.bodyText,
       commentId: comment.id,
+      editedById: auth.user.id,
       mentionUserIds,
     });
     await this.auditLogRepository.create({

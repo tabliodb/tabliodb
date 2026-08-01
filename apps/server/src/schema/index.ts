@@ -293,6 +293,18 @@ export interface CommentMentionTable {
   createdAt: Timestamp;
 }
 
+export interface CommentEditHistoryTable {
+  id: Generated<string>;
+  commentId: string;
+  editedById: string;
+  previousBodyJson: JsonColumn;
+  previousBodyText: string;
+  nextBodyJson: JsonColumn;
+  nextBodyText: string;
+  bodyFormat: Defaulted<'lexical'>;
+  createdAt: Timestamp;
+}
+
 export interface CommentThreadReadTable {
   threadId: string;
   userId: string;
@@ -338,6 +350,7 @@ export interface DB {
   diagram_review_signals: DiagramReviewSignalTable;
   comment_threads: CommentThreadTable;
   comments: CommentTable;
+  comment_edit_history: CommentEditHistoryTable;
   comment_mentions: CommentMentionTable;
   comment_thread_reads: CommentThreadReadTable;
   audit_logs: AuditLogTable;

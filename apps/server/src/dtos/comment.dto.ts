@@ -139,6 +139,27 @@ const CommentThreadListQuerySchema = z
   })
   .meta({ id: 'CommentThreadListQueryDto' });
 
+const CommentListQuerySchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    parentCommentId: z
+      .preprocess((value) => {
+        // Query string tidak punya nilai null asli, jadi "null" dan empty value dipakai untuk meminta root comments.
+        if (value === undefined) {
+          return undefined;
+        }
+
+        if (value === null || value === '' || value === 'null') {
+          return null;
+        }
+
+        return Array.isArray(value) ? value[0] : value;
+      }, z.string().uuid().nullable().optional())
+      .optional(),
+  })
+  .meta({ id: 'CommentListQueryDto' });
+
 const CommentThreadListResponseSchema = z
   .object({
     items: z.array(CommentThreadListItemSchema),
@@ -155,6 +176,7 @@ const CommentListResponseSchema = z
   })
   .meta({ id: 'CommentListResponseDto' });
 
+export class CommentListQueryDto extends createZodDto(CommentListQuerySchema) {}
 export class CommentListResponseDto extends createZodDto(CommentListResponseSchema) {}
 export class CommentDiagramSummaryDto extends createZodDto(CommentDiagramSummarySchema) {}
 export class CommentReplyCreateDto extends createZodDto(CommentReplyCreateSchema) {}

@@ -170,9 +170,35 @@ export class CommentRepository {
       .executeTakeFirst();
   }
 
-  updateComment(options: { bodyJson: JsonValue; bodyText: string; commentId: string; mentionUserIds: string[] }) {
+  updateComment(options: {
+    bodyJson: JsonValue;
+    bodyText: string;
+    commentId: string;
+    editedById: string;
+    mentionUserIds: string[];
+  }) {
     return this.db.transaction().execute(async (tx) => {
       const now = new Date();
+      const previousComment = await tx
+        .selectFrom('comments')
+        .select(['id', 'bodyJson', 'bodyText', 'bodyFormat'])
+        .where('id', '=', options.commentId)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirstOrThrow();
+
+      await tx
+        .insertInto('comment_edit_history')
+        .values({
+          bodyFormat: 'lexical',
+          commentId: previousComment.id,
+          editedById: options.editedById,
+          nextBodyJson: options.bodyJson,
+          nextBodyText: options.bodyText,
+          previousBodyJson: previousComment.bodyJson,
+          previousBodyText: previousComment.bodyText,
+        })
+        .execute();
+
       const comment = await tx
         .updateTable('comments')
         .set({
