@@ -794,6 +794,40 @@ export type DeleteCheckCommand = {
   checkId: string;
 };
 
+export type CreateGroupCommand = {
+  type: 'group.create';
+  groupId?: string;
+  name: string;
+  position?: { x: number; y: number };
+  width?: number;
+  height?: number;
+  color?: string;
+  tableIds?: string[];
+};
+
+export type UpdateGroupCommand = {
+  type: 'group.update';
+  groupId: string;
+  changes: Partial<Omit<DiagramGroup, 'id' | 'tableIds'>>;
+};
+
+export type AssignTableToGroupCommand = {
+  type: 'group.assignTable';
+  groupId: string;
+  tableId: string;
+};
+
+export type RemoveTableFromGroupCommand = {
+  type: 'group.removeTable';
+  groupId?: string;
+  tableId: string;
+};
+
+export type DeleteGroupCommand = {
+  type: 'group.delete';
+  groupId: string;
+};
+
 export type DiagramCommand =
   | CreateTableCommand
   | RenameTableCommand
@@ -817,7 +851,12 @@ export type DiagramCommand =
   | DeleteEnumCommand
   | CreateCheckCommand
   | UpdateCheckCommand
-  | DeleteCheckCommand;
+  | DeleteCheckCommand
+  | CreateGroupCommand
+  | UpdateGroupCommand
+  | AssignTableToGroupCommand
+  | RemoveTableFromGroupCommand
+  | DeleteGroupCommand;
 
 export function applyDiagramCommands(
   model: DiagramModel,
@@ -881,6 +920,16 @@ export function applyDiagramCommand(
       return finalizeDiagramModel(updateCheck(model, command), options);
     case 'check.delete':
       return finalizeDiagramModel(deleteCheck(model, command.checkId), options);
+    case 'group.create':
+      return finalizeDiagramModel(createGroup(model, command, idFactory), options);
+    case 'group.update':
+      return finalizeDiagramModel(updateGroup(model, command), options);
+    case 'group.assignTable':
+      return finalizeDiagramModel(assignTableToGroup(model, command), options);
+    case 'group.removeTable':
+      return finalizeDiagramModel(removeTableFromGroup(model, command), options);
+    case 'group.delete':
+      return finalizeDiagramModel(deleteGroup(model, command.groupId), options);
   }
 }
 
@@ -1564,6 +1613,141 @@ function deleteTable(model: DiagramModel, tableId: string): DiagramModel {
   };
 }
 
+function createGroup(model: DiagramModel, command: CreateGroupCommand, idFactory: DiagramIdFactory): DiagramModel {
+  const groupId = command.groupId ?? idFactory('group');
+  assertMissingEntity(model.groups[groupId], `Group "${groupId}" already exists`);
+
+  const tableIds = Array.from(new Set(command.tableIds ?? []));
+  tableIds.forEach((tableId) => requireTable(model, tableId));
+
+  const group = DiagramGroupSchema.parse({
+    color: command.color,
+    height: command.height ?? 280,
+    id: groupId,
+    name: command.name,
+    position: command.position ?? { x: 0, y: 0 },
+    tableIds: [],
+    width: command.width ?? 460,
+  });
+  const modelWithGroup = {
+    ...model,
+    groups: {
+      ...model.groups,
+      [groupId]: group,
+    },
+  };
+
+  return tableIds.reduce(
+    (currentModel, tableId) => assignTableToGroup(currentModel, { groupId, tableId, type: 'group.assignTable' }),
+    modelWithGroup,
+  );
+}
+
+function updateGroup(model: DiagramModel, command: UpdateGroupCommand): DiagramModel {
+  const group = requireGroup(model, command.groupId);
+
+  return {
+    ...model,
+    groups: {
+      ...model.groups,
+      [group.id]: DiagramGroupSchema.parse({
+        ...group,
+        ...command.changes,
+        id: group.id,
+        tableIds: group.tableIds,
+      }),
+    },
+  };
+}
+
+function assignTableToGroup(model: DiagramModel, command: AssignTableToGroupCommand): DiagramModel {
+  const group = requireGroup(model, command.groupId);
+  const table = requireTable(model, command.tableId);
+  const groupsWithoutTable = Object.fromEntries(
+    Object.entries(model.groups).map(([groupId, currentGroup]) => [
+      groupId,
+      {
+        ...currentGroup,
+        // Membership is exclusive; assigning to a new module removes the table from any previous module first.
+        tableIds: currentGroup.tableIds.filter((tableId) => tableId !== table.id),
+      },
+    ]),
+  );
+
+  return {
+    ...model,
+    groups: {
+      ...groupsWithoutTable,
+      [group.id]: DiagramGroupSchema.parse({
+        ...groupsWithoutTable[group.id],
+        tableIds: [...groupsWithoutTable[group.id].tableIds, table.id],
+      }),
+    },
+    tables: {
+      ...model.tables,
+      [table.id]: DatabaseTableSchema.parse({
+        ...table,
+        groupId: group.id,
+      }),
+    },
+  };
+}
+
+function removeTableFromGroup(model: DiagramModel, command: RemoveTableFromGroupCommand): DiagramModel {
+  const table = requireTable(model, command.tableId);
+  const groupId = command.groupId ?? table.groupId;
+  const nextGroups = groupId
+    ? {
+        ...model.groups,
+        [groupId]: DiagramGroupSchema.parse({
+          ...requireGroup(model, groupId),
+          tableIds: requireGroup(model, groupId).tableIds.filter((tableId) => tableId !== table.id),
+        }),
+      }
+    : Object.fromEntries(
+        Object.entries(model.groups).map(([currentGroupId, group]) => [
+          currentGroupId,
+          {
+            ...group,
+            tableIds: group.tableIds.filter((tableId) => tableId !== table.id),
+          },
+        ]),
+      );
+
+  return {
+    ...model,
+    groups: nextGroups,
+    tables: {
+      ...model.tables,
+      [table.id]: DatabaseTableSchema.parse({
+        ...table,
+        groupId: undefined,
+      }),
+    },
+  };
+}
+
+function deleteGroup(model: DiagramModel, groupId: string): DiagramModel {
+  const group = requireGroup(model, groupId);
+  const removedTableIds = new Set(group.tableIds);
+
+  return {
+    ...model,
+    groups: omitKey(model.groups, group.id),
+    tables: Object.fromEntries(
+      Object.entries(model.tables).map(([tableId, table]) => [
+        tableId,
+        removedTableIds.has(tableId)
+          ? DatabaseTableSchema.parse({
+              ...table,
+              groupId: undefined,
+            })
+          : table,
+      ]),
+    ),
+  };
+}
+
 function createColumnFromCommand(
   model: DiagramModel,
   command: CreateColumnCommand,
@@ -2023,6 +2207,15 @@ function requireColumn(model: DiagramModel, columnId: string): DatabaseColumn {
   }
 
   return column;
+}
+
+function requireGroup(model: DiagramModel, groupId: string): DiagramGroup {
+  const group = model.groups[groupId];
+  if (!group) {
+    throw new DiagramCommandError(`Group "${groupId}" does not exist`);
+  }
+
+  return group;
 }
 
 function requireRelationship(model: DiagramModel, relationshipId: string): DatabaseRelationship {

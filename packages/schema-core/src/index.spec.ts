@@ -428,6 +428,66 @@ describe('schema-core diagram commands', () => {
     expect(model.tables.books.displayMode).toBeUndefined();
   });
 
+  it('creates module groups and keeps table membership exclusive', () => {
+    const model = applyDiagramCommands(
+      createEmptyDiagramModel('Group command test'),
+      [
+        {
+          columns: [{ id: 'users-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } }],
+          name: 'users',
+          tableId: 'users',
+          type: 'table.create',
+        },
+        {
+          columns: [{ id: 'orders-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } }],
+          name: 'orders',
+          tableId: 'orders',
+          type: 'table.create',
+        },
+      ],
+      { now: fixedNow },
+    );
+    const groupedModel = applyDiagramCommands(
+      model,
+      [
+        {
+          groupId: 'core',
+          name: 'Core',
+          position: { x: 20, y: 30 },
+          tableIds: ['users'],
+          type: 'group.create',
+        },
+        {
+          groupId: 'commerce',
+          name: 'Commerce',
+          tableIds: ['orders'],
+          type: 'group.create',
+        },
+        {
+          groupId: 'commerce',
+          tableId: 'users',
+          type: 'group.assignTable',
+        },
+      ],
+      { now: fixedNow },
+    );
+    const deletedGroupModel = applyDiagramCommand(
+      groupedModel,
+      { groupId: 'commerce', type: 'group.delete' },
+      { now: fixedNow },
+    );
+
+    expect(groupedModel.groups.core.tableIds).toEqual([]);
+    expect(groupedModel.groups.commerce.tableIds).toEqual(['orders', 'users']);
+    expect(groupedModel.tables.users.groupId).toBe('commerce');
+    expect(groupedModel.tables.orders.groupId).toBe('commerce');
+    expect(model.tables.users.groupId).toBeUndefined();
+    expect(deletedGroupModel.groups.commerce).toBeUndefined();
+    expect(deletedGroupModel.tables.users).toBeDefined();
+    expect(deletedGroupModel.tables.users.groupId).toBeUndefined();
+    expect(deletedGroupModel.tables.orders.groupId).toBeUndefined();
+  });
+
   it('updates a column without mutating the previous model', () => {
     const model = applyDiagramCommand(
       createEmptyDiagramModel('Column update test'),

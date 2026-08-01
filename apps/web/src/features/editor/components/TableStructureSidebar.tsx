@@ -57,6 +57,7 @@ const inlineInputClassName =
 
 const compactSelectClassName =
   'h-[var(--tabliodb-control-sm)] rounded-[var(--tabliodb-radius-sm)] border border-[rgb(var(--tabliodb-border-strong))] px-2.5 text-[13px] shadow-none';
+const unsetGroupValue = '__no_group__';
 
 export type TableStructureSidebarProps = {
   model: DiagramModel;
@@ -81,7 +82,10 @@ export function TableStructureSidebar({
   const columns = useMemo(() => (table ? getTableColumns(model, table.id) : []), [model, table]);
   const [activeAttributesColumnId, setActiveAttributesColumnId] = useState<string | null>(null);
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
+  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
   const [confirmDeleteTable, setConfirmDeleteTable] = useState(false);
+  const groups = useMemo(() => Object.values(model.groups), [model.groups]);
+  const tableGroup = table?.groupId ? (model.groups[table.groupId] ?? null) : null;
   const selectedColumn = columns.find((column) => column.id === selectedColumnId) ?? columns[0] ?? null;
   const columnIds = columns.map((column) => column.id).join('|');
 
@@ -99,6 +103,7 @@ export function TableStructureSidebar({
 
   useEffect(() => {
     setActiveAttributesColumnId(null);
+    setConfirmDeleteGroup(false);
     setConfirmDeleteTable(false);
   }, [selectedTableId]);
 
@@ -166,6 +171,68 @@ export function TableStructureSidebar({
         type: 'table.updateDisplay',
       }),
     );
+  }
+
+  function handleCreateGroup() {
+    const groupId = createDiagramEntityId('group');
+    const groupName = createUniqueGroupName(groups, `${titleCaseWords(table.name)} module`);
+
+    apply(
+      applyDiagramCommand(model, {
+        ...createInitialGroupBounds(table),
+        color: table.color,
+        groupId,
+        name: groupName,
+        tableIds: [table.id],
+        type: 'group.create',
+      }),
+    );
+    setConfirmDeleteGroup(false);
+  }
+
+  function handleGroupMembershipChange(groupId: string) {
+    if (groupId === unsetGroupValue) {
+      apply(applyDiagramCommand(model, { tableId: table.id, type: 'group.removeTable' }));
+      setConfirmDeleteGroup(false);
+      return;
+    }
+
+    if (groupId !== table.groupId) {
+      apply(applyDiagramCommand(model, { groupId, tableId: table.id, type: 'group.assignTable' }));
+      setConfirmDeleteGroup(false);
+    }
+  }
+
+  function handleGroupNameCommit(value: string) {
+    const name = value.trim();
+
+    if (!tableGroup || !name || name === tableGroup.name) {
+      return;
+    }
+
+    apply(applyDiagramCommand(model, { changes: { name }, groupId: tableGroup.id, type: 'group.update' }));
+  }
+
+  function handleGroupColorChange(color: string) {
+    if (!tableGroup || color === tableGroup.color) {
+      return;
+    }
+
+    apply(applyDiagramCommand(model, { changes: { color }, groupId: tableGroup.id, type: 'group.update' }));
+  }
+
+  function handleDeleteGroup() {
+    if (!tableGroup || readOnly) {
+      return;
+    }
+
+    if (!confirmDeleteGroup) {
+      setConfirmDeleteGroup(true);
+      return;
+    }
+
+    apply(applyDiagramCommand(model, { groupId: tableGroup.id, type: 'group.delete' }));
+    setConfirmDeleteGroup(false);
   }
 
   function handleAddColumn() {
@@ -328,6 +395,84 @@ export function TableStructureSidebar({
               {tableCollapsed ? 'Expand table' : 'Collapse table'}
             </Button>
           </div>
+          <div className="mt-3 border-t border-[rgb(var(--tabliodb-border))] pt-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Module
+              </span>
+              <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                {tableGroup ? `${tableGroup.tableIds.length} tables` : 'None'}
+              </span>
+            </div>
+            <Select
+              className={compactSelectClassName}
+              disabled={readOnly || groups.length === 0}
+              onValueChange={handleGroupMembershipChange}
+              options={[
+                { label: 'No module', value: unsetGroupValue },
+                ...groups.map((group) => ({
+                  label: group.name,
+                  value: group.id,
+                })),
+              ]}
+              value={tableGroup?.id ?? unsetGroupValue}
+            />
+            {tableGroup ? (
+              <div className="mt-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
+                <InlineTextInput
+                  disabled={readOnly}
+                  onCommit={handleGroupNameCommit}
+                  placeholder="Module name"
+                  value={tableGroup.name}
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {tableColorOptions.map((color) => {
+                    const colorLabel = getTableColorLabel(color);
+
+                    return (
+                      <WithTooltip content={`Set module color to ${colorLabel}`} key={color}>
+                        <button
+                          aria-label={`Use ${colorLabel} for module`}
+                          className="size-5 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={readOnly}
+                          onClick={() => handleGroupColorChange(color)}
+                          style={{
+                            backgroundColor: color,
+                            boxShadow:
+                              getDisplayTableColor(tableGroup.color) === color
+                                ? `0 0 0 1px #ffffff, 0 0 0 3px ${color}, 0 1px 0 rgb(var(--tabliodb-border-strong))`
+                                : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 1px 0 rgb(var(--tabliodb-border-strong))',
+                          }}
+                          type="button"
+                        />
+                      </WithTooltip>
+                    );
+                  })}
+                </div>
+                <Button
+                  className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
+                  disabled={readOnly}
+                  onClick={handleDeleteGroup}
+                  size="sm"
+                  variant="secondary"
+                >
+                  <Trash2 className="size-3.5" />
+                  {confirmDeleteGroup ? 'Confirm delete module' : 'Delete module'}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
+                disabled={readOnly}
+                onClick={handleCreateGroup}
+                size="sm"
+                variant="soft"
+              >
+                <Plus className="size-3.5" />
+                Create module from table
+              </Button>
+            )}
+          </div>
           <Button
             className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-danger-shadow))]"
             disabled={readOnly}
@@ -418,6 +563,52 @@ function getSidebarDisplayMode(table: DatabaseTable): Extract<TableDisplayMode, 
 
 function isTableDisplayCollapsed(table: DatabaseTable): boolean {
   return table.collapsed === true || table.displayMode === 'header_only';
+}
+
+function createInitialGroupBounds(table: DatabaseTable): {
+  height: number;
+  position: { x: number; y: number };
+  width: number;
+} {
+  const tableWidth = Math.max(table.width, 288);
+  const tableHeight = 38 + table.columnIds.length * 26 + 6;
+
+  return {
+    height: tableHeight + 70,
+    position: {
+      x: table.position.x - 36,
+      y: table.position.y - 42,
+    },
+    width: tableWidth + 72,
+  };
+}
+
+function createUniqueGroupName(groups: { name: string }[], baseName: string): string {
+  const existingNames = new Set(groups.map((group) => group.name.toLowerCase()));
+
+  if (!existingNames.has(baseName.toLowerCase())) {
+    return baseName;
+  }
+
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${baseName} ${index}`;
+
+    if (!existingNames.has(candidate.toLowerCase())) {
+      return candidate;
+    }
+  }
+
+  return `${baseName} ${Date.now()}`;
+}
+
+function titleCaseWords(value: string): string {
+  const normalized = value.replace(/[_-]+/g, ' ').trim().replace(/\s+/g, ' ');
+
+  if (!normalized) {
+    return 'New';
+  }
+
+  return normalized.replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function ColumnEditorRow({

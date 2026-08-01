@@ -15,6 +15,7 @@ import {
   getTableColumns,
   type DatabaseColumn,
   type DatabaseTable,
+  type DiagramGroup,
   type DiagramModel,
   type TableDisplayMode,
 } from '@tabliodb/schema-core';
@@ -35,10 +36,14 @@ import { formatColumnType } from '../diagram-model';
 import { getDisplayTableColor } from '../table-colors';
 
 const tableNodeShape = 'tabliodb-table';
+const groupNodeIdPrefix = 'tabliodb-group:';
 const tableNodeWidth = 288;
 const tableHeaderHeight = 38;
 const tableColumnHeight = 26;
 const tablePaddingBottom = 6;
+const groupPaddingX = 36;
+const groupPaddingBottom = 28;
+const groupHeaderOffset = 42;
 const tableResizeMaxWidth = 720;
 const tableResizeMinWidth = 240;
 const diagramVisualGridSize = 24;
@@ -81,6 +86,7 @@ export type RemoteCanvasCursor = {
 };
 
 type TableNodeData = {
+  kind: 'table';
   color: string;
   columnCommentMarkers: Record<string, CommentMarkerCount>;
   columns: DatabaseColumn[];
@@ -91,6 +97,14 @@ type TableNodeData = {
   selected: boolean;
   tableId: string;
   tableName: string;
+};
+
+type GroupNodeData = {
+  kind: 'group';
+  color: string;
+  groupId: string;
+  groupName: string;
+  tableCount: number;
 };
 
 type PortSide = 'left' | 'right';
@@ -132,6 +146,7 @@ type CanvasMinimapTable = CanvasRect & {
 };
 
 type CanvasMinimapState = {
+  groups: CanvasMinimapTable[];
   tables: CanvasMinimapTable[];
   viewBox: CanvasRect;
   viewport: CanvasRect;
@@ -227,7 +242,7 @@ export function SchemaCanvas({
       interacting: {
         edgeLabelMovable: false,
         edgeMovable: false,
-        nodeMovable: !readOnly,
+        nodeMovable: (cellView) => !readOnly && isTableNodeData(cellView.cell.getData()),
         vertexAddable: false,
         vertexDeletable: false,
       },
@@ -250,7 +265,10 @@ export function SchemaCanvas({
 
     graph.on('node:click', ({ node }) => {
       const data = node.getData<TableNodeData>();
-      onSelectedTableChangeRef.current(data.tableId);
+
+      if (isTableNodeData(data)) {
+        onSelectedTableChangeRef.current(data.tableId);
+      }
     });
 
     graph.on('blank:click', () => {
@@ -621,6 +639,24 @@ function CanvasMinimap({
           x={state.viewBox.x}
           y={state.viewBox.y}
         />
+        {state.groups.map((group) => (
+          <rect
+            fill={group.color}
+            fillOpacity="0.08"
+            height={group.height}
+            key={group.id}
+            rx="16"
+            stroke={group.color}
+            strokeDasharray="14 10"
+            strokeOpacity="0.45"
+            strokeWidth="5"
+            width={group.width}
+            x={group.x}
+            y={group.y}
+          >
+            <title>{group.name}</title>
+          </rect>
+        ))}
         {state.tables.map((table) => (
           <rect
             fill={table.color}
@@ -671,16 +707,24 @@ function createCanvasMinimapState(
     x: table.position.x,
     y: table.position.y,
   }));
+  const groups = Object.values(model.groups).map<CanvasMinimapTable>((group) => ({
+    ...getRenderedGroupBounds(model, group),
+    color: getDisplayTableColor(group.color),
+    id: group.id,
+    name: group.name,
+    selected: false,
+  }));
 
   if (tables.length === 0) {
     return null;
   }
 
   const viewport = getCanvasViewportRect(graph, container);
-  const contentBounds = getCanvasContentBounds([...tables, viewport]);
+  const contentBounds = getCanvasContentBounds([...groups, ...tables, viewport]);
   const viewBox = normalizeRectToAspect(padCanvasRect(contentBounds, 96), minimapAspectRatio);
 
   return {
+    groups: groups.map(roundCanvasMinimapTable),
     tables: tables.map(roundCanvasMinimapTable),
     viewBox: roundCanvasRect(viewBox),
     viewport: roundCanvasRect(viewport),
@@ -778,17 +822,24 @@ function areCanvasMinimapStatesEqual(
   return (
     areCanvasRectsEqual(currentState.viewBox, nextState.viewBox) &&
     areCanvasRectsEqual(currentState.viewport, nextState.viewport) &&
-    currentState.tables.length === nextState.tables.length &&
-    currentState.tables.every((table, index) => {
-      const nextTable = nextState.tables[index];
+    areCanvasMinimapItemsEqual(currentState.groups, nextState.groups) &&
+    areCanvasMinimapItemsEqual(currentState.tables, nextState.tables)
+  );
+}
+
+function areCanvasMinimapItemsEqual(currentItems: CanvasMinimapTable[], nextItems: CanvasMinimapTable[]): boolean {
+  return (
+    currentItems.length === nextItems.length &&
+    currentItems.every((item, index) => {
+      const nextItem = nextItems[index];
 
       return (
-        nextTable &&
-        table.id === nextTable.id &&
-        table.name === nextTable.name &&
-        table.color === nextTable.color &&
-        table.selected === nextTable.selected &&
-        areCanvasRectsEqual(table, nextTable)
+        nextItem &&
+        item.id === nextItem.id &&
+        item.name === nextItem.name &&
+        item.color === nextItem.color &&
+        item.selected === nextItem.selected &&
+        areCanvasRectsEqual(item, nextItem)
       );
     })
   );
@@ -852,7 +903,6 @@ function areRemoteCursorPositionsEqual(
     );
   });
 }
-
 function registerTableNodeShape(): void {
   if (tableShapeRegistered) {
     return;
@@ -879,7 +929,11 @@ function syncGraphFromModel(
   const relationshipPlan = createRelationshipPlan(model, selectedTableId);
   // Marker summary dihitung sekali per sync supaya node table tidak mengulang scan thread untuk setiap row.
   const commentMarkerSummary = createCommentMarkerSummary(model, commentTargetSummaries);
-  const nodeIds = new Set(Object.keys(model.tables));
+  const groupMetadata = Object.values(model.groups).map((group) => createGroupNodeMetadata(model, group));
+  const nodeIds = new Set([
+    ...Object.keys(model.tables),
+    ...groupMetadata.map((metadata) => metadata.id).filter((id): id is string => Boolean(id)),
+  ]);
   const edgeMetadata = createRelationshipEdgeMetadata(model, relationshipPlan);
   const edgeIds = new Set(edgeMetadata.map((edge) => edge.id).filter((id): id is string => Boolean(id)));
 
@@ -894,6 +948,10 @@ function syncGraphFromModel(
       if (!edgeIds.has(edge.id)) {
         graph.removeCell(edge);
       }
+    }
+
+    for (const group of groupMetadata) {
+      syncGroupNode(graph, group);
     }
 
     for (const table of Object.values(model.tables)) {
@@ -914,6 +972,86 @@ function syncGraphFromModel(
       syncRelationshipEdge(graph, edge);
     }
   });
+}
+
+function createGroupNodeMetadata(model: DiagramModel, group: DiagramGroup): NodeMetadata {
+  const bounds = getRenderedGroupBounds(model, group);
+  const color = getDisplayTableColor(group.color);
+
+  return {
+    attrs: {
+      body: {
+        fill: hexToRgba(color, 0.1),
+        pointerEvents: 'none',
+        rx: 18,
+        ry: 18,
+        stroke: color,
+        strokeDasharray: '9 7',
+        strokeOpacity: 0.58,
+        strokeWidth: 2,
+      },
+      label: {
+        fill: color,
+        fontFamily: 'Nunito, ui-sans-serif, system-ui, sans-serif',
+        fontSize: 13,
+        fontWeight: 900,
+        pointerEvents: 'none',
+        refX: 16,
+        refY: 17,
+        text: `${group.name}  ${group.tableIds.length}`,
+        textAnchor: 'start',
+        textVerticalAnchor: 'middle',
+      },
+    },
+    data: {
+      color,
+      groupId: group.id,
+      groupName: group.name,
+      kind: 'group',
+      tableCount: group.tableIds.length,
+    } satisfies GroupNodeData,
+    height: bounds.height,
+    id: getGroupNodeId(group.id),
+    position: { x: bounds.x, y: bounds.y },
+    shape: 'rect',
+    width: bounds.width,
+    zIndex: -20,
+  };
+}
+
+function syncGroupNode(graph: Graph, metadata: NodeMetadata): void {
+  const existing = graph.getCellById(metadata.id!) as X6Node | null | undefined;
+
+  if (!existing?.isNode()) {
+    graph.addNode(metadata);
+    return;
+  }
+
+  const nextData = metadata.data as GroupNodeData;
+  const currentData = existing.getData<GroupNodeData>();
+  const currentPosition = existing.getPosition();
+  const currentSize = existing.getSize();
+  const nextPosition = metadata.position ?? { x: metadata.x ?? 0, y: metadata.y ?? 0 };
+  const nextSize = metadata.size ?? {
+    height: metadata.height ?? 1,
+    width: metadata.width ?? 1,
+  };
+
+  if (!areGroupNodeDataEqual(currentData, nextData)) {
+    existing.setData(nextData, { overwrite: true });
+  }
+
+  existing.attr(metadata.attrs ?? {});
+
+  if (currentSize.width !== nextSize.width || currentSize.height !== nextSize.height) {
+    existing.resize(nextSize.width, nextSize.height);
+  }
+
+  if (currentPosition.x !== nextPosition.x || currentPosition.y !== nextPosition.y) {
+    existing.position(nextPosition.x, nextPosition.y);
+  }
+
+  existing.setZIndex(metadata.zIndex ?? -20);
 }
 
 function syncTableNode(graph: Graph, metadata: NodeMetadata): void {
@@ -1030,6 +1168,7 @@ function createTableNodeMetadata(
     id: table.id,
     data: {
       color: getDisplayTableColor(table.color),
+      kind: 'table',
       columnCommentMarkers: Object.fromEntries(
         columns.map((column) => [column.id, getColumnCommentMarkerCount(commentMarkerSummary, column.id)]),
       ),
@@ -1259,6 +1398,47 @@ function getTableWidth(table: DatabaseTable): number {
   return Math.max(table.width, tableNodeWidth);
 }
 
+function getGroupNodeId(groupId: string): string {
+  return `${groupNodeIdPrefix}${groupId}`;
+}
+
+function getRenderedGroupBounds(model: DiagramModel, group: DiagramGroup): CanvasRect {
+  const memberRects = group.tableIds.flatMap<CanvasRect>((tableId) => {
+    const table = model.tables[tableId];
+
+    if (!table) {
+      return [];
+    }
+
+    return [
+      {
+        height: getTableNodeHeight(model, table),
+        width: getTableWidth(table),
+        x: table.position.x,
+        y: table.position.y,
+      },
+    ];
+  });
+
+  if (memberRects.length === 0) {
+    return {
+      height: group.height,
+      width: group.width,
+      x: group.position.x,
+      y: group.position.y,
+    };
+  }
+
+  const contentBounds = getCanvasContentBounds(memberRects);
+
+  return {
+    height: contentBounds.height + groupHeaderOffset + groupPaddingBottom,
+    width: contentBounds.width + groupPaddingX * 2,
+    x: contentBounds.x - groupPaddingX,
+    y: contentBounds.y - groupHeaderOffset,
+  };
+}
+
 function getTableNodeHeight(model: DiagramModel, table: DatabaseTable): number {
   const columns = getVisibleTableColumns(model, table);
 
@@ -1304,6 +1484,36 @@ function getRelationshipColumnIdsForTable(model: DiagramModel, tableId: string):
   }
 
   return columnIds;
+}
+
+function isTableNodeData(data: unknown): data is TableNodeData {
+  return Boolean(data && typeof data === 'object' && 'kind' in data && data.kind === 'table');
+}
+
+function areGroupNodeDataEqual(current: GroupNodeData | undefined, next: GroupNodeData): boolean {
+  return Boolean(
+    current &&
+    current.color === next.color &&
+    current.groupId === next.groupId &&
+    current.groupName === next.groupName &&
+    current.kind === next.kind &&
+    current.tableCount === next.tableCount,
+  );
+}
+
+function hexToRgba(hexColor: string, opacity: number): string {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hexColor);
+
+  if (!match) {
+    return hexColor;
+  }
+
+  const value = Number.parseInt(match[1], 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
 }
 
 function registerRelationshipRouter(): void {
