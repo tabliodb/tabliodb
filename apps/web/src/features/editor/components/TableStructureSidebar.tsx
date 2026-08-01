@@ -356,6 +356,7 @@ export function TableStructureSidebar({
             Table name
           </label>
           <InlineTextInput
+            ariaLabel="Table name"
             className="mt-2"
             disabled={readOnly}
             onCommit={handleTableNameCommit}
@@ -452,6 +453,7 @@ export function TableStructureSidebar({
             {tableGroup ? (
               <div className="mt-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
                 <InlineTextInput
+                  ariaLabel="Module name"
                   disabled={readOnly}
                   onCommit={handleGroupNameCommit}
                   placeholder="Module name"
@@ -706,6 +708,7 @@ function ColumnEditorRow({
       <div className="grid grid-cols-[12px_minmax(0,1fr)_28px] items-center gap-1.5">
         <GripVertical className="size-3.5 text-[rgb(var(--tabliodb-ink-subtle))]" />
         <InlineTextInput
+          ariaLabel={`Column name ${column.name}`}
           className="min-w-0"
           disabled={disabled}
           onCommit={(value) => {
@@ -861,6 +864,7 @@ function ColumnAttributesPopoverContent({
         <label className="block text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Default
           <InlineTextInput
+            ariaLabel={`Column default ${column.name}`}
             className="mt-1"
             disabled={disabled}
             onCommit={(defaultValue) => onUpdate(column, { defaultValue: normalizeOptionalString(defaultValue) })}
@@ -873,6 +877,7 @@ function ColumnAttributesPopoverContent({
         <label className="block text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Comment
           <InlineTextarea
+            ariaLabel={`Column comment ${column.name}`}
             className="mt-1"
             disabled={disabled}
             onCommit={(comment) => onUpdate(column, { comment: normalizeOptionalString(comment) })}
@@ -937,6 +942,7 @@ function ColumnToggle({
 }
 
 function InlineTextInput({
+  ariaLabel,
   className,
   disabled,
   onCommit,
@@ -944,6 +950,7 @@ function InlineTextInput({
   validate,
   value,
 }: {
+  ariaLabel?: string;
   className?: string;
   disabled?: boolean;
   onCommit: (value: string) => void;
@@ -980,6 +987,7 @@ function InlineTextInput({
     <div className={className}>
       <Input
         aria-invalid={Boolean(error)}
+        aria-label={ariaLabel}
         className={cn(
           inlineInputClassName,
           error
@@ -1063,6 +1071,7 @@ function InlineNumberInput({
 }
 
 function InlineTextarea({
+  ariaLabel,
   className,
   disabled,
   onCommit,
@@ -1070,6 +1079,7 @@ function InlineTextarea({
   validate,
   value,
 }: {
+  ariaLabel?: string;
   className?: string;
   disabled?: boolean;
   onCommit: (value: string) => void;
@@ -1105,6 +1115,7 @@ function InlineTextarea({
     <div className={className}>
       <textarea
         aria-invalid={Boolean(error)}
+        aria-label={ariaLabel}
         className={cn(
           'min-h-16 w-full resize-none rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-[13px] font-semibold outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60',
           error
