@@ -1,6 +1,7 @@
 export * from './auth';
 export * from './diagrams';
 export * from './invitations';
+export * from './notifications';
 export * from './organizations';
 export * from './projects';
 export * from './review-signals';

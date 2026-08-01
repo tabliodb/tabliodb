@@ -4,6 +4,7 @@ import { CommentController } from './comment.controller.js';
 import { DiagramController } from './diagram.controller.js';
 import { FileController } from './file.controller.js';
 import { InvitationController } from './invitation.controller.js';
+import { NotificationController } from './notification.controller.js';
 import { OrganizationController } from './organization.controller.js';
 import { ProjectController } from './project.controller.js';
 import { ReviewSignalController } from './review-signal.controller.js';
@@ -18,6 +19,7 @@ export const controllers = [
   DiagramController,
   FileController,
   InvitationController,
+  NotificationController,
   OrganizationController,
   ProjectController,
   ReviewSignalController,

@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Redis as RedisClient } from 'ioredis';
 import type { Redis as RedisInstance } from 'ioredis';
 import { ConfigRepository } from '../repositories/config.repository.js';
@@ -24,7 +24,7 @@ export class RedisService implements OnModuleDestroy {
   private connectPromise?: Promise<RedisInstance | null>;
   private warnedUnavailable = false;
 
-  constructor(private readonly configRepository: ConfigRepository) {
+  constructor(@Inject(ConfigRepository) private readonly configRepository: ConfigRepository) {
     const { redis } = this.configRepository.getEnv();
 
     if (!redis.url) {

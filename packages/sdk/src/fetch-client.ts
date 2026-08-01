@@ -457,6 +457,76 @@ export type InvitationAcceptResponseDtoOutput = {
   user: AuthUserDtoOutput;
   invitation: InvitationPublicDtoOutput;
 };
+export type NotificationInboxItemDtoOutput = {
+  comment: {
+    author: {
+      avatarUrl: string | null;
+      cursorColor: string;
+      email: string;
+      id: string;
+      name: string;
+    };
+    body: string;
+    bodyFormat: BodyFormat;
+    bodyJson: CommentLexicalDocumentDtoOutput;
+    bodyText: string;
+    createdAt: string;
+    createdById: string;
+    deletedAt: string | null;
+    editedAt: string | null;
+    id: string;
+    mentionedUserIds: string[];
+    parentCommentId: string | null;
+    replyCount: number;
+    threadId: string;
+    updatedAt: string;
+  };
+  createdAt: string;
+  diagram: {
+    dialect: Dialect;
+    id: string;
+    name: string;
+  };
+  id: string;
+  isUnread: boolean;
+  parentComment: {
+    author: {
+      avatarUrl: string | null;
+      cursorColor: string;
+      email: string;
+      id: string;
+      name: string;
+    };
+    bodyText: string;
+    id: string;
+  } | null;
+  project: {
+    id: string;
+    name: string;
+    organizationId: string;
+    organizationName: string;
+    organizationSlug: string;
+    slug: string;
+  };
+  thread: {
+    id: string;
+    status: Status3;
+    targetId: string | null;
+    targetType: TargetType;
+    updatedAt: string;
+  };
+  type: Type2;
+};
+export type NotificationInboxListResponseDtoOutput = {
+  items: NotificationInboxItemDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type NotificationSummaryDtoOutput = {
+  totalCount: number;
+  unreadCount: number;
+  updatedAt: string | null;
+};
 export type OrganizationDtoOutput = {
   id: string;
   name: string;
@@ -495,7 +565,7 @@ export type OrganizationMemberDtoOutput = {
   joinedAt: string | null;
   name: string;
   role: Role;
-  status: Status3;
+  status: Status4;
   updatedAt: string;
   userId: string;
 };
@@ -1686,6 +1756,43 @@ export function acceptInvitation(
     ),
   );
 }
+export function getNotificationInbox(
+  {
+    cursor,
+    limit,
+  }: {
+    cursor?: string;
+    limit?: number;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: NotificationInboxListResponseDtoOutput;
+    }>(
+      `/notifications/inbox${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function getNotificationSummary(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: NotificationSummaryDtoOutput;
+    }>('/notifications/summary', {
+      ...opts,
+    }),
+  );
+}
 export function getOrganizations(
   {
     cursor,
@@ -2601,6 +2708,14 @@ export enum Status2 {
   Revoked = 'revoked',
   Expired = 'expired',
 }
+export enum Status3 {
+  Open = 'open',
+  Resolved = 'resolved',
+}
+export enum Type2 {
+  Mention = 'mention',
+  Reply = 'reply',
+}
 export enum Role {
   Owner = 'owner',
   Admin = 'admin',
@@ -2612,7 +2727,7 @@ export enum DefaultProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status3 {
+export enum Status4 {
   Pending = 'pending',
   Active = 'active',
   Suspended = 'suspended',

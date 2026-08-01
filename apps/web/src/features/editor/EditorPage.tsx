@@ -24,6 +24,7 @@ import {
   type DiagramExportResponseDto,
   type DiagramImportDto,
   type DiagramResponseDto,
+  type NotificationInboxItemDto,
   type OrganizationDto,
   type OrganizationMemberDto,
   type OrganizationSettingsDto,
@@ -70,7 +71,9 @@ import {
   cn,
 } from '@tabliodb/ui';
 import {
+  AtSign,
   Archive,
+  Bell,
   Building2,
   Check,
   ChevronsUpDown,
@@ -109,6 +112,7 @@ import {
   UserPlus,
   UserRound,
   UsersRound,
+  Reply,
   X,
 } from 'lucide-react';
 import {
@@ -155,6 +159,7 @@ import {
   useUpdateProjectMemberMutation,
   useUpdateProjectMutation,
 } from '@/resources/projects';
+import { notificationQueries } from '@/resources/notifications';
 import {
   commentQueries,
   useCreateCommentThreadMutation,
@@ -300,12 +305,14 @@ const reviewSignalPageQuery = { limit: 50 } as const;
 const commentThreadPageQuery = { limit: 50 } as const;
 const commentReplyPageQuery = { limit: 50 } as const;
 const commentNestedReplyPageQuery = { limit: 30 } as const;
+const notificationInboxPageQuery = { limit: 8 } as const;
 const commentTypingFreshnessMs = 8000;
 const commentTypingTimeoutMs = 6500;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 const emptyCommentThreads: CommentThreadListItemDto[] = [];
 const emptyComments: CommentResponseDto[] = [];
+const emptyNotifications: NotificationInboxItemDto[] = [];
 const emptyProjectMembers: ProjectMemberDto[] = [];
 
 const selectClassName =
@@ -318,6 +325,7 @@ export function EditorPage() {
   const [copiedSql, setCopiedSql] = useState(false);
   const [sqlPreviewOpen, setSqlPreviewOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [importJsonOpen, setImportJsonOpen] = useState(false);
   const [importSqlOpen, setImportSqlOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
@@ -400,10 +408,24 @@ export function EditorPage() {
     // Canvas dan toolbar cukup memakai agregasi target; thread list lengkap baru dimuat ketika dialog komentar dibuka.
     enabled: Boolean(activeDiagram) && commentSummaryQueryOptions.enabled !== false,
   });
+  const notificationSummaryQueryOptions = notificationQueries.summary();
+  const notificationSummaryQuery = useQuery({
+    ...notificationSummaryQueryOptions,
+    // Summary notification murah dan current-user scoped; query ditahan sampai session user valid.
+    enabled: Boolean(currentUser) && notificationSummaryQueryOptions.enabled !== false,
+  });
+  const notificationInboxQueryOptions = notificationQueries.inbox(notificationInboxPageQuery);
+  const notificationInboxQuery = useQuery({
+    ...notificationInboxQueryOptions,
+    // Inbox detail baru dimuat ketika menu dibuka agar editor canvas tidak membawa payload diskusi global saat initial render.
+    enabled: Boolean(currentUser) && notificationsOpen && notificationInboxQueryOptions.enabled !== false,
+  });
 
   const latestSnapshot = snapshotsQuery.data?.[0] ?? null;
   const commentTargetSummaries = commentSummaryQuery.data?.targets ?? [];
   const openCommentThreadCount = commentSummaryQuery.data?.openCount ?? 0;
+  const inboxNotifications = notificationInboxQuery.data?.items ?? emptyNotifications;
+  const unreadNotificationCount = notificationSummaryQuery.data?.unreadCount ?? 0;
   const persistedReviewSignals = useMemo(() => {
     if (!model || !isCurrentDraftPersisted(model)) {
       return null;
@@ -557,6 +579,49 @@ export function EditorPage() {
       target,
     });
   }, []);
+
+  const handleNotificationOpen = useCallback(
+    (notification: NotificationInboxItemDto) => {
+      const target = {
+        targetId: notification.thread.targetId,
+        targetType: notification.thread.targetType,
+      };
+
+      if (activeProject?.id === notification.project.id && activeDiagram?.id === notification.diagram.id) {
+        const tableId = modelRef.current ? getCommentTargetTableId(modelRef.current, target) : null;
+
+        if (tableId) {
+          setSelectedTableId(tableId);
+          setLeftSidebarOpen(true);
+        }
+
+        setSelectedCommentTarget(target);
+        setCommentsOpen(true);
+        // Sama seperti marker canvas, request id membuat klik notification berulang tetap membuka thread terbaru.
+        commentThreadOpenRequestIdRef.current += 1;
+        setCommentThreadOpenRequest({
+          requestId: commentThreadOpenRequestIdRef.current,
+          target,
+        });
+        return;
+      }
+
+      modelRef.current = null;
+      persistedDraftSignatureRef.current = null;
+      setModel(null);
+      setSelectedTableId(null);
+      setSelectedCommentTarget(target);
+      setCommentsOpen(false);
+      navigate(
+        routes.diagram.to({
+          diagramId: notification.diagram.id,
+          projectId: notification.project.id,
+          workspaceSlug: notification.project.organizationSlug || notification.project.organizationId,
+        }),
+      );
+    },
+    [activeDiagram?.id, activeProject?.id, navigate],
+  );
 
   useEffect(() => {
     if (!activeDiagram || !currentUser) {
@@ -994,6 +1059,64 @@ export function EditorPage() {
               </span>
             ) : null}
           </div>
+          <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+            <DropdownMenuTrigger asChild>
+              <div className="relative">
+                <IconButton icon={Bell} label="Notifications" />
+                {unreadNotificationCount > 0 ? (
+                  <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-1 text-[9px] font-extrabold leading-4 text-[rgb(var(--tabliodb-danger-text))] shadow-[0_1px_0_rgb(var(--tabliodb-danger-border))]">
+                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                  </span>
+                ) : null}
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[380px] p-2">
+              <div className="flex items-start justify-between gap-3 px-2 py-1.5">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-extrabold">Notifications</div>
+                  <p className="mt-0.5 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    Mentions and direct replies across your projects
+                  </p>
+                </div>
+                <Badge variant={unreadNotificationCount > 0 ? 'yellow' : 'neutral'}>
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount} unread
+                </Badge>
+              </div>
+              <DropdownMenuSeparatorItem />
+              {notificationInboxQuery.isPending ? (
+                <div className="flex items-center gap-2 rounded-(--tabliodb-radius-sm) px-3 py-3 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Loading inbox
+                </div>
+              ) : notificationInboxQuery.error ? (
+                <div className="rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-3 py-2 text-xs font-extrabold text-[rgb(var(--tabliodb-danger-text))]">
+                  {getErrorMessage(notificationInboxQuery.error)}
+                </div>
+              ) : inboxNotifications.length === 0 ? (
+                <div className="rounded-(--tabliodb-radius-md) border border-dashed border-[rgb(var(--tabliodb-border))] px-3 py-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  No mentions or replies yet
+                </div>
+              ) : (
+                <div className="grid gap-1">
+                  {inboxNotifications.map((notification) => (
+                    <NotificationInboxMenuItem
+                      key={notification.id}
+                      notification={notification}
+                      onSelect={handleNotificationOpen}
+                    />
+                  ))}
+                </div>
+              )}
+              {notificationInboxQuery.data?.nextCursor ? (
+                <>
+                  <DropdownMenuSeparatorItem />
+                  <div className="px-2 py-1 text-center text-[11px] font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
+                    Showing latest {inboxNotifications.length} notifications
+                  </div>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <IconButton disabled icon={History} label="History coming soon" />
           <IconButton disabled icon={GitBranch} label="Branches coming soon" />
           <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
@@ -1362,6 +1485,54 @@ function updateLiveModelFromDiagram(
   modelRef.current = nextModel;
 
   return nextModel;
+}
+
+function NotificationInboxMenuItem({
+  notification,
+  onSelect,
+}: {
+  notification: NotificationInboxItemDto;
+  onSelect: (notification: NotificationInboxItemDto) => void;
+}) {
+  const Icon = notification.type === 'mention' ? AtSign : Reply;
+  const targetLabel = formatCommentTargetType(notification.thread.targetType);
+  const actionLabel = notification.type === 'mention' ? 'mentioned you' : 'replied to you';
+
+  return (
+    <DropdownMenuItem
+      className={cn(
+        'items-start gap-2.5 p-2.5',
+        notification.isUnread && 'bg-[rgb(var(--tabliodb-selected-surface))]',
+      )}
+      onSelect={() => onSelect(notification)}
+    >
+      <span
+        className={cn(
+          'mt-0.5 grid size-8 shrink-0 place-items-center rounded-[12px] border text-white shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]',
+          notification.type === 'mention'
+            ? 'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky))]'
+            : 'border-[rgb(var(--tabliodb-lavender-border))] bg-[rgb(var(--tabliodb-lavender))]',
+        )}
+      >
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center justify-between gap-2">
+          <span className="min-w-0 truncate text-[13px] font-extrabold">
+            {notification.comment.author.name} {actionLabel}
+          </span>
+          {notification.isUnread ? <Badge variant="yellow">New</Badge> : null}
+        </span>
+        <span className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+          {notification.comment.bodyText || 'No preview available.'}
+        </span>
+        <span className="mt-1 block truncate text-[11px] font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
+          {notification.project.name} / {notification.diagram.name} / {targetLabel} /{' '}
+          {formatDateTime(notification.createdAt)}
+        </span>
+      </span>
+    </DropdownMenuItem>
+  );
 }
 
 function CommentsDialog({

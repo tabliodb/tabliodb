@@ -4,6 +4,7 @@ import { CommentService } from './comment.service.js';
 import { DiagramService } from './diagram.service.js';
 import { FileService } from './file.service.js';
 import { InvitationService } from './invitation.service.js';
+import { NotificationService } from './notification.service.js';
 import { OrganizationService } from './organization.service.js';
 import { PermissionService } from './permission.service.js';
 import { ProjectService } from './project.service.js';
@@ -21,6 +22,7 @@ export const services = [
   DiagramService,
   FileService,
   InvitationService,
+  NotificationService,
   OrganizationService,
   PermissionService,
   ProjectService,

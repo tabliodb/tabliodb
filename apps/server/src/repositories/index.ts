@@ -8,6 +8,7 @@ import { DatabaseRepository } from './database.repository.js';
 import { DiagramRepository } from './diagram.repository.js';
 import { FileRepository } from './file.repository.js';
 import { InvitationRepository } from './invitation.repository.js';
+import { NotificationRepository } from './notification.repository.js';
 import { OrganizationRepository } from './organization.repository.js';
 import { PasswordResetRepository } from './password-reset.repository.js';
 import { ProjectRepository } from './project.repository.js';
@@ -28,6 +29,7 @@ export const repositories = [
   DiagramRepository,
   FileRepository,
   InvitationRepository,
+  NotificationRepository,
   OrganizationRepository,
   PasswordResetRepository,
   ProjectRepository,

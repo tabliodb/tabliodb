@@ -10,6 +10,7 @@ import type {
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { sdk } from '@/services/sdk';
+import { notificationKeys } from '@/resources/notifications';
 import { commentKeys } from './comment.keys';
 
 const createCommentThreadMutationFn = (variables: {
@@ -48,6 +49,7 @@ export function useCreateCommentThreadMutation(params: UseCreateCommentThreadMut
       // Thread baru mengubah daftar thread diagram dan membuat comment list thread baru tersedia.
       queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       queryClient.setQueryData(commentKeys.threadComments(data.thread.id, {}), {
         items: [data.comment],
         nextCursor: null,
@@ -71,6 +73,7 @@ export function useReplyToCommentThreadMutation(params: UseReplyToCommentThreadM
       queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -89,6 +92,7 @@ export function useReplyToCommentMutation(params: UseReplyToCommentMutationParam
       queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -106,6 +110,7 @@ export function useUpdateCommentMutation(params: UseUpdateCommentMutationParams 
       // Edited comments keep the same thread but change the visible comment tree and mention metadata.
       queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -124,6 +129,7 @@ export function useDeleteCommentMutation(params: UseDeleteCommentMutationParams 
       queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -141,6 +147,7 @@ export function useMarkCommentThreadReadMutation(params: UseMarkCommentThreadRea
       // Read cursor menurunkan unread badge thread list dan menjaga panel aktif punya state "seen by" terbaru.
       queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       queryClient.setQueryData(commentKeys.readState(data.threadId), data);
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
