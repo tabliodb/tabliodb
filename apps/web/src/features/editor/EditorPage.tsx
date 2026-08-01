@@ -160,6 +160,7 @@ import {
   useCreateCommentThreadMutation,
   useDeleteCommentMutation,
   useMarkCommentThreadReadMutation,
+  useReplyToCommentMutation,
   useReplyToCommentThreadMutation,
   useResolveCommentThreadMutation,
   useUnresolveCommentThreadMutation,
@@ -298,6 +299,7 @@ const projectMemberPageQuery = { limit: 50 } as const;
 const reviewSignalPageQuery = { limit: 50 } as const;
 const commentThreadPageQuery = { limit: 50 } as const;
 const commentReplyPageQuery = { limit: 50 } as const;
+const commentNestedReplyPageQuery = { limit: 30 } as const;
 const commentTypingFreshnessMs = 8000;
 const commentTypingTimeoutMs = 6500;
 const workspaceMemberPageQuery = { limit: 50 } as const;
@@ -1431,10 +1433,11 @@ function CommentsDialog({
   });
   const threads = threadsQuery.data?.items ?? emptyCommentThreads;
   const activeThread = activeThreadId ? (threads.find((thread) => thread.id === activeThreadId) ?? null) : null;
-  const threadCommentsQueryOptions = commentQueries.listThreadComments(activeThreadId ?? '', commentReplyPageQuery);
-  const threadCommentsQuery = useQuery({
-    ...threadCommentsQueryOptions,
-    enabled: open && Boolean(activeThreadId) && threadCommentsQueryOptions.enabled !== false,
+  const rootCommentsQueryOptions = commentQueries.listRootComments(activeThreadId ?? '', commentReplyPageQuery);
+  const rootCommentsQuery = useQuery({
+    ...rootCommentsQueryOptions,
+    // Root comments menjadi entry point tree; setiap child mengambil replies langsung dari endpoint parent comment.
+    enabled: open && Boolean(activeThreadId) && rootCommentsQueryOptions.enabled !== false,
   });
   const threadReadStateQueryOptions = commentQueries.readState(activeThread?.id ?? '');
   const threadReadStateQuery = useQuery({
@@ -1448,8 +1451,7 @@ function CommentsDialog({
     // Mention suggestions memakai project members dan baru dibutuhkan ketika dialog komentar dibuka.
     enabled: open && mentionMembersQueryOptions.enabled !== false,
   });
-  const comments = threadCommentsQuery.data?.items ?? emptyComments;
-  const commentTree = useMemo(() => createCommentTree(comments), [comments]);
+  const rootComments = rootCommentsQuery.data?.items ?? emptyComments;
   const visibleTypingPresences = useMemo(
     () => getFreshCommentTypingPresences(remoteTypingPresences, typingTick),
     [remoteTypingPresences, typingTick],
@@ -1462,15 +1464,17 @@ function CommentsDialog({
   const mentionUsers = mentionMembersQuery.data?.items ?? emptyProjectMembers;
   const createThreadMutation = useCreateCommentThreadMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
-  const replyMutation = useReplyToCommentThreadMutation();
+  const threadReplyMutation = useReplyToCommentThreadMutation();
+  const commentReplyMutation = useReplyToCommentMutation();
   const resolveThreadMutation = useResolveCommentThreadMutation();
   const unresolveThreadMutation = useUnresolveCommentThreadMutation();
   const markThreadReadMutation = useMarkCommentThreadReadMutation();
   const updateCommentMutation = useUpdateCommentMutation();
+  const isReplyMutationPending = threadReplyMutation.isPending || commentReplyMutation.isPending;
   const isMutationPending =
     createThreadMutation.isPending ||
     deleteCommentMutation.isPending ||
-    replyMutation.isPending ||
+    isReplyMutationPending ||
     resolveThreadMutation.isPending ||
     unresolveThreadMutation.isPending ||
     updateCommentMutation.isPending;
@@ -1516,15 +1520,15 @@ function CommentsDialog({
     if (
       !open ||
       !activeThread ||
-      threadCommentsQuery.isPending ||
-      threadCommentsQuery.error ||
+      rootCommentsQuery.isPending ||
+      rootCommentsQuery.error ||
       markThreadReadMutation.isPending
     ) {
       return;
     }
 
     const readSignature = `${activeThread.id}:${activeThread.updatedAt}:${
-      threadCommentsQuery.data?.totalCount ?? comments.length
+      rootCommentsQuery.data?.totalCount ?? rootComments.length
     }`;
 
     if (lastMarkedReadSignatureRef.current === readSignature) {
@@ -1535,12 +1539,12 @@ function CommentsDialog({
     markThreadReadMutation.mutate(activeThread.id);
   }, [
     activeThread,
-    comments.length,
+    rootComments.length,
     markThreadReadMutation,
     open,
-    threadCommentsQuery.data?.totalCount,
-    threadCommentsQuery.error,
-    threadCommentsQuery.isPending,
+    rootCommentsQuery.data?.totalCount,
+    rootCommentsQuery.error,
+    rootCommentsQuery.isPending,
   ]);
 
   useEffect(() => {
@@ -1586,7 +1590,7 @@ function CommentsDialog({
       stopCommentTyping();
       createThreadMutation.reset();
       deleteCommentMutation.reset();
-      replyMutation.reset();
+      resetReplyMutations();
       resolveThreadMutation.reset();
       unresolveThreadMutation.reset();
       updateCommentMutation.reset();
@@ -1621,21 +1625,33 @@ function CommentsDialog({
       return;
     }
 
-    replyMutation.mutate(
-      {
-        body: {
-          bodyJson: values.bodyJson,
-          parentCommentId: replyParentComment?.id ?? null,
+    const body = {
+      bodyJson: values.bodyJson,
+      parentCommentId: replyParentComment?.id ?? null,
+    };
+    const onSuccess = () => {
+      replyForm.reset(createEmptyCommentFormBody());
+      setReplyParentComment(null);
+      stopCommentTyping();
+    };
+
+    if (replyParentComment) {
+      commentReplyMutation.mutate(
+        {
+          body,
+          commentId: replyParentComment.id,
         },
+        { onSuccess },
+      );
+      return;
+    }
+
+    threadReplyMutation.mutate(
+      {
+        body,
         threadId: activeThread.id,
       },
-      {
-        onSuccess: () => {
-          replyForm.reset(createEmptyCommentFormBody());
-          setReplyParentComment(null);
-          stopCommentTyping();
-        },
-      },
+      { onSuccess },
     );
   }
 
@@ -1650,7 +1666,7 @@ function CommentsDialog({
 
     if (replyParentComment?.id !== comment.id) {
       replyForm.reset(createEmptyCommentFormBody());
-      replyMutation.reset();
+      resetReplyMutations();
     }
 
     stopCommentTyping();
@@ -1666,7 +1682,7 @@ function CommentsDialog({
     setReplyParentComment(null);
     setDeleteConfirmCommentId(null);
     replyForm.reset(createEmptyCommentFormBody());
-    replyMutation.reset();
+    resetReplyMutations();
     updateCommentMutation.reset();
     editForm.reset({
       body: comment.body,
@@ -1690,7 +1706,7 @@ function CommentsDialog({
     setReplyParentComment(null);
     editForm.reset(createEmptyCommentFormBody());
     replyForm.reset(createEmptyCommentFormBody());
-    replyMutation.reset();
+    resetReplyMutations();
     deleteCommentMutation.reset();
     stopCommentTyping();
     setDeleteConfirmCommentId(comment.id);
@@ -1736,7 +1752,7 @@ function CommentsDialog({
 
   function handleInlineReplyCancel() {
     replyForm.reset(createEmptyCommentFormBody());
-    replyMutation.reset();
+    resetReplyMutations();
     setReplyParentComment(null);
     stopCommentTyping();
   }
@@ -1771,7 +1787,7 @@ function CommentsDialog({
     onChange(value);
     replyForm.setValue('bodyJson', bodyJson, { shouldDirty: true });
 
-    if (!activeThread || !canComment || replyMutation.isPending || value.trim().length === 0) {
+    if (!activeThread || !canComment || isReplyMutationPending || value.trim().length === 0) {
       stopCommentTyping();
       return;
     }
@@ -1820,8 +1836,17 @@ function CommentsDialog({
     }
   }
 
+  function resetReplyMutations() {
+    threadReplyMutation.reset();
+    commentReplyMutation.reset();
+  }
+
   const mutationError =
-    createThreadMutation.error ?? replyMutation.error ?? resolveThreadMutation.error ?? unresolveThreadMutation.error;
+    createThreadMutation.error ??
+    threadReplyMutation.error ??
+    commentReplyMutation.error ??
+    resolveThreadMutation.error ??
+    unresolveThreadMutation.error;
   const activeThreadTargetLabel = activeThread ? getCommentThreadTargetLabel(model, activeThread) : null;
   const readReceiptText = formatReadReceiptText(
     getVisibleThreadReaders(threadReadStateQuery.data?.readers ?? [], currentUserId),
@@ -1888,7 +1913,7 @@ function CommentsDialog({
               <CommentComposer
                 aria-invalid={Boolean(replyForm.formState.errors.body)}
                 density="compact"
-                disabled={!activeThread || !canComment || replyMutation.isPending}
+                disabled={!activeThread || !canComment || isReplyMutationPending}
                 mentionUsers={mentionUsers}
                 onBlur={() => handleReplyComposerBlur(field.onBlur)}
                 onChange={(value, bodyJson) => handleReplyComposerChange(value, bodyJson, field.onChange)}
@@ -1903,8 +1928,8 @@ function CommentsDialog({
             <FieldError>{replyForm.formState.errors.body?.message}</FieldError>
             {mutationError ? <FieldError>{getErrorMessage(mutationError)}</FieldError> : null}
           </div>
-          <Button disabled={!activeThread || !canComment || replyMutation.isPending} size="sm" type="submit">
-            {replyMutation.isPending ? (
+          <Button disabled={!activeThread || !canComment || isReplyMutationPending} size="sm" type="submit">
+            {isReplyMutationPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <MessageSquareText className="size-4" />
@@ -2188,8 +2213,8 @@ function CommentsDialog({
                   ) : null}
                 </div>
                 <Badge variant="neutral">
-                  {threadCommentsQuery.data?.totalCount ?? comments.length}
-                  {comments.length === 1 ? ' message' : ' messages'}
+                  {rootCommentsQuery.data?.totalCount ?? rootComments.length}
+                  {rootComments.length === 1 ? ' root message' : ' root messages'}
                 </Badge>
               </div>
               {activeThreadTypingPresences.length > 0 ? (
@@ -2206,22 +2231,22 @@ function CommentsDialog({
                   <div className="grid h-full place-items-center rounded-(--tabliodb-radius-md) border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                     Comments stay anchored to the diagram objects your team is reviewing.
                   </div>
-                ) : threadCommentsQuery.isPending ? (
+                ) : rootCommentsQuery.isPending ? (
                   <div className="flex items-center gap-2 rounded-(--tabliodb-radius-md) p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
                     <Loader2 className="size-4 animate-spin" />
                     Loading replies
                   </div>
-                ) : threadCommentsQuery.error ? (
+                ) : rootCommentsQuery.error ? (
                   <div className="rounded-(--tabliodb-radius-md) border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                    {getErrorMessage(threadCommentsQuery.error)}
+                    {getErrorMessage(rootCommentsQuery.error)}
                   </div>
-                ) : comments.length === 0 ? (
+                ) : rootComments.length === 0 ? (
                   <div className="grid h-full place-items-center rounded-(--tabliodb-radius-md) border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                     This thread is ready for the first reply.
                   </div>
                 ) : (
                   <div className="grid gap-1">
-                    {commentTree.map((comment) => (
+                    {rootComments.map((comment) => (
                       <ThreadCommentItem
                         canModerateComments={canModerateComments}
                         canComment={canComment}
@@ -2241,6 +2266,7 @@ function CommentsDialog({
                         onReply={handleReplyTargetSelect}
                         renderEditComposer={renderInlineEditComposer}
                         renderReplyComposer={renderInlineReplyComposer}
+                        treeOpen={open}
                       />
                     ))}
                   </div>
@@ -2269,7 +2295,7 @@ function CommentsDialog({
                       <CommentComposer
                         aria-invalid={Boolean(replyForm.formState.errors.body)}
                         density="compact"
-                        disabled={!activeThread || !canComment || replyMutation.isPending}
+                        disabled={!activeThread || !canComment || isReplyMutationPending}
                         mentionUsers={mentionUsers}
                         menuPlacement="top"
                         onBlur={() => handleReplyComposerBlur(field.onBlur)}
@@ -2285,8 +2311,8 @@ function CommentsDialog({
                     <FieldError>{replyForm.formState.errors.body?.message}</FieldError>
                     {mutationError ? <FieldError>{getErrorMessage(mutationError)}</FieldError> : null}
                   </div>
-                  <Button disabled={!activeThread || !canComment || replyMutation.isPending} size="sm" type="submit">
-                    {replyMutation.isPending ? (
+                  <Button disabled={!activeThread || !canComment || isReplyMutationPending} size="sm" type="submit">
+                    {isReplyMutationPending ? (
                       <Loader2 className="size-4 animate-spin" />
                     ) : (
                       <MessageSquareText className="size-4" />
@@ -2302,10 +2328,6 @@ function CommentsDialog({
     </Dialog>
   );
 }
-
-type ThreadCommentNode = CommentResponseDto & {
-  replies: ThreadCommentNode[];
-};
 
 function ThreadCommentItem({
   canModerateComments,
@@ -2323,10 +2345,11 @@ function ThreadCommentItem({
   onReply,
   renderEditComposer,
   renderReplyComposer,
+  treeOpen,
 }: {
   canModerateComments: boolean;
   canComment: boolean;
-  comment: ThreadCommentNode;
+  comment: CommentResponseDto;
   currentUserId: string;
   deleteConfirmCommentId: string | null;
   deleteError: unknown;
@@ -2339,10 +2362,18 @@ function ThreadCommentItem({
   onReply: (comment: CommentResponseDto) => void;
   renderEditComposer: (comment: CommentResponseDto) => ReactNode;
   renderReplyComposer: (comment: CommentResponseDto) => ReactNode;
+  treeOpen: boolean;
 }) {
-  const hasReplies = comment.replies.length > 0;
+  const hasReplies = comment.replyCount > 0;
   const isDeleted = Boolean(comment.deletedAt);
   const [areRepliesExpanded, setAreRepliesExpanded] = useState(true);
+  const repliesQueryOptions = commentQueries.listReplies(comment.id, commentNestedReplyPageQuery);
+  const repliesQuery = useQuery({
+    ...repliesQueryOptions,
+    // Child replies dibuat lazy per branch sehingga thread besar tidak wajib memuat seluruh tree dalam satu request.
+    enabled: treeOpen && hasReplies && areRepliesExpanded && repliesQueryOptions.enabled !== false,
+  });
+  const replies = repliesQuery.data?.items ?? emptyComments;
   const canEdit = canComment && !isDeleted && comment.createdById === currentUserId;
   const canDelete = canComment && !isDeleted && (comment.createdById === currentUserId || canModerateComments);
   const isDeleteConfirming = deleteConfirmCommentId === comment.id;
@@ -2485,6 +2516,17 @@ function ThreadCommentItem({
                   </button>
                 ) : null}
               </div>
+              {hasVisibleReplies && repliesQuery.isPending ? (
+                <div className="mt-1.5 flex items-center gap-1.5 text-xs font-bold text-[rgb(var(--tabliodb-ink-subtle))]">
+                  <Loader2 className="size-3 animate-spin" />
+                  Loading replies
+                </div>
+              ) : null}
+              {hasVisibleReplies && repliesQuery.error ? (
+                <div className="mt-1">
+                  <FieldError>{getErrorMessage(repliesQuery.error)}</FieldError>
+                </div>
+              ) : null}
               {isDeleteConfirming && deleteError ? (
                 <div className="mt-1">
                   <FieldError>{getErrorMessage(deleteError)}</FieldError>
@@ -2499,7 +2541,7 @@ function ThreadCommentItem({
         <div className={cn('pb-2 pr-2', inlineReplyIndentClass)}>{inlineReplyComposer}</div>
       ) : null}
 
-      {hasVisibleReplies ? (
+      {hasVisibleReplies && replies.length > 0 ? (
         <div className={cn('relative -mt-1 pl-8.5', replySpineIndentClass)}>
           {/* The spine sits on the parent avatar centerline, while each elbow overlaps the child avatar edge so nested replies feel physically connected. */}
           <span
@@ -2507,7 +2549,7 @@ function ThreadCommentItem({
             className="absolute bottom-3 left-0 -top-1.5 w-px bg-[rgb(var(--tabliodb-border-strong))]"
           />
           <div className="grid gap-0.5">
-            {comment.replies.map((reply) => (
+            {replies.map((reply) => (
               <ThreadCommentItem
                 canModerateComments={canModerateComments}
                 canComment={canComment}
@@ -2525,6 +2567,7 @@ function ThreadCommentItem({
                 onReply={onReply}
                 renderEditComposer={renderEditComposer}
                 renderReplyComposer={renderReplyComposer}
+                treeOpen={treeOpen}
               />
             ))}
           </div>
@@ -2545,38 +2588,6 @@ function getCommentQuotePreview(comment: CommentResponseDto): string {
 
   // Quote preview memakai plain text hasil sanitasi server; rendering rich Lexical JSON akan ditambahkan sebagai tahap aman terpisah.
   return comment.body.trim() || 'No preview available.';
-}
-
-function createCommentTree(comments: CommentResponseDto[]): ThreadCommentNode[] {
-  const nodesById = new Map<string, ThreadCommentNode>();
-  const roots: ThreadCommentNode[] = [];
-
-  for (const comment of comments) {
-    nodesById.set(comment.id, {
-      ...comment,
-      replies: [],
-    });
-  }
-
-  for (const comment of comments) {
-    const node = nodesById.get(comment.id);
-
-    if (!node) {
-      continue;
-    }
-
-    const parent = comment.parentCommentId ? nodesById.get(comment.parentCommentId) : null;
-
-    if (parent) {
-      // Tree disusun di client dari halaman comment yang tersedia; parent yang belum ikut ter-fetch tetap ditampilkan sebagai root agar pagination tidak merusak UI.
-      parent.replies.push(node);
-      continue;
-    }
-
-    roots.push(node);
-  }
-
-  return roots;
 }
 
 function getFreshCommentTypingPresences(
