@@ -1009,12 +1009,52 @@ export type SnapshotResponseDtoOutput = {
       relationshipRouting?: RelationshipRouting;
     };
   };
+  restoredFromSnapshotId: string | null;
   createdAt: string;
 };
 export type SnapshotListResponseDtoOutput = {
   items: SnapshotResponseDtoOutput[];
   nextCursor: string | null;
   totalCount: number;
+};
+export type SnapshotReferenceDtoOutput = {
+  id: string;
+  diagramId: string;
+  version: number;
+  message: string | null;
+  restoredFromSnapshotId: string | null;
+  createdAt: string;
+};
+export type SnapshotTableRenameDtoOutput = {
+  id: string;
+  fromName: string;
+  toName: string;
+};
+export type SnapshotTableChangeSummaryDtoOutput = {
+  added: number;
+  removed: number;
+  changed: number;
+  renamed: SnapshotTableRenameDtoOutput[];
+};
+export type SnapshotEntityChangeSummaryDtoOutput = {
+  added: number;
+  removed: number;
+  changed: number;
+};
+export type SnapshotDiffResponseDtoOutput = {
+  fromSnapshot: SnapshotReferenceDtoOutput;
+  toSnapshot: SnapshotReferenceDtoOutput;
+  tables: SnapshotTableChangeSummaryDtoOutput;
+  columns: SnapshotEntityChangeSummaryDtoOutput;
+  relationships: SnapshotEntityChangeSummaryDtoOutput;
+  indexes: SnapshotEntityChangeSummaryDtoOutput;
+  enums: SnapshotEntityChangeSummaryDtoOutput;
+  checks: SnapshotEntityChangeSummaryDtoOutput;
+  notes: SnapshotEntityChangeSummaryDtoOutput;
+  groups: SnapshotEntityChangeSummaryDtoOutput;
+  dialectChanged: boolean;
+  metadataChanged: boolean;
+  schemaVersionChanged: boolean;
 };
 export type UserResponseDtoOutput = {
   id: string;
@@ -2447,6 +2487,43 @@ export function getDiagramSnapshots(
         ...opts,
       },
     ),
+  );
+}
+export function getSnapshotDiff(
+  {
+    toSnapshotId,
+    fromSnapshotId,
+  }: {
+    toSnapshotId: string;
+    fromSnapshotId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: SnapshotDiffResponseDtoOutput;
+    }>(`/snapshots/${encodeURIComponent(fromSnapshotId)}/diff/${encodeURIComponent(toSnapshotId)}`, {
+      ...opts,
+    }),
+  );
+}
+export function restoreSnapshot(
+  {
+    snapshotId,
+  }: {
+    snapshotId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: SnapshotResponseDtoOutput;
+    }>(`/snapshots/${encodeURIComponent(snapshotId)}/restore`, {
+      ...opts,
+      method: 'POST',
+    }),
   );
 }
 export function getUsers(

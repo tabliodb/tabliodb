@@ -3,6 +3,7 @@ import { Permission, isGranted, permissionsForProjectRole, type PaginationQuery 
 import type {
   DiagramResponseDto,
   ProjectResponseDto,
+  SnapshotDiffResponseDto,
   SnapshotListResponseDto,
   SnapshotResponseDto,
 } from '@tabliodb/sdk';
@@ -13,6 +14,10 @@ import { snapshotsKeys } from './snapshot.keys';
 type InitialSnapshotFactory = (diagram: DiagramResponseDto) => DiagramModel;
 
 type SnapshotsQueries = {
+  diff: (
+    fromSnapshotId: string | null,
+    toSnapshotId: string | null,
+  ) => AppQueryOptions<SnapshotDiffResponseDto, ReturnType<typeof snapshotsKeys.diff>>;
   listByDiagram: (
     diagramId: string,
     query?: PaginationQuery,
@@ -25,6 +30,14 @@ type SnapshotsQueries = {
 };
 
 export const snapshotsQueries: SnapshotsQueries = {
+  diff: (fromSnapshotId: string | null, toSnapshotId: string | null) =>
+    appQueryOptions({
+      enabled: Boolean(fromSnapshotId && toSnapshotId),
+      queryFn: () => sdk.snapshots.diff(fromSnapshotId ?? '', toSnapshotId ?? ''),
+      // Null id tetap dipetakan ke key stabil supaya hook bisa dibuat sebelum user memilih snapshot pembanding.
+      queryKey: snapshotsKeys.diff(fromSnapshotId ?? 'missing-from-snapshot', toSnapshotId ?? 'missing-to-snapshot'),
+    }),
+
   listByDiagram: (diagramId: string, query: PaginationQuery = {}) =>
     appQueryOptions({
       enabled: Boolean(diagramId),

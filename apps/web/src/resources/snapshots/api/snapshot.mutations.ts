@@ -5,9 +5,14 @@ import { sdk } from '@/services/sdk';
 import { snapshotsKeys } from './snapshot.keys';
 
 const createSnapshotMutationFn = (body: SnapshotCreateDto) => sdk.snapshots.create(body);
+const restoreSnapshotMutationFn = (snapshotId: string) => sdk.snapshots.restore(snapshotId);
 
 type UseCreateSnapshotMutationParams = {
   mutationConfig?: MutationConfig<typeof createSnapshotMutationFn>;
+};
+
+type UseRestoreSnapshotMutationParams = {
+  mutationConfig?: MutationConfig<typeof restoreSnapshotMutationFn>;
 };
 
 export function useCreateSnapshotMutation(params: UseCreateSnapshotMutationParams = {}) {
@@ -21,6 +26,24 @@ export function useCreateSnapshotMutation(params: UseCreateSnapshotMutationParam
         nextCursor: current?.nextCursor ?? null,
         totalCount: (current?.totalCount ?? 0) + 1,
       }));
+      void queryClient.invalidateQueries({ queryKey: snapshotsKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useRestoreSnapshotMutation(params: UseRestoreSnapshotMutationParams = {}) {
+  return useMutation({
+    mutationFn: restoreSnapshotMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      queryClient.setQueryData<SnapshotListResponseDto>(snapshotsKeys.listByDiagram(data.diagramId), (current) => ({
+        items: [data, ...(current?.items ?? [])],
+        nextCursor: current?.nextCursor ?? null,
+        totalCount: (current?.totalCount ?? 0) + 1,
+      }));
+      // Restore menghasilkan snapshot baru dari versi lama, sehingga semua daftar history diagram perlu di-refresh.
+      void queryClient.invalidateQueries({ queryKey: snapshotsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

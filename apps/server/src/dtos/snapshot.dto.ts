@@ -19,9 +19,59 @@ const SnapshotResponseSchema = z
     version: z.number(),
     message: z.string().nullable(),
     snapshot: DiagramModelSchema,
+    restoredFromSnapshotId: z.string().uuid().nullable(),
     createdAt: DateTimeSchema,
   })
   .meta({ id: 'SnapshotResponseDto' });
+
+const SnapshotReferenceSchema = z
+  .object({
+    id: z.string().uuid(),
+    diagramId: z.string().uuid(),
+    version: z.number(),
+    message: z.string().nullable(),
+    restoredFromSnapshotId: z.string().uuid().nullable(),
+    createdAt: DateTimeSchema,
+  })
+  .meta({ id: 'SnapshotReferenceDto' });
+
+const SnapshotEntityChangeSummarySchema = z
+  .object({
+    added: z.number().int().nonnegative(),
+    removed: z.number().int().nonnegative(),
+    changed: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'SnapshotEntityChangeSummaryDto' });
+
+const SnapshotTableRenameSchema = z
+  .object({
+    id: z.string(),
+    fromName: z.string(),
+    toName: z.string(),
+  })
+  .meta({ id: 'SnapshotTableRenameDto' });
+
+const SnapshotTableChangeSummarySchema = SnapshotEntityChangeSummarySchema.extend({
+  renamed: z.array(SnapshotTableRenameSchema),
+}).meta({ id: 'SnapshotTableChangeSummaryDto' });
+
+const SnapshotDiffResponseSchema = z
+  .object({
+    fromSnapshot: SnapshotReferenceSchema,
+    toSnapshot: SnapshotReferenceSchema,
+    tables: SnapshotTableChangeSummarySchema,
+    columns: SnapshotEntityChangeSummarySchema,
+    relationships: SnapshotEntityChangeSummarySchema,
+    indexes: SnapshotEntityChangeSummarySchema,
+    enums: SnapshotEntityChangeSummarySchema,
+    checks: SnapshotEntityChangeSummarySchema,
+    notes: SnapshotEntityChangeSummarySchema,
+    groups: SnapshotEntityChangeSummarySchema,
+    dialectChanged: z.boolean(),
+    metadataChanged: z.boolean(),
+    schemaVersionChanged: z.boolean(),
+  })
+  .meta({ id: 'SnapshotDiffResponseDto' });
 
 const SnapshotListQuerySchema = z
   .object({
@@ -39,6 +89,7 @@ const SnapshotListResponseSchema = z
   .meta({ id: 'SnapshotListResponseDto' });
 
 export class SnapshotCreateDto extends createZodDto(SnapshotCreateSchema) {}
+export class SnapshotDiffResponseDto extends createZodDto(SnapshotDiffResponseSchema) {}
 export class SnapshotListQueryDto extends createZodDto(SnapshotListQuerySchema) {}
 export class SnapshotListResponseDto extends createZodDto(SnapshotListResponseSchema) {}
 export class SnapshotResponseDto extends createZodDto(SnapshotResponseSchema) {}
