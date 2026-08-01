@@ -8,11 +8,14 @@ import type {
 import {
   createCommentThread as createCommentThreadRequest,
   deleteComment as deleteCommentRequest,
+  getCommentReplies as getCommentRepliesRequest,
   getCommentDiagramSummary as getCommentDiagramSummaryRequest,
+  getCommentThreadRootComments as getCommentThreadRootCommentsRequest,
   getCommentThreadReadState,
   getCommentThreads,
   getThreadComments,
   markCommentThreadRead,
+  replyToComment as replyToCommentRequest,
   replyToCommentThread,
   resolveCommentThread,
   unresolveCommentThread,
@@ -93,6 +96,10 @@ export type CommentThreadCreateDto = {
 
 export type CommentReplyCreateDto = {
   bodyJson: CommentLexicalDocumentDto;
+  parentCommentId?: string | null;
+};
+
+export type CommentListQuery = PaginationQuery & {
   parentCommentId?: string | null;
 };
 
@@ -182,9 +189,12 @@ export type CommentsResource = {
   deleteComment: (commentId: string) => Promise<CommentResponseDto>;
   getDiagramSummary: (diagramId: string) => Promise<CommentDiagramSummaryDto>;
   getThreadReadState: (threadId: string) => Promise<CommentThreadReadStateDto>;
-  listThreadComments: (threadId: string, query?: PaginationQuery) => Promise<CommentListResponseDto>;
+  listReplies: (commentId: string, query?: PaginationQuery) => Promise<CommentListResponseDto>;
+  listRootComments: (threadId: string, query?: PaginationQuery) => Promise<CommentListResponseDto>;
+  listThreadComments: (threadId: string, query?: CommentListQuery) => Promise<CommentListResponseDto>;
   listThreads: (diagramId: string, query?: PaginationQuery) => Promise<CommentThreadListResponseDto>;
   markThreadRead: (threadId: string) => Promise<CommentThreadReadStateDto>;
+  replyToComment: (commentId: string, body: CommentReplyCreateDto) => Promise<CommentThreadResponseDto>;
   replyToThread: (threadId: string, body: CommentReplyCreateDto) => Promise<CommentThreadResponseDto>;
   resolveThread: (threadId: string) => Promise<CommentThreadDto>;
   unresolveThread: (threadId: string) => Promise<CommentThreadDto>;
@@ -205,8 +215,20 @@ export function createCommentsResource(opts?: RequestOpts): CommentsResource {
       deleteCommentRequest({ commentId }, opts) as unknown as Promise<CommentResponseDto>,
     getDiagramSummary: (diagramId: string) =>
       getCommentDiagramSummaryRequest({ diagramId }, opts) as unknown as Promise<CommentDiagramSummaryDto>,
-    listThreadComments: (threadId: string, query: PaginationQuery = {}) =>
-      getThreadComments({ threadId, ...query }, opts) as unknown as Promise<CommentListResponseDto>,
+    listReplies: (commentId: string, query: PaginationQuery = {}) =>
+      getCommentRepliesRequest({ commentId, ...query }, opts) as unknown as Promise<CommentListResponseDto>,
+    listRootComments: (threadId: string, query: PaginationQuery = {}) =>
+      getCommentThreadRootCommentsRequest({ threadId, ...query }, opts) as unknown as Promise<CommentListResponseDto>,
+    listThreadComments: (threadId: string, query: CommentListQuery = {}) =>
+      getThreadComments(
+        {
+          threadId,
+          ...query,
+          // Generated OpenAPI treats query values as strings; SDK public API keeps null ergonomic for root comments.
+          parentCommentId: query.parentCommentId === null ? 'null' : query.parentCommentId,
+        },
+        opts,
+      ) as unknown as Promise<CommentListResponseDto>,
     listThreads: (diagramId: string, query: PaginationQuery = {}) =>
       getCommentThreads({ diagramId, ...query }, opts) as unknown as Promise<CommentThreadListResponseDto>,
     markThreadRead: (threadId: string) =>
@@ -215,6 +237,11 @@ export function createCommentsResource(opts?: RequestOpts): CommentsResource {
       // Reply body tetap memakai tipe public SDK agar web tidak perlu import enum/DTO dari generated fetch-client.
       replyToCommentThread(
         { threadId, commentReplyCreateDto: body as unknown as GeneratedCommentReplyCreateDto },
+        opts,
+      ) as unknown as Promise<CommentThreadResponseDto>,
+    replyToComment: (commentId: string, body: CommentReplyCreateDto) =>
+      replyToCommentRequest(
+        { commentId, commentReplyCreateDto: body as unknown as GeneratedCommentReplyCreateDto },
         opts,
       ) as unknown as Promise<CommentThreadResponseDto>,
     resolveThread: (threadId: string) =>

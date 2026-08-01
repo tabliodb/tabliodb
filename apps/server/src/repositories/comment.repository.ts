@@ -12,6 +12,7 @@ export type CommentThreadListOptions = {
 export type CommentListOptions = {
   cursor?: string;
   limit: number;
+  parentCommentId?: string | null;
 };
 
 @Injectable()
@@ -167,6 +168,25 @@ export class CommentRepository {
       ])
       .where('comments.id', '=', commentId)
       .where('comments.deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  getCommentThreadScope(commentId: string) {
+    return this.db
+      .selectFrom('comments')
+      .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
+      .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
+      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .select([
+        'comments.id',
+        'comments.threadId',
+        'comments.deletedAt',
+        'comment_threads.diagramId',
+        'diagrams.projectId',
+        'projects.organizationId',
+      ])
+      // Replies to deleted tombstones still need to be readable so the nested tree does not collapse.
+      .where('comments.id', '=', commentId)
       .executeTakeFirst();
   }
 
@@ -385,6 +405,7 @@ export class CommentRepository {
 
   async getComments(threadId: string, options: CommentListOptions) {
     const offset = decodeOffsetCursor(options.cursor);
+    const parentFilter = createCommentParentFilter(options.parentCommentId);
     const rows = await this.db
       .selectFrom('comments')
       .innerJoin('users', 'users.id', 'comments.createdById')
@@ -424,6 +445,7 @@ export class CommentRepository {
         )`.as('mentionedUserIds'),
       ])
       .where('comments.threadId', '=', threadId)
+      .where(parentFilter)
       .orderBy('comments.createdAt', 'asc')
       .limit(options.limit + 1)
       .offset(offset)
@@ -432,10 +454,11 @@ export class CommentRepository {
       .selectFrom('comments')
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .where('threadId', '=', threadId)
+      .where(parentFilter)
       .executeTakeFirstOrThrow();
 
     return {
-      // Reply list memakai cursor supaya thread panjang tetap bisa dibuka tanpa menarik seluruh diskusi sekaligus.
+      // Reply list memakai cursor dan parent filter supaya UI nested tidak perlu menarik seluruh thread sekaligus.
       items: rows.slice(0, options.limit),
       nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
       totalCount: Number(totalRow.count),
@@ -609,4 +632,16 @@ export class CommentRepository {
 
 function createCommentTargetSummaryKey(targetType: string, targetId: string | null): string {
   return `${targetType}:${targetId ?? 'diagram'}`;
+}
+
+function createCommentParentFilter(parentCommentId: string | null | undefined) {
+  if (parentCommentId === undefined) {
+    return sql<boolean>`true`;
+  }
+
+  if (parentCommentId === null) {
+    return sql<boolean>`comments.parent_comment_id is null`;
+  }
+
+  return sql<boolean>`comments.parent_comment_id = ${parentCommentId}`;
 }

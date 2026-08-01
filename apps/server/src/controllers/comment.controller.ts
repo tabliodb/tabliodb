@@ -1,10 +1,11 @@
 import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import {
   CommentDiagramSummaryDto,
+  CommentListQueryDto,
   CommentListResponseDto,
   CommentReplyCreateDto,
   CommentResponseDto,
@@ -64,14 +65,33 @@ export class CommentController {
   @Get('threads/:threadId/comments')
   @ApiParam({ name: 'threadId', type: String })
   @ApiPaginationQuery()
+  @ApiQuery({
+    description: 'Use null to list root comments, a comment id to list direct replies, or omit it for legacy flat lists.',
+    name: 'parentCommentId',
+    required: false,
+    type: String,
+  })
   @ApiOperation({ operationId: 'getThreadComments' })
   @ZodResponse({ type: CommentListResponseDto })
   getThreadComments(
     @Auth() auth: AuthContext,
     @Param('threadId') threadId: string,
-    @Query() query: CommentThreadListQueryDto,
+    @Query() query: CommentListQueryDto,
   ) {
     return this.service.getThreadComments(auth, threadId, query);
+  }
+
+  @Get('threads/:threadId/root-comments')
+  @ApiParam({ name: 'threadId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getCommentThreadRootComments' })
+  @ZodResponse({ type: CommentListResponseDto })
+  getThreadRootComments(
+    @Auth() auth: AuthContext,
+    @Param('threadId') threadId: string,
+    @Query() query: CommentThreadListQueryDto,
+  ) {
+    return this.service.getThreadRootComments(auth, threadId, query);
   }
 
   @Post('threads/:threadId/comments')
@@ -82,6 +102,29 @@ export class CommentController {
   @ZodResponse({ status: HttpStatus.CREATED, type: CommentThreadResponseDto })
   replyToThread(@Auth() auth: AuthContext, @Param('threadId') threadId: string, @Body() dto: CommentReplyCreateDto) {
     return this.service.replyToThread(auth, threadId, dto);
+  }
+
+  @Get('comments/:commentId/replies')
+  @ApiParam({ name: 'commentId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getCommentReplies' })
+  @ZodResponse({ type: CommentListResponseDto })
+  getCommentReplies(
+    @Auth() auth: AuthContext,
+    @Param('commentId') commentId: string,
+    @Query() query: CommentThreadListQueryDto,
+  ) {
+    return this.service.getCommentReplies(auth, commentId, query);
+  }
+
+  @Post('comments/:commentId/replies')
+  @RateLimit({ key: 'comments:write', limit: 24, windowMs: 60_000 })
+  @ApiParam({ name: 'commentId', type: String })
+  @ApiBody({ type: CommentReplyCreateDto })
+  @ApiOperation({ operationId: 'replyToComment' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: CommentThreadResponseDto })
+  replyToComment(@Auth() auth: AuthContext, @Param('commentId') commentId: string, @Body() dto: CommentReplyCreateDto) {
+    return this.service.replyToComment(auth, commentId, dto);
   }
 
   @Patch('comments/:commentId')

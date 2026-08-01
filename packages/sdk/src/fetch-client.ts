@@ -1260,10 +1260,12 @@ export function getCommentThreads(
 }
 export function getThreadComments(
   {
+    parentCommentId,
     cursor,
     limit,
     threadId,
   }: {
+    parentCommentId?: string;
     cursor?: string;
     limit?: number;
     threadId: string;
@@ -1277,6 +1279,7 @@ export function getThreadComments(
     }>(
       `/comments/threads/${encodeURIComponent(threadId)}/comments${QS.query(
         QS.explode({
+          parentCommentId,
           cursor,
           limit,
         }),
@@ -1303,6 +1306,88 @@ export function replyToCommentThread(
       data: CommentThreadResponseDtoOutput;
     }>(
       `/comments/threads/${encodeURIComponent(threadId)}/comments`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: commentReplyCreateDto,
+      }),
+    ),
+  );
+}
+export function getCommentThreadRootComments(
+  {
+    cursor,
+    limit,
+    threadId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    threadId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentListResponseDtoOutput;
+    }>(
+      `/comments/threads/${encodeURIComponent(threadId)}/root-comments${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function getCommentReplies(
+  {
+    cursor,
+    limit,
+    commentId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    commentId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: number;
+      data: CommentListResponseDtoOutput;
+    }>(
+      `/comments/comments/${encodeURIComponent(commentId)}/replies${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function replyToComment(
+  {
+    commentId,
+    commentReplyCreateDto,
+  }: {
+    commentId: string;
+    commentReplyCreateDto: CommentReplyCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: CommentThreadResponseDtoOutput;
+    }>(
+      `/comments/comments/${encodeURIComponent(commentId)}/replies`,
       oazapfts.json({
         ...opts,
         method: 'POST',

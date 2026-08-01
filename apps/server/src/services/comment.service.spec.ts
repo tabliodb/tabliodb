@@ -60,6 +60,7 @@ describe(CommentService.name, () => {
     deleteComment: vi.fn(),
     getCommentInThread: vi.fn(),
     getCommentForResponse: vi.fn(),
+    getCommentThreadScope: vi.fn(),
     getCommentWithThread: vi.fn(),
     getComments: vi.fn(),
     getDiagramSummary: vi.fn(),
@@ -504,6 +505,97 @@ describe(CommentService.name, () => {
     expect(commentRepository.getComments).toHaveBeenCalledWith('thread-id', {
       cursor: undefined,
       limit: 50,
+      parentCommentId: undefined,
+    });
+  });
+
+  it('returns only root comments for a thread through an explicit parent filter', async () => {
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.getComments.mockResolvedValue({
+      items: [
+        {
+          ...comment,
+          authorAvatarUrl: null,
+          authorCursorColor: '#58cc02',
+          authorEmail: 'commenter@tabliodb.local',
+          authorId: 'user-id',
+          authorName: 'Commenter User',
+          mentionedUserIds: [],
+          replyCount: 2,
+        },
+      ],
+      nextCursor: 'offset:50',
+      totalCount: 12,
+    });
+
+    await expect(
+      service.getThreadRootComments(auth, 'thread-id', { cursor: 'offset:0', limit: 50 }),
+    ).resolves.toMatchObject({
+      items: [
+        {
+          id: 'comment-id',
+          parentCommentId: null,
+          replyCount: 2,
+        },
+      ],
+      nextCursor: 'offset:50',
+      totalCount: 12,
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
+    expect(commentRepository.getComments).toHaveBeenCalledWith('thread-id', {
+      cursor: 'offset:0',
+      limit: 50,
+      // Root endpoint selalu meminta parent null agar UI bisa memuat level pertama tanpa reply nested.
+      parentCommentId: null,
+    });
+  });
+
+  it('returns direct replies for a comment without rejecting deleted tombstone parents', async () => {
+    commentRepository.getCommentThreadScope.mockResolvedValue({
+      deletedAt: new Date('2026-07-30T08:03:00.000Z'),
+      diagramId: 'diagram-id',
+      id: 'parent-comment-id',
+      organizationId: 'organization-id',
+      projectId: 'project-id',
+      threadId: 'thread-id',
+    });
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.getComments.mockResolvedValue({
+      items: [
+        {
+          ...comment,
+          authorAvatarUrl: null,
+          authorCursorColor: '#58cc02',
+          authorEmail: 'commenter@tabliodb.local',
+          authorId: 'user-id',
+          authorName: 'Commenter User',
+          id: 'reply-id',
+          mentionedUserIds: [],
+          parentCommentId: 'parent-comment-id',
+          replyCount: 0,
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    await expect(service.getCommentReplies(auth, 'parent-comment-id', { limit: 20 })).resolves.toMatchObject({
+      items: [
+        {
+          id: 'reply-id',
+          parentCommentId: 'parent-comment-id',
+        },
+      ],
+      totalCount: 1,
+    });
+
+    expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
+    expect(commentRepository.getComments).toHaveBeenCalledWith('thread-id', {
+      cursor: undefined,
+      limit: 20,
+      parentCommentId: 'parent-comment-id',
     });
   });
 
@@ -632,6 +724,76 @@ describe(CommentService.name, () => {
       parentCommentId: 'parent-comment-id',
       threadId: 'thread-id',
     });
+  });
+
+  it('creates a nested reply from a comment route and forces the route comment as the parent', async () => {
+    commentRepository.getCommentWithThread.mockResolvedValue({
+      createdById: 'teammate-id',
+      deletedAt: null,
+      diagramId: 'diagram-id',
+      id: 'parent-comment-id',
+      organizationId: 'organization-id',
+      parentCommentId: null,
+      projectId: 'project-id',
+      threadId: 'thread-id',
+    });
+    commentRepository.getThreadById.mockResolvedValue(thread);
+    diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
+    commentRepository.getCommentInThread.mockResolvedValue({
+      deletedAt: null,
+      id: 'parent-comment-id',
+      parentCommentId: null,
+      threadId: 'thread-id',
+    });
+    commentRepository.createCommentReply.mockResolvedValue({
+      comment: {
+        ...comment,
+        id: 'nested-comment-id',
+        parentCommentId: 'parent-comment-id',
+      },
+      thread,
+    });
+
+    await expect(
+      service.replyToComment(auth, 'parent-comment-id', { bodyJson: commentBody('Reply from route.') }),
+    ).resolves.toMatchObject({
+      comment: {
+        id: 'nested-comment-id',
+        parentCommentId: 'parent-comment-id',
+      },
+    });
+
+    expect(commentRepository.createCommentReply).toHaveBeenCalledWith({
+      bodyJson: createPlainTextCommentLexicalDocument('Reply from route.'),
+      bodyText: 'Reply from route.',
+      createdById: 'user-id',
+      mentionUserIds: [],
+      parentCommentId: 'parent-comment-id',
+      threadId: 'thread-id',
+    });
+  });
+
+  it('rejects comment-route replies when the body points to a different parent', async () => {
+    commentRepository.getCommentWithThread.mockResolvedValue({
+      createdById: 'teammate-id',
+      deletedAt: null,
+      diagramId: 'diagram-id',
+      id: 'parent-comment-id',
+      organizationId: 'organization-id',
+      parentCommentId: null,
+      projectId: 'project-id',
+      threadId: 'thread-id',
+    });
+
+    await expect(
+      service.replyToComment(auth, 'parent-comment-id', {
+        bodyJson: commentBody('Wrong route parent.'),
+        parentCommentId: 'other-parent-id',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(commentRepository.getThreadById).not.toHaveBeenCalled();
+    expect(commentRepository.createCommentReply).not.toHaveBeenCalled();
   });
 
   it('rejects nested replies when the parent comment is not inside the thread', async () => {

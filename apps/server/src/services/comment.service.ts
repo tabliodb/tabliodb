@@ -1,9 +1,10 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Selectable } from 'kysely';
 import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
 import { AuditAction } from '../constants.js';
 import {
+  CommentListQueryDto,
   CommentReplyCreateDto,
   CommentThreadCreateDto,
   CommentThreadListQueryDto,
@@ -113,16 +114,53 @@ export class CommentService {
     };
   }
 
-  async getThreadComments(auth: AuthContext, threadId: string, query: CommentThreadListQueryDto) {
+  async getThreadComments(auth: AuthContext, threadId: string, query: CommentListQueryDto) {
     const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramRead);
     const comments = await this.commentRepository.getComments(thread.id, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
+      parentCommentId: query.parentCommentId,
     });
 
     return {
       ...comments,
       items: comments.items.map((comment) => this.serializeComment(comment)),
+    };
+  }
+
+  async getThreadRootComments(auth: AuthContext, threadId: string, query: CommentThreadListQueryDto) {
+    const thread = await this.requireCommentThread(auth, threadId, Permission.DiagramRead);
+    const comments = await this.commentRepository.getComments(thread.id, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+      // Root comments adalah level pertama di dalam thread, sehingga parent harus null secara eksplisit.
+      parentCommentId: null,
+    });
+
+    return {
+      ...comments,
+      items: comments.items.map((comment) => this.serializeComment(comment)),
+    };
+  }
+
+  async getCommentReplies(auth: AuthContext, commentId: string, query: CommentThreadListQueryDto) {
+    const comment = await this.commentRepository.getCommentThreadScope(commentId);
+
+    if (!comment) {
+      throw new NotFoundException('Comment was not found.');
+    }
+
+    await this.diagramService.requireDiagram(auth, comment.diagramId, Permission.DiagramRead);
+
+    const comments = await this.commentRepository.getComments(comment.threadId, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+      parentCommentId: comment.id,
+    });
+
+    return {
+      ...comments,
+      items: comments.items.map((reply) => this.serializeComment(reply)),
     };
   }
 
@@ -185,6 +223,24 @@ export class CommentService {
         updatedAt: toIsoDateTime(result.comment.updatedAt),
       },
     };
+  }
+
+  async replyToComment(auth: AuthContext, commentId: string, dto: CommentReplyCreateDto) {
+    const comment = await this.commentRepository.getCommentWithThread(commentId);
+
+    if (!comment) {
+      throw new NotFoundException('Comment was not found.');
+    }
+
+    if (dto.parentCommentId && dto.parentCommentId !== comment.id) {
+      throw new BadRequestException('Reply parent must match the route comment.');
+    }
+
+    // Route comment menjadi parent tunggal agar client tidak bisa tanpa sengaja membuat reply ke parent lain.
+    return this.replyToThread(auth, comment.threadId, {
+      bodyJson: dto.bodyJson,
+      parentCommentId: comment.id,
+    });
   }
 
   async updateComment(auth: AuthContext, commentId: string, dto: CommentUpdateDto) {

@@ -1,5 +1,6 @@
 import type { PaginationQuery } from '@tabliodb/shared';
 import type {
+  CommentListQuery,
   CommentDiagramSummaryDto,
   CommentListResponseDto,
   CommentThreadListResponseDto,
@@ -15,8 +16,16 @@ type CommentQueries = {
   ) => AppQueryOptions<CommentDiagramSummaryDto, ReturnType<typeof commentKeys.diagramSummary>>;
   listThreadComments: (
     threadId: string,
-    query?: PaginationQuery,
+    query?: CommentListQuery,
   ) => AppQueryOptions<CommentListResponseDto, ReturnType<typeof commentKeys.threadComments>>;
+  listReplies: (
+    commentId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<CommentListResponseDto, ReturnType<typeof commentKeys.commentReplies>>;
+  listRootComments: (
+    threadId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<CommentListResponseDto, ReturnType<typeof commentKeys.rootComments>>;
   readState: (threadId: string) => AppQueryOptions<CommentThreadReadStateDto, ReturnType<typeof commentKeys.readState>>;
   listThreads: (
     diagramId: string,
@@ -31,11 +40,23 @@ export const commentQueries: CommentQueries = {
       queryFn: () => sdk.comments.getDiagramSummary(diagramId),
       queryKey: commentKeys.diagramSummary(diagramId),
     }),
-  listThreadComments: (threadId: string, query: PaginationQuery = {}) =>
+  listThreadComments: (threadId: string, query: CommentListQuery = {}) =>
     appQueryOptions({
       enabled: Boolean(threadId),
       queryFn: () => sdk.comments.listThreadComments(threadId, query),
       queryKey: commentKeys.threadComments(threadId, query),
+    }),
+  listReplies: (commentId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(commentId),
+      queryFn: () => sdk.comments.listReplies(commentId, query),
+      queryKey: commentKeys.commentReplies(commentId, query),
+    }),
+  listRootComments: (threadId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(threadId),
+      queryFn: () => sdk.comments.listRootComments(threadId, query),
+      queryKey: commentKeys.rootComments(threadId, query),
     }),
   readState: (threadId: string) =>
     appQueryOptions({

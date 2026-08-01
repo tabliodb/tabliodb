@@ -19,6 +19,10 @@ const replyToCommentThreadMutationFn = (variables: {
   body: CommentReplyCreateDto;
   threadId: string;
 }): Promise<CommentThreadResponseDto> => sdk.comments.replyToThread(variables.threadId, variables.body);
+const replyToCommentMutationFn = (variables: {
+  body: CommentReplyCreateDto;
+  commentId: string;
+}): Promise<CommentThreadResponseDto> => sdk.comments.replyToComment(variables.commentId, variables.body);
 const updateCommentMutationFn = (variables: {
   body: CommentUpdateDto;
   commentId: string;
@@ -64,6 +68,24 @@ export function useReplyToCommentThreadMutation(params: UseReplyToCommentThreadM
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Reply bisa reopen thread resolved, jadi thread list dan comment list thread perlu disegarkan bersama.
+      queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
+      queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
+      queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+type UseReplyToCommentMutationParams = {
+  mutationConfig?: MutationConfig<typeof replyToCommentMutationFn>;
+};
+
+export function useReplyToCommentMutation(params: UseReplyToCommentMutationParams = {}) {
+  return useMutation({
+    mutationFn: replyToCommentMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Reply langsung ke comment mengubah root/reply tree dan dapat reopen thread yang sudah resolved.
       queryClient.invalidateQueries({ queryKey: commentKeys.summaries() });
       queryClient.invalidateQueries({ queryKey: commentKeys.threadLists() });
       queryClient.invalidateQueries({ queryKey: commentKeys.commentLists() });
