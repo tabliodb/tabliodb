@@ -17,7 +17,7 @@ export async function editorLoader({ params }: LoaderFunctionArgs) {
       null;
 
     if (activeOrganization) {
-      await queryClient.ensureQueryData(projectsQueries.listOrCreateStarter(activeOrganization.id));
+      await queryClient.ensureQueryData(projectsQueries.listOrCreateStarter(activeOrganization));
     }
   } catch (error) {
     if (error instanceof TabliodbApiError && error.status === 401) {

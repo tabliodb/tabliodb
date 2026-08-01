@@ -1,5 +1,5 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { ProjectRole } from '@tabliodb/shared';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { ProjectService } from './project.service.js';
@@ -111,6 +111,25 @@ describe(ProjectService.name, () => {
         projectId: 'project-id',
       }),
     );
+  });
+
+  it('returns a conflict error when project slug already exists in the workspace', async () => {
+    organizationRepository.getByIdForUser.mockResolvedValue({
+      allowMemberProjectCreate: true,
+      id: 'organization-id',
+      role: OrganizationRole.Owner,
+    });
+    projectRepository.create.mockRejectedValue({
+      code: '23505',
+      constraint: 'projects_organization_id_slug_key',
+    });
+
+    await expect(
+      service.create(auth, {
+        name: 'Library System',
+        organizationId: 'organization-id',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('rejects adding a user that is not in the project workspace', async () => {

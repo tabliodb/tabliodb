@@ -1,5 +1,6 @@
-import type { PaginationQuery } from '@tabliodb/shared';
+import { OrganizationRole, type PaginationQuery } from '@tabliodb/shared';
 import type {
+  OrganizationDto,
   ProjectListQuery,
   ProjectListResponseDto,
   ProjectMemberListResponseDto,
@@ -14,7 +15,7 @@ export const defaultProjectName = 'Library System';
 type ProjectsQueries = {
   list: (query?: ProjectListQuery) => AppQueryOptions<ProjectListResponseDto, ReturnType<typeof projectsKeys.list>>;
   listOrCreateStarter: (
-    organizationId: string | null,
+    organization: OrganizationDto | null,
   ) => AppQueryOptions<ProjectResponseDto[], ReturnType<typeof projectsKeys.list>>;
   members: (
     projectId: string,
@@ -29,11 +30,11 @@ export const projectsQueries: ProjectsQueries = {
       queryKey: projectsKeys.list(query),
     }),
 
-  listOrCreateStarter: (organizationId: string | null) =>
+  listOrCreateStarter: (organization: OrganizationDto | null) =>
     appQueryOptions({
-      enabled: Boolean(organizationId),
-      queryFn: () => listOrCreateStarterProjects(organizationId),
-      queryKey: projectsKeys.list({ limit: 50, organizationId: organizationId ?? undefined }),
+      enabled: Boolean(organization?.id),
+      queryFn: () => listOrCreateStarterProjects(organization),
+      queryKey: projectsKeys.list({ limit: 50, organizationId: organization?.id ?? undefined }),
     }),
 
   members: (projectId: string, query: PaginationQuery = {}) =>
@@ -44,23 +45,32 @@ export const projectsQueries: ProjectsQueries = {
     }),
 };
 
-async function listOrCreateStarterProjects(organizationId: string | null): Promise<ProjectResponseDto[]> {
-  if (!organizationId) {
+async function listOrCreateStarterProjects(organization: OrganizationDto | null): Promise<ProjectResponseDto[]> {
+  if (!organization) {
     return [];
   }
 
-  const projects = await sdk.projects.list({ limit: 50, organizationId });
+  const projects = await sdk.projects.list({ limit: 50, organizationId: organization.id });
 
   if (projects.items.length > 0) {
     return projects.items;
+  }
+
+  if (!canCreateAutomaticStarterProject(organization)) {
+    // Workspace members may have no direct project access yet; the app should show an empty state instead of creating a duplicate starter project.
+    return [];
   }
 
   // Presentable build tetap membuat starter workspace agar instalasi kosong langsung punya diagram yang bisa dipakai demo.
   const project = await sdk.projects.create({
     description: 'Starter schema workspace',
     name: defaultProjectName,
-    organizationId,
+    organizationId: organization.id,
   });
 
   return [project];
+}
+
+export function canCreateAutomaticStarterProject(organization: OrganizationDto): boolean {
+  return organization.role === OrganizationRole.Owner || organization.role === OrganizationRole.Admin;
 }

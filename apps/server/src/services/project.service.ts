@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { defaultDiagramReviewSettings } from '@tabliodb/schema-core';
 import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
@@ -67,13 +73,13 @@ export class ProjectService {
 
     await this.assertCanCreateProject(auth, organization.id, organization.allowMemberProjectCreate);
 
-    const project = await this.projectRepository.create({
-      organizationId: organization.id,
-      name: dto.name,
-      slug: slugify(dto.name),
-      description: dto.description ?? null,
-      reviewSettings: defaultDiagramReviewSettings,
+    const project = await this.createProjectOrThrowConflict({
       createdById: auth.user.id,
+      description: dto.description ?? null,
+      name: dto.name,
+      organizationId: organization.id,
+      reviewSettings: defaultDiagramReviewSettings,
+      slug: slugify(dto.name),
     });
 
     await this.recordProjectAudit(auth, {
@@ -304,6 +310,19 @@ export class ProjectService {
     throw new ForbiddenException('Workspace members cannot create projects');
   }
 
+  private async createProjectOrThrowConflict(options: Parameters<ProjectRepository['create']>[0]) {
+    try {
+      return await this.projectRepository.create(options);
+    } catch (error) {
+      if (isProjectSlugConflict(error)) {
+        // Slug unik per workspace menjaga URL/navigasi stabil; duplicate name harus menjadi 409, bukan bocoran error Postgres.
+        throw new ConflictException('A project with this name already exists in this workspace');
+      }
+
+      throw error;
+    }
+  }
+
   private serializeProject(project: {
     createdAt: Date | string;
     description: string | null;
@@ -384,4 +403,14 @@ export class ProjectService {
       updatedAt: toIsoDateTime(member.updatedAt),
     };
   }
+}
+
+function isProjectSlugConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const record = error as { code?: unknown; constraint?: unknown };
+
+  return record.code === '23505' && record.constraint === 'projects_organization_id_slug_key';
 }

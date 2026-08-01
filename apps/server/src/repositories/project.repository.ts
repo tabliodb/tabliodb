@@ -70,6 +70,28 @@ export class ProjectRepository {
         INNER JOIN teams ON teams.id = project_team_access.team_id
         WHERE team_members.user_id = ${userId}
           AND teams.archived_at IS NULL
+        UNION ALL
+        -- Workspace owners/admins can administer every project in their workspace even if no direct project_members row exists.
+        SELECT projects.id AS project_id, 'owner' AS role
+        FROM projects
+        INNER JOIN organizations ON organizations.id = projects.organization_id
+        INNER JOIN organization_members ON organization_members.organization_id = organizations.id
+        WHERE organization_members.user_id = ${userId}
+          AND organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin')
+          AND organizations.archived_at IS NULL
+          AND projects.archived_at IS NULL
+        UNION ALL
+        -- Workspace default access lets owners expose every project to members without writing one project_members row per user.
+        SELECT projects.id AS project_id, organizations.default_project_role AS role
+        FROM projects
+        INNER JOIN organizations ON organizations.id = projects.organization_id
+        INNER JOIN organization_members ON organization_members.organization_id = organizations.id
+        WHERE organization_members.user_id = ${userId}
+          AND organization_members.status = 'active'
+          AND organizations.archived_at IS NULL
+          AND projects.archived_at IS NULL
+          AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
       ),
       effective_access AS (
         SELECT
@@ -123,6 +145,28 @@ export class ProjectRepository {
         INNER JOIN teams ON teams.id = project_team_access.team_id
         WHERE team_members.user_id = ${userId}
           AND teams.archived_at IS NULL
+        UNION ALL
+        -- Workspace owners/admins are counted with effective access for the same reason they are listed above.
+        SELECT projects.id AS project_id, 'owner' AS role
+        FROM projects
+        INNER JOIN organizations ON organizations.id = projects.organization_id
+        INNER JOIN organization_members ON organization_members.organization_id = organizations.id
+        WHERE organization_members.user_id = ${userId}
+          AND organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin')
+          AND organizations.archived_at IS NULL
+          AND projects.archived_at IS NULL
+        UNION ALL
+        -- The count query mirrors the list query so pagination totals include organization-wide default access consistently.
+        SELECT projects.id AS project_id, organizations.default_project_role AS role
+        FROM projects
+        INNER JOIN organizations ON organizations.id = projects.organization_id
+        INNER JOIN organization_members ON organization_members.organization_id = organizations.id
+        WHERE organization_members.user_id = ${userId}
+          AND organization_members.status = 'active'
+          AND organizations.archived_at IS NULL
+          AND projects.archived_at IS NULL
+          AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
       ),
       effective_access AS (
         SELECT project_id
@@ -185,6 +229,30 @@ export class ProjectRepository {
         AND project_team_access.project_id = ${projectId}
         AND projects.archived_at IS NULL
         AND teams.archived_at IS NULL
+      UNION ALL
+      -- Workspace managers get effective owner access so admin UI and recovery flows never depend on per-project grants.
+      SELECT 'owner' AS role
+      FROM projects
+      INNER JOIN organizations ON organizations.id = projects.organization_id
+      INNER JOIN organization_members ON organization_members.organization_id = organizations.id
+      WHERE organization_members.user_id = ${userId}
+        AND projects.id = ${projectId}
+        AND organization_members.status = 'active'
+        AND organization_members.role IN ('owner', 'admin')
+        AND organizations.archived_at IS NULL
+        AND projects.archived_at IS NULL
+      UNION ALL
+      -- Direct permission checks must include the same organization default role used by project listing.
+      SELECT organizations.default_project_role AS role
+      FROM projects
+      INNER JOIN organizations ON organizations.id = projects.organization_id
+      INNER JOIN organization_members ON organization_members.organization_id = organizations.id
+      WHERE organization_members.user_id = ${userId}
+        AND projects.id = ${projectId}
+        AND organization_members.status = 'active'
+        AND organizations.archived_at IS NULL
+        AND projects.archived_at IS NULL
+        AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
     `.execute(this.db);
     const role = resolveHighestProjectRole(roles.rows.map((row) => row.role));
 

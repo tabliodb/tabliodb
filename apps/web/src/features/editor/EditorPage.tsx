@@ -5,6 +5,7 @@ import {
   diagramReviewSignalCodes,
   getDiagramModelIntegrityWarnings,
   getRelationshipColumnPairs,
+  applyDiagramCommand,
   parseDiagramModel,
   stringifyDiagramModel,
   type DatabaseDialect,
@@ -119,7 +120,9 @@ import {
   UserRound,
   UsersRound,
   Reply,
+  Redo2,
   RotateCcw,
+  Undo2,
   X,
 } from 'lucide-react';
 import {
@@ -366,11 +369,17 @@ const commentTypingFreshnessMs = 8000;
 const commentTypingTimeoutMs = 6500;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
+const editorModelHistoryLimit = 80;
 const emptyCommentThreads: CommentThreadListItemDto[] = [];
 const emptyComments: CommentResponseDto[] = [];
 const emptyNotifications: NotificationInboxItemDto[] = [];
 const emptyProjectMembers: ProjectMemberDto[] = [];
 const emptySnapshots: SnapshotResponseDto[] = [];
+
+type EditorModelHistory = {
+  past: DiagramModel[];
+  future: DiagramModel[];
+};
 
 const selectClassName =
   'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50';
@@ -389,7 +398,9 @@ export function EditorPage() {
   const [fitSignal, setFitSignal] = useState(0);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
+  const modelHistoryRef = useRef<EditorModelHistory>({ past: [], future: [] });
   const persistedDraftSignatureRef = useRef<string | null>(null);
+  const [modelHistoryRevision, setModelHistoryRevision] = useState(0);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedCommentTarget, setSelectedCommentTarget] = useState<EditorCommentTarget | null>(null);
@@ -420,7 +431,7 @@ export function EditorPage() {
     );
   }, [organizations, routeWorkspaceSlug]);
 
-  const projectsQuery = useQuery(projectsQueries.listOrCreateStarter(activeOrganization?.id ?? null));
+  const projectsQuery = useQuery(projectsQueries.listOrCreateStarter(activeOrganization));
 
   const projects = projectsQuery.data ?? [];
   const filteredProjects = useMemo(() => {
@@ -505,6 +516,70 @@ export function EditorPage() {
     () => createRemoteCommentTypingPresenceList(remoteAwarenessStates, currentUser?.id ?? null),
     [currentUser?.id, remoteAwarenessStates],
   );
+  const [canUndoModelChange, canRedoModelChange] = useMemo(
+    () => [modelHistoryRef.current.past.length > 0, modelHistoryRef.current.future.length > 0] as const,
+    [modelHistoryRevision],
+  );
+
+  const resetModelHistory = useCallback(() => {
+    modelHistoryRef.current = { past: [], future: [] };
+    setModelHistoryRevision((revision) => revision + 1);
+  }, []);
+
+  const reconcileModelSelection = useCallback((nextModel: DiagramModel) => {
+    setSelectedTableId((currentTableId) =>
+      currentTableId && nextModel.tables[currentTableId] ? currentTableId : null,
+    );
+    setSelectedCommentTarget((currentTarget) =>
+      currentTarget && isCommentTargetAvailable(nextModel, currentTarget) ? currentTarget : null,
+    );
+  }, []);
+
+  const handleUndoModelChange = useCallback(() => {
+    if (!canEditDiagram) {
+      return;
+    }
+
+    const currentModel = modelRef.current;
+    const history = modelHistoryRef.current;
+    const previousModel = history.past[history.past.length - 1];
+
+    if (!currentModel || !previousModel) {
+      return;
+    }
+
+    modelHistoryRef.current = {
+      past: history.past.slice(0, -1),
+      future: [currentModel, ...history.future].slice(0, editorModelHistoryLimit),
+    };
+    modelRef.current = previousModel;
+    setModel(previousModel);
+    reconcileModelSelection(previousModel);
+    setModelHistoryRevision((revision) => revision + 1);
+  }, [canEditDiagram, reconcileModelSelection]);
+
+  const handleRedoModelChange = useCallback(() => {
+    if (!canEditDiagram) {
+      return;
+    }
+
+    const currentModel = modelRef.current;
+    const history = modelHistoryRef.current;
+    const nextModel = history.future[0];
+
+    if (!currentModel || !nextModel) {
+      return;
+    }
+
+    modelHistoryRef.current = {
+      past: [...history.past, currentModel].slice(-editorModelHistoryLimit),
+      future: history.future.slice(1),
+    };
+    modelRef.current = nextModel;
+    setModel(nextModel);
+    reconcileModelSelection(nextModel);
+    setModelHistoryRevision((revision) => revision + 1);
+  }, [canEditDiagram, reconcileModelSelection]);
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -526,6 +601,7 @@ export function EditorPage() {
         setModel(snapshot.snapshot);
         setSelectedTableId(null);
         setSelectedCommentTarget(null);
+        resetModelHistory();
         setSnapshotHistoryOpen(false);
         queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
@@ -546,6 +622,7 @@ export function EditorPage() {
         setModel(importedModel);
         setSelectedTableId(null);
         setSelectedCommentTarget(null);
+        resetModelHistory();
         queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
@@ -570,6 +647,17 @@ export function EditorPage() {
         return;
       }
 
+      const currentModel = modelRef.current;
+
+      if (currentModel && createDiagramModelSignature(currentModel) !== createDiagramModelSignature(nextModel)) {
+        // History disimpan sebagai snapshot model immutable supaya undo/redo tetap sederhana walau perubahan datang dari canvas, sidebar, atau inspector.
+        modelHistoryRef.current = {
+          past: [...modelHistoryRef.current.past, currentModel].slice(-editorModelHistoryLimit),
+          future: [],
+        };
+        setModelHistoryRevision((revision) => revision + 1);
+      }
+
       // Keep the latest draft model synchronously available for snapshot clicks that happen immediately after an input blur.
       modelRef.current = nextModel;
       setModel(nextModel);
@@ -586,6 +674,72 @@ export function EditorPage() {
       setLeftSidebarOpen(true);
     }
   }, []);
+
+  useEffect(() => {
+    const handleEditorKeyboardShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const hasHistoryModifier = event.ctrlKey || event.metaKey;
+
+      if (hasHistoryModifier && key === 'z' && !event.shiftKey && !isEditableShortcutTarget(event.target)) {
+        event.preventDefault();
+        handleUndoModelChange();
+        return;
+      }
+
+      if (
+        hasHistoryModifier &&
+        ((key === 'z' && event.shiftKey) || key === 'y') &&
+        !isEditableShortcutTarget(event.target)
+      ) {
+        event.preventDefault();
+        handleRedoModelChange();
+        return;
+      }
+
+      if (
+        canEditDiagram &&
+        selectedTableId &&
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        !isInteractiveShortcutTarget(event.target)
+      ) {
+        const currentModel = modelRef.current;
+        const tableToDelete = currentModel?.tables[selectedTableId];
+
+        if (!currentModel || !tableToDelete) {
+          return;
+        }
+
+        event.preventDefault();
+
+        if (
+          !window.confirm(
+            `Delete table "${tableToDelete.name}"? Relationships and dependent diagram metadata will be removed too.`,
+          )
+        ) {
+          return;
+        }
+
+        handleModelChange(
+          applyDiagramCommand(currentModel, {
+            type: 'table.delete',
+            tableId: selectedTableId,
+          }),
+        );
+        setSelectedTableId(null);
+        setSelectedCommentTarget(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleEditorKeyboardShortcut);
+
+    return () => {
+      window.removeEventListener('keydown', handleEditorKeyboardShortcut);
+    };
+  }, [canEditDiagram, handleModelChange, handleRedoModelChange, handleUndoModelChange, selectedTableId]);
 
   const publishAwareness = useCallback(
     (
@@ -809,7 +963,8 @@ export function EditorPage() {
     setModel(latestSnapshot.snapshot);
     setSelectedTableId(null);
     setSelectedCommentTarget(null);
-  }, [latestSnapshot]);
+    resetModelHistory();
+  }, [latestSnapshot, resetModelHistory]);
 
   useEffect(() => {
     if (!activeDiagram || snapshotsQuery.isPending || snapshotsQuery.data === undefined || latestSnapshot) {
@@ -823,7 +978,8 @@ export function EditorPage() {
     setModel(seedModel);
     setSelectedTableId(null);
     setSelectedCommentTarget(null);
-  }, [activeDiagram, latestSnapshot, snapshotsQuery.data, snapshotsQuery.isPending]);
+    resetModelHistory();
+  }, [activeDiagram, latestSnapshot, resetModelHistory, snapshotsQuery.data, snapshotsQuery.isPending]);
 
   useEffect(() => {
     if (!model || !selectedCommentTarget || isCommentTargetAvailable(model, selectedCommentTarget)) {
@@ -1006,8 +1162,7 @@ export function EditorPage() {
     const nextModel = addTableToDiagramModel(model, tableName);
     const nextTableId = Object.keys(nextModel.tables).find((tableId) => !model.tables[tableId]) ?? null;
 
-    modelRef.current = nextModel;
-    setModel(nextModel);
+    handleModelChange(nextModel);
     setSelectedTableId(nextTableId);
     // Table baru langsung menjadi target komentar aktif agar review pertama jatuh ke entity yang baru dibuat.
     setSelectedCommentTarget(nextTableId ? { targetId: nextTableId, targetType: 'table' } : null);
@@ -1097,6 +1252,22 @@ export function EditorPage() {
     return <LoadingState />;
   }
 
+  if (!projectsQuery.isPending && activeOrganization && projects.length === 0) {
+    return (
+      <ErrorState
+        error={
+          new Error(
+            isOrganizationManager(activeOrganization)
+              ? 'No project found. Create a project from this workspace to start designing.'
+              : 'No project is available for your account yet. Ask a workspace owner to grant you project or team access.',
+          )
+        }
+        onRetry={() => queryClient.invalidateQueries()}
+        title="No project access"
+      />
+    );
+  }
+
   if (!diagramsQuery.isPending && activeProject && diagrams.length === 0) {
     return (
       <ErrorState
@@ -1141,6 +1312,20 @@ export function EditorPage() {
         </div>
         <div className="flex items-center gap-1">
           <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
+          <div className="hidden items-center gap-1 xl:flex">
+            <IconButton
+              disabled={!canEditDiagram || !canUndoModelChange}
+              icon={Undo2}
+              label="Undo last edit"
+              onClick={handleUndoModelChange}
+            />
+            <IconButton
+              disabled={!canEditDiagram || !canRedoModelChange}
+              icon={Redo2}
+              label="Redo last edit"
+              onClick={handleRedoModelChange}
+            />
+          </div>
           <CollaborationPresence collaborators={collaborators} />
           <div className="relative">
             <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
@@ -1258,6 +1443,15 @@ export function EditorPage() {
               <IconButton icon={MoreHorizontal} label="More actions" variant="secondary" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={!canEditDiagram || !canUndoModelChange} onSelect={handleUndoModelChange}>
+                <Undo2 className="size-4" />
+                Undo last edit
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!canEditDiagram || !canRedoModelChange} onSelect={handleRedoModelChange}>
+                <Redo2 className="size-4" />
+                Redo last edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparatorItem />
               <DropdownMenuItem onSelect={() => setFitSignal((value) => value + 1)}>
                 <LocateFixed className="size-4" />
                 Fit diagram
@@ -1577,6 +1771,22 @@ function getOrganizationSlug(organization: OrganizationDto): string {
 
 function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: string | null): boolean {
   return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
+}
+
+function isEditableShortcutTarget(target: EventTarget | null): boolean {
+  const element = target instanceof Element ? target : null;
+
+  return Boolean(element?.closest('input, textarea, select, [contenteditable="true"], [data-lexical-editor="true"]'));
+}
+
+function isInteractiveShortcutTarget(target: EventTarget | null): boolean {
+  const element = target instanceof Element ? target : null;
+
+  return Boolean(
+    element?.closest(
+      'input, textarea, select, button, a, [contenteditable="true"], [data-lexical-editor="true"], [role="dialog"], [role="menu"], [data-radix-popper-content-wrapper]',
+    ),
+  );
 }
 
 function updateLiveModelFromDiagram(
