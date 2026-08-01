@@ -120,7 +120,7 @@ function renderTextNode(node: CommentLexicalTextNodeDto, key: string): ReactNode
         format & textFormat.italic && 'italic',
         format & textFormat.strikethrough && 'line-through',
         format & textFormat.underline && 'underline underline-offset-2',
-        format & textFormat.code && 'rounded-[6px] bg-[rgb(var(--tabliodb-surface))] px-1 py-0.5 font-mono text-[12px]',
+        format & textFormat.code && 'rounded-md bg-[rgb(var(--tabliodb-surface))] px-1 py-0.5 font-mono text-[12px]',
       )}
       key={key}
     >
