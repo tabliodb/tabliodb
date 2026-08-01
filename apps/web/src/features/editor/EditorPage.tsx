@@ -207,6 +207,14 @@ import {
 } from '@/resources/review-signals';
 import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
 import { createEmptyCommentFormBody } from './comment-body';
+import {
+  createDiagramModelSignature,
+  createEmptyEditorModelHistory,
+  redoLocalModelChange,
+  recordLocalModelChange,
+  undoLocalModelChange,
+  type EditorModelHistory,
+} from './model-history';
 import { CommentBody } from './components/CommentBody';
 import { SchemaCanvas, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
@@ -375,7 +383,6 @@ const commentTypingFreshnessMs = 8000;
 const commentTypingTimeoutMs = 6500;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
-const editorModelHistoryLimit = 80;
 const emptyCommentThreads: CommentThreadListItemDto[] = [];
 const emptyComments: CommentResponseDto[] = [];
 const emptyNotifications: NotificationInboxItemDto[] = [];
@@ -385,11 +392,6 @@ const idleCollaborationStatus: DiagramCollaborationStatus = {
   connection: 'idle',
   synced: false,
   unsyncedChanges: 0,
-};
-
-type EditorModelHistory = {
-  past: DiagramModel[];
-  future: DiagramModel[];
 };
 
 const selectClassName =
@@ -409,7 +411,7 @@ export function EditorPage() {
   const [fitSignal, setFitSignal] = useState(0);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
-  const modelHistoryRef = useRef<EditorModelHistory>({ past: [], future: [] });
+  const modelHistoryRef = useRef<EditorModelHistory>(createEmptyEditorModelHistory());
   const persistedDraftSignatureRef = useRef<string | null>(null);
   const [modelHistoryRevision, setModelHistoryRevision] = useState(0);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
@@ -547,7 +549,7 @@ export function EditorPage() {
   );
 
   const resetModelHistory = useCallback(() => {
-    modelHistoryRef.current = { past: [], future: [] };
+    modelHistoryRef.current = createEmptyEditorModelHistory();
     setModelHistoryRevision((revision) => revision + 1);
   }, []);
 
@@ -565,22 +567,17 @@ export function EditorPage() {
       return;
     }
 
-    const currentModel = modelRef.current;
-    const history = modelHistoryRef.current;
-    const previousModel = history.past[history.past.length - 1];
+    const result = undoLocalModelChange(modelHistoryRef.current, modelRef.current);
 
-    if (!currentModel || !previousModel) {
+    if (!result) {
       return;
     }
 
-    modelHistoryRef.current = {
-      past: history.past.slice(0, -1),
-      future: [currentModel, ...history.future].slice(0, editorModelHistoryLimit),
-    };
-    modelRef.current = previousModel;
-    setModel(previousModel);
-    syncModelToCollaboration(previousModel);
-    reconcileModelSelection(previousModel);
+    modelHistoryRef.current = result.history;
+    modelRef.current = result.model;
+    setModel(result.model);
+    syncModelToCollaboration(result.model);
+    reconcileModelSelection(result.model);
     setModelHistoryRevision((revision) => revision + 1);
   }, [canEditDiagram, reconcileModelSelection, syncModelToCollaboration]);
 
@@ -589,22 +586,17 @@ export function EditorPage() {
       return;
     }
 
-    const currentModel = modelRef.current;
-    const history = modelHistoryRef.current;
-    const nextModel = history.future[0];
+    const result = redoLocalModelChange(modelHistoryRef.current, modelRef.current);
 
-    if (!currentModel || !nextModel) {
+    if (!result) {
       return;
     }
 
-    modelHistoryRef.current = {
-      past: [...history.past, currentModel].slice(-editorModelHistoryLimit),
-      future: history.future.slice(1),
-    };
-    modelRef.current = nextModel;
-    setModel(nextModel);
-    syncModelToCollaboration(nextModel);
-    reconcileModelSelection(nextModel);
+    modelHistoryRef.current = result.history;
+    modelRef.current = result.model;
+    setModel(result.model);
+    syncModelToCollaboration(result.model);
+    reconcileModelSelection(result.model);
     setModelHistoryRevision((revision) => revision + 1);
   }, [canEditDiagram, reconcileModelSelection, syncModelToCollaboration]);
 
@@ -679,12 +671,10 @@ export function EditorPage() {
 
       const currentModel = modelRef.current;
 
-      if (currentModel && createDiagramModelSignature(currentModel) !== createDiagramModelSignature(nextModel)) {
-        // History disimpan sebagai snapshot model immutable supaya undo/redo tetap sederhana walau perubahan datang dari canvas, sidebar, atau inspector.
-        modelHistoryRef.current = {
-          past: [...modelHistoryRef.current.past, currentModel].slice(-editorModelHistoryLimit),
-          future: [],
-        };
+      const localHistory = recordLocalModelChange(modelHistoryRef.current, currentModel, nextModel);
+
+      if (localHistory.changed) {
+        modelHistoryRef.current = localHistory.history;
         setModelHistoryRevision((revision) => revision + 1);
       }
 
@@ -7299,11 +7289,6 @@ function getImportSqlErrorMessage(error: unknown): string {
   }
 
   return 'SQL could not be imported.';
-}
-
-function createDiagramModelSignature(model: DiagramModel): string {
-  // Signature memakai serializer canonical schema-core, sehingga urutan key dan bentuk JSON konsisten antar render.
-  return stringifyDiagramModel(model);
 }
 
 function toDiagramExportWarnings(warnings: readonly DiagramExportWarningInput[]): DiagramExportResponseDto['warnings'] {
