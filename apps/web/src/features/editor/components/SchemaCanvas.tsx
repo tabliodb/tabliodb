@@ -40,35 +40,33 @@ import { getDisplayTableColor } from '../table-colors';
 const tableNodeShape = 'tabliodb-table';
 const noteNodeShape = 'tabliodb-note';
 const groupNodeIdPrefix = 'tabliodb-group:';
-const tableNodeWidth = 288;
-const tableHeaderHeight = 38;
-const tableColumnHeight = 26;
-const tablePaddingBottom = 6;
-const groupPaddingX = 36;
-const groupPaddingBottom = 28;
-const groupHeaderOffset = 42;
-const noteNodeDefaultWidth = 260;
-const noteNodeMinHeight = 118;
-const noteNodeMaxHeight = 220;
-const tableResizeMaxWidth = 720;
-const tableResizeMinWidth = 240;
-const diagramVisualGridSize = 24;
-const diagramDragGridSize = 1;
+
+const tableNodeWidth = 288; // 288 / 12 = 24 grid units (Pas!)
+const tableHeaderHeight = 36; // Disarankan ubah 38 -> 36 (36 / 12 = 3 units)
+const tableColumnHeight = 24; // Disarankan ubah 26 -> 24 (24 / 12 = 2 units)
+const tablePaddingBottom = 12; // Disarankan ubah 6 -> 12 (1 unit)
+const groupPaddingX = 36; // 36 / 12 = 3 units (Pas!)
+const groupPaddingBottom = 24; // Disarankan ubah 28 -> 24 (2 units)
+const groupHeaderOffset = 48; // Disarankan ubah 42 -> 48 (4 units)
+const noteNodeDefaultWidth = 264; // Disarankan ubah 260 -> 264 (22 units)
+const noteNodeMinHeight = 120; // Disarankan ubah 118 -> 120 (10 units)
+const noteNodeMaxHeight = 216; // Disarankan ubah 220 -> 216 (18 units)
+const tableResizeMaxWidth = 720; // 720 / 12 = 60 units (Pas!)
+const tableResizeMinWidth = 240; // 240 / 12 = 20 units (Pas!)
+
+const diagramVisualGridSize = 12;
+const diagramDragGridSize = 12;
 // Canvas colors are fixed hex values because X6 receives them outside CSS class resolution.
 const canvasBackgroundColor = '#F6F6F6';
 const canvasGridColor = '#AAAAAA';
 const relationshipActiveColor = '#58cc02';
 const relationshipConnectorRadius = 10;
-const relationshipEndpointLaneGap = 0;
-const relationshipMinimumBridgeGap = 8;
 const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
-const relationshipRouteGap = 40;
-const relationshipRouteLaneGap = 8;
-const relationshipRouterName = 'tabliodb-relationship';
+
+const relationshipObstaclePadding = 12;
 const minimapAspectRatio = 192 / 124;
 
-let relationshipRouterRegistered = false;
 let noteShapeRegistered = false;
 let tableShapeRegistered = false;
 
@@ -226,7 +224,7 @@ export function SchemaCanvas({
 
     registerTableNodeShape();
     registerNoteNodeShape();
-    registerRelationshipRouter();
+    // registerRelationshipRouter();
 
     const container = containerRef.current;
     const graph = new Graph({
@@ -244,7 +242,7 @@ export function SchemaCanvas({
         connector: { name: 'rounded', args: { radius: relationshipConnectorRadius } },
         connectionPoint: 'boundary',
         highlight: true,
-        router: { name: relationshipRouterName },
+        router: { name: 'manhattan', args: buildManhattanRouterArgs() },
         snap: { radius: 24 },
       },
       container,
@@ -254,7 +252,7 @@ export function SchemaCanvas({
         type: 'dot',
         args: {
           color: canvasGridColor,
-          thickness: 1.5,
+          thickness: 1,
         },
       },
       interacting: {
@@ -1397,6 +1395,13 @@ function getPortItems(ports: NodeMetadata['ports'] | undefined): unknown[] {
   return ports?.items ?? [];
 }
 
+function getEndpointLaneGap(laneTotal: number): number {
+  if (laneTotal <= 2) return 7; // lega, default nyaman
+  if (laneTotal <= 4) return 6; // masih aman di row 24px
+  if (laneTotal <= 6) return 5; // mulai rapat tapi masih oke
+  return 4; // emergency padat
+}
+
 function createTableNodeMetadata(
   model: DiagramModel,
   table: DatabaseTable,
@@ -1438,8 +1443,57 @@ function createTableNodeMetadata(
   };
 }
 
+// excludeShapes: ['rect'] itu kunci — tanpa ini, kotak group yang murni dekoratif
+// (pointerEvents: 'none', cuma background) ikut dianggap penghalang. startDirections/
+// endDirections dikunci ke sisi port fisiknya (kiri/kanan) supaya garis tetap keluar
+// dari baris kolom yang benar, bukan cari jalan pintas lewat sisi lain tabel.
+function buildManhattanRouterArgs(sourceSide?: PortSide, targetSide?: PortSide) {
+  return {
+    endDirections: targetSide ? [targetSide] : ['left', 'right'],
+    excludeShapes: ['rect'],
+    padding: relationshipObstaclePadding,
+    startDirections: sourceSide ? [sourceSide] : ['left', 'right'],
+    step: diagramVisualGridSize,
+  };
+}
+
+function buildRelationshipMarkers(
+  cardinality: 'one_to_one' | 'one_to_many' | 'many_to_many',
+  stroke: string,
+  strokeWidth: number,
+) {
+  const oneMarker = {
+    d: 'M 0 -7 L 0 7',
+    fill: 'none',
+    name: 'path' as const,
+    offsetX: 0,
+    stroke,
+    strokeWidth,
+  };
+
+  // Crow's foot besar — shaft 10px + kaki terbuka 9px (mirip DrawSQL asli)
+  const manyMarker = {
+    d: 'M -12 -7 L 0 0 L -12 7 M -12 0 L 0 0',
+    fill: 'none',
+    name: 'path' as const,
+    offsetX: 0,
+    stroke,
+    strokeWidth,
+  };
+
+  switch (cardinality) {
+    case 'many_to_many':
+      return { sourceMarker: manyMarker, targetMarker: manyMarker };
+    case 'one_to_one':
+      return { sourceMarker: oneMarker, targetMarker: oneMarker };
+    case 'one_to_many':
+    default:
+      return { sourceMarker: oneMarker, targetMarker: manyMarker };
+  }
+}
+
 function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipPlan): EdgeMetadata[] {
-  return Object.values(model.relationships).flatMap<EdgeMetadata>((relationship, index) => {
+  return Object.values(model.relationships).flatMap<EdgeMetadata>((relationship) => {
     const sourceTable = model.tables[relationship.sourceTableId];
     const targetTable = model.tables[relationship.targetTableId];
     const terminals = plan.terminalsByRelationship.get(relationship.id);
@@ -1448,36 +1502,21 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
       return [];
     }
 
-    // Relationships become active when either endpoint table is selected, so both PK-side and FK-side inspection highlights the same wiring.
     const stroke = terminals.source.active ? relationshipActiveColor : relationshipNeutralColor;
-    const strokeWidth = terminals.source.active ? 3 : 2;
+    const strokeWidth = terminals.source.active ? 1.7 : 1.5;
+    const { sourceMarker, targetMarker } = buildRelationshipMarkers(relationship.cardinality, stroke, strokeWidth);
 
     return [
       {
         id: relationship.id,
         attrs: {
           line: {
-            sourceMarker: {
-              d: 'M 0 -8 L 0 8',
-              fill: 'none',
-              name: 'path',
-              offsetX: -5,
-              stroke,
-              strokeWidth,
-            },
+            sourceMarker,
             stroke,
             strokeLinecap: 'round',
             strokeLinejoin: 'round',
             strokeWidth,
-            targetMarker: {
-              // DrawSQL-style crow's foot marker communicates the many side of the relationship at the foreign-key endpoint.
-              d: 'M 10 -9 L 0 0 L 10 9 M 0 0 L 10 0',
-              fill: 'none',
-              name: 'path',
-              offsetX: 1,
-              stroke,
-              strokeWidth,
-            },
+            targetMarker,
           },
         },
         connector: {
@@ -1486,14 +1525,8 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
         },
         labels: [],
         router: {
-          name: relationshipRouterName,
-          args: {
-            edgeIndex: index,
-            sourceLaneIndex: terminals.source.laneIndex,
-            sourceLaneTotal: terminals.source.laneTotal, // tambahkan
-            targetLaneIndex: terminals.target.laneIndex,
-            targetLaneTotal: terminals.target.laneTotal, // tambahkan
-          },
+          name: 'manhattan',
+          args: buildManhattanRouterArgs(terminals.source.side, terminals.target.side),
         },
         source: { cell: relationship.sourceTableId, port: terminals.source.portId },
         target: { cell: relationship.targetTableId, port: terminals.target.portId },
@@ -1517,13 +1550,34 @@ function createRelationshipPlan(model: DiagramModel, selectedTableId: string | n
       continue;
     }
 
-    const sourceIsLeft =
-      sourceTable.position.x + getTableWidth(sourceTable) / 2 <=
-      targetTable.position.x + getTableWidth(targetTable) / 2;
-    // Selecting either the primary-key table or the foreign-key table should light up the relationship for quick bidirectional tracing.
+    const sourceCenterX = sourceTable.position.x + getTableWidth(sourceTable) / 2;
+    const targetCenterX = targetTable.position.x + getTableWidth(targetTable) / 2;
+    const sourceCenterY = sourceTable.position.y + getTableNodeHeight(model, sourceTable) / 2;
+    const targetCenterY = targetTable.position.y + getTableNodeHeight(model, targetTable) / 2;
+
+    const dx = Math.abs(targetCenterX - sourceCenterX);
+    const dy = Math.abs(targetCenterY - sourceCenterY);
+
+    let sourceSide: PortSide;
+    let targetSide: PortSide;
+
+    if (dy > dx * 1.5) {
+      // Vertikal dominance: pakai sisi yang sama — prioritas kiri untuk alignment rapi
+      if (sourceCenterX <= targetCenterX) {
+        sourceSide = 'left';
+        targetSide = 'left';
+      } else {
+        sourceSide = 'right';
+        targetSide = 'right';
+      }
+    } else {
+      // Horizontal dominance: logika asli (berhadapan)
+      const sourceIsLeft = sourceCenterX <= targetCenterX;
+      sourceSide = sourceIsLeft ? 'right' : 'left';
+      targetSide = sourceIsLeft ? 'left' : 'right';
+    }
+
     const active = selectedTableId === relationship.sourceTableId || selectedTableId === relationship.targetTableId;
-    const sourceSide: PortSide = sourceIsLeft ? 'right' : 'left';
-    const targetSide: PortSide = sourceIsLeft ? 'left' : 'right';
 
     pushGroupedTerminal(
       groupedTerminals,
@@ -1551,7 +1605,6 @@ function createRelationshipPlan(model: DiagramModel, selectedTableId: string | n
 
   for (const terminals of groupedTerminals.values()) {
     terminals.forEach((terminal, laneIndex) => {
-      // Endpoints that share the same table, column, and side receive separate lanes so multiple wires do not collapse into one line.
       const hydratedTerminal: RelationshipTerminal = {
         ...terminal,
         laneIndex,
@@ -1614,8 +1667,12 @@ function createColumnPorts(
         columnIndex >= 0
           ? tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2
           : tableHeaderHeight / 2;
-      // The vertical lane offset makes several relationships to the same id row visually distinct while keeping every endpoint attached to the real column.
-      const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * relationshipEndpointLaneGap;
+
+      // === GANTI DI SINI ===
+      const laneGap = getEndpointLaneGap(terminal.laneTotal);
+      const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * laneGap;
+      // =====================
+
       const color = terminal.active ? relationshipActiveColor : relationshipNeutralColor;
 
       return [
@@ -1785,145 +1842,6 @@ function hexToRgba(hexColor: string, opacity: number): string {
   const blue = value & 255;
 
   return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
-}
-
-function registerRelationshipRouter(): void {
-  if (relationshipRouterRegistered) {
-    return;
-  }
-
-  Graph.registerRouter(
-    relationshipRouterName,
-    (vertices, options, edgeView) => createLiveRelationshipRoute(vertices, options, edgeView),
-    true,
-  );
-  relationshipRouterRegistered = true;
-}
-
-function createLiveRelationshipRoute(
-  vertices: PointLike[],
-  options: {
-    edgeIndex?: number;
-    sourceLaneIndex?: number;
-    targetLaneIndex?: number;
-    sourceLaneTotal?: number; // tambahkan
-    targetLaneTotal?: number; // tambahkan
-  },
-  edgeView: EdgeView,
-): PointLike[] {
-  if (!edgeView.sourceAnchor || !edgeView.targetAnchor) {
-    return vertices;
-  }
-
-  const source = edgeView.sourceAnchor;
-  const target = edgeView.targetAnchor;
-  const sourceBBox = edgeView.sourceView?.cell.getBBox();
-  const targetBBox = edgeView.targetView?.cell.getBBox();
-
-  if (!sourceBBox || !targetBBox) {
-    return vertices;
-  }
-
-  const sourceDirection = source.x <= sourceBBox.x + sourceBBox.width / 2 ? -1 : 1;
-  const targetDirection = target.x <= targetBBox.x + targetBBox.width / 2 ? -1 : 1;
-  // const edgeLaneOffset = (((options.edgeIndex ?? 0) % 7) - 3) * relationshipRouteLaneGap;
-  const laneIndex = options.sourceLaneIndex ?? options.targetLaneIndex ?? 0;
-  const laneTotal = Math.max(1, options.sourceLaneTotal ?? options.targetLaneTotal ?? 1);
-  const edgeLaneOffset = (laneIndex - (laneTotal - 1) / 2) * relationshipRouteLaneGap;
-  const faceToFaceBridgeX = getFaceToFaceBridgeX(
-    sourceBBox,
-    targetBBox,
-    sourceDirection,
-    targetDirection,
-    edgeLaneOffset,
-  );
-
-  // This router is evaluated by X6 during node movement, so the path follows the live drag position instead of stale React model coordinates.
-  if (faceToFaceBridgeX !== null) {
-    return [
-      { x: faceToFaceBridgeX, y: source.y },
-      { x: faceToFaceBridgeX, y: target.y },
-    ];
-  }
-
-  if (sourceDirection === targetDirection) {
-    const outerX =
-      sourceDirection === -1
-        ? Math.min(sourceBBox.x, targetBBox.x) - relationshipRouteGap - Math.abs(edgeLaneOffset)
-        : Math.max(sourceBBox.x + sourceBBox.width, targetBBox.x + targetBBox.width) +
-          relationshipRouteGap +
-          Math.abs(edgeLaneOffset);
-
-    return [
-      { x: outerX, y: source.y },
-      { x: outerX, y: target.y },
-    ];
-  }
-
-  const unionLeft = Math.min(sourceBBox.x, targetBBox.x);
-  const unionRight = Math.max(sourceBBox.x + sourceBBox.width, targetBBox.x + targetBBox.width);
-  const sourceOuterX =
-    sourceDirection === -1
-      ? unionLeft - relationshipRouteGap - Math.abs(edgeLaneOffset)
-      : unionRight + relationshipRouteGap + Math.abs(edgeLaneOffset);
-  const targetOuterX =
-    targetDirection === -1
-      ? unionLeft - relationshipRouteGap - Math.abs(edgeLaneOffset)
-      : unionRight + relationshipRouteGap + Math.abs(edgeLaneOffset);
-  const detourY = getVerticalDetourY(sourceBBox, targetBBox, source.y, target.y, Math.abs(edgeLaneOffset));
-
-  return [
-    { x: sourceOuterX, y: source.y },
-    { x: sourceOuterX, y: detourY },
-    { x: targetOuterX, y: detourY },
-    { x: targetOuterX, y: target.y },
-  ];
-}
-
-function getFaceToFaceBridgeX(
-  sourceBBox: { x: number; width: number },
-  targetBBox: { x: number; width: number },
-  sourceDirection: -1 | 1,
-  targetDirection: -1 | 1,
-  laneOffset: number,
-): number | null {
-  if (sourceDirection === 1 && targetDirection === -1) {
-    const sourceRight = sourceBBox.x + sourceBBox.width;
-    const targetLeft = targetBBox.x;
-    const gap = targetLeft - sourceRight;
-
-    if (gap >= relationshipMinimumBridgeGap) {
-      return clamp(sourceRight + gap / 2 + laneOffset, sourceRight + 8, targetLeft - 8);
-    }
-  }
-
-  if (sourceDirection === -1 && targetDirection === 1) {
-    const targetRight = targetBBox.x + targetBBox.width;
-    const sourceLeft = sourceBBox.x;
-    const gap = sourceLeft - targetRight;
-
-    if (gap >= relationshipMinimumBridgeGap) {
-      return clamp(targetRight + gap / 2 + laneOffset, targetRight + 8, sourceLeft - 8);
-    }
-  }
-
-  return null;
-}
-
-function getVerticalDetourY(
-  sourceBBox: { y: number; height: number },
-  targetBBox: { y: number; height: number },
-  sourceY: number,
-  targetY: number,
-  laneOffset: number,
-): number {
-  const topY = Math.min(sourceBBox.y, targetBBox.y) - relationshipRouteGap - laneOffset;
-  const bottomY =
-    Math.max(sourceBBox.y + sourceBBox.height, targetBBox.y + targetBBox.height) + relationshipRouteGap + laneOffset;
-  const topCost = Math.abs(sourceY - topY) + Math.abs(targetY - topY);
-  const bottomCost = Math.abs(sourceY - bottomY) + Math.abs(targetY - bottomY);
-
-  return topCost <= bottomCost ? topY : bottomY;
 }
 
 function clamp(value: number, min: number, max: number): number {
