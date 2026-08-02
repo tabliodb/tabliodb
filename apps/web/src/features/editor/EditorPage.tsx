@@ -1409,7 +1409,7 @@ export function EditorPage() {
           <div className="relative">
             <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
             {openCommentThreadCount > 0 ? (
-              <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border border-[rgb(var(--tabliodb-red-border))] bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 shadow-[0_1px_0_rgb(var(--tabliodb-red-border))] text-white">
+              <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
                 {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
               </span>
             ) : null}
