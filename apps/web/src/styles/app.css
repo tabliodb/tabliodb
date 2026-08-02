@@ -192,7 +192,7 @@ body {
 
 .tabliodb-table-node__name {
   overflow: hidden;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: 0;
   text-overflow: ellipsis;
@@ -227,14 +227,16 @@ body {
 
 .tabliodb-table-node__column-name {
   overflow: hidden;
-  font-weight: 700;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px;
 }
 
 .tabliodb-table-node__column-type {
   color: #71717a;
-  font-weight: 650;
+  font-weight: 400;
+  font-size: 12px;
 }
 
 .tabliodb-table-node__badges {

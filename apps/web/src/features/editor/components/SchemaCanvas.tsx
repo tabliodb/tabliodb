@@ -1974,7 +1974,7 @@ function renderColumnRow(column: DatabaseColumn, commentMarkerCount: CommentMark
   return `
     <div class="tabliodb-table-node__column">
       <span class="tabliodb-table-node__column-name ${column.primaryKey ? 'font-extrabold! text-black!' : ''}">${escapeHtml(column.name)}</span>
-      <span class="tabliodb-table-node__column-type">${escapeHtml(formatColumnType(column.type))}${column.nullable ? '<span class="font-extrabold! text-xs!">?</span>' : ''}</span>
+      <span class="tabliodb-table-node__column-type">${escapeHtml(formatColumnType(column.type))}${column.nullable ? '<span class="font-extrabold!">?</span>' : ''}</span>
       <span class="tabliodb-table-node__badges">${commentMarker}${badges}</span>
     </div>
   `;
