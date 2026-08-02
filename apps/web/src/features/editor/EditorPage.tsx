@@ -107,9 +107,6 @@ import {
   LogOut,
   MessageSquareText,
   MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightOpen,
   Play,
   Plus,
   Save,
@@ -129,6 +126,7 @@ import {
   Undo2,
   X,
   PanelRight,
+  PanelLeft,
 } from 'lucide-react';
 import {
   lazy,
@@ -1706,7 +1704,7 @@ export function EditorPage() {
         <aside className="relative min-w-0 overflow-hidden border-r border-[rgb(var(--tabliodb-border))] bg-white">
           {!leftSidebarOpen ? (
             <SidebarRail
-              icon={PanelLeftOpen}
+              icon={PanelLeft}
               label="Show left sidebar"
               onClick={() => setLeftSidebarOpen(true)}
               side="left"
@@ -1728,9 +1726,14 @@ export function EditorPage() {
                   <Database className="size-4" />
                 </div>
                 <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold">Workspace</span>
-                <IconButton icon={PanelLeftClose} label="Hide left sidebar" onClick={() => setLeftSidebarOpen(false)} />
+                <IconButton
+                  size="lg"
+                  icon={PanelLeft}
+                  label="Hide left sidebar"
+                  onClick={() => setLeftSidebarOpen(false)}
+                />
               </div>
-              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
+              <div className="tabliodb-sclrollbar min-h-0 flex-1 overflow-y-auto p-3">
                 <WorkspaceSwitcher
                   activeOrganization={activeOrganization}
                   onSelect={(organization) => {
