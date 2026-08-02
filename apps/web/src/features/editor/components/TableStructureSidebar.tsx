@@ -29,7 +29,7 @@ import {
   GripVertical,
   KeyRound,
   MoreHorizontal,
-  PanelLeftClose,
+  PanelLeft,
   Plus,
   Trash2,
   X,
@@ -335,7 +335,7 @@ export function TableStructureSidebar({
           </div>
           <div className="truncate text-[13px] font-extrabold leading-5">{table.name}</div>
         </div>
-        <IconButton icon={PanelLeftClose} label="Hide sidebar" onClick={onHide} variant="ghost" />
+        <IconButton size="lg" icon={PanelLeft} label="Hide sidebar" onClick={onHide} variant="ghost" />
         <IconButton icon={X} label="Back to projects" onClick={onClearTableSelection} variant="ghost" />
       </div>
 
