@@ -40,7 +40,7 @@ export function Select({
         aria-label={ariaLabel}
         id={id}
         className={cn(
-          'flex h-[var(--tabliodb-control-md)] w-full cursor-pointer items-center justify-between gap-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left text-[13px] font-extrabold leading-none text-[rgb(var(--tabliodb-ink))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] outline-none transition hover:bg-[rgb(var(--tabliodb-surface-raised))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-[rgb(var(--tabliodb-ink-subtle))]',
+          'flex h-[var(--tabliodb-control-md)] w-full cursor-pointer items-center justify-between gap-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left text-[13px] font-extrabold leading-none text-[rgb(var(--tabliodb-ink))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] outline-none transition hover:bg-[rgb(var(--tabliodb-surface-raised))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[1px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-[rgb(var(--tabliodb-ink-subtle))]',
           className,
         )}
         onBlur={onBlur}
