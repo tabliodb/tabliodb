@@ -59,8 +59,8 @@ const canvasBackgroundColor = '#F6F6F6';
 const canvasGridColor = '#AAAAAA';
 const relationshipActiveColor = '#58cc02';
 const relationshipConnectorRadius = 10;
-const relationshipEndpointLaneGap = 8;
-const relationshipMinimumBridgeGap = 24;
+const relationshipEndpointLaneGap = 0;
+const relationshipMinimumBridgeGap = 8;
 const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
 const relationshipRouteGap = 40;
@@ -1490,7 +1490,9 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
           args: {
             edgeIndex: index,
             sourceLaneIndex: terminals.source.laneIndex,
+            sourceLaneTotal: terminals.source.laneTotal, // tambahkan
             targetLaneIndex: terminals.target.laneIndex,
+            targetLaneTotal: terminals.target.laneTotal, // tambahkan
           },
         },
         source: { cell: relationship.sourceTableId, port: terminals.source.portId },
@@ -1804,6 +1806,8 @@ function createLiveRelationshipRoute(
     edgeIndex?: number;
     sourceLaneIndex?: number;
     targetLaneIndex?: number;
+    sourceLaneTotal?: number; // tambahkan
+    targetLaneTotal?: number; // tambahkan
   },
   edgeView: EdgeView,
 ): PointLike[] {
@@ -1822,7 +1826,10 @@ function createLiveRelationshipRoute(
 
   const sourceDirection = source.x <= sourceBBox.x + sourceBBox.width / 2 ? -1 : 1;
   const targetDirection = target.x <= targetBBox.x + targetBBox.width / 2 ? -1 : 1;
-  const edgeLaneOffset = (((options.edgeIndex ?? 0) % 7) - 3) * relationshipRouteLaneGap;
+  // const edgeLaneOffset = (((options.edgeIndex ?? 0) % 7) - 3) * relationshipRouteLaneGap;
+  const laneIndex = options.sourceLaneIndex ?? options.targetLaneIndex ?? 0;
+  const laneTotal = Math.max(1, options.sourceLaneTotal ?? options.targetLaneTotal ?? 1);
+  const edgeLaneOffset = (laneIndex - (laneTotal - 1) / 2) * relationshipRouteLaneGap;
   const faceToFaceBridgeX = getFaceToFaceBridgeX(
     sourceBBox,
     targetBBox,
