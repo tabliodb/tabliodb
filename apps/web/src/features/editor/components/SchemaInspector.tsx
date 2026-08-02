@@ -38,7 +38,7 @@ import {
   WithTooltip,
   cn,
 } from '@tabliodb/ui';
-import { MessageSquareText, PanelRightClose, Pencil, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { MessageSquareText, PanelRight, Pencil, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
@@ -465,7 +465,9 @@ export function SchemaInspector({
     >
       <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] px-4 text-[13px] font-extrabold">
         <span>Inspector</span>
-        {onHide ? <IconButton icon={PanelRightClose} label="Hide inspector" onClick={onHide} variant="ghost" /> : null}
+        {onHide ? (
+          <IconButton size="lg" icon={PanelRight} label="Hide inspector" onClick={onHide} variant="ghost" />
+        ) : null}
       </div>
       <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         <div className="flex flex-wrap gap-2">
