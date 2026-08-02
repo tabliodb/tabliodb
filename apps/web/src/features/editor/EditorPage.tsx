@@ -425,8 +425,7 @@ export function EditorPage() {
   // Inspector starts collapsed so the editor opens with more canvas room while keeping the right rail discoverable.
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [remoteAwarenessStates, setRemoteAwarenessStates] = useState<RemoteAwarenessState[]>([]);
-  const [collaborationStatus, setCollaborationStatus] =
-    useState<DiagramCollaborationStatus>(idleCollaborationStatus);
+  const [collaborationStatus, setCollaborationStatus] = useState<DiagramCollaborationStatus>(idleCollaborationStatus);
   const collaborationRef = useRef<DiagramCollaboration | null>(null);
   const latestCursorRef = useRef<AwarenessState['cursor']>(undefined);
   const latestCommentTypingRef = useRef<AwarenessState['commentTyping']>(undefined);
@@ -1410,7 +1409,7 @@ export function EditorPage() {
           <div className="relative">
             <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
             {openCommentThreadCount > 0 ? (
-              <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-1 text-[9px] font-extrabold leading-4 text-[rgb(var(--tabliodb-sky-text))] shadow-[0_1px_0_rgb(var(--tabliodb-sky-border))]">
+              <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border border-[rgb(var(--tabliodb-red-border))] bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 shadow-[0_1px_0_rgb(var(--tabliodb-red-border))] text-white">
                 {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
               </span>
             ) : null}
