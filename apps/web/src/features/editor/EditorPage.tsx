@@ -128,6 +128,7 @@ import {
   RotateCcw,
   Undo2,
   X,
+  PanelRight,
 } from 'lucide-react';
 import {
   lazy,
@@ -1842,7 +1843,7 @@ export function EditorPage() {
         ) : (
           <aside className="min-w-0 overflow-hidden border-l border-[rgb(var(--tabliodb-border))] bg-white">
             <SidebarRail
-              icon={PanelRightOpen}
+              icon={PanelRight}
               label="Show inspector"
               onClick={() => setRightSidebarOpen(true)}
               side="right"
@@ -4081,7 +4082,7 @@ function SidebarRail({
         side === 'left' ? 'border-r-0' : 'border-l-0',
       )}
     >
-      <IconButton icon={icon} label={label} onClick={onClick} variant="ghost" />
+      <IconButton size="lg" icon={icon} label={label} onClick={onClick} variant="ghost" />
     </div>
   );
 }
