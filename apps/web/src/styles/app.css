@@ -192,11 +192,12 @@ body {
 
 .tabliodb-table-node__name {
   overflow: hidden;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .tabliodb-table-node__count {
