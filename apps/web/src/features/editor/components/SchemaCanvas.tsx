@@ -2041,18 +2041,22 @@ function renderTableNode(data: TableNodeData): string {
   `;
 }
 
+const keyRoundSvg =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-key-round-icon lucide-key-round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>`.trim();
+const SnowFlakeSvg =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-snowflake-icon lucide-snowflake"><path d="m10 20-1.25-2.5L6 18"/><path d="M10 4 8.75 6.5 6 6"/><path d="m14 20 1.25-2.5L18 18"/><path d="m14 4 1.25 2.5L18 6"/><path d="m17 21-3-6h-4"/><path d="m17 3-3 6 1.5 3"/><path d="M2 12h6.5L10 9"/><path d="m20 10-1.5 2 1.5 2"/><path d="M22 12h-6.5L14 15"/><path d="m4 10 1.5 2L4 14"/><path d="m7 21 3-6-1.5-3"/><path d="m7 3 3 6h4"/></svg>`.trim();
+
 function renderColumnRow(column: DatabaseColumn, commentMarkerCount: CommentMarkerCount | undefined): string {
   const commentMarker = renderCommentMarker(commentMarkerCount, `column ${column.name}`, 'column', column.id);
   const badges = [
-    column.primaryKey ? '<span class="tabliodb-table-node__badge">PK</span>' : '',
-    column.unique ? '<span class="tabliodb-table-node__badge">UQ</span>' : '',
-    !column.nullable ? '<span class="tabliodb-table-node__badge">NN</span>' : '',
+    column.primaryKey ? `<span class="tabliodb-table-node__badge">${keyRoundSvg}</span>` : '',
+    column.unique ? `<span class="tabliodb-table-node__badge">${SnowFlakeSvg}</span>` : '',
   ].join('');
 
   return `
     <div class="tabliodb-table-node__column">
       <span class="tabliodb-table-node__column-name">${escapeHtml(column.name)}</span>
-      <span class="tabliodb-table-node__column-type">${escapeHtml(formatColumnType(column.type))}</span>
+      <span class="tabliodb-table-node__column-type">${escapeHtml(formatColumnType(column.type))}${column.nullable ? '?' : ''}</span>
       <span class="tabliodb-table-node__badges">${commentMarker}${badges}</span>
     </div>
   `;
