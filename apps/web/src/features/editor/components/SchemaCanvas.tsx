@@ -55,13 +55,13 @@ const tableResizeMinWidth = 240;
 const diagramVisualGridSize = 24;
 const diagramDragGridSize = 1;
 // Canvas colors are fixed hex values because X6 receives them outside CSS class resolution.
-const canvasBackgroundColor = '#fbfdff';
-const canvasGridColor = '#e1e8f0';
+const canvasBackgroundColor = '#F6F6F6';
+const canvasGridColor = '#AAAAAA';
 const relationshipActiveColor = '#58cc02';
 const relationshipConnectorRadius = 10;
 const relationshipEndpointLaneGap = 8;
 const relationshipMinimumBridgeGap = 24;
-const relationshipNeutralColor = '#9aa8b6';
+const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
 const relationshipRouteGap = 40;
 const relationshipRouteLaneGap = 8;
@@ -254,7 +254,7 @@ export function SchemaCanvas({
         type: 'dot',
         args: {
           color: canvasGridColor,
-          thickness: 1,
+          thickness: 1.5,
         },
       },
       interacting: {
