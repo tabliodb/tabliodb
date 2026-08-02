@@ -1409,7 +1409,7 @@ export function EditorPage() {
           <div className="relative">
             <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
             {openCommentThreadCount > 0 ? (
-              <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
+              <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
                 {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
               </span>
             ) : null}
@@ -1419,7 +1419,7 @@ export function EditorPage() {
               <div className="relative">
                 <IconButton icon={Bell} label="Notifications" />
                 {unreadNotificationCount > 0 ? (
-                  <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-1 text-[9px] font-extrabold leading-4 text-[rgb(var(--tabliodb-danger-text))] shadow-[0_1px_0_rgb(var(--tabliodb-danger-border))]">
+                  <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
                     {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
                   </span>
                 ) : null}
