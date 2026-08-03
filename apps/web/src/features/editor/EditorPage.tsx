@@ -2068,7 +2068,7 @@ function SnapshotHistoryDialog({
             </div>
             <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
               {snapshots.length === 0 ? (
-                <div className="rounded-[16px] border border-dashed border-[rgb(var(--tabliodb-border))] bg-white p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <div className="rounded-2xl border border-dashed border-[rgb(var(--tabliodb-border))] bg-white p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                   No snapshots yet
                 </div>
               ) : (
@@ -2080,7 +2080,7 @@ function SnapshotHistoryDialog({
                     return (
                       <button
                         className={cn(
-                          'w-full cursor-pointer rounded-[16px] border bg-white px-3 py-3 text-left transition',
+                          'w-full cursor-pointer rounded-2xl border bg-white px-3 py-3 text-left transition',
                           isSelected
                             ? 'border-[rgb(var(--tabliodb-lavender-border))] bg-[rgb(var(--tabliodb-lavender-soft))] shadow-[0_3px_0_rgb(var(--tabliodb-lavender-border))]'
                             : 'border-[rgb(var(--tabliodb-border))] shadow-[0_2px_0_rgb(var(--tabliodb-border))] hover:border-[rgb(var(--tabliodb-primary-border))] hover:bg-[rgb(var(--tabliodb-primary-soft))]',
@@ -2138,7 +2138,7 @@ function SnapshotHistoryDialog({
 
             <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-4">
               {restoreError ? (
-                <div className="mb-4 rounded-[16px] border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-4 py-3 text-sm font-extrabold text-[rgb(var(--tabliodb-danger-text))]">
+                <div className="mb-4 rounded-2xl border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-4 py-3 text-sm font-extrabold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(restoreError)}
                 </div>
               ) : null}
@@ -2153,7 +2153,7 @@ function SnapshotHistoryDialog({
                   Loading diff
                 </div>
               ) : diffQuery.error ? (
-                <div className="rounded-[16px] border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-4 py-3 text-sm font-extrabold text-[rgb(var(--tabliodb-danger-text))]">
+                <div className="rounded-2xl border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-4 py-3 text-sm font-extrabold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(diffQuery.error)}
                 </div>
               ) : diffQuery.data ? (
@@ -2259,7 +2259,7 @@ function SnapshotDiffPanel({ diff }: { diff: SnapshotDiffResponseDto }) {
         </div>
 
         {diff.migrationSql.warnings.length > 0 ? (
-          <section className="mt-3 rounded-[16px] border border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
+          <section className="mt-3 rounded-2xl border border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
             <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
               <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
               Review before applying
@@ -2273,12 +2273,12 @@ function SnapshotDiffPanel({ diff }: { diff: SnapshotDiffResponseDto }) {
             </ul>
           </section>
         ) : (
-          <section className="mt-3 rounded-[16px] border border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3 text-[12px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
+          <section className="mt-3 rounded-2xl border border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3 text-[12px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
             No migration warnings for this preview.
           </section>
         )}
 
-        <pre className="tabliodb-scrollbar mt-3 max-h-72 overflow-auto rounded-[16px] border-2 border-[rgb(var(--tabliodb-ink))] bg-[rgb(var(--tabliodb-ink))] p-4 text-[12px] font-semibold leading-5 text-white shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))]">
+        <pre className="tabliodb-scrollbar mt-3 max-h-72 overflow-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-ink))] bg-[rgb(var(--tabliodb-ink))] p-4 text-[12px] font-semibold leading-5 text-white shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))]">
           <code>{diff.migrationSql.sql}</code>
         </pre>
       </div>
@@ -2296,7 +2296,7 @@ function SnapshotDiffMetric({
   const total = summary.added + summary.changed + summary.removed;
 
   return (
-    <div className="rounded-[16px] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
+    <div className="rounded-2xl border border-[rgb(var(--tabliodb-border))] bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-[12px] font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">{label}</span>
         <Badge variant={total > 0 ? 'yellow' : 'neutral'}>{total}</Badge>
@@ -2312,7 +2312,7 @@ function SnapshotDiffMetric({
 
 function SnapshotBooleanMetric({ changed, label }: { changed: boolean; label: string }) {
   return (
-    <div className="rounded-[16px] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
+    <div className="rounded-2xl border border-[rgb(var(--tabliodb-border))] bg-white p-3">
       <div className="mb-2 text-[12px] font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">{label}</div>
       <Badge variant={changed ? 'yellow' : 'neutral'}>{changed ? 'Changed' : 'Same'}</Badge>
     </div>
