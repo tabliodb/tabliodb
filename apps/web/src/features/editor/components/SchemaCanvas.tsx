@@ -558,8 +558,12 @@ export function SchemaCanvas({
     let panAnchor = { x: 0, y: 0 };
     let panTranslate = { x: 0, y: 0 };
 
+    // Reset cursor saat mount agar tidak tertinggal 'grab' dari sesi sebelumnya
+    container.style.cursor = '';
+
     const handleSpaceKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !isEditableShortcutTarget(e.target)) {
+        container.classList.add('is-space-pressed');
         isSpacePressed = true;
         container.style.cursor = 'grab';
         e.preventDefault(); // cegah halaman scroll ke bawah
@@ -568,6 +572,7 @@ export function SchemaCanvas({
 
     const handleSpaceKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
+        container.classList.remove('is-space-pressed');
         isSpacePressed = false;
         if (!isCustomPanning) {
           container.style.cursor = '';

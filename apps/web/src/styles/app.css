@@ -104,11 +104,14 @@ body {
 }
 
 .tabliodb-x6-canvas {
-  cursor: grab;
+  cursor: default !important;
 }
 
-.tabliodb-x6-canvas:active {
-  cursor: grabbing;
+/* Jika kamu ingin grab hanya saat Space ditekan (via JS inline style), 
+   !important di atas akan memblokirnya. 
+   Solusinya: gunakan class khusus saat Space aktif. */
+.tabliodb-x6-canvas.is-space-pressed {
+  cursor: grab !important;
 }
 
 .tabliodb-scrollbar {
