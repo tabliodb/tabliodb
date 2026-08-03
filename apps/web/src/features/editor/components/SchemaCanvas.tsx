@@ -457,7 +457,9 @@ export function SchemaCanvas({
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         moveEvent.preventDefault();
-        latestWidth = clampTableNodeWidth(startWidth + (moveEvent.clientX - startClientX) / graphScale);
+        const rawWidth = startWidth + (moveEvent.clientX - startClientX) / graphScale;
+        const snappedWidth = Math.round(rawWidth / diagramDragGridSize) * diagramDragGridSize;
+        latestWidth = clampTableNodeWidth(snappedWidth);
         node.resize(latestWidth, node.getSize().height);
       };
 
@@ -467,11 +469,12 @@ export function SchemaCanvas({
 
         if (latestWidth !== startWidth) {
           // Width is committed once at drag-end so quick resize movement does not spam snapshot model updates.
+          const finalWidth = Math.round(latestWidth / diagramDragGridSize) * diagramDragGridSize;
           onModelChangeRef.current(
             applyDiagramCommand(modelRef.current, {
               type: 'table.resize',
               tableId,
-              width: latestWidth,
+              width: clampTableNodeWidth(finalWidth),
             }),
           );
         }
