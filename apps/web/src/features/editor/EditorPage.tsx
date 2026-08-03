@@ -6406,7 +6406,7 @@ function TeamListItem({
         <span className="truncate text-sm font-extrabold">{team.name}</span>
         <Badge variant={isSelected ? 'green' : 'neutral'}>{team.memberCount} users</Badge>
       </div>
-      <p className="line-clamp-2 min-h-[2rem] text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+      <p className="line-clamp-2 min-h-8 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
         {team.description || 'No description yet'}
       </p>
       <div className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
@@ -6442,7 +6442,7 @@ function TeamMemberRow({
   return (
     <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="flex min-w-0 items-center gap-3">
-        <UserAvatar className="size-9 rounded-[12px] text-[11px]" user={member} />
+        <UserAvatar className="size-9 rounded-xl text-[11px]" user={member} />
         <div className="min-w-0">
           <h6 className="truncate text-sm font-extrabold">{member.name}</h6>
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
