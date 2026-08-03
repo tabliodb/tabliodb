@@ -272,7 +272,7 @@ export function SchemaCanvas({
       },
       panning: {
         enabled: true,
-        eventTypes: ['rightMouseDown', 'mouseWheel'],
+        eventTypes: ['leftMouseDown', 'mouseWheel'],
       },
     });
 
