@@ -1963,7 +1963,7 @@ function NotificationInboxMenuItem({
     >
       <span
         className={cn(
-          'mt-0.5 grid size-8 shrink-0 place-items-center rounded-[12px] border text-white shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]',
+          'mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl border text-white shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]',
           notification.type === 'mention'
             ? 'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky))]'
             : 'border-[rgb(var(--tabliodb-lavender-border))] bg-[rgb(var(--tabliodb-lavender))]',
@@ -2148,7 +2148,7 @@ function SnapshotHistoryDialog({
               ) : selectedSnapshot.id === latestSnapshot?.id ? (
                 <SnapshotHistoryEmptyState message="This is the current saved snapshot." />
               ) : diffQuery.isPending ? (
-                <div className="flex h-full min-h-[260px] items-center justify-center gap-2 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <div className="flex h-full min-h-65 items-center justify-center gap-2 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                   <Loader2 className="size-4 animate-spin" />
                   Loading diff
                 </div>
@@ -2177,7 +2177,7 @@ function SnapshotHistoryDialog({
 
 function SnapshotHistoryEmptyState({ message }: { message: string }) {
   return (
-    <div className="grid h-full min-h-[260px] place-items-center rounded-[18px] border border-dashed border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+    <div className="grid h-full min-h-65 place-items-center rounded-[18px] border border-dashed border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-6 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
       {message}
     </div>
   );
@@ -5353,7 +5353,7 @@ function WorkspaceSettingsDialog({
                 </div>
               ) : (
                 <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-                  <div className="tabliodb-scrollbar max-h-[32rem] overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-2">
+                  <div className="tabliodb-scrollbar max-h-128 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-2">
                     {teams.length === 0 ? (
                       <div className="grid min-h-28 place-items-center rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] px-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                         No teams yet
@@ -5589,7 +5589,7 @@ function WorkspaceSettingsDialog({
                         </div>
                       </div>
                     ) : (
-                      <div className="grid min-h-[24rem] place-items-center p-6 text-center">
+                      <div className="grid min-h-96 place-items-center p-6 text-center">
                         <div>
                           <UsersRound className="mx-auto size-8 text-[rgb(var(--tabliodb-primary-text))]" />
                           <h4 className="mt-3 text-sm font-extrabold">Select a team</h4>
