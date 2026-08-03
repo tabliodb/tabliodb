@@ -4,10 +4,8 @@ import {
   type Cell,
   type Edge as X6Edge,
   type EdgeMetadata,
-  type EdgeView,
   type Node as X6Node,
   type NodeMetadata,
-  type PointLike,
 } from '@antv/x6';
 import {
   applyDiagramCommand,
@@ -555,6 +553,70 @@ export function SchemaCanvas({
 
     graphRef.current = graph;
 
+    let isSpacePressed = false;
+    let isCustomPanning = false;
+    let panAnchor = { x: 0, y: 0 };
+    let panTranslate = { x: 0, y: 0 };
+
+    const handleSpaceKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isEditableShortcutTarget(e.target)) {
+        isSpacePressed = true;
+        container.style.cursor = 'grab';
+        e.preventDefault(); // cegah halaman scroll ke bawah
+      }
+    };
+
+    const handleSpaceKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        isSpacePressed = false;
+        if (!isCustomPanning) {
+          container.style.cursor = '';
+        }
+      }
+    };
+
+    const handlePanMouseDown = (e: MouseEvent) => {
+      // button 1 = middle mouse (scroll wheel press)
+      // button 0 + space = left click while holding space
+      if (e.button === 1 || (isSpacePressed && e.button === 0)) {
+        isCustomPanning = true;
+        panAnchor = { x: e.clientX, y: e.clientY };
+        const t = graph.translate();
+        panTranslate = { x: t.tx, y: t.ty };
+        container.style.cursor = 'grabbing';
+        e.preventDefault();
+        e.stopPropagation(); // jangan trigger node selection/move
+      }
+    };
+
+    const handlePanMouseMove = (e: MouseEvent) => {
+      if (!isCustomPanning) return;
+      const dx = e.clientX - panAnchor.x;
+      const dy = e.clientY - panAnchor.y;
+      graph.translate(panTranslate.x + dx, panTranslate.y + dy);
+    };
+
+    const handlePanMouseUp = () => {
+      if (isCustomPanning) {
+        isCustomPanning = false;
+        container.style.cursor = isSpacePressed ? 'grab' : '';
+      }
+    };
+
+    // Cegah browser default behavior untuk middle-mouse (scroll mode di Firefox, dsb)
+    const suppressMiddleMouseDefault = (e: MouseEvent) => {
+      if (e.button === 1) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleSpaceKeyDown);
+    window.addEventListener('keyup', handleSpaceKeyUp);
+    container.addEventListener('mousedown', handlePanMouseDown, true);
+    window.addEventListener('mousemove', handlePanMouseMove);
+    window.addEventListener('mouseup', handlePanMouseUp);
+    window.addEventListener('mousedown', suppressMiddleMouseDefault, true);
+
     return () => {
       container.removeEventListener('mousedown', handleCommentMarkerMouseDown, true);
       container.removeEventListener('click', handleCommentMarkerClick, true);
@@ -567,6 +629,14 @@ export function SchemaCanvas({
       container.removeEventListener('pointermove', handleCursorPointerMove);
       graph.dispose();
       graphRef.current = null;
+
+      // === cleanup custom panning ===
+      window.removeEventListener('keydown', handleSpaceKeyDown);
+      window.removeEventListener('keyup', handleSpaceKeyUp);
+      container.removeEventListener('mousedown', handlePanMouseDown, true);
+      window.removeEventListener('mousemove', handlePanMouseMove);
+      window.removeEventListener('mouseup', handlePanMouseUp);
+      window.removeEventListener('mousedown', suppressMiddleMouseDefault, true);
     };
   }, [readOnly]);
 
@@ -1819,6 +1889,12 @@ function isNoteNodeData(data: unknown): data is NoteNodeData {
 
 function isMovableCanvasNodeData(data: unknown): data is TableNodeData | NoteNodeData {
   return isTableNodeData(data) || isNoteNodeData(data);
+}
+
+function isEditableShortcutTarget(target: EventTarget | null): boolean {
+  const element = target instanceof Element ? target : null;
+
+  return Boolean(element?.closest('input, textarea, select, [contenteditable="true"], [data-lexical-editor="true"]'));
 }
 
 function areGroupNodeDataEqual(current: GroupNodeData | undefined, next: GroupNodeData): boolean {
