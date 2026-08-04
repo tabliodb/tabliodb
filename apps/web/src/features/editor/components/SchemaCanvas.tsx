@@ -1514,7 +1514,7 @@ function createTableNodeMetadata(
     } satisfies TableNodeData,
     height,
     position: table.position,
-    ports: createColumnPorts(model, table, terminals, readOnly),
+    ports: createColumnPorts(model, table, terminals, readOnly, table.id === selectedTableId),
     shape: tableNodeShape,
     width,
     zIndex: table.id === selectedTableId ? 2 : 1,
@@ -1729,6 +1729,7 @@ function createColumnPorts(
   table: DatabaseTable,
   terminals: RelationshipTerminal[],
   readOnly: boolean,
+  selected: boolean,
 ): NodeMetadata['ports'] {
   const visibleColumns = getVisibleTableColumns(model, table);
 
@@ -1753,6 +1754,8 @@ function createColumnPorts(
 
       const color = terminal.active ? relationshipActiveColor : relationshipNeutralColor;
 
+      const isVisible = selected;
+
       return [
         {
           args: {
@@ -1762,11 +1765,16 @@ function createColumnPorts(
           attrs: {
             portBody: {
               cursor: readOnly ? 'default' : 'crosshair',
-              fill: '#ffffff',
-              magnet: !readOnly,
-              r: terminal.active ? relationshipPortRadius + 1 : relationshipPortRadius,
-              stroke: color,
-              strokeWidth: terminal.active ? 3 : 2,
+              fill: isVisible ? '#ffffff' : 'transparent',
+              magnet: !readOnly && isVisible, // ← drag new relation hanya saat terlihat
+              r: isVisible ? (terminal.active ? relationshipPortRadius + 1 : relationshipPortRadius) : 0,
+              stroke: isVisible ? color : 'transparent',
+              strokeWidth: isVisible ? (terminal.active ? 3 : 2) : 0,
+              // magnet: !readOnly,
+              // fill: '#ffffff',
+              // stroke: color,
+              // strokeWidth: terminal.active ? 3 : 2,
+              // r: terminal.active ? relationshipPortRadius + 1 : relationshipPortRadius,
             },
           },
           group: 'absolute',
