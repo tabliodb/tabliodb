@@ -17,12 +17,10 @@ export function createTabliodbRequestOptions(options: TabliodbClientOptions = {}
   const nextHeaders: CustomHeaders = { ...(headers ?? {}) };
 
   if (accessToken) {
-    // Bearer token tetap didukung untuk SDK server-side atau integrasi eksternal yang tidak memakai cookie browser.
     nextHeaders.Authorization = `Bearer ${accessToken}`;
   }
 
   if (apiKey) {
-    // API key mengikuti header yang sama dengan guard server agar generated SDK bisa dipakai oleh automation.
     nextHeaders['x-api-key'] = apiKey;
   }
 
