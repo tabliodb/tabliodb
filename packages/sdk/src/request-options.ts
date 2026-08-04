@@ -26,7 +26,6 @@ export function createTabliodbRequestOptions(options: TabliodbClientOptions = {}
 
   return {
     baseUrl: requestOptions.baseUrl ?? defaults.baseUrl,
-    // Cookie auth adalah jalur utama UI browser, jadi default SDK perlu mengirim credential same-origin.
     credentials: requestOptions.credentials ?? 'include',
     ...requestOptions,
     fetch: createCsrfAwareFetch(requestOptions.fetch, csrfProtection),
@@ -37,7 +36,6 @@ export function createTabliodbRequestOptions(options: TabliodbClientOptions = {}
 export function configureTabliodbSdk(options: TabliodbClientOptions = {}): RequestOpts {
   const requestOptions = createTabliodbRequestOptions(options);
 
-  // Oazapfts generated client membaca defaults secara live.
   Object.assign(defaults, requestOptions, {
     headers: requestOptions.headers ?? {},
   });
@@ -61,7 +59,6 @@ function createCsrfAwareFetch(customFetch: typeof fetch | undefined, enabled: bo
     const csrfToken = readBrowserCookie(csrfCookieName);
 
     if (csrfToken && !hasExplicitNonCookieAuth(headers) && !headers.has(csrfHeaderName)) {
-      // Browser UI memakai double-submit CSRF: cookie dibaca client, lalu dikirim balik via header state-changing request.
       headers.set(csrfHeaderName, csrfToken);
     }
 
