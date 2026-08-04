@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import LOGO from '@/assets/logo.svg';
 import {
   diagramReviewRuleDefinitions,
   diagramReviewSignalCodes,
@@ -1374,10 +1375,7 @@ export function EditorPage() {
       <header className="flex h-(--tabliodb-header-height) shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] bg-white px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex shrink-0 items-center gap-2">
-            <div className="grid size-8 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-              <Database className="size-4.5" />
-            </div>
-            <span className="text-[15px] font-extrabold">Tabliodb</span>
+            <img src={LOGO} alt="Tabliodb" className="w-32" />
           </div>
           <div className="min-w-0 border-l border-[rgb(var(--tabliodb-border))] pl-3">
             <h1 className="truncate text-[14px] font-extrabold leading-5">
