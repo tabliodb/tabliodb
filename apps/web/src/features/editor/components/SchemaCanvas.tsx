@@ -747,7 +747,7 @@ export function SchemaCanvas({
       ) : minimapState ? (
         <button
           aria-label="Show minimap"
-          className="absolute bottom-4 right-4 z-20 h-9 cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+          className="absolute bottom-4 right-4 z-20 h-9 cursor-pointer rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
           onClick={() => setMinimapOpen(true)}
           type="button"
         >
@@ -821,7 +821,7 @@ function CanvasMinimap({
   }
 
   return (
-    <section className="absolute bottom-4 right-4 z-20 w-48 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur">
+    <section className="absolute bottom-4 right-4 z-20 w-48 rounded-(--tabliodb-radius-lg) border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur">
       <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
         <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Minimap
@@ -837,7 +837,7 @@ function CanvasMinimap({
       </div>
       <svg
         aria-label="Diagram minimap"
-        className="block aspect-[192/124] w-full cursor-crosshair rounded-[10px] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-canvas))]"
+        className="block aspect-192/124 w-full cursor-crosshair rounded-[10px] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-canvas))]"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         preserveAspectRatio="none"
