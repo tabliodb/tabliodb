@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/tabliodb-logo-stacked-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/tabliodb-logo-stacked.svg">
-    <img alt="TablioDB Logo" src="docs/assets/tabliodb-logo-stacked.svg" width="120">
+    <img alt="TablioDB Logo" src="docs/assets/tabliodb-logo-stacked.svg" width="150">
   </picture>
 </p>
 
