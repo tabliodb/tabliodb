@@ -1765,11 +1765,11 @@ function createColumnPorts(
           attrs: {
             portBody: {
               cursor: readOnly ? 'default' : 'crosshair',
-              fill: isVisible ? '#ffffff' : 'transparent',
+              fill: isVisible ? '#58cc02' : 'transparent',
               magnet: !readOnly && isVisible, // ← drag new relation hanya saat terlihat
               r: isVisible ? (terminal.active ? relationshipPortRadius + 1 : relationshipPortRadius) : 0,
               stroke: isVisible ? color : 'transparent',
-              strokeWidth: isVisible ? (terminal.active ? 3 : 2) : 0,
+              strokeWidth: isVisible ? (terminal.active ? 1.5 : 2) : 0,
               // magnet: !readOnly,
               // fill: '#ffffff',
               // stroke: color,
