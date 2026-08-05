@@ -8,6 +8,9 @@
 
 <h3 align="center">Draw database diagrams, discuss schema changes, and export SQL — all in your browser. No terminal.</h3>
 
+> ⚠️ **Project Status: Active Development**
+> TablioDB is currently in early development and not yet ready for production use.
+
 <p align="center">
   <a href="https://github.com/tabliodb/tabliodb/releases/latest"><img src="https://img.shields.io/github/v/release/tabliodb/tabliodb?style=for-the-badge&label=release" alt="Latest Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-green?style=for-the-badge" alt="License GPL-3.0" /></a>
