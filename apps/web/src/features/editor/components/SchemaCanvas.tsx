@@ -107,6 +107,7 @@ type TableNodeData = {
   columnCountLabel: string;
   commentMarker: CommentMarkerCount;
   displayMode: TableDisplayMode;
+  portSignature: string;
   readOnly: boolean;
   selectedColumnId: string | null;
   selected: boolean;
@@ -148,6 +149,16 @@ type RelationshipPlan = {
   terminalsByTable: Map<string, RelationshipTerminal[]>;
 };
 
+type RelationshipTableGeometry = {
+  centerX: number;
+  centerY: number;
+};
+
+type RelationshipTerminalSlot = {
+  active: boolean;
+  related: boolean;
+};
+
 type RemoteCanvasCursorPosition = RemoteCanvasCursor & {
   left: number;
   top: number;
@@ -187,6 +198,13 @@ type CanvasMinimapState = {
   viewport: CanvasRect;
 };
 
+type CanvasMinimapStaticState = {
+  contentBounds: CanvasRect;
+  groups: CanvasMinimapTable[];
+  notes: CanvasMinimapTable[];
+  tables: CanvasMinimapTable[];
+};
+
 export function SchemaCanvas({
   commentTargetSummaries = [],
   fitKey,
@@ -217,6 +235,10 @@ export function SchemaCanvas({
   const selectedTableIdRef = useRef(selectedTableId);
   const selectedRelationshipIdRef = useRef<string | null>(null);
   const resizingTableIdRef = useRef<string | null>(null);
+  const minimapStaticStateRef = useRef<CanvasMinimapStaticState | null>(null);
+  const localCursorFrameRef = useRef(0);
+  const pendingLocalCursorRef = useRef<AwarenessState['cursor'] | undefined>(undefined);
+  const lastPublishedLocalCursorRef = useRef<AwarenessState['cursor'] | undefined>(undefined);
   const onLocalCursorChangeRef = useRef(onLocalCursorChange);
   const onCommentTargetOpenRef = useRef(onCommentTargetOpen);
   const onColumnSelectRef = useRef(onColumnSelect);
@@ -232,6 +254,11 @@ export function SchemaCanvas({
   useEffect(() => {
     modelRef.current = model;
   }, [model]);
+
+  useEffect(() => {
+    // Item minimap yang berasal dari model dihitung saat model/selection berubah saja; loop RAF cukup menggabungkan viewport live.
+    minimapStaticStateRef.current = createCanvasMinimapStaticState(model, selectedTableId);
+  }, [model, selectedTableId]);
 
   useEffect(() => {
     // Graph X6 tidak diremount saat sidebar dibuka-tutup, jadi quick editor relationship membaca safe-area terbaru lewat ref.
@@ -669,11 +696,44 @@ export function SchemaCanvas({
     container.addEventListener('keydown', handleNoteKeyDown, true);
     container.addEventListener('mousedown', handleResizeMouseDown, true);
 
+    const publishLocalCursor = (cursor: AwarenessState['cursor'] | undefined, immediate = false) => {
+      pendingLocalCursorRef.current = cursor;
+
+      if (immediate) {
+        if (localCursorFrameRef.current) {
+          window.cancelAnimationFrame(localCursorFrameRef.current);
+          localCursorFrameRef.current = 0;
+        }
+
+        if (!areAwarenessCursorsEqual(lastPublishedLocalCursorRef.current, cursor)) {
+          lastPublishedLocalCursorRef.current = cursor;
+          onLocalCursorChangeRef.current?.(cursor);
+        }
+
+        return;
+      }
+
+      if (localCursorFrameRef.current) {
+        return;
+      }
+
+      localCursorFrameRef.current = window.requestAnimationFrame(() => {
+        localCursorFrameRef.current = 0;
+        const nextCursor = pendingLocalCursorRef.current;
+
+        if (!areAwarenessCursorsEqual(lastPublishedLocalCursorRef.current, nextCursor)) {
+          // Pointermove bisa datang ratusan kali per detik; publish awareness cukup sekali per frame agar Yjs tidak kebanjiran update.
+          lastPublishedLocalCursorRef.current = nextCursor;
+          onLocalCursorChangeRef.current?.(nextCursor);
+        }
+      });
+    };
+
     const handleCursorPointerMove = (event: PointerEvent) => {
       const point = graph.clientToLocal(event.clientX, event.clientY);
 
       // Awareness cursor disimpan dalam coordinate system local X6 supaya posisi remote user tetap akurat saat canvas di-pan atau di-zoom.
-      onLocalCursorChangeRef.current?.({
+      publishLocalCursor({
         x: Math.round(point.x),
         y: Math.round(point.y),
       });
@@ -681,7 +741,7 @@ export function SchemaCanvas({
 
     const handleCursorPointerLeave = () => {
       // Menghapus cursor ketika pointer keluar canvas mencegah user lain melihat pointer stale di diagram.
-      onLocalCursorChangeRef.current?.(undefined);
+      publishLocalCursor(undefined, true);
     };
 
     container.addEventListener('pointerleave', handleCursorPointerLeave);
@@ -817,6 +877,10 @@ export function SchemaCanvas({
       container.removeEventListener('mousedown', handleResizeMouseDown, true);
       container.removeEventListener('pointerleave', handleCursorPointerLeave);
       container.removeEventListener('pointermove', handleCursorPointerMove);
+      if (localCursorFrameRef.current) {
+        window.cancelAnimationFrame(localCursorFrameRef.current);
+        localCursorFrameRef.current = 0;
+      }
       graph.dispose();
       graphRef.current = null;
 
@@ -914,7 +978,7 @@ export function SchemaCanvas({
     const graph = graphRef.current;
     const container = containerRef.current;
 
-    if (!graph || !container) {
+    if (!graph || !container || !minimapOpen) {
       setMinimapState(null);
       return;
     }
@@ -927,11 +991,12 @@ export function SchemaCanvas({
         return;
       }
 
-      const nextState = createCanvasMinimapState(graph, container, modelRef.current, selectedTableId);
+      const staticState = minimapStaticStateRef.current;
+      const nextState = staticState ? createCanvasMinimapState(graph, container, staticState) : null;
       setMinimapState((currentState) =>
         areCanvasMinimapStatesEqual(currentState, nextState) ? currentState : nextState,
       );
-      // Minimap mengikuti transform X6 live; state React hanya berubah saat viewport/table bounds benar-benar bergeser.
+      // Saat terbuka, minimap mengikuti transform X6 live; static item diagram tetap di-cache agar pan/zoom tidak scan semua table.
       animationFrameId = window.requestAnimationFrame(syncMinimapState);
     };
 
@@ -941,13 +1006,14 @@ export function SchemaCanvas({
       disposed = true;
       window.cancelAnimationFrame(animationFrameId);
     };
-  }, [readOnly, selectedTableId]);
+  }, [minimapOpen, model, selectedTableId]);
 
   function handleMinimapCenter(x: number, y: number) {
     graphRef.current?.centerPoint(x, y);
   }
 
   const activeRelationship = relationshipMenu ? (model.relationships[relationshipMenu.relationshipId] ?? null) : null;
+  const canShowMinimap = Object.keys(model.tables).length > 0;
 
   function handleRelationshipCardinalityChange(cardinality: DatabaseRelationship['cardinality']) {
     if (!activeRelationship || readOnly || activeRelationship.cardinality === cardinality) {
@@ -985,14 +1051,14 @@ export function SchemaCanvas({
           {toolbar}
         </div>
       ) : null}
-      {minimapState && minimapOpen ? (
+      {minimapOpen && minimapState ? (
         <CanvasMinimap
           offsetRight={minimapOffsetRight}
           onCenter={handleMinimapCenter}
           onClose={() => setMinimapOpen(false)}
           state={minimapState}
         />
-      ) : minimapState ? (
+      ) : !minimapOpen && canShowMinimap ? (
         <button
           aria-label="Show minimap"
           className="tabliodb-editor-chrome absolute bottom-4 z-20 h-9 cursor-pointer rounded-(--tabliodb-radius-md) px-3 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] transition-[right,background,box-shadow,transform] duration-200 hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
@@ -1273,12 +1339,10 @@ function RelationshipEndpointPill({ label, tone }: { label: string; tone: 'sourc
   );
 }
 
-function createCanvasMinimapState(
-  graph: Graph,
-  container: HTMLElement,
+function createCanvasMinimapStaticState(
   model: DiagramModel,
   selectedTableId: string | null,
-): CanvasMinimapState | null {
+): CanvasMinimapStaticState | null {
   const tables = Object.values(model.tables).map<CanvasMinimapTable>((table) => ({
     color: getDisplayTableColor(table.color),
     height: getTableNodeHeight(model, table),
@@ -1311,14 +1375,29 @@ function createCanvasMinimapState(
     return null;
   }
 
-  const viewport = getCanvasViewportRect(graph, container);
-  const contentBounds = getCanvasContentBounds([...groups, ...tables, ...notes, viewport]);
-  const viewBox = normalizeRectToAspect(padCanvasRect(contentBounds, 96), minimapAspectRatio);
+  const contentBounds = getCanvasContentBounds([...groups, ...tables, ...notes]);
 
   return {
+    contentBounds,
     groups: groups.map(roundCanvasMinimapTable),
     notes: notes.map(roundCanvasMinimapTable),
     tables: tables.map(roundCanvasMinimapTable),
+  };
+}
+
+function createCanvasMinimapState(
+  graph: Graph,
+  container: HTMLElement,
+  staticState: CanvasMinimapStaticState,
+): CanvasMinimapState {
+  const viewport = getCanvasViewportRect(graph, container);
+  const contentBounds = mergeCanvasRects(staticState.contentBounds, viewport);
+  const viewBox = normalizeRectToAspect(padCanvasRect(contentBounds, 96), minimapAspectRatio);
+
+  return {
+    groups: staticState.groups,
+    notes: staticState.notes,
+    tables: staticState.tables,
     viewBox: roundCanvasRect(viewBox),
     viewport: roundCanvasRect(viewport),
   };
@@ -1350,6 +1429,20 @@ function getCanvasContentBounds(rects: CanvasRect[]): CanvasRect {
     width: Math.max(1, right - left),
     x: left,
     y: top,
+  };
+}
+
+function mergeCanvasRects(left: CanvasRect, right: CanvasRect): CanvasRect {
+  const minX = Math.min(left.x, right.x);
+  const minY = Math.min(left.y, right.y);
+  const maxX = Math.max(left.x + left.width, right.x + right.width);
+  const maxY = Math.max(left.y + left.height, right.y + right.height);
+
+  return {
+    height: Math.max(1, maxY - minY),
+    width: Math.max(1, maxX - minX),
+    x: minX,
+    y: minY,
   };
 }
 
@@ -1422,6 +1515,10 @@ function areCanvasMinimapStatesEqual(
 }
 
 function areCanvasMinimapItemsEqual(currentItems: CanvasMinimapTable[], nextItems: CanvasMinimapTable[]): boolean {
+  if (currentItems === nextItems) {
+    return true;
+  }
+
   return (
     currentItems.length === nextItems.length &&
     currentItems.every((item, index) => {
@@ -1441,6 +1538,17 @@ function areCanvasMinimapItemsEqual(currentItems: CanvasMinimapTable[], nextItem
 
 function areCanvasRectsEqual(left: CanvasRect, right: CanvasRect): boolean {
   return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height;
+}
+
+function areAwarenessCursorsEqual(
+  left: AwarenessState['cursor'] | undefined,
+  right: AwarenessState['cursor'] | undefined,
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return left.x === right.x && left.y === right.y;
 }
 
 function createRemoteCursorPositions(
@@ -1751,12 +1859,13 @@ function syncTableNode(graph: Graph, metadata: NodeMetadata): void {
     height: metadata.height ?? tableHeaderHeight,
   };
   const nextPorts = metadata.ports;
+  const shouldSyncPorts = currentData?.portSignature !== nextData.portSignature;
 
   if (!isTableNodeDataEqual(currentData, nextData)) {
     existing.setData(nextData, { overwrite: true });
   }
 
-  if (JSON.stringify(existing.getPorts()) !== JSON.stringify(getPortItems(nextPorts))) {
+  if (shouldSyncPorts) {
     // Relationship endpoints are rendered as X6 ports, so port metadata must move with column rows and lane offsets.
     existing.setProp('ports', nextPorts);
   }
@@ -1820,15 +1929,6 @@ function getMetadataTerminalPortId(terminal: EdgeMetadata['source']): string | n
   return null;
 }
 
-function getPortItems(ports: NodeMetadata['ports'] | undefined): unknown[] {
-  if (Array.isArray(ports)) {
-    return ports;
-  }
-
-  // X6 accepts both a raw port array and a full ports metadata object; normalizing here keeps sync comparisons type-safe.
-  return ports?.items ?? [];
-}
-
 function createTableNodeMetadata(
   model: DiagramModel,
   table: DatabaseTable,
@@ -1843,6 +1943,8 @@ function createTableNodeMetadata(
   const displayMode = getEffectiveTableDisplayMode(table);
   const height = getTableNodeHeight(model, table);
   const width = getTableWidth(table);
+  const selected = table.id === selectedTableId;
+  const portSignature = createColumnPortSignature(table, columns, terminals, readOnly, selected);
 
   return {
     id: table.id,
@@ -1857,18 +1959,19 @@ function createTableNodeMetadata(
         displayMode === 'all_columns' ? String(totalColumnCount) : `${columns.length}/${totalColumnCount}`,
       commentMarker: getTableCommentMarkerCount(commentMarkerSummary, table.id),
       displayMode,
+      portSignature,
       readOnly,
       selectedColumnId,
-      selected: table.id === selectedTableId,
+      selected,
       tableId: table.id,
       tableName: table.name,
     } satisfies TableNodeData,
     height,
     position: table.position,
-    ports: createColumnPorts(model, table, terminals, readOnly, table.id === selectedTableId),
+    ports: createColumnPorts(table, columns, terminals, readOnly, selected),
     shape: tableNodeShape,
     width,
-    zIndex: table.id === selectedTableId ? 2 : 1,
+    zIndex: selected ? 2 : 1,
   };
 }
 
@@ -1921,8 +2024,12 @@ function buildRelationshipMarkers(
   }
 }
 
-function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipPlan): EdgeMetadata[] {
-  return Object.values(model.relationships).flatMap<EdgeMetadata>((relationship) => {
+function createRelationshipEdgeMetadata(
+  model: DiagramModel,
+  plan: RelationshipPlan,
+  relationships: DatabaseRelationship[] = Object.values(model.relationships),
+): EdgeMetadata[] {
+  return relationships.flatMap<EdgeMetadata>((relationship) => {
     const sourceTable = model.tables[relationship.sourceTableId];
     const targetTable = model.tables[relationship.targetTableId];
     const terminals = plan.terminalsByRelationship.get(relationship.id);
@@ -1969,33 +2076,32 @@ function createRelationshipPlan(
   model: DiagramModel,
   selectedTableId: string | null,
   selectedRelationshipId: string | null,
+  relationships: DatabaseRelationship[] = Object.values(model.relationships),
 ): RelationshipPlan {
   const terminalsByRelationship = new Map<string, { source?: RelationshipTerminal; target?: RelationshipTerminal }>();
   const terminalsByTable = new Map<string, RelationshipTerminal[]>();
+  const tableGeometryById = createRelationshipTableGeometry(model, relationships);
 
-  for (const relationship of Object.values(model.relationships)) {
+  for (const relationship of relationships) {
     const sourceTable = model.tables[relationship.sourceTableId];
     const targetTable = model.tables[relationship.targetTableId];
+    const sourceGeometry = tableGeometryById.get(relationship.sourceTableId);
+    const targetGeometry = tableGeometryById.get(relationship.targetTableId);
     const [columnPair] = getRelationshipColumnPairs(relationship);
 
-    if (!sourceTable || !targetTable || !columnPair) {
+    if (!sourceTable || !targetTable || !sourceGeometry || !targetGeometry || !columnPair) {
       continue;
     }
 
-    const sourceCenterX = sourceTable.position.x + getTableWidth(sourceTable) / 2;
-    const targetCenterX = targetTable.position.x + getTableWidth(targetTable) / 2;
-    const sourceCenterY = sourceTable.position.y + getTableNodeHeight(model, sourceTable) / 2;
-    const targetCenterY = targetTable.position.y + getTableNodeHeight(model, targetTable) / 2;
-
-    const dx = Math.abs(targetCenterX - sourceCenterX);
-    const dy = Math.abs(targetCenterY - sourceCenterY);
+    const dx = Math.abs(targetGeometry.centerX - sourceGeometry.centerX);
+    const dy = Math.abs(targetGeometry.centerY - sourceGeometry.centerY);
 
     let sourceSide: PortSide;
     let targetSide: PortSide;
 
     if (dy > dx * 1.5) {
       // Vertikal dominance: pakai sisi yang sama — prioritas kiri untuk alignment rapi
-      if (sourceCenterX <= targetCenterX) {
+      if (sourceGeometry.centerX <= targetGeometry.centerX) {
         sourceSide = 'left';
         targetSide = 'left';
       } else {
@@ -2004,7 +2110,7 @@ function createRelationshipPlan(
       }
     } else {
       // Horizontal dominance: logika asli (berhadapan)
-      const sourceIsLeft = sourceCenterX <= targetCenterX;
+      const sourceIsLeft = sourceGeometry.centerX <= targetGeometry.centerX;
       sourceSide = sourceIsLeft ? 'right' : 'left';
       targetSide = sourceIsLeft ? 'left' : 'right';
     }
@@ -2047,6 +2153,29 @@ function createRelationshipPlan(
   return { terminalsByRelationship, terminalsByTable };
 }
 
+function createRelationshipTableGeometry(
+  model: DiagramModel,
+  relationships?: DatabaseRelationship[],
+): Map<string, RelationshipTableGeometry> {
+  const geometryById = new Map<string, RelationshipTableGeometry>();
+  const tables = relationships
+    ? Array.from(
+        new Set(relationships.flatMap((relationship) => [relationship.sourceTableId, relationship.targetTableId])),
+      )
+        .map((tableId) => model.tables[tableId])
+        .filter((table): table is DatabaseTable => Boolean(table))
+    : Object.values(model.tables);
+
+  for (const table of tables) {
+    geometryById.set(table.id, {
+      centerX: table.position.x + getTableWidth(table) / 2,
+      centerY: table.position.y + getTableNodeHeight(model, table) / 2,
+    });
+  }
+
+  return geometryById;
+}
+
 function createTerminalBase(options: {
   active: boolean;
   columnId: string;
@@ -2063,14 +2192,15 @@ function createTerminalBase(options: {
 }
 
 function createColumnPorts(
-  model: DiagramModel,
   table: DatabaseTable,
+  visibleColumns: DatabaseColumn[],
   terminals: RelationshipTerminal[],
   readOnly: boolean,
   selected: boolean,
 ): NodeMetadata['ports'] {
-  const visibleColumns = getVisibleTableColumns(model, table);
   const portSides: PortSide[] = ['left', 'right'];
+  const terminalSlots = createRelationshipTerminalSlotMap(terminals);
+  const width = getTableWidth(table);
 
   return {
     groups: {
@@ -2082,17 +2212,14 @@ function createColumnPorts(
     items: visibleColumns.flatMap((column, columnIndex) =>
       portSides.map((side) => {
         const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2;
+        const terminalSlot = terminalSlots.get(createRelationshipTerminalSlotKey(column.id, side));
 
-        const relatedTerminal = terminals.find((terminal) => terminal.columnId === column.id && terminal.side === side);
-        const activeTerminal = terminals.find(
-          (terminal) => terminal.active && terminal.columnId === column.id && terminal.side === side,
-        );
-        const isVisible = selected || Boolean(activeTerminal);
-        const color = activeTerminal ? relationshipActiveColor : '#5865f2';
+        const isVisible = selected || Boolean(terminalSlot?.active);
+        const color = terminalSlot?.active ? relationshipActiveColor : '#5865f2';
 
         return {
           args: {
-            x: side === 'left' ? 0 : getTableWidth(table),
+            x: side === 'left' ? 0 : width,
             y,
           },
           attrs: {
@@ -2102,12 +2229,12 @@ function createColumnPorts(
               magnet: !readOnly,
               opacity: isVisible ? 1 : 0,
               r: isVisible
-                ? activeTerminal
+                ? terminalSlot?.active
                   ? relationshipPortRadius + 1
                   : relationshipPortRadius
                 : relationshipPortRadius,
               stroke: isVisible ? color : 'transparent',
-              strokeWidth: isVisible ? (relatedTerminal ? 2 : 1.5) : 0,
+              strokeWidth: isVisible ? (terminalSlot?.related ? 2 : 1.5) : 0,
             },
           },
           group: 'absolute',
@@ -2117,6 +2244,55 @@ function createColumnPorts(
       }),
     ),
   };
+}
+
+function createColumnPortSignature(
+  table: DatabaseTable,
+  visibleColumns: DatabaseColumn[],
+  terminals: RelationshipTerminal[],
+  readOnly: boolean,
+  selected: boolean,
+): string {
+  const terminalSignature = terminals
+    .map((terminal) =>
+      [
+        terminal.columnId,
+        terminal.side,
+        terminal.active ? 'active' : 'idle',
+        terminal.role,
+        terminal.relationshipId,
+      ].join(':'),
+    )
+    .sort()
+    .join('|');
+
+  return [
+    getTableWidth(table),
+    readOnly ? 'readonly' : 'editable',
+    selected ? 'selected' : 'idle',
+    visibleColumns.map((column) => column.id).join(','),
+    terminalSignature,
+  ].join('::');
+}
+
+function createRelationshipTerminalSlotMap(terminals: RelationshipTerminal[]): Map<string, RelationshipTerminalSlot> {
+  const slots = new Map<string, RelationshipTerminalSlot>();
+
+  for (const terminal of terminals) {
+    const key = createRelationshipTerminalSlotKey(terminal.columnId, terminal.side);
+    const currentSlot = slots.get(key);
+
+    slots.set(key, {
+      active: Boolean(currentSlot?.active || terminal.active),
+      related: true,
+    });
+  }
+
+  return slots;
+}
+
+function createRelationshipTerminalSlotKey(columnId: string, side: PortSide): string {
+  return `${columnId}:${side}`;
 }
 
 function createColumnPortId(tableId: string, columnId: string, side: PortSide): string {
@@ -2204,28 +2380,32 @@ function refreshTableResizePreview(
       [tableId]: previewTable,
     },
   };
-  const relationshipPlan = createRelationshipPlan(previewModel, selectedTableId, selectedRelationshipId);
+  const affectedRelationships = Object.values(previewModel.relationships).filter(
+    (relationship) => relationship.sourceTableId === tableId || relationship.targetTableId === tableId,
+  );
+  const relationshipPlan = createRelationshipPlan(
+    previewModel,
+    selectedTableId,
+    selectedRelationshipId,
+    affectedRelationships,
+  );
+  const visibleColumns = getVisibleTableColumns(previewModel, previewTable);
 
   graph.batchUpdate('tabliodb-resize-preview', () => {
     node.setProp(
       'ports',
       createColumnPorts(
-        previewModel,
         previewTable,
+        visibleColumns,
         relationshipPlan.terminalsByTable.get(tableId) ?? [],
         readOnly,
         tableId === selectedTableId,
       ),
     );
 
-    for (const edgeMetadata of createRelationshipEdgeMetadata(previewModel, relationshipPlan)) {
-      const relationshipId = edgeMetadata.id;
-      const relationship = relationshipId ? previewModel.relationships[relationshipId] : null;
-
-      if (relationship?.sourceTableId === tableId || relationship?.targetTableId === tableId) {
-        // Reapplying the edge metadata forces X6 to recalculate endpoints against the live resized port positions.
-        syncRelationshipEdge(graph, edgeMetadata);
-      }
+    for (const edgeMetadata of createRelationshipEdgeMetadata(previewModel, relationshipPlan, affectedRelationships)) {
+      // Reapplying affected edge metadata forces X6 to recalculate endpoints against the live resized port positions.
+      syncRelationshipEdge(graph, edgeMetadata);
     }
   });
 }
@@ -2403,6 +2583,7 @@ function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNod
     current.color === next.color &&
     current.columnCountLabel === next.columnCountLabel &&
     current.displayMode === next.displayMode &&
+    current.portSignature === next.portSignature &&
     current.readOnly === next.readOnly &&
     current.selectedColumnId === next.selectedColumnId &&
     current.selected === next.selected &&
