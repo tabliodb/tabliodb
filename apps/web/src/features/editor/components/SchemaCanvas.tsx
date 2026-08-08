@@ -995,7 +995,7 @@ export function SchemaCanvas({
       ) : minimapState ? (
         <button
           aria-label="Show minimap"
-          className="absolute bottom-4 z-20 h-9 cursor-pointer rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition-[right,background,box-shadow,transform] duration-200 hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+          className="tabliodb-editor-chrome absolute bottom-4 z-20 h-9 cursor-pointer rounded-(--tabliodb-radius-md) px-3 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] transition-[right,background,box-shadow,transform] duration-200 hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
           onClick={() => setMinimapOpen(true)}
           style={{ right: minimapOffsetRight }}
           type="button"
@@ -1085,7 +1085,7 @@ function CanvasMinimap({
 
   return (
     <section
-      className="absolute bottom-4 z-20 w-[clamp(144px,16vw,192px)] rounded-(--tabliodb-radius-lg) border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgba(15,23,42,0.14)] transition-[right] duration-200 backdrop-blur"
+      className="tabliodb-editor-chrome absolute bottom-4 z-20 w-[clamp(144px,16vw,192px)] rounded-(--tabliodb-radius-lg) p-2 transition-[right] duration-200"
       style={{ right: offsetRight }}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
@@ -1094,7 +1094,7 @@ function CanvasMinimap({
         </span>
         <button
           aria-label="Hide minimap"
-          className="grid size-5 cursor-pointer place-items-center rounded-full text-[13px] font-extrabold leading-none text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] hover:text-[rgb(var(--tabliodb-ink))]"
+          className="grid size-5 cursor-pointer place-items-center rounded-full text-[13px] font-extrabold leading-none text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-surface))] hover:text-[rgb(var(--tabliodb-ink))]"
           onClick={onClose}
           type="button"
         >

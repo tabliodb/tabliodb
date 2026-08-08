@@ -1579,7 +1579,7 @@ export function EditorPage() {
   const canvasFloatingInsetRight = (rightSidebarOpen ? expandedSidebarWidthPx : collapsedSidebarWidthPx) + 16;
   const canvasToolbar = canEditDiagram ? (
     <div
-      className="tabliodb-scrollbar flex items-center gap-2 overflow-x-auto rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-1.5 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgb(15_23_42/0.12)] backdrop-blur"
+      className="tabliodb-editor-chrome tabliodb-scrollbar flex items-center gap-2 overflow-x-auto rounded-[var(--tabliodb-radius-lg)] p-1.5"
       style={{ maxWidth: `max(9rem, calc(100vw - ${canvasToolbarOffsetLeft} - ${canvasMinimapOffsetRight} - 12px))` }}
     >
       <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} triggerSize="sm" />
@@ -2029,7 +2029,7 @@ export function EditorPage() {
         </section>
 
         <aside
-          className="absolute inset-y-0 left-0 z-30 min-w-0 overflow-hidden border-r border-[rgb(var(--tabliodb-border))] bg-white shadow-[12px_0_28px_rgb(15_23_42/0.06)] transition-[width] duration-200"
+          className="tabliodb-editor-chrome-soft absolute inset-y-0 left-0 z-30 min-w-0 overflow-hidden border-r border-[rgb(var(--tabliodb-border))] transition-[width] duration-200"
           style={{ width: leftSidebarWidth }}
         >
           {!leftSidebarOpen ? (
@@ -2037,7 +2037,6 @@ export function EditorPage() {
               icon={PanelLeft}
               label="Show left sidebar"
               onClick={() => setLeftSidebarOpen(true)}
-              side="left"
             />
           ) : (
             <DiagramTablesSidebar
@@ -2056,7 +2055,7 @@ export function EditorPage() {
 
         {rightSidebarOpen ? (
           <div
-            className="absolute inset-y-0 right-0 z-30 min-w-0 shadow-[-12px_0_28px_rgb(15_23_42/0.06)] transition-[width] duration-200"
+            className="tabliodb-editor-chrome-soft absolute inset-y-0 right-0 z-30 min-w-0 transition-[width] duration-200"
             style={{ width: rightSidebarWidth }}
           >
             <SchemaInspector
@@ -2080,14 +2079,13 @@ export function EditorPage() {
           </div>
         ) : (
           <aside
-            className="absolute inset-y-0 right-0 z-30 min-w-0 overflow-hidden border-l border-[rgb(var(--tabliodb-border))] bg-white transition-[width] duration-200"
+            className="tabliodb-editor-chrome-soft absolute inset-y-0 right-0 z-30 min-w-0 overflow-hidden border-l border-[rgb(var(--tabliodb-border))] transition-[width] duration-200"
             style={{ width: rightSidebarWidth }}
           >
             <SidebarRail
               icon={PanelRight}
               label="Show inspector"
               onClick={() => setRightSidebarOpen(true)}
-              side="right"
             />
           </aside>
         )}
@@ -4411,20 +4409,13 @@ function SidebarRail({
   icon,
   label,
   onClick,
-  side,
 }: {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   label: string;
   onClick: () => void;
-  side: 'left' | 'right';
 }) {
   return (
-    <div
-      className={cn(
-        'flex h-full min-h-0 items-start justify-center pt-3',
-        side === 'left' ? 'border-r-0' : 'border-l-0',
-      )}
-    >
+    <div className="flex h-full min-h-0 items-start justify-center bg-white/70 pt-3 backdrop-blur">
       <IconButton size="lg" icon={icon} label={label} onClick={onClick} variant="ghost" />
     </div>
   );
@@ -4748,8 +4739,8 @@ function DiagramTablesSidebar({
   }, [selectedTableId, visibleTables.length]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] px-3">
+    <div className="flex h-full min-h-0 flex-col bg-[rgb(var(--tabliodb-surface-raised))]">
+      <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] bg-white/80 px-3 backdrop-blur">
         <div className="grid size-8 shrink-0 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]">
           <Database className="size-4" />
         </div>
@@ -4767,7 +4758,7 @@ function DiagramTablesSidebar({
         <IconButton size="lg" icon={PanelLeft} label="Hide left sidebar" onClick={onHide} variant="ghost" />
       </div>
 
-      <div className="border-b border-[rgb(var(--tabliodb-border))] p-3">
+      <div className="border-b border-[rgb(var(--tabliodb-border))] bg-white/60 p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
           <Input
@@ -4836,8 +4827,8 @@ function TableAccordionItem({
       className={cn(
         'overflow-hidden rounded-[var(--tabliodb-radius-lg)] border bg-white transition',
         selected
-          ? 'border-[rgb(var(--tabliodb-active-chip-border))] shadow-[0_2px_0_rgb(var(--tabliodb-border))]'
-          : 'border-transparent hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+          ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))] shadow-[0_2px_0_rgb(var(--tabliodb-active-chip-border))]'
+          : 'border-[rgb(var(--tabliodb-border))] shadow-[0_1px_0_rgb(var(--tabliodb-border))] hover:border-[rgb(var(--tabliodb-border-strong))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
       )}
       data-tabliodb-table-item-id={table.id}
     >

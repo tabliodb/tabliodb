@@ -461,15 +461,18 @@ export function SchemaInspector({
 
   return (
     <aside
-      className={cn('flex min-h-0 min-w-0 flex-col border-l border-[rgb(var(--tabliodb-border))] bg-white', className)}
+      className={cn(
+        'flex min-h-0 min-w-0 flex-col border-l border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))]',
+        className,
+      )}
     >
-      <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] px-4 text-[13px] font-extrabold">
+      <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] bg-white/80 px-4 text-[13px] font-extrabold backdrop-blur">
         <span>Inspector</span>
         {onHide ? (
           <IconButton size="lg" icon={PanelRight} label="Hide inspector" onClick={onHide} variant="ghost" />
         ) : null}
       </div>
-      <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
         <div className="flex flex-wrap gap-2">
           <Badge variant="green">{model.dialect}</Badge>
           <Badge variant="blue">v{latestSnapshotVersion}</Badge>
@@ -496,7 +499,7 @@ export function SchemaInspector({
             Selected table
           </h2>
           {selectedTable ? (
-            <Surface className="mt-2 p-3">
+            <Surface className="mt-2 p-3" depth="sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
@@ -521,9 +524,9 @@ export function SchemaInspector({
                   <button
                     aria-pressed={selectedColumnId === column.id}
                     className={cn(
-                      'grid w-full cursor-pointer grid-cols-[1fr_auto] gap-2 rounded-xl px-2 py-2 text-left text-xs transition hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+                      'grid w-full cursor-pointer grid-cols-[1fr_auto] gap-2 rounded-[var(--tabliodb-radius-md)] border border-transparent px-2 py-2 text-left text-xs transition hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]',
                       selectedColumnId === column.id &&
-                        'bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))]',
+                        'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))] shadow-[inset_3px_0_0_rgb(var(--tabliodb-primary))]',
                     )}
                     key={column.id}
                     onClick={() => handleColumnSelect(column.id)}
