@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import sharp from 'sharp';
 import { AVATAR_SERVE_VARIANT } from '../repositories/file.repository.js';
 import { FileService } from './file.service.js';
@@ -12,6 +12,7 @@ describe(FileService.name, () => {
     getEnv: vi.fn(),
   };
   const fileRepository = {
+    canReadUserAvatar: vi.fn(),
     clearUserAvatar: vi.fn(),
     getReadyAvatarById: vi.fn(),
     replaceUserAvatar: vi.fn(),
@@ -40,6 +41,7 @@ describe(FileService.name, () => {
       },
     });
     fileRepository.replaceUserAvatar.mockResolvedValue({ file: { id: 'file-id' }, oldFile: null });
+    fileRepository.canReadUserAvatar.mockResolvedValue(true);
     service = new FileService(configRepository as never, fileRepository as never);
   });
 
@@ -112,14 +114,32 @@ describe(FileService.name, () => {
       byteSize: String(pngBuffer.length),
       checksumSha256: 'checksum',
       mimeType: 'image/png',
+      ownerId: 'user-id',
       storageKey,
     });
 
-    const file = await service.getReadyAvatarFile('file-id');
+    const file = await service.getReadyAvatarFile('viewer-id', 'file-id');
 
     expect(file.mimeType).toBe('image/png');
     expect(file.byteSize).toBe(String(pngBuffer.length));
+    expect(fileRepository.canReadUserAvatar).toHaveBeenCalledWith('viewer-id', 'user-id');
     file.stream.destroy();
+  });
+
+  it('rejects avatar reads when the viewer does not share an active workspace with the owner', async () => {
+    const storageKey = 'avatars/user-id/avatar.png';
+    await mkdir(path.dirname(path.join(storageRoot, storageKey)), { recursive: true });
+    await writeFile(path.join(storageRoot, storageKey), pngBuffer);
+    fileRepository.getReadyAvatarById.mockResolvedValue({
+      byteSize: String(pngBuffer.length),
+      checksumSha256: 'checksum',
+      mimeType: 'image/png',
+      ownerId: 'user-id',
+      storageKey,
+    });
+    fileRepository.canReadUserAvatar.mockResolvedValue(false);
+
+    await expect(service.getReadyAvatarFile('viewer-id', 'file-id')).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('hides avatar records when the physical file is missing', async () => {
@@ -127,9 +147,10 @@ describe(FileService.name, () => {
       byteSize: '12',
       checksumSha256: 'checksum',
       mimeType: 'image/png',
+      ownerId: 'user-id',
       storageKey: 'avatars/user-id/missing.png',
     });
 
-    await expect(service.getReadyAvatarFile('file-id')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.getReadyAvatarFile('viewer-id', 'file-id')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

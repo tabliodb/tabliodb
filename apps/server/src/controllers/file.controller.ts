@@ -1,7 +1,8 @@
 import { Controller, Get, Param, Res, StreamableFile } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { Authenticated } from '../middleware/auth.guard.js';
+import type { AuthContext } from '../database.js';
+import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { FileService } from '../services/file.service.js';
 
 @ApiTags('files')
@@ -13,8 +14,8 @@ export class FileController {
   @Get(':fileId')
   @ApiParam({ name: 'fileId', type: String })
   @ApiOperation({ operationId: 'getFile' })
-  async getFile(@Param('fileId') fileId: string, @Res({ passthrough: true }) res: Response) {
-    const file = await this.fileService.getReadyAvatarFile(fileId);
+  async getFile(@Auth() auth: AuthContext, @Param('fileId') fileId: string, @Res({ passthrough: true }) res: Response) {
+    const file = await this.fileService.getReadyAvatarFile(auth.user.id, fileId);
 
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Length', file.byteSize);

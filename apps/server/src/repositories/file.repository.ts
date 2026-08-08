@@ -162,6 +162,7 @@ export class FileRepository {
       )
       .select([
         'files.id',
+        'files.ownerId',
         sql<string>`coalesce(avatar_variant.mime_type, files.mime_type)`.as('mimeType'),
         sql<string>`coalesce(avatar_variant.byte_size, files.byte_size)`.as('byteSize'),
         sql<string | null>`coalesce(avatar_variant.metadata ->> 'checksumSha256', files.checksum_sha256)`.as(
@@ -174,5 +175,27 @@ export class FileRepository {
       .where('files.status', '=', 'ready')
       .where('files.deletedAt', 'is', null)
       .executeTakeFirst();
+  }
+
+  async canReadUserAvatar(viewerId: string, ownerId: string): Promise<boolean> {
+    if (viewerId === ownerId) {
+      return true;
+    }
+
+    const sharedWorkspace = await this.db
+      .selectFrom('organization_members as viewer_membership')
+      .innerJoin('organization_members as owner_membership', (join) =>
+        join.onRef('owner_membership.organizationId', '=', 'viewer_membership.organizationId'),
+      )
+      .innerJoin('organizations', 'organizations.id', 'viewer_membership.organizationId')
+      .select(sql<number>`1`.as('exists'))
+      .where('viewer_membership.userId', '=', viewerId)
+      .where('viewer_membership.status', '=', 'active')
+      .where('owner_membership.userId', '=', ownerId)
+      .where('owner_membership.status', '=', 'active')
+      .where('organizations.archivedAt', 'is', null)
+      .executeTakeFirst();
+
+    return Boolean(sharedWorkspace);
   }
 }

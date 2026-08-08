@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
@@ -141,11 +141,16 @@ export class FileService {
     }
   }
 
-  async getReadyAvatarFile(fileId: string): Promise<ReadyAvatarFile> {
+  async getReadyAvatarFile(viewerId: string, fileId: string): Promise<ReadyAvatarFile> {
     const file = await this.fileRepository.getReadyAvatarById(fileId);
 
     if (!file) {
       throw new NotFoundException('Avatar file was not found');
+    }
+
+    // Avatar URLs are exposed in collaboration/member responses, but a guessed UUID still needs a workspace relationship.
+    if (!(await this.fileRepository.canReadUserAvatar(viewerId, file.ownerId))) {
+      throw new ForbiddenException('Avatar file access is not allowed');
     }
 
     const absolutePath = this.resolveStoragePath(file.storageKey);
