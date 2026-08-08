@@ -103,10 +103,10 @@ const totalStepCount = setupSteps.length + 1;
 
 function getSetupDefaults(): SetupFormState {
   return {
-    ownerEmail: 'owner@tabliodb.local',
-    ownerName: 'Tabliodb Owner',
-    ownerPassword: 'tabliodb-dev',
-    publicUrl: typeof window === 'undefined' ? '' : window.location.origin,
+    ownerEmail: '',
+    ownerName: '',
+    ownerPassword: '',
+    publicUrl: '',
     workspaceName: 'Personal Workspace',
   };
 }

@@ -4,7 +4,7 @@ import { queryClient } from '@/lib/react-query';
 import { setupQueries } from '@/resources/setup';
 
 export const requireSetupComplete: MiddlewareFunction = async (_, next) => {
-  const setupStatus = await queryClient.ensureQueryData(setupQueries.status());
+  const setupStatus = await queryClient.fetchQuery(setupQueries.status());
 
   if (!setupStatus.isSetupComplete) {
     throw redirect(routes.setup.to());

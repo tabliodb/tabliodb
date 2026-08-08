@@ -24,5 +24,7 @@ export const setupQueries: SetupQueries = {
       queryFn: () => getSetupStatus(),
       queryKey: setupKeys.status(),
       retry: false,
+      // Setup status mengontrol redirect global; nilai stale setelah db reset bisa membawa user ke route yang salah.
+      staleTime: 0,
     }),
 };

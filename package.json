@@ -23,6 +23,7 @@
     "db:reset": "npm run db:reset -w @tabliodb/server",
     "db:seed": "npm run db:seed -w @tabliodb/server",
     "db:fresh": "npm run db:fresh -w @tabliodb/server",
+    "db:fresh:seed": "npm run db:fresh:seed -w @tabliodb/server",
     "docker:prod:build": "docker compose --env-file docker/production.env -f docker/docker-compose.prod.yml build",
     "docker:prod:down": "docker compose --env-file docker/production.env -f docker/docker-compose.prod.yml down",
     "docker:prod:logs": "docker compose --env-file docker/production.env -f docker/docker-compose.prod.yml logs -f tabliodb",
