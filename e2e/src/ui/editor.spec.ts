@@ -47,7 +47,13 @@ test('renders the schema editor shell', async ({ page }) => {
 
   await page.goto('/');
 
-  await expect(page.getByText('Tabliodb')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Tabliodb' })).toBeVisible();
   await expect(page.getByText('Library System')).toBeVisible();
   await expect(page.getByText('books')).toBeVisible();
+
+  const horizontalOverflow = await page.evaluate(() => {
+    // Editor sidebars are absolute overlays; the document itself must stay locked to the viewport on desktop, tablet, and mobile smoke runs.
+    return Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth;
+  });
+  expect(horizontalOverflow).toBeLessThanOrEqual(2);
 });

@@ -1570,15 +1570,18 @@ export function EditorPage() {
   const rightSidebarWidth = rightSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
   // Floating canvas controls menghormati rail/sidebar yang sedang terlihat agar toolbar dan minimap tidak tertutup panel.
   const canvasToolbarOffsetLeft = leftSidebarOpen
-    ? `calc(${expandedSidebarWidth} + 16px)`
+    ? `min(calc(${expandedSidebarWidth} + 16px), calc(100vw - 11rem))`
     : `calc(${collapsedSidebarWidth} + 12px)`;
   const canvasMinimapOffsetRight = rightSidebarOpen
-    ? `calc(${expandedSidebarWidth} + 16px)`
+    ? `min(calc(${expandedSidebarWidth} + 16px), calc(100vw - 10rem))`
     : `calc(${collapsedSidebarWidth} + 12px)`;
   const canvasFloatingInsetLeft = (leftSidebarOpen ? expandedSidebarWidthPx : collapsedSidebarWidthPx) + 16;
   const canvasFloatingInsetRight = (rightSidebarOpen ? expandedSidebarWidthPx : collapsedSidebarWidthPx) + 16;
   const canvasToolbar = canEditDiagram ? (
-    <div className="tabliodb-scrollbar flex max-w-[calc(100vw-7rem)] items-center gap-2 overflow-x-auto rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-1.5 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgb(15_23_42/0.12)] backdrop-blur">
+    <div
+      className="tabliodb-scrollbar flex items-center gap-2 overflow-x-auto rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-1.5 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgb(15_23_42/0.12)] backdrop-blur"
+      style={{ maxWidth: `max(9rem, calc(100vw - ${canvasToolbarOffsetLeft} - ${canvasMinimapOffsetRight} - 12px))` }}
+    >
       <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} triggerSize="sm" />
       <Button className="gap-2" disabled={!canEditDiagram} onClick={handleAddNote} size="sm" variant="secondary">
         <StickyNote className="size-4" />
@@ -1589,10 +1592,10 @@ export function EditorPage() {
 
   return (
     <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
-      <header className="flex h-(--tabliodb-header-height) shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] bg-white px-3 sm:px-4">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="flex shrink-0 items-center gap-2">
-            <img src={LOGO} alt="Tabliodb" className="w-32" />
+      <header className="flex h-(--tabliodb-header-height) shrink-0 items-center gap-2 border-b border-[rgb(var(--tabliodb-border))] bg-white px-2 sm:gap-3 sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          <div className="flex h-9 w-32 shrink-0 items-center overflow-hidden max-[560px]:w-9">
+            <img src={LOGO} alt="Tabliodb" className="h-9 w-32 max-w-none" />
           </div>
           <WorkspaceProjectMenu
             activeDiagram={activeDiagram}
@@ -1639,7 +1642,7 @@ export function EditorPage() {
           />
         </div>
         {/* Aksi sekunder tetap tersedia di More menu, lalu disembunyikan bertahap di header supaya identitas project tidak terdesak. */}
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="tabliodb-scrollbar flex min-w-0 max-w-[64vw] shrink-0 items-center gap-1 overflow-x-auto py-1 max-[700px]:max-w-[58vw]">
           <Badge className="hidden md:inline-flex" variant={canEditDiagram ? 'green' : 'yellow'}>
             {formatProjectRole(activeProject.projectRole)}
           </Badge>
@@ -4462,7 +4465,7 @@ function WorkspaceProjectMenu({
     <DropdownMenu onOpenChange={setOpen} open={open}>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex min-w-0 cursor-pointer items-center gap-2 border-l border-[rgb(var(--tabliodb-border))] py-1 pl-3 text-left transition hover:text-[rgb(var(--tabliodb-primary-text))]"
+          className="flex min-w-0 max-w-full cursor-pointer items-center gap-2 border-l border-[rgb(var(--tabliodb-border))] py-1 pl-2 text-left transition hover:text-[rgb(var(--tabliodb-primary-text))] sm:pl-3"
           type="button"
         >
           <div className="min-w-0">
@@ -4640,7 +4643,7 @@ function UserAccountMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="ml-1 flex h-[var(--tabliodb-control-lg)] max-w-54 cursor-pointer items-center gap-2 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-2 pr-3 text-left shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+          className="ml-1 flex h-[var(--tabliodb-control-lg)] max-w-54 cursor-pointer items-center gap-2 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-2 pr-3 text-left shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))] max-[640px]:ml-0 max-[640px]:w-10 max-[640px]:justify-center max-[640px]:px-0"
           type="button"
         >
           <UserAvatar className="size-8 rounded-full text-[11px]" user={user} />
@@ -4653,7 +4656,7 @@ function UserAccountMenu({
           <ChevronsUpDown className="hidden size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))] sm:block" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 p-2">
+      <DropdownMenuContent align="end" className="w-[min(92vw,288px)] p-2">
         <div className="flex items-center gap-3 px-2 py-2">
           <UserAvatar className="size-10 rounded-[14px] text-xs" user={user} />
           <div className="min-w-0">

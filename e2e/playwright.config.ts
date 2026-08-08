@@ -9,8 +9,24 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'chromium-desktop',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'chromium-tablet',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { height: 768, width: 1024 },
+      },
+    },
+    {
+      name: 'chromium-mobile',
+      use: {
+        ...devices['Desktop Chrome'],
+        hasTouch: true,
+        isMobile: true,
+        viewport: { height: 844, width: 390 },
+      },
     },
   ],
 });

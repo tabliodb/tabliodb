@@ -74,6 +74,28 @@
   --tabliodb-shadow-panel: 0 10px 28px rgb(15 23 42 / 8%);
 }
 
+@media (max-width: 900px) {
+  :root {
+    /* Sidebar editor tetap nyaman di tablet tanpa menutup seluruh canvas atau mendorong floating controls keluar layar. */
+    --tabliodb-sidebar-width: min(320px, calc(100vw - 64px));
+    --tabliodb-header-height: 52px;
+    --tabliodb-control-lg: 40px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    /* Viewport ponsel diperlakukan sebagai emergency layout: rail masih terlihat, panel masih bisa dibuka, dan canvas tidak hilang total. */
+    --tabliodb-sidebar-width: min(300px, calc(100vw - 54px));
+    --tabliodb-control-md: 36px;
+    --tabliodb-control-lg: 40px;
+  }
+
+  body {
+    font-size: 12px;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
