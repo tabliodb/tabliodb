@@ -165,7 +165,14 @@ import type {
   RemoteAwarenessState,
 } from '@/features/collaboration/collaboration-client';
 import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
-import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
+import {
+  EmptyState,
+  ErrorState,
+  InlineErrorState,
+  InlineLoadingState,
+  LoadingState,
+  getErrorMessage,
+} from '@/features/app/RouteStates';
 import { authQueries, useLogoutMutation } from '@/resources/auth';
 import {
   defaultDiagramName,
@@ -1524,7 +1531,7 @@ export function EditorPage() {
     Boolean(activeProject && activeDiagram && !model);
 
   if (isLoadingWorkspace) {
-    return <LoadingState />;
+    return <LoadingState message="Loading diagram workspace" />;
   }
 
   if (!projectsQuery.isPending && activeOrganization && projects.length === 0) {
@@ -1555,7 +1562,7 @@ export function EditorPage() {
   }
 
   if (!currentUser || !activeOrganization || !activeProject || !activeDiagram || !model) {
-    return <LoadingState />;
+    return <LoadingState message="Preparing editor" />;
   }
 
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
@@ -1698,18 +1705,20 @@ export function EditorPage() {
               </div>
               <DropdownMenuSeparatorItem />
               {notificationInboxQuery.isPending ? (
-                <div className="flex items-center gap-2 rounded-(--tabliodb-radius-sm) px-3 py-3 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Loading inbox
-                </div>
+                <InlineLoadingState className="mx-1 my-2 px-3 py-3 text-xs" message="Loading inbox" />
               ) : notificationInboxQuery.error ? (
-                <div className="rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-3 py-2 text-xs font-extrabold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(notificationInboxQuery.error)}
-                </div>
+                <InlineErrorState
+                  className="mx-1 my-2 px-3 py-3 text-xs"
+                  error={notificationInboxQuery.error}
+                  onRetry={() => void notificationInboxQuery.refetch()}
+                  title="Could not load notifications"
+                />
               ) : inboxNotifications.length === 0 ? (
-                <div className="rounded-(--tabliodb-radius-md) border border-dashed border-[rgb(var(--tabliodb-border))] px-3 py-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  No mentions or replies yet
-                </div>
+                <EmptyState
+                  className="mx-1 my-2 rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] px-3 py-5"
+                  description="Mentions, replies, and review updates will land here."
+                  title="No notifications yet"
+                />
               ) : (
                 <div className="tabliodb-scrollbar grid max-h-[min(60dvh,420px)] gap-1 overflow-y-auto pr-1">
                   {inboxNotifications.map((notification) => (

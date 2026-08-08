@@ -123,7 +123,7 @@ export function ProfilePage() {
   }
 
   if (currentUserQuery.isPending) {
-    return <LoadingState />;
+    return <LoadingState message="Loading profile" />;
   }
 
   if (currentUserQuery.error || !currentUser) {

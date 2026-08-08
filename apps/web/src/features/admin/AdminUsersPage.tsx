@@ -47,7 +47,7 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledTextarea } from '@/features/app/FormControls';
-import { getErrorMessage } from '@/features/app/RouteStates';
+import { EmptyState, InlineErrorState, InlineLoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { useCreateInvitationMutation } from '@/resources/invitations';
 import {
   type UserListQuery,
@@ -189,9 +189,7 @@ export function AdminUsersPage() {
       </section>
 
       {userActionError ? (
-        <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-          {getErrorMessage(userActionError)}
-        </div>
+        <InlineErrorState error={userActionError} title="User action failed" />
       ) : null}
 
       <Surface className="overflow-hidden" depth="md">
@@ -231,24 +229,24 @@ export function AdminUsersPage() {
         </div>
 
         {usersQuery.isPending ? (
-          <div className="flex items-center gap-2 p-6 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-            <Loader2 className="size-4 animate-spin" />
-            Loading users
-          </div>
+          <InlineLoadingState className="m-4" message="Loading users" />
         ) : usersQuery.error ? (
-          <div className="p-4">
-            <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-              {getErrorMessage(usersQuery.error)}
-            </div>
-          </div>
+          <InlineErrorState
+            className="m-4"
+            error={usersQuery.error}
+            onRetry={() => void usersQuery.refetch()}
+            title="Could not load users"
+          />
         ) : users.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-              <UsersRound className="size-6" />
-            </div>
-            <div className="text-sm font-extrabold">No users found</div>
-            <div className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Try a different search.</div>
-          </div>
+          <EmptyState
+            description={
+              searchTerm.trim() || roleFilter !== 'all'
+                ? 'Try clearing the search or choosing another role filter.'
+                : 'Create a teammate or send an invite to start collaborating.'
+            }
+            icon={UsersRound}
+            title="No users found"
+          />
         ) : (
           <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
             {users.map((user) => (

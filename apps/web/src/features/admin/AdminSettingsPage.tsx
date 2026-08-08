@@ -83,7 +83,7 @@ export function AdminSettingsPage() {
   }
 
   if (authSettingsQuery.isPending) {
-    return <LoadingState />;
+    return <LoadingState message="Loading sign-up settings" />;
   }
 
   if (authSettingsQuery.error) {
