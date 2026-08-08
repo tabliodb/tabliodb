@@ -1871,8 +1871,12 @@ export function getDiagramReviewSummary(
 }
 export function getDiagramReviewEvents(
   {
+    cursor,
+    limit,
     diagramId,
   }: {
+    cursor?: string;
+    limit?: number;
     diagramId: string;
   },
   opts?: Oazapfts.RequestOpts,
@@ -1881,9 +1885,17 @@ export function getDiagramReviewEvents(
     oazapfts.fetchJson<{
       status: number;
       data: DiagramReviewEventListResponseDtoOutput;
-    }>(`/diagrams/${encodeURIComponent(diagramId)}/review/events`, {
-      ...opts,
-    }),
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/review/events${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
   );
 }
 export function createDiagramReviewAction(

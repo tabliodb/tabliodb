@@ -1345,6 +1345,22 @@
         "operationId": "getDiagramReviewEvents",
         "parameters": [
           {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
             "name": "diagramId",
             "required": true,
             "in": "path",

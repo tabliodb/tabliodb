@@ -22,6 +22,7 @@ import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
 import { DiagramService } from '../services/diagram.service.js';
 import { DiagramReviewService } from '../services/diagram-review.service.js';
+import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
 @ApiTags('diagrams')
 @Controller('diagrams')
@@ -90,6 +91,7 @@ export class DiagramController {
   @Get(':diagramId/review/events')
   @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
+  @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getDiagramReviewEvents' })
   @ZodResponse({ type: DiagramReviewEventListResponseDto })
   getDiagramReviewEvents(
