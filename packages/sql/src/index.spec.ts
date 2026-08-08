@@ -348,6 +348,78 @@ describe('parseCreateSchemaSql', () => {
     expect(Object.values(result.model.relationships)).toHaveLength(1);
   });
 
+  it('imports PostgreSQL index options that can be represented in the diagram model', () => {
+    const result = parseCreateSchemaSql(
+      `
+        CREATE TABLE "public"."users" (
+          "id" UUID PRIMARY KEY,
+          "email" VARCHAR(190) NOT NULL,
+          "display_name" VARCHAR(120),
+          "deleted_at" TIMESTAMPTZ
+        );
+
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS "users_email_active_idx"
+          ON "public"."users" USING btree ("email")
+          INCLUDE ("display_name")
+          WHERE "deleted_at" IS NULL;
+      `,
+      { dialect: 'postgresql' },
+    );
+
+    const index = Object.values(result.model.indexes).find(
+      (databaseIndex) => databaseIndex.name === 'users_email_active_idx',
+    );
+    const indexedColumn = index?.columns[0]?.columnId ? result.model.columns[index.columns[0].columnId] : undefined;
+    const includeColumnId = index?.includeColumnIds?.[0];
+    const includeColumn = includeColumnId ? result.model.columns[includeColumnId] : undefined;
+
+    expect(result.warnings).toEqual([]);
+    expect(index?.method).toBe('btree');
+    expect(index?.where).toBe('"deleted_at" IS NULL');
+    expect(indexedColumn?.name).toBe('email');
+    expect(includeColumn?.name).toBe('display_name');
+  });
+
+  it('warns for index expressions and missing index columns instead of creating a misleading index', () => {
+    const result = parseCreateSchemaSql(
+      `
+        CREATE TABLE users (
+          id UUID PRIMARY KEY,
+          email VARCHAR(190)
+        );
+
+        CREATE INDEX users_search_idx ON users (lower(email), missing_column);
+      `,
+      { dialect: 'postgresql' },
+    );
+
+    expect(Object.values(result.model.indexes)).toHaveLength(0);
+    expect(result.warnings.map((warning) => warning.code)).toEqual([
+      'unsupported_index_expression',
+      'missing_index_column',
+    ]);
+  });
+
+  it('warns for foreign keys with unresolved columns without blaming the referenced table', () => {
+    const result = parseCreateSchemaSql(
+      `
+        CREATE TABLE users (
+          id UUID PRIMARY KEY
+        );
+
+        CREATE TABLE orders (
+          id UUID PRIMARY KEY,
+          user_id UUID,
+          CONSTRAINT orders_user_id_fkey FOREIGN KEY (missing_user_id) REFERENCES users (missing_id)
+        );
+      `,
+      { dialect: 'postgresql' },
+    );
+
+    expect(Object.values(result.model.relationships)).toHaveLength(0);
+    expect(result.warnings.map((warning) => warning.code)).toEqual(['missing_referenced_column']);
+  });
+
   it('warns when a SQL statement is outside the basic DDL importer scope', () => {
     const result = parseCreateSchemaSql(
       `

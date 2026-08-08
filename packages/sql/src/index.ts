@@ -42,10 +42,13 @@ export type SqlImportWarning = {
   code:
     | 'empty_sql'
     | 'malformed_statement'
+    | 'missing_index_column'
+    | 'missing_referenced_column'
     | 'missing_referenced_table'
     | 'missing_table'
     | 'unsupported_column_type'
     | 'unsupported_constraint'
+    | 'unsupported_index_expression'
     | 'unsupported_statement';
   message: string;
   statement?: string;
@@ -803,11 +806,13 @@ function applyTableConstraint(context: SqlImportContext, tableId: string, fragme
 
 function parseCreateIndexStatement(context: SqlImportContext, statement: string): boolean {
   const mysqlMatch = statement.match(
-    /^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+?)\s+USING\s+(\w+)\s+ON\s+([\s\S]+)$/i,
+    /^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+?)\s+USING\s+(\w+)\s+ON\s+([\s\S]+)$/i,
   );
   const standardMatch =
     mysqlMatch ??
-    statement.match(/^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+?)\s+ON\s+([\s\S]+)$/i);
+    statement.match(
+      /^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([\s\S]+?)\s+ON\s+([\s\S]+)$/i,
+    );
 
   if (!standardMatch) {
     return false;
@@ -846,20 +851,17 @@ function parseCreateIndexStatement(context: SqlImportContext, statement: string)
     return true;
   }
 
-  const columns = parseColumnList(afterOn.slice(columnsStart + 1, columnsEnd)).flatMap((columnName) => {
-    const columnId = findColumnIdByName(context, tableId, columnName);
-    return columnId ? [columnId] : [];
-  });
+  const suffix = afterOn.slice(columnsEnd + 1);
+  const columns = parseIndexColumnReferences(context, tableId, afterOn.slice(columnsStart + 1, columnsEnd), statement);
+  const includeColumnIds = parseIndexIncludeColumnReferences(context, tableId, suffix, statement);
 
   createIndex(context, tableId, {
     columns,
+    includeColumnIds,
     method: methodFromPrefix ?? (tableMethodMatch?.[2]?.toLowerCase() as DatabaseIndex['method'] | undefined),
     name: indexName,
     unique,
-    where: afterOn
-      .slice(columnsEnd + 1)
-      .match(/\bWHERE\s+([\s\S]+)$/i)?.[1]
-      ?.trim(),
+    where: suffix.match(/\bWHERE\s+([\s\S]+)$/i)?.[1]?.trim(),
   });
 
   return true;
@@ -899,6 +901,77 @@ function parseAlterTableForeignKeyStatement(context: SqlImportContext, statement
   createRelationshipFromConstraint(context, tableId, foreignKey);
 
   return true;
+}
+
+function parseIndexColumnReferences(
+  context: SqlImportContext,
+  tableId: string,
+  columnListSql: string,
+  statement: string,
+): string[] {
+  return splitTopLevel(columnListSql, ',').flatMap((fragment) => {
+    const cleaned = fragment
+      .replace(/\b(?:ASC|DESC)\b/gi, '')
+      .replace(/\bNULLS\s+(?:FIRST|LAST)\b/gi, '')
+      .trim();
+    const identifier = readLeadingIdentifier(cleaned);
+
+    if (!identifier) {
+      context.warnings.push({
+        code: 'malformed_statement',
+        message: `SQL import could not read index column expression "${fragment}".`,
+        statement,
+      });
+      return [];
+    }
+
+    const columnId = findColumnIdByName(context, tableId, identifier.value);
+
+    if (columnId) {
+      return [columnId];
+    }
+
+    context.warnings.push({
+      // Function/expression indexes need a richer model field than columnId, so MVP import keeps the table and warns clearly.
+      code: cleaned.includes('(') ? 'unsupported_index_expression' : 'missing_index_column',
+      message: cleaned.includes('(')
+        ? `SQL import skipped index expression "${cleaned}" because expression indexes are not modeled yet.`
+        : `SQL import could not find index column "${identifier.value}".`,
+      statement,
+    });
+
+    return [];
+  });
+}
+
+function parseIndexIncludeColumnReferences(
+  context: SqlImportContext,
+  tableId: string,
+  suffix: string,
+  statement: string,
+): string[] | undefined {
+  const includeIndex = findTopLevelWord(suffix, 'INCLUDE');
+
+  if (includeIndex < 0) {
+    return undefined;
+  }
+
+  const afterInclude = suffix.slice(includeIndex + 'INCLUDE'.length);
+  const includeStart = findTopLevelCharacter(afterInclude, '(');
+  const includeContent = readParenthesizedContent(afterInclude, includeStart);
+
+  if (!includeContent) {
+    context.warnings.push({
+      code: 'malformed_statement',
+      message: 'CREATE INDEX INCLUDE clause does not contain a readable column list.',
+      statement,
+    });
+    return undefined;
+  }
+
+  const includeColumnIds = parseIndexColumnReferences(context, tableId, includeContent, statement);
+
+  return includeColumnIds.length > 0 ? includeColumnIds : undefined;
 }
 
 function parseForeignKeyConstraint(body: string, name?: string): ParsedForeignKeyConstraint | null {
@@ -965,7 +1038,7 @@ function createRelationshipFromConstraint(
     sourceColumnIds.length !== targetColumnIds.length
   ) {
     context.warnings.push({
-      code: 'missing_referenced_table',
+      code: 'missing_referenced_column',
       message: `Foreign key "${constraint.name ?? targetTable.name}" has unresolved columns.`,
     });
     return;
@@ -991,6 +1064,7 @@ function createIndex(
   tableId: string,
   input: {
     columns: string[];
+    includeColumnIds?: string[];
     method?: DatabaseIndex['method'];
     name: string;
     unique: boolean;
@@ -1008,6 +1082,7 @@ function createIndex(
   context.model.indexes[indexId] = {
     columns: input.columns.map((columnId) => ({ columnId })),
     id: indexId,
+    includeColumnIds: input.includeColumnIds,
     method: input.method,
     name: input.name,
     tableId,
