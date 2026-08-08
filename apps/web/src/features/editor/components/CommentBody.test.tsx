@@ -1,4 +1,4 @@
-import type { CommentLexicalDocumentDto } from '@tabliodb/sdk';
+import type { CommentLexicalDocumentDto } from '@/resources/comments';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CommentBody } from './CommentBody';

@@ -30,7 +30,7 @@ export class UserController {
   @ApiQuery({ enum: ['owner', 'instance-admin', 'org-admin', 'member'], name: 'role', required: false })
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiOperation({ operationId: 'getUsers' })
-  @ZodResponse({ type: UserListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: UserListResponseDto })
   getUsers(@Auth() auth: AuthContext, @Query() query: UserListQueryDto): Promise<UserListResponseDto> {
     return this.userService.getAll(auth, query);
   }
@@ -50,7 +50,7 @@ export class UserController {
   @ApiParam({ name: 'userId', type: String })
   @ApiBody({ type: UserStatusUpdateDto })
   @ApiOperation({ operationId: 'updateUserStatus' })
-  @ZodResponse({ type: UserResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: UserResponseDto })
   updateUserStatus(
     @Auth() auth: AuthContext,
     @Param('userId') userId: string,

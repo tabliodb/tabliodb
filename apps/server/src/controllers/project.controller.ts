@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
@@ -36,8 +36,9 @@ export class ProjectController {
   @Get()
   @RequirePermission(Permission.ProjectRead)
   @ApiPaginationQuery()
+  @ApiQuery({ name: 'organizationId', required: false, type: String })
   @ApiOperation({ operationId: 'getProjects' })
-  @ZodResponse({ type: ProjectListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ProjectListResponseDto })
   getProjects(@Auth() auth: AuthContext, @Query() query: ProjectListQueryDto) {
     return this.projectService.getAll(auth, query);
   }
@@ -56,7 +57,7 @@ export class ProjectController {
   @ApiParam({ name: 'projectId', type: String })
   @ApiBody({ type: ProjectUpdateDto })
   @ApiOperation({ operationId: 'updateProject' })
-  @ZodResponse({ type: ProjectResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ProjectResponseDto })
   updateProject(@Auth() auth: AuthContext, @Param('projectId') projectId: string, @Body() dto: ProjectUpdateDto) {
     return this.projectService.update(auth, projectId, dto);
   }
@@ -76,7 +77,7 @@ export class ProjectController {
   @ApiParam({ name: 'projectId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getProjectMembers' })
-  @ZodResponse({ type: ProjectMemberListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ProjectMemberListResponseDto })
   getProjectMembers(
     @Auth() auth: AuthContext,
     @Param('projectId') projectId: string,
@@ -105,7 +106,7 @@ export class ProjectController {
   @ApiParam({ name: 'userId', type: String })
   @ApiBody({ type: ProjectMemberUpdateDto })
   @ApiOperation({ operationId: 'updateProjectMember' })
-  @ZodResponse({ type: ProjectMemberDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ProjectMemberDto })
   updateProjectMember(
     @Auth() auth: AuthContext,
     @Param('projectId') projectId: string,
@@ -135,7 +136,7 @@ export class ProjectController {
   @ApiParam({ name: 'projectId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getProjectDiagrams' })
-  @ZodResponse({ type: DiagramListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramListResponseDto })
   getProjectDiagrams(
     @Auth() auth: AuthContext,
     @Param('projectId') projectId: string,

@@ -27,7 +27,7 @@ export class ReviewSignalController {
   @ApiPaginationQuery()
   @ApiQuery({ name: 'includeIgnored', required: false, type: Boolean })
   @ApiOperation({ operationId: 'getDiagramReviewSignals' })
-  @ZodResponse({ type: ReviewSignalListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ReviewSignalListResponseDto })
   getDiagramReviewSignals(
     @Auth() auth: AuthContext,
     @Param('diagramId') diagramId: string,
@@ -40,7 +40,7 @@ export class ReviewSignalController {
   @RequirePermission(Permission.ProjectRead, { key: 'projectId', source: 'param', type: 'project' })
   @ApiParam({ name: 'projectId', type: String })
   @ApiOperation({ operationId: 'getProjectReviewSignalSettings' })
-  @ZodResponse({ type: ReviewSignalSettingsDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ReviewSignalSettingsDto })
   getProjectReviewSignalSettings(@Auth() auth: AuthContext, @Param('projectId') projectId: string) {
     return this.service.getProjectSettings(auth, projectId);
   }
@@ -50,7 +50,7 @@ export class ReviewSignalController {
   @ApiParam({ name: 'projectId', type: String })
   @ApiBody({ type: ReviewSignalSettingsDto })
   @ApiOperation({ operationId: 'updateProjectReviewSignalSettings' })
-  @ZodResponse({ type: ReviewSignalSettingsDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ReviewSignalSettingsDto })
   updateProjectReviewSignalSettings(
     @Auth() auth: AuthContext,
     @Param('projectId') projectId: string,
@@ -63,7 +63,7 @@ export class ReviewSignalController {
   @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
   @ApiOperation({ operationId: 'getDiagramReviewSignalSettings' })
-  @ZodResponse({ type: ReviewSignalEffectiveSettingsDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ReviewSignalEffectiveSettingsDto })
   getDiagramReviewSignalSettings(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string) {
     return this.service.getDiagramSettings(auth, diagramId);
   }
@@ -73,7 +73,7 @@ export class ReviewSignalController {
   @ApiParam({ name: 'diagramId', type: String })
   @ApiBody({ type: ReviewSignalSettingsDto })
   @ApiOperation({ operationId: 'updateDiagramReviewSignalSettings' })
-  @ZodResponse({ type: ReviewSignalEffectiveSettingsDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ReviewSignalEffectiveSettingsDto })
   updateDiagramReviewSignalSettings(
     @Auth() auth: AuthContext,
     @Param('diagramId') diagramId: string,

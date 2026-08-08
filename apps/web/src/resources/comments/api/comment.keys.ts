@@ -1,5 +1,5 @@
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { CommentListQuery } from '@tabliodb/sdk';
+import type { CommentListQuery } from './comment.types';
 
 export const commentKeys = {
   all: ['comments'] as const,

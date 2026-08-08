@@ -1,7 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { OrganizationRole } from '@tabliodb/shared';
-import type { InvitationCreateResponseDto, UserListQuery, UserResponseDto } from '@tabliodb/sdk';
+import {
+  InstanceRole2,
+  OrganizationRole as SdkOrganizationRole,
+  type InvitationCreateResponseDtoOutput,
+  type UserResponseDtoOutput,
+} from '@tabliodb/sdk';
 import {
   Badge,
   Button,
@@ -46,6 +50,7 @@ import { ControlledCheckbox, ControlledInput, ControlledTextarea } from '@/featu
 import { getErrorMessage } from '@/features/app/RouteStates';
 import { useCreateInvitationMutation } from '@/resources/invitations';
 import {
+  type UserListQuery,
   useCreateUserMutation,
   useResetUserPasswordMutation,
   useRevokeUserSessionsMutation,
@@ -57,7 +62,7 @@ const createUserFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
   grantInstanceAdmin: z.boolean(),
   name: z.string().trim().min(1, 'Name is required.'),
-  organizationRole: z.enum([OrganizationRole.Admin, OrganizationRole.Member]),
+  organizationRole: z.enum(SdkOrganizationRole),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
 });
 
@@ -67,7 +72,7 @@ const createUserDefaults: CreateUserFormState = {
   email: '',
   grantInstanceAdmin: false,
   name: '',
-  organizationRole: OrganizationRole.Member,
+  organizationRole: SdkOrganizationRole.Member,
   password: '',
 };
 
@@ -75,7 +80,7 @@ const inviteUserFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
   expiresInDays: z.number().int().min(1, 'Minimum 1 day.').max(30, 'Maximum 30 days.'),
   message: z.string().trim().max(500, 'Message is too long.').optional(),
-  organizationRole: z.enum([OrganizationRole.Admin, OrganizationRole.Member]),
+  organizationRole: z.enum(SdkOrganizationRole),
 });
 
 type InviteUserFormState = z.infer<typeof inviteUserFormSchema>;
@@ -84,7 +89,7 @@ const inviteUserDefaults: InviteUserFormState = {
   email: '',
   expiresInDays: 7,
   message: '',
-  organizationRole: OrganizationRole.Member,
+  organizationRole: SdkOrganizationRole.Member,
 };
 const resetPasswordFormSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters.'),
@@ -105,7 +110,7 @@ export function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [pageCursor, setPageCursor] = useState<string | undefined>();
   const [cursorHistory, setCursorHistory] = useState<Array<string | undefined>>([]);
-  const [resetPasswordUser, setResetPasswordUser] = useState<UserResponseDto | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<UserResponseDtoOutput | null>(null);
   const userListQuery = useMemo<UserListQuery>(
     () => ({
       cursor: pageCursor,
@@ -126,7 +131,7 @@ export function AdminUsersPage() {
       active: users.filter((user) => !user.isDisabled).length,
       instanceAdmins: users.filter((user) => user.instanceRole === 'owner' || user.instanceRole === 'admin').length,
       organizationAdmins: users.filter((user) =>
-        user.organizations.some((organization) => organization.role === OrganizationRole.Admin),
+        user.organizations.some((organization) => organization.role === SdkOrganizationRole.Admin),
       ).length,
       total: users.length,
     }),
@@ -141,7 +146,7 @@ export function AdminUsersPage() {
     setCursorHistory([]);
   }
 
-  function handleToggleUserStatus(user: UserResponseDto) {
+  function handleToggleUserStatus(user: UserResponseDtoOutput) {
     updateUserStatusMutation.mutate({
       body: {
         isDisabled: !user.isDisabled,
@@ -150,7 +155,7 @@ export function AdminUsersPage() {
     });
   }
 
-  function handleRevokeUserSessions(user: UserResponseDto) {
+  function handleRevokeUserSessions(user: UserResponseDtoOutput) {
     revokeUserSessionsMutation.mutate({ userId: user.id });
   }
 
@@ -304,7 +309,7 @@ export function AdminUsersPage() {
 
 function InviteUserDialog() {
   const [open, setOpen] = useState(false);
-  const [createdInvite, setCreatedInvite] = useState<InvitationCreateResponseDto | null>(null);
+  const [createdInvite, setCreatedInvite] = useState<InvitationCreateResponseDtoOutput | null>(null);
   const form = useForm<InviteUserFormState>({
     defaultValues: inviteUserDefaults,
     mode: 'onBlur',
@@ -385,16 +390,16 @@ function InviteUserDialog() {
                   </legend>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <RoleOption
-                      checked={form.watch('organizationRole') === OrganizationRole.Member}
+                      checked={form.watch('organizationRole') === SdkOrganizationRole.Member}
                       description="Can join workspace projects."
                       label="Member"
-                      onClick={() => form.setValue('organizationRole', OrganizationRole.Member, { shouldDirty: true })}
+                      onClick={() => form.setValue('organizationRole', SdkOrganizationRole.Member, { shouldDirty: true })}
                     />
                     <RoleOption
-                      checked={form.watch('organizationRole') === OrganizationRole.Admin}
+                      checked={form.watch('organizationRole') === SdkOrganizationRole.Admin}
                       description="Can help manage users."
                       label="Admin"
-                      onClick={() => form.setValue('organizationRole', OrganizationRole.Admin, { shouldDirty: true })}
+                      onClick={() => form.setValue('organizationRole', SdkOrganizationRole.Admin, { shouldDirty: true })}
                     />
                   </div>
                 </fieldset>
@@ -507,7 +512,7 @@ function CreateUserDialog() {
   function handleSubmit(values: CreateUserFormState) {
     createUserMutation.mutate({
       email: values.email,
-      instanceRole: values.grantInstanceAdmin ? 'admin' : undefined,
+      instanceRole: values.grantInstanceAdmin ? InstanceRole2.Admin : undefined,
       name: values.name,
       organizationRole: values.organizationRole,
       password: values.password,
@@ -582,16 +587,16 @@ function CreateUserDialog() {
                 </legend>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <RoleOption
-                    checked={form.watch('organizationRole') === OrganizationRole.Member}
+                    checked={form.watch('organizationRole') === SdkOrganizationRole.Member}
                     description="Can create and edit accessible projects."
                     label="Member"
-                    onClick={() => form.setValue('organizationRole', OrganizationRole.Member, { shouldDirty: true })}
+                    onClick={() => form.setValue('organizationRole', SdkOrganizationRole.Member, { shouldDirty: true })}
                   />
                   <RoleOption
-                    checked={form.watch('organizationRole') === OrganizationRole.Admin}
+                    checked={form.watch('organizationRole') === SdkOrganizationRole.Admin}
                     description="Can help manage workspace members."
                     label="Admin"
-                    onClick={() => form.setValue('organizationRole', OrganizationRole.Admin, { shouldDirty: true })}
+                    onClick={() => form.setValue('organizationRole', SdkOrganizationRole.Admin, { shouldDirty: true })}
                   />
                 </div>
               </fieldset>
@@ -641,7 +646,7 @@ function ResetUserPasswordDialog({
   user,
 }: {
   onOpenChange: (open: boolean) => void;
-  user: UserResponseDto | null;
+  user: UserResponseDtoOutput | null;
 }) {
   const form = useForm<ResetPasswordFormState>({
     defaultValues: resetPasswordDefaults,
@@ -778,10 +783,10 @@ function UserRow({
   user,
 }: {
   isBusy: boolean;
-  onResetPassword: (user: UserResponseDto) => void;
-  onRevokeSessions: (user: UserResponseDto) => void;
-  onToggleStatus: (user: UserResponseDto) => void;
-  user: UserResponseDto;
+  onResetPassword: (user: UserResponseDtoOutput) => void;
+  onRevokeSessions: (user: UserResponseDtoOutput) => void;
+  onToggleStatus: (user: UserResponseDtoOutput) => void;
+  user: UserResponseDtoOutput;
 }) {
   const bucket = getUserRoleBucket(user);
 
@@ -892,7 +897,7 @@ function StatCard({
   );
 }
 
-function getUserRoleBucket(user: UserResponseDto): RoleFilter {
+function getUserRoleBucket(user: UserResponseDtoOutput): RoleFilter {
   if (user.instanceRole === 'owner') {
     return 'owner';
   }
@@ -901,7 +906,7 @@ function getUserRoleBucket(user: UserResponseDto): RoleFilter {
     return 'instance-admin';
   }
 
-  if (user.organizations.some((organization) => organization.role === OrganizationRole.Admin)) {
+  if (user.organizations.some((organization) => organization.role === SdkOrganizationRole.Admin)) {
     return 'org-admin';
   }
 
@@ -918,7 +923,7 @@ function formatRoleFilter(filter: RoleFilter): string {
   }[filter];
 }
 
-function formatOrganizations(user: UserResponseDto): string {
+function formatOrganizations(user: UserResponseDtoOutput): string {
   if (user.organizations.length === 0) {
     return 'No workspace';
   }
@@ -926,7 +931,7 @@ function formatOrganizations(user: UserResponseDto): string {
   return user.organizations.map((organization) => organization.name).join(', ');
 }
 
-function UserAvatar({ user }: { user: Pick<UserResponseDto, 'avatarUrl' | 'name'> }) {
+function UserAvatar({ user }: { user: Pick<UserResponseDtoOutput, 'avatarUrl' | 'name'> }) {
   return (
     <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-sm font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
       {user.avatarUrl ? <img alt="" className="size-full object-cover" src={user.avatarUrl} /> : getInitials(user.name)}

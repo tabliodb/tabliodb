@@ -1,5 +1,7 @@
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { DiagramExportQuery } from '@tabliodb/sdk';
+import type { exportDiagram } from '@tabliodb/sdk';
+
+export type DiagramExportQuery = Omit<Parameters<typeof exportDiagram>[0], 'diagramId'>;
 
 export const diagramsKeys = {
   all: ['diagrams'] as const,

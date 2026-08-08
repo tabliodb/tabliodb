@@ -1,19 +1,29 @@
 import { useMutation } from '@tanstack/react-query';
-import type { OrganizationMemberUpdateDto, OrganizationSettingsUpdateDto } from '@tabliodb/sdk';
+import {
+  removeOrganizationMember,
+  updateOrganizationMember,
+  updateOrganizationSettings,
+  type OrganizationMemberUpdateDto,
+  type OrganizationSettingsUpdateDto,
+} from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { projectsKeys } from '@/resources/projects';
 import { organizationsKeys } from './organization.keys';
 
 const updateOrganizationSettingsMutationFn = (input: { body: OrganizationSettingsUpdateDto; organizationId: string }) =>
-  sdk.organizations.updateSettings(input.organizationId, input.body);
+  updateOrganizationSettings({ organizationId: input.organizationId, organizationSettingsUpdateDto: input.body });
 const updateOrganizationMemberMutationFn = (input: {
   body: OrganizationMemberUpdateDto;
   organizationId: string;
   userId: string;
-}) => sdk.organizations.updateMember(input.organizationId, input.userId, input.body);
+}) =>
+  updateOrganizationMember({
+    organizationId: input.organizationId,
+    organizationMemberUpdateDto: input.body,
+    userId: input.userId,
+  });
 const removeOrganizationMemberMutationFn = (input: { organizationId: string; userId: string }) =>
-  sdk.organizations.removeMember(input.organizationId, input.userId);
+  removeOrganizationMember({ organizationId: input.organizationId, userId: input.userId });
 
 type UseUpdateOrganizationSettingsMutationParams = {
   mutationConfig?: MutationConfig<typeof updateOrganizationSettingsMutationFn>;

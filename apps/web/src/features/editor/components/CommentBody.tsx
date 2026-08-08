@@ -1,4 +1,4 @@
-import type { CommentLexicalDocumentDto, CommentLexicalInlineNodeDto, CommentLexicalTextNodeDto } from '@tabliodb/sdk';
+import type { CommentLexicalDocumentDto, CommentLexicalInlineNodeDto, CommentLexicalTextNodeDto } from '@/resources/comments';
 import { cn } from '@tabliodb/ui';
 import type { ReactNode } from 'react';
 

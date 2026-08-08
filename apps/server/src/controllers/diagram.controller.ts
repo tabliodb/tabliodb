@@ -47,7 +47,7 @@ export class DiagramController {
   @ApiParam({ name: 'diagramId', type: String })
   @ApiBody({ type: DiagramUpdateDto })
   @ApiOperation({ operationId: 'updateDiagram' })
-  @ZodResponse({ type: DiagramResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramResponseDto })
   updateDiagram(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string, @Body() dto: DiagramUpdateDto) {
     return this.service.update(auth, diagramId, dto);
   }
@@ -59,7 +59,7 @@ export class DiagramController {
   @ApiQuery({ enum: ['postgresql', 'mysql', 'sqlite', 'mariadb', 'sqlserver'], name: 'dialect', required: false })
   @ApiQuery({ name: 'includeComments', required: false, type: Boolean })
   @ApiOperation({ operationId: 'exportDiagram' })
-  @ZodResponse({ type: DiagramExportResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramExportResponseDto })
   exportDiagram(
     @Auth() auth: AuthContext,
     @Param('diagramId') diagramId: string,
@@ -83,7 +83,7 @@ export class DiagramController {
   @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
   @ApiOperation({ operationId: 'getDiagramReviewSummary' })
-  @ZodResponse({ type: DiagramReviewSummaryDto })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramReviewSummaryDto })
   getDiagramReviewSummary(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string) {
     return this.diagramReviewService.getSummary(auth, diagramId);
   }
@@ -93,7 +93,7 @@ export class DiagramController {
   @ApiParam({ name: 'diagramId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getDiagramReviewEvents' })
-  @ZodResponse({ type: DiagramReviewEventListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramReviewEventListResponseDto })
   getDiagramReviewEvents(
     @Auth() auth: AuthContext,
     @Param('diagramId') diagramId: string,

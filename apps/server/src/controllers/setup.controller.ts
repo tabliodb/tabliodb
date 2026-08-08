@@ -24,7 +24,7 @@ export class SetupController {
 
   @Get()
   @ApiOperation({ operationId: 'getSetupStatus' })
-  @ZodResponse({ type: SetupStatusResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: SetupStatusResponseDto })
   getStatus(): Promise<SetupStatusResponseDto> {
     return this.service.getStatus();
   }
@@ -33,7 +33,7 @@ export class SetupController {
   @Authenticated()
   @RequirePermission(Permission.OrganizationManage)
   @ApiOperation({ operationId: 'getInstanceAuthSettings' })
-  @ZodResponse({ type: InstanceAuthSettingsDto })
+  @ZodResponse({ status: HttpStatus.OK, type: InstanceAuthSettingsDto })
   getAuthSettings(@Auth() auth: AuthContext): Promise<InstanceAuthSettingsDto> {
     return this.service.getAuthSettings(auth);
   }

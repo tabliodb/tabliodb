@@ -1,4 +1,17 @@
 import { useMutation } from '@tanstack/react-query';
+import {
+  createCommentThread,
+  deleteComment,
+  markCommentThreadRead,
+  replyToComment,
+  replyToCommentThread,
+  resolveCommentThread,
+  unresolveCommentThread,
+  updateComment,
+  type CommentReplyCreateDto as GeneratedCommentReplyCreateDto,
+  type CommentThreadCreateDto as GeneratedCommentThreadCreateDto,
+  type CommentUpdateDto as GeneratedCommentUpdateDto,
+} from '@tabliodb/sdk';
 import type {
   CommentReplyCreateDto,
   CommentResponseDto,
@@ -7,35 +20,49 @@ import type {
   CommentThreadReadStateDto,
   CommentThreadResponseDto,
   CommentUpdateDto,
-} from '@tabliodb/sdk';
+} from './comment.types';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { notificationKeys } from '@/resources/notifications';
 import { commentKeys } from './comment.keys';
 
 const createCommentThreadMutationFn = (variables: {
   body: CommentThreadCreateDto;
-}): Promise<CommentThreadResponseDto> => sdk.comments.createThread(variables.body);
+}): Promise<CommentThreadResponseDto> =>
+  createCommentThread({
+    commentThreadCreateDto: variables.body as unknown as GeneratedCommentThreadCreateDto,
+  }) as unknown as Promise<CommentThreadResponseDto>;
 const replyToCommentThreadMutationFn = (variables: {
   body: CommentReplyCreateDto;
   threadId: string;
-}): Promise<CommentThreadResponseDto> => sdk.comments.replyToThread(variables.threadId, variables.body);
+}): Promise<CommentThreadResponseDto> =>
+  replyToCommentThread({
+    commentReplyCreateDto: variables.body as unknown as GeneratedCommentReplyCreateDto,
+    threadId: variables.threadId,
+  }) as unknown as Promise<CommentThreadResponseDto>;
 const replyToCommentMutationFn = (variables: {
   body: CommentReplyCreateDto;
   commentId: string;
-}): Promise<CommentThreadResponseDto> => sdk.comments.replyToComment(variables.commentId, variables.body);
+}): Promise<CommentThreadResponseDto> =>
+  replyToComment({
+    commentId: variables.commentId,
+    commentReplyCreateDto: variables.body as unknown as GeneratedCommentReplyCreateDto,
+  }) as unknown as Promise<CommentThreadResponseDto>;
 const updateCommentMutationFn = (variables: {
   body: CommentUpdateDto;
   commentId: string;
-}): Promise<CommentResponseDto> => sdk.comments.updateComment(variables.commentId, variables.body);
+}): Promise<CommentResponseDto> =>
+  updateComment({
+    commentId: variables.commentId,
+    commentUpdateDto: variables.body as unknown as GeneratedCommentUpdateDto,
+  }) as unknown as Promise<CommentResponseDto>;
 const deleteCommentMutationFn = (commentId: string): Promise<CommentResponseDto> =>
-  sdk.comments.deleteComment(commentId);
+  deleteComment({ commentId }) as unknown as Promise<CommentResponseDto>;
 const resolveCommentThreadMutationFn = (threadId: string): Promise<CommentThreadDto> =>
-  sdk.comments.resolveThread(threadId);
+  resolveCommentThread({ threadId }) as unknown as Promise<CommentThreadDto>;
 const unresolveCommentThreadMutationFn = (threadId: string): Promise<CommentThreadDto> =>
-  sdk.comments.unresolveThread(threadId);
+  unresolveCommentThread({ threadId }) as unknown as Promise<CommentThreadDto>;
 const markCommentThreadReadMutationFn = (threadId: string): Promise<CommentThreadReadStateDto> =>
-  sdk.comments.markThreadRead(threadId);
+  markCommentThreadRead({ threadId });
 
 type UseCreateCommentThreadMutationParams = {
   mutationConfig?: MutationConfig<typeof createCommentThreadMutationFn>;

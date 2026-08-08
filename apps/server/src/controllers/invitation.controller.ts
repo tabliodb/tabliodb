@@ -35,7 +35,7 @@ export class InvitationController {
   @Get(':token')
   @ApiParam({ name: 'token', type: String })
   @ApiOperation({ operationId: 'getInvitationByToken' })
-  @ZodResponse({ type: InvitationPublicDto })
+  @ZodResponse({ status: HttpStatus.OK, type: InvitationPublicDto })
   getInvitationByToken(@Param('token') token: string): Promise<InvitationPublicDto> {
     return this.service.getByToken(token);
   }

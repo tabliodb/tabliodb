@@ -1,36 +1,38 @@
-import { OrganizationRole, type PaginationQuery } from '@tabliodb/shared';
-import type {
-  OrganizationDto,
-  ProjectListQuery,
-  ProjectListResponseDto,
-  ProjectMemberListResponseDto,
-  ProjectResponseDto,
+import type { PaginationQuery } from '@tabliodb/shared';
+import {
+  createProject,
+  getProjectMembers,
+  getProjects,
+  Role as GeneratedOrganizationRole,
+  type OrganizationDtoOutput,
+  type ProjectListResponseDtoOutput,
+  type ProjectMemberListResponseDtoOutput,
+  type ProjectResponseDtoOutput,
 } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
-import { projectsKeys } from './project.keys';
+import { projectsKeys, type ProjectListQuery } from './project.keys';
 
 export const defaultProjectName = 'Library System';
 
 type ProjectsQueries = {
-  list: (query?: ProjectListQuery) => AppQueryOptions<ProjectListResponseDto, ReturnType<typeof projectsKeys.list>>;
+  list: (query?: ProjectListQuery) => AppQueryOptions<ProjectListResponseDtoOutput, ReturnType<typeof projectsKeys.list>>;
   listOrCreateStarter: (
-    organization: OrganizationDto | null,
-  ) => AppQueryOptions<ProjectResponseDto[], ReturnType<typeof projectsKeys.list>>;
+    organization: OrganizationDtoOutput | null,
+  ) => AppQueryOptions<ProjectResponseDtoOutput[], ReturnType<typeof projectsKeys.list>>;
   members: (
     projectId: string,
     query?: PaginationQuery,
-  ) => AppQueryOptions<ProjectMemberListResponseDto, ReturnType<typeof projectsKeys.members>>;
+  ) => AppQueryOptions<ProjectMemberListResponseDtoOutput, ReturnType<typeof projectsKeys.members>>;
 };
 
 export const projectsQueries: ProjectsQueries = {
   list: (query: ProjectListQuery = {}) =>
     appQueryOptions({
-      queryFn: () => sdk.projects.list(query),
+      queryFn: () => getProjects(query),
       queryKey: projectsKeys.list(query),
     }),
 
-  listOrCreateStarter: (organization: OrganizationDto | null) =>
+  listOrCreateStarter: (organization: OrganizationDtoOutput | null) =>
     appQueryOptions({
       enabled: Boolean(organization?.id),
       queryFn: () => listOrCreateStarterProjects(organization),
@@ -40,17 +42,17 @@ export const projectsQueries: ProjectsQueries = {
   members: (projectId: string, query: PaginationQuery = {}) =>
     appQueryOptions({
       enabled: Boolean(projectId),
-      queryFn: () => sdk.projects.listMembers(projectId, query),
+      queryFn: () => getProjectMembers({ projectId, ...query }),
       queryKey: projectsKeys.members(projectId, query),
     }),
 };
 
-async function listOrCreateStarterProjects(organization: OrganizationDto | null): Promise<ProjectResponseDto[]> {
+async function listOrCreateStarterProjects(organization: OrganizationDtoOutput | null): Promise<ProjectResponseDtoOutput[]> {
   if (!organization) {
     return [];
   }
 
-  const projects = await sdk.projects.list({ limit: 50, organizationId: organization.id });
+  const projects = await getProjects({ limit: 50, organizationId: organization.id });
 
   if (projects.items.length > 0) {
     return projects.items;
@@ -62,15 +64,17 @@ async function listOrCreateStarterProjects(organization: OrganizationDto | null)
   }
 
   // Presentable build tetap membuat starter workspace agar instalasi kosong langsung punya diagram yang bisa dipakai demo.
-  const project = await sdk.projects.create({
-    description: 'Starter schema workspace',
-    name: defaultProjectName,
-    organizationId: organization.id,
+  const project = await createProject({
+    projectCreateDto: {
+      description: 'Starter schema workspace',
+      name: defaultProjectName,
+      organizationId: organization.id,
+    },
   });
 
   return [project];
 }
 
-export function canCreateAutomaticStarterProject(organization: OrganizationDto): boolean {
-  return organization.role === OrganizationRole.Owner || organization.role === OrganizationRole.Admin;
+export function canCreateAutomaticStarterProject(organization: OrganizationDtoOutput): boolean {
+  return organization.role === GeneratedOrganizationRole.Owner || organization.role === GeneratedOrganizationRole.Admin;
 }

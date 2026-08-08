@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import {
@@ -32,8 +32,9 @@ export class TeamController {
 
   @Get()
   @ApiPaginationQuery()
+  @ApiQuery({ name: 'organizationId', required: true, type: String })
   @ApiOperation({ operationId: 'getTeams' })
-  @ZodResponse({ type: TeamListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: TeamListResponseDto })
   getTeams(@Auth() auth: AuthContext, @Query() query: TeamListQueryDto): Promise<TeamListResponseDto> {
     return this.teamService.getAll(auth, query);
   }
@@ -50,7 +51,7 @@ export class TeamController {
   @ApiParam({ name: 'teamId', type: String })
   @ApiBody({ type: TeamUpdateDto })
   @ApiOperation({ operationId: 'updateTeam' })
-  @ZodResponse({ type: TeamResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: TeamResponseDto })
   updateTeam(@Auth() auth: AuthContext, @Param('teamId') teamId: string, @Body() dto: TeamUpdateDto) {
     return this.teamService.update(auth, teamId, dto);
   }
@@ -68,7 +69,7 @@ export class TeamController {
   @ApiParam({ name: 'teamId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getTeamMembers' })
-  @ZodResponse({ type: TeamMemberListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: TeamMemberListResponseDto })
   getTeamMembers(
     @Auth() auth: AuthContext,
     @Param('teamId') teamId: string,
@@ -108,7 +109,7 @@ export class TeamController {
   @ApiParam({ name: 'teamId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getTeamProjectAccesses' })
-  @ZodResponse({ type: TeamProjectAccessListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: TeamProjectAccessListResponseDto })
   getTeamProjectAccesses(
     @Auth() auth: AuthContext,
     @Param('teamId') teamId: string,

@@ -1,4 +1,4 @@
-import type { CommentLexicalDocumentDto } from '@tabliodb/sdk';
+import type { CommentLexicalDocumentDto } from '@/resources/comments';
 
 export function createPlainTextCommentLexicalDocument(text: string): CommentLexicalDocumentDto {
   const children =

@@ -1236,7 +1236,7 @@ export type CurrentUserResponseDtoOutput = AuthUserDtoOutput;
 export function getServerHealth(opts?: Oazapfts.RequestOpts) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ServerHealthResponseDtoOutput;
     }>('/server/health', {
       ...opts,
@@ -1246,7 +1246,7 @@ export function getServerHealth(opts?: Oazapfts.RequestOpts) {
 export function getCurrentUser(opts?: Oazapfts.RequestOpts) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: AuthUserDtoOutput;
     }>('/auth/me', {
       ...opts,
@@ -1263,7 +1263,7 @@ export function updateCurrentUserProfile(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: AuthUserDtoOutput;
     }>(
       '/auth/me/profile',
@@ -1463,7 +1463,7 @@ export function getCommentDiagramSummary(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentDiagramSummaryDtoOutput;
     }>(`/comments/diagram/${encodeURIComponent(diagramId)}/summary`, {
       ...opts,
@@ -1484,7 +1484,7 @@ export function getCommentThreads(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentThreadListResponseDtoOutput;
     }>(
       `/comments/diagram/${encodeURIComponent(diagramId)}/threads${QS.query(
@@ -1515,7 +1515,7 @@ export function getThreadComments(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentListResponseDtoOutput;
     }>(
       `/comments/threads/${encodeURIComponent(threadId)}/comments${QS.query(
@@ -1569,7 +1569,7 @@ export function getCommentThreadRootComments(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentListResponseDtoOutput;
     }>(
       `/comments/threads/${encodeURIComponent(threadId)}/root-comments${QS.query(
@@ -1598,7 +1598,7 @@ export function getCommentReplies(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentListResponseDtoOutput;
     }>(
       `/comments/comments/${encodeURIComponent(commentId)}/replies${QS.query(
@@ -1649,7 +1649,7 @@ export function updateComment(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentResponseDtoOutput;
     }>(
       `/comments/comments/${encodeURIComponent(commentId)}`,
@@ -1671,7 +1671,7 @@ export function deleteComment(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentResponseDtoOutput;
     }>(`/comments/comments/${encodeURIComponent(commentId)}`, {
       ...opts,
@@ -1689,7 +1689,7 @@ export function getCommentThreadReadState(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentThreadReadStateDtoOutput;
     }>(`/comments/threads/${encodeURIComponent(threadId)}/read-state`, {
       ...opts,
@@ -1706,7 +1706,7 @@ export function markCommentThreadRead(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentThreadReadStateDtoOutput;
     }>(`/comments/threads/${encodeURIComponent(threadId)}/read`, {
       ...opts,
@@ -1724,7 +1724,7 @@ export function resolveCommentThread(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentThreadStatusResponseDtoOutput;
     }>(`/comments/threads/${encodeURIComponent(threadId)}/resolve`, {
       ...opts,
@@ -1742,7 +1742,7 @@ export function unresolveCommentThread(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: CommentThreadStatusResponseDtoOutput;
     }>(`/comments/threads/${encodeURIComponent(threadId)}/unresolve`, {
       ...opts,
@@ -1784,7 +1784,7 @@ export function updateDiagram(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: DiagramResponseDtoOutput;
     }>(
       `/diagrams/${encodeURIComponent(diagramId)}`,
@@ -1812,7 +1812,7 @@ export function exportDiagram(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: DiagramExportResponseDtoOutput;
     }>(
       `/diagrams/${encodeURIComponent(diagramId)}/export${QS.query(
@@ -1862,7 +1862,7 @@ export function getDiagramReviewSummary(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: DiagramReviewSummaryDtoOutput;
     }>(`/diagrams/${encodeURIComponent(diagramId)}/review`, {
       ...opts,
@@ -1883,7 +1883,7 @@ export function getDiagramReviewEvents(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: DiagramReviewEventListResponseDtoOutput;
     }>(
       `/diagrams/${encodeURIComponent(diagramId)}/review/events${QS.query(
@@ -1968,7 +1968,7 @@ export function getInvitationByToken(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: InvitationPublicDtoOutput;
     }>(`/invitations/${encodeURIComponent(token)}`, {
       ...opts,
@@ -2009,7 +2009,7 @@ export function getNotificationInbox(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: NotificationInboxListResponseDtoOutput;
     }>(
       `/notifications/inbox${QS.query(
@@ -2027,7 +2027,7 @@ export function getNotificationInbox(
 export function getNotificationSummary(opts?: Oazapfts.RequestOpts) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: NotificationSummaryDtoOutput;
     }>('/notifications/summary', {
       ...opts,
@@ -2046,7 +2046,7 @@ export function getOrganizations(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: OrganizationListResponseDtoOutput;
     }>(
       `/organizations${QS.query(
@@ -2071,7 +2071,7 @@ export function getOrganizationSettings(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: OrganizationSettingsDtoOutput;
     }>(`/organizations/${encodeURIComponent(organizationId)}/settings`, {
       ...opts,
@@ -2090,7 +2090,7 @@ export function updateOrganizationSettings(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: OrganizationSettingsDtoOutput;
     }>(
       `/organizations/${encodeURIComponent(organizationId)}/settings`,
@@ -2116,7 +2116,7 @@ export function getOrganizationMembers(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: OrganizationMemberListResponseDtoOutput;
     }>(
       `/organizations/${encodeURIComponent(organizationId)}/members${QS.query(
@@ -2145,7 +2145,7 @@ export function updateOrganizationMember(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: OrganizationMemberDtoOutput;
     }>(
       `/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(userId)}`,
@@ -2169,7 +2169,7 @@ export function removeOrganizationMember(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: OrganizationMemberRemoveResponseDtoOutput;
     }>(`/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(userId)}`, {
       ...opts,
@@ -2191,7 +2191,7 @@ export function getOrganizationAuditLogs(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: AuditLogListResponseDtoOutput;
     }>(
       `/organizations/${encodeURIComponent(organizationId)}/audit-logs${QS.query(
@@ -2208,9 +2208,11 @@ export function getOrganizationAuditLogs(
 }
 export function getProjects(
   {
+    organizationId,
     cursor,
     limit,
   }: {
+    organizationId?: string;
     cursor?: string;
     limit?: number;
   },
@@ -2218,11 +2220,12 @@ export function getProjects(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ProjectListResponseDtoOutput;
     }>(
       `/projects${QS.query(
         QS.explode({
+          organizationId,
           cursor,
           limit,
         }),
@@ -2267,7 +2270,7 @@ export function updateProject(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ProjectResponseDtoOutput;
     }>(
       `/projects/${encodeURIComponent(projectId)}`,
@@ -2311,7 +2314,7 @@ export function getProjectMembers(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ProjectMemberListResponseDtoOutput;
     }>(
       `/projects/${encodeURIComponent(projectId)}/members${QS.query(
@@ -2364,7 +2367,7 @@ export function updateProjectMember(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ProjectMemberDtoOutput;
     }>(
       `/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
@@ -2410,7 +2413,7 @@ export function getProjectDiagrams(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: DiagramListResponseDtoOutput;
     }>(
       `/projects/${encodeURIComponent(projectId)}/diagrams${QS.query(
@@ -2441,7 +2444,7 @@ export function getDiagramReviewSignals(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ReviewSignalListResponseDtoOutput;
     }>(
       `/review-signals/diagram/${encodeURIComponent(diagramId)}${QS.query(
@@ -2467,7 +2470,7 @@ export function getProjectReviewSignalSettings(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ReviewSignalSettingsDtoOutput;
     }>(`/review-signals/project/${encodeURIComponent(projectId)}/settings`, {
       ...opts,
@@ -2486,7 +2489,7 @@ export function updateProjectReviewSignalSettings(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ReviewSignalSettingsDtoOutput;
     }>(
       `/review-signals/project/${encodeURIComponent(projectId)}/settings`,
@@ -2508,7 +2511,7 @@ export function getDiagramReviewSignalSettings(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ReviewSignalEffectiveSettingsDtoOutput;
     }>(`/review-signals/diagram/${encodeURIComponent(diagramId)}/settings`, {
       ...opts,
@@ -2527,7 +2530,7 @@ export function updateDiagramReviewSignalSettings(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: ReviewSignalEffectiveSettingsDtoOutput;
     }>(
       `/review-signals/diagram/${encodeURIComponent(diagramId)}/settings`,
@@ -2578,7 +2581,7 @@ export function unignoreReviewSignal(
 export function getSetupStatus(opts?: Oazapfts.RequestOpts) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: SetupStatusResponseDtoOutput;
     }>('/setup', {
       ...opts,
@@ -2610,7 +2613,7 @@ export function completeSetup(
 export function getInstanceAuthSettings(opts?: Oazapfts.RequestOpts) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: InstanceAuthSettingsDtoOutput;
     }>('/setup/auth-settings', {
       ...opts,
@@ -2675,7 +2678,7 @@ export function getDiagramSnapshots(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: SnapshotListResponseDtoOutput;
     }>(
       `/snapshots/diagram/${encodeURIComponent(diagramId)}${QS.query(
@@ -2702,7 +2705,7 @@ export function getSnapshotDiff(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: SnapshotDiffResponseDtoOutput;
     }>(`/snapshots/${encodeURIComponent(fromSnapshotId)}/diff/${encodeURIComponent(toSnapshotId)}`, {
       ...opts,
@@ -2729,9 +2732,11 @@ export function restoreSnapshot(
 }
 export function getTeams(
   {
+    organizationId,
     cursor,
     limit,
   }: {
+    organizationId: string;
     cursor?: string;
     limit?: number;
   },
@@ -2739,11 +2744,12 @@ export function getTeams(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: TeamListResponseDtoOutput;
     }>(
       `/teams${QS.query(
         QS.explode({
+          organizationId,
           cursor,
           limit,
         }),
@@ -2788,7 +2794,7 @@ export function updateTeam(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: TeamResponseDtoOutput;
     }>(
       `/teams/${encodeURIComponent(teamId)}`,
@@ -2832,7 +2838,7 @@ export function getTeamMembers(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: TeamMemberListResponseDtoOutput;
     }>(
       `/teams/${encodeURIComponent(teamId)}/members${QS.query(
@@ -2905,7 +2911,7 @@ export function getTeamProjectAccesses(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: TeamProjectAccessListResponseDtoOutput;
     }>(
       `/teams/${encodeURIComponent(teamId)}/projects${QS.query(
@@ -2980,7 +2986,7 @@ export function getUsers(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: UserListResponseDtoOutput;
     }>(
       `/users${QS.query(
@@ -3031,7 +3037,7 @@ export function updateUserStatus(
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
-      status: number;
+      status: 200;
       data: UserResponseDtoOutput;
     }>(
       `/users/${encodeURIComponent(userId)}/status`,

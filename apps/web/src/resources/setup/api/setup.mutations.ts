@@ -1,12 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
-import type { InstanceAuthSettingsUpdateDto, SetupCreateDto } from '@tabliodb/sdk';
+import { completeSetup, updateInstanceAuthSettings, type InstanceAuthSettingsUpdateDto, type SetupCreateDto } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { projectsKeys } from '@/resources/projects';
 import { setupKeys } from './setup.keys';
 
-const completeSetupMutationFn = (body: SetupCreateDto) => sdk.setup.complete(body);
-const updateAuthSettingsMutationFn = (body: InstanceAuthSettingsUpdateDto) => sdk.setup.updateAuthSettings(body);
+const completeSetupMutationFn = (body: SetupCreateDto) => completeSetup({ setupCreateDto: body });
+const updateAuthSettingsMutationFn = (body: InstanceAuthSettingsUpdateDto) =>
+  updateInstanceAuthSettings({ instanceAuthSettingsUpdateDto: body });
 
 type UseCompleteSetupMutationParams = {
   mutationConfig?: MutationConfig<typeof completeSetupMutationFn>;

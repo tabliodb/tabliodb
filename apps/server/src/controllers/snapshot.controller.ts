@@ -35,7 +35,7 @@ export class SnapshotController {
   @ApiParam({ name: 'diagramId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getDiagramSnapshots' })
-  @ZodResponse({ type: SnapshotListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: SnapshotListResponseDto })
   getDiagramSnapshots(
     @Auth() auth: AuthContext,
     @Param('diagramId') diagramId: string,
@@ -48,7 +48,7 @@ export class SnapshotController {
   @ApiParam({ name: 'fromSnapshotId', type: String })
   @ApiParam({ name: 'toSnapshotId', type: String })
   @ApiOperation({ operationId: 'getSnapshotDiff' })
-  @ZodResponse({ type: SnapshotDiffResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: SnapshotDiffResponseDto })
   getSnapshotDiff(
     @Auth() auth: AuthContext,
     @Param('fromSnapshotId') fromSnapshotId: string,

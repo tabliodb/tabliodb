@@ -1,5 +1,5 @@
 import { getRelationshipColumnPairs, type DiagramModel } from '@tabliodb/schema-core';
-import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
+import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@/resources/comments';
 
 export type CommentMarkerCount = {
   open: number;

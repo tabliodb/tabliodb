@@ -1,26 +1,37 @@
 import { useMutation } from '@tanstack/react-query';
-import type { TeamCreateDto, TeamMemberCreateDto, TeamProjectAccessUpsertDto, TeamUpdateDto } from '@tabliodb/sdk';
+import {
+  addTeamMember,
+  archiveTeam,
+  createTeam,
+  removeTeamMember,
+  removeTeamProjectAccess,
+  updateTeam,
+  upsertTeamProjectAccess,
+  type TeamCreateDto,
+  type TeamMemberCreateDto,
+  type TeamProjectAccessUpsertDto,
+  type TeamUpdateDto,
+} from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { organizationsKeys } from '@/resources/organizations';
 import { projectsKeys } from '@/resources/projects';
 import { teamsKeys } from './team.keys';
 
-const createTeamMutationFn = (body: TeamCreateDto) => sdk.teams.create(body);
+const createTeamMutationFn = (body: TeamCreateDto) => createTeam({ teamCreateDto: body });
 const updateTeamMutationFn = (input: { body: TeamUpdateDto; teamId: string }) =>
-  sdk.teams.update(input.teamId, input.body);
-const archiveTeamMutationFn = (input: { organizationId: string; teamId: string }) => sdk.teams.archive(input.teamId);
+  updateTeam({ teamId: input.teamId, teamUpdateDto: input.body });
+const archiveTeamMutationFn = (input: { organizationId: string; teamId: string }) => archiveTeam({ teamId: input.teamId });
 const addTeamMemberMutationFn = (input: { body: TeamMemberCreateDto; organizationId: string; teamId: string }) =>
-  sdk.teams.addMember(input.teamId, input.body);
+  addTeamMember({ teamId: input.teamId, teamMemberCreateDto: input.body });
 const removeTeamMemberMutationFn = (input: { organizationId: string; teamId: string; userId: string }) =>
-  sdk.teams.removeMember(input.teamId, input.userId);
+  removeTeamMember({ teamId: input.teamId, userId: input.userId });
 const upsertTeamProjectAccessMutationFn = (input: {
   body: TeamProjectAccessUpsertDto;
   organizationId: string;
   teamId: string;
-}) => sdk.teams.upsertProjectAccess(input.teamId, input.body);
+}) => upsertTeamProjectAccess({ teamId: input.teamId, teamProjectAccessUpsertDto: input.body });
 const removeTeamProjectAccessMutationFn = (input: { organizationId: string; projectId: string; teamId: string }) =>
-  sdk.teams.removeProjectAccess(input.teamId, input.projectId);
+  removeTeamProjectAccess({ projectId: input.projectId, teamId: input.teamId });
 
 type UseCreateTeamMutationParams = {
   mutationConfig?: MutationConfig<typeof createTeamMutationFn>;

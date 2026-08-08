@@ -1,4 +1,6 @@
-import type { ReviewSignalListQuery } from '@tabliodb/sdk';
+import type { getDiagramReviewSignals } from '@tabliodb/sdk';
+
+export type ReviewSignalListQuery = Omit<Parameters<typeof getDiagramReviewSignals>[0], 'diagramId'>;
 
 export const reviewSignalKeys = {
   all: ['review-signals'] as const,

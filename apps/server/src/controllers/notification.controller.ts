@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
@@ -20,14 +20,14 @@ export class NotificationController {
   @Get('inbox')
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getNotificationInbox' })
-  @ZodResponse({ type: NotificationInboxListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: NotificationInboxListResponseDto })
   getInbox(@Auth() auth: AuthContext, @Query() query: NotificationInboxListQueryDto) {
     return this.service.getInbox(auth, query);
   }
 
   @Get('summary')
   @ApiOperation({ operationId: 'getNotificationSummary' })
-  @ZodResponse({ type: NotificationSummaryDto })
+  @ZodResponse({ status: HttpStatus.OK, type: NotificationSummaryDto })
   getSummary(@Auth() auth: AuthContext) {
     return this.service.getSummary(auth);
   }

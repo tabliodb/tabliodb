@@ -1,39 +1,42 @@
 import type { DiagramModel } from '@tabliodb/schema-core';
-import { Permission, isGranted, permissionsForProjectRole, type PaginationQuery } from '@tabliodb/shared';
-import type {
-  DiagramResponseDto,
-  ProjectResponseDto,
-  SnapshotDiffResponseDto,
-  SnapshotListResponseDto,
-  SnapshotResponseDto,
+import { Permission, ProjectRole, isGranted, permissionsForProjectRole, type PaginationQuery } from '@tabliodb/shared';
+import {
+  createSnapshot,
+  getDiagramSnapshots,
+  getSnapshotDiff,
+  type DiagramResponseDtoOutput,
+  type ProjectResponseDtoOutput,
+  type SnapshotCreateDto,
+  type SnapshotDiffResponseDtoOutput,
+  type SnapshotListResponseDtoOutput,
+  type SnapshotResponseDtoOutput,
 } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { snapshotsKeys } from './snapshot.keys';
 
-type InitialSnapshotFactory = (diagram: DiagramResponseDto) => DiagramModel;
+type InitialSnapshotFactory = (diagram: DiagramResponseDtoOutput) => DiagramModel;
 
 type SnapshotsQueries = {
   diff: (
     fromSnapshotId: string | null,
     toSnapshotId: string | null,
-  ) => AppQueryOptions<SnapshotDiffResponseDto, ReturnType<typeof snapshotsKeys.diff>>;
+  ) => AppQueryOptions<SnapshotDiffResponseDtoOutput, ReturnType<typeof snapshotsKeys.diff>>;
   listByDiagram: (
     diagramId: string,
     query?: PaginationQuery,
-  ) => AppQueryOptions<SnapshotListResponseDto, ReturnType<typeof snapshotsKeys.listByDiagram>>;
+  ) => AppQueryOptions<SnapshotListResponseDtoOutput, ReturnType<typeof snapshotsKeys.listByDiagram>>;
   listOrCreateInitial: (
-    diagram: DiagramResponseDto | null,
-    project: ProjectResponseDto | null,
+    diagram: DiagramResponseDtoOutput | null,
+    project: ProjectResponseDtoOutput | null,
     createInitialSnapshot: InitialSnapshotFactory,
-  ) => AppQueryOptions<SnapshotResponseDto[], ReturnType<typeof snapshotsKeys.listByDiagram>>;
+  ) => AppQueryOptions<SnapshotResponseDtoOutput[], ReturnType<typeof snapshotsKeys.listByDiagram>>;
 };
 
 export const snapshotsQueries: SnapshotsQueries = {
   diff: (fromSnapshotId: string | null, toSnapshotId: string | null) =>
     appQueryOptions({
       enabled: Boolean(fromSnapshotId && toSnapshotId),
-      queryFn: () => sdk.snapshots.diff(fromSnapshotId ?? '', toSnapshotId ?? ''),
+      queryFn: () => getSnapshotDiff({ fromSnapshotId: fromSnapshotId ?? '', toSnapshotId: toSnapshotId ?? '' }),
       // Null id tetap dipetakan ke key stabil supaya hook bisa dibuat sebelum user memilih snapshot pembanding.
       queryKey: snapshotsKeys.diff(fromSnapshotId ?? 'missing-from-snapshot', toSnapshotId ?? 'missing-to-snapshot'),
     }),
@@ -41,13 +44,13 @@ export const snapshotsQueries: SnapshotsQueries = {
   listByDiagram: (diagramId: string, query: PaginationQuery = {}) =>
     appQueryOptions({
       enabled: Boolean(diagramId),
-      queryFn: () => sdk.snapshots.listByDiagram(diagramId, query),
+      queryFn: () => getDiagramSnapshots({ diagramId, ...query }),
       queryKey: snapshotsKeys.listByDiagram(diagramId, query),
     }),
 
   listOrCreateInitial: (
-    diagram: DiagramResponseDto | null,
-    project: ProjectResponseDto | null,
+    diagram: DiagramResponseDtoOutput | null,
+    project: ProjectResponseDtoOutput | null,
     createInitialSnapshot: InitialSnapshotFactory,
   ) =>
     appQueryOptions({
@@ -58,15 +61,15 @@ export const snapshotsQueries: SnapshotsQueries = {
 };
 
 async function listOrCreateInitialSnapshots(
-  diagram: DiagramResponseDto | null,
-  project: ProjectResponseDto | null,
+  diagram: DiagramResponseDtoOutput | null,
+  project: ProjectResponseDtoOutput | null,
   createInitialSnapshot: InitialSnapshotFactory,
-): Promise<SnapshotResponseDto[]> {
+): Promise<SnapshotResponseDtoOutput[]> {
   if (!diagram) {
     return [];
   }
 
-  const snapshots = await sdk.snapshots.listByDiagram(diagram.id, { limit: 20 });
+  const snapshots = await getDiagramSnapshots({ diagramId: diagram.id, limit: 20 });
 
   if (snapshots.items.length > 0) {
     return snapshots.items;
@@ -74,16 +77,21 @@ async function listOrCreateInitialSnapshots(
 
   if (
     !project ||
-    !isGranted({ current: permissionsForProjectRole(project.projectRole), requested: [Permission.SnapshotCreate] })
+    !isGranted({
+      current: permissionsForProjectRole(project.projectRole as unknown as ProjectRole),
+      requested: [Permission.SnapshotCreate],
+    })
   ) {
     // View-only access can read existing snapshot history but must not create the initial snapshot for an empty diagram.
     return [];
   }
 
-  const snapshot = await sdk.snapshots.create({
-    diagramId: diagram.id,
-    message: 'Initial schema',
-    snapshot: createInitialSnapshot(diagram),
+  const snapshot = await createSnapshot({
+    snapshotCreateDto: {
+      diagramId: diagram.id,
+      message: 'Initial schema',
+      snapshot: createInitialSnapshot(diagram) as unknown as SnapshotCreateDto['snapshot'],
+    },
   });
 
   return [snapshot];

@@ -18,7 +18,7 @@ import {
   type DiagramNote,
   type TableDisplayMode,
 } from '@tabliodb/schema-core';
-import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
+import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@/resources/comments';
 import type { AwarenessState } from '@tabliodb/shared';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {

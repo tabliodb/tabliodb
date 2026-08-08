@@ -47,7 +47,7 @@ export class AuthController {
   @Get('me')
   @Authenticated()
   @ApiOperation({ operationId: 'getCurrentUser' })
-  @ZodResponse({ type: CurrentUserResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CurrentUserResponseDto })
   getCurrentUser(@Res({ passthrough: true }) res: Response, @Auth() auth: AuthContext): CurrentUserResponseDto {
     if (auth.session?.source === 'cookie') {
       // Existing cookie sessions from older dev builds receive a CSRF token during the normal bootstrap /auth/me probe.
@@ -61,7 +61,7 @@ export class AuthController {
   @Authenticated()
   @ApiBody({ type: CurrentUserProfileUpdateDto })
   @ApiOperation({ operationId: 'updateCurrentUserProfile' })
-  @ZodResponse({ type: CurrentUserResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CurrentUserResponseDto })
   updateCurrentUserProfile(
     @Auth() auth: AuthContext,
     @Body() dto: CurrentUserProfileUpdateDto,

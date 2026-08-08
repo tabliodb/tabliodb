@@ -1,5 +1,7 @@
 import type { PaginationQuery } from '@tabliodb/shared';
-import type { TeamListQuery } from '@tabliodb/sdk';
+import type { getTeams } from '@tabliodb/sdk';
+
+export type TeamListQuery = Parameters<typeof getTeams>[0];
 
 export const teamsKeys = {
   all: ['teams'] as const,

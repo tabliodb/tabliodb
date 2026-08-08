@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
@@ -30,7 +30,7 @@ export class OrganizationController {
   @RequirePermission(Permission.OrganizationRead)
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getOrganizations' })
-  @ZodResponse({ type: OrganizationListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: OrganizationListResponseDto })
   getOrganizations(
     @Auth() auth: AuthContext,
     @Query() query: OrganizationListQueryDto,
@@ -42,7 +42,7 @@ export class OrganizationController {
   @RequirePermission(Permission.OrganizationRead, { key: 'organizationId', source: 'param', type: 'organization' })
   @ApiParam({ name: 'organizationId', type: String })
   @ApiOperation({ operationId: 'getOrganizationSettings' })
-  @ZodResponse({ type: OrganizationSettingsDto })
+  @ZodResponse({ status: HttpStatus.OK, type: OrganizationSettingsDto })
   getOrganizationSettings(
     @Auth() auth: AuthContext,
     @Param('organizationId') organizationId: string,
@@ -55,7 +55,7 @@ export class OrganizationController {
   @ApiParam({ name: 'organizationId', type: String })
   @ApiBody({ type: OrganizationSettingsUpdateDto })
   @ApiOperation({ operationId: 'updateOrganizationSettings' })
-  @ZodResponse({ type: OrganizationSettingsDto })
+  @ZodResponse({ status: HttpStatus.OK, type: OrganizationSettingsDto })
   updateOrganizationSettings(
     @Auth() auth: AuthContext,
     @Param('organizationId') organizationId: string,
@@ -69,7 +69,7 @@ export class OrganizationController {
   @ApiParam({ name: 'organizationId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getOrganizationMembers' })
-  @ZodResponse({ type: OrganizationMemberListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: OrganizationMemberListResponseDto })
   getOrganizationMembers(
     @Auth() auth: AuthContext,
     @Param('organizationId') organizationId: string,
@@ -84,7 +84,7 @@ export class OrganizationController {
   @ApiParam({ name: 'userId', type: String })
   @ApiBody({ type: OrganizationMemberUpdateDto })
   @ApiOperation({ operationId: 'updateOrganizationMember' })
-  @ZodResponse({ type: OrganizationMemberDto })
+  @ZodResponse({ status: HttpStatus.OK, type: OrganizationMemberDto })
   updateOrganizationMember(
     @Auth() auth: AuthContext,
     @Param('organizationId') organizationId: string,
@@ -99,7 +99,7 @@ export class OrganizationController {
   @ApiParam({ name: 'organizationId', type: String })
   @ApiParam({ name: 'userId', type: String })
   @ApiOperation({ operationId: 'removeOrganizationMember' })
-  @ZodResponse({ type: OrganizationMemberRemoveResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: OrganizationMemberRemoveResponseDto })
   removeOrganizationMember(
     @Auth() auth: AuthContext,
     @Param('organizationId') organizationId: string,
@@ -113,7 +113,7 @@ export class OrganizationController {
   @ApiParam({ name: 'organizationId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getOrganizationAuditLogs' })
-  @ZodResponse({ type: AuditLogListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: AuditLogListResponseDto })
   getOrganizationAuditLogs(
     @Auth() auth: AuthContext,
     @Param('organizationId') organizationId: string,

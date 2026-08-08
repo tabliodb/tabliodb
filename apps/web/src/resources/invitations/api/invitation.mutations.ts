@@ -1,13 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
-import type { InvitationAcceptDto, InvitationCreateDto } from '@tabliodb/sdk';
+import { acceptInvitation, createInvitation, type InvitationAcceptDto, type InvitationCreateDto } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { authKeys } from '@/resources/auth';
 import { projectsKeys } from '@/resources/projects';
 import { invitationsKeys } from './invitation.keys';
 
-const acceptInvitationMutationFn = (body: InvitationAcceptDto) => sdk.invitations.accept(body);
-const createInvitationMutationFn = (body: InvitationCreateDto) => sdk.invitations.create(body);
+const acceptInvitationMutationFn = (body: InvitationAcceptDto) => acceptInvitation({ invitationAcceptDto: body });
+const createInvitationMutationFn = (body: InvitationCreateDto) => createInvitation({ invitationCreateDto: body });
 
 type UseAcceptInvitationMutationParams = {
   mutationConfig?: MutationConfig<typeof acceptInvitationMutationFn>;

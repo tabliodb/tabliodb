@@ -1,3 +1,4 @@
+import '@/services/sdk';
 import { setupQueries } from '@/resources/setup';
 import { queryClient } from '@/lib/react-query';
 

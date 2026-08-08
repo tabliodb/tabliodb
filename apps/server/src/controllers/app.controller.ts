@@ -12,7 +12,7 @@ export class AppController {
 
   @Get('health')
   @ApiOperation({ operationId: 'getServerHealth' })
-  @ZodResponse({ type: ServerHealthResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: ServerHealthResponseDto })
   async getHealth(@Res({ passthrough: true }) response: Response) {
     const health = await this.service.getHealth();
 

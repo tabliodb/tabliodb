@@ -1,23 +1,32 @@
 import { useMutation } from '@tanstack/react-query';
-import type {
-  CurrentUserProfileUpdateDto,
-  LoginCredentialDto,
-  PasswordResetConfirmDto,
-  PasswordResetRequestDto,
+import {
+  confirmPasswordReset,
+  deleteCurrentUserAvatar,
+  login,
+  logout,
+  requestPasswordReset,
+  updateCurrentUserProfile,
+  uploadCurrentUserAvatar,
+  type CurrentUserProfileUpdateDto,
+  type LoginCredentialDto,
+  type PasswordResetConfirmDto,
+  type PasswordResetRequestDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { projectsKeys } from '@/resources/projects';
 import { usersKeys } from '@/resources/users';
 import { authKeys } from './auth.keys';
 
-const uploadAvatarMutationFn = (file: Blob) => sdk.auth.uploadAvatar(file);
-const deleteAvatarMutationFn = () => sdk.auth.deleteAvatar();
-const updateProfileMutationFn = (body: CurrentUserProfileUpdateDto) => sdk.auth.updateProfile(body);
-const loginMutationFn = (body: LoginCredentialDto) => sdk.auth.login(body);
-const logoutMutationFn = () => sdk.auth.logout();
-const passwordResetRequestMutationFn = (body: PasswordResetRequestDto) => sdk.auth.requestPasswordReset(body);
-const passwordResetConfirmMutationFn = (body: PasswordResetConfirmDto) => sdk.auth.confirmPasswordReset(body);
+const uploadAvatarMutationFn = (file: Blob) => uploadCurrentUserAvatar({ body: { file } });
+const deleteAvatarMutationFn = () => deleteCurrentUserAvatar();
+const updateProfileMutationFn = (body: CurrentUserProfileUpdateDto) =>
+  updateCurrentUserProfile({ currentUserProfileUpdateDto: body });
+const loginMutationFn = (body: LoginCredentialDto) => login({ loginCredentialDto: body });
+const logoutMutationFn = () => logout();
+const passwordResetRequestMutationFn = (body: PasswordResetRequestDto) =>
+  requestPasswordReset({ passwordResetRequestDto: body });
+const passwordResetConfirmMutationFn = (body: PasswordResetConfirmDto) =>
+  confirmPasswordReset({ passwordResetConfirmDto: body });
 
 type UseUploadAvatarMutationParams = {
   mutationConfig?: MutationConfig<typeof uploadAvatarMutationFn>;

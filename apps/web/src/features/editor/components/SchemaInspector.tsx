@@ -18,7 +18,7 @@ import {
   type DiagramReviewSignal,
   type ReferentialAction,
 } from '@tabliodb/schema-core';
-import type { CommentThreadTargetSummaryDto } from '@tabliodb/sdk';
+import type { CommentThreadTargetSummaryDto } from '@/resources/comments';
 import {
   Badge,
   Button,

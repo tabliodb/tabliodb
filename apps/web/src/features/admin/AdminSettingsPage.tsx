@@ -1,21 +1,21 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import type { SignupPolicy } from '@tabliodb/sdk';
+import { SignupPolicy } from '@tabliodb/sdk';
 import { Badge, Button, FieldError, Surface, cn } from '@tabliodb/ui';
 import { Globe2, Loader2, LockKeyhole, MailCheck, Save, ShieldCheck, UserPlus } from 'lucide-react';
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
 import { setupQueries, useUpdateAuthSettingsMutation } from '@/resources/setup';
 
 const signupPolicyOptions = [
-  'invite_only',
-  'allowed_domains',
-  'signup_disabled',
-  'sso_only',
-  'public_signup',
+  SignupPolicy.InviteOnly,
+  SignupPolicy.AllowedDomains,
+  SignupPolicy.SignupDisabled,
+  SignupPolicy.SsoOnly,
+  SignupPolicy.PublicSignup,
 ] as const satisfies readonly SignupPolicy[];
 
 const authSettingsFormSchema = z
@@ -44,10 +44,10 @@ export function AdminSettingsPage() {
   const form = useForm<AuthSettingsFormState>({
     defaultValues: {
       allowedDomainsText: '',
-      signupPolicy: 'invite_only',
+      signupPolicy: SignupPolicy.InviteOnly,
     },
     mode: 'onBlur',
-    resolver: zodResolver(authSettingsFormSchema),
+    resolver: zodResolver(authSettingsFormSchema) as Resolver<AuthSettingsFormState>,
   });
   const { errors, isDirty } = form.formState;
   const selectedPolicy = form.watch('signupPolicy');

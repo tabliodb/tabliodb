@@ -43,7 +43,7 @@ export class CommentController {
   @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
   @ApiOperation({ operationId: 'getCommentDiagramSummary' })
-  @ZodResponse({ type: CommentDiagramSummaryDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentDiagramSummaryDto })
   getDiagramSummary(@Auth() auth: AuthContext, @Param('diagramId') diagramId: string) {
     return this.service.getDiagramSummary(auth, diagramId);
   }
@@ -53,7 +53,7 @@ export class CommentController {
   @ApiParam({ name: 'diagramId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getCommentThreads' })
-  @ZodResponse({ type: CommentThreadListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentThreadListResponseDto })
   getThreads(
     @Auth() auth: AuthContext,
     @Param('diagramId') diagramId: string,
@@ -72,7 +72,7 @@ export class CommentController {
     type: String,
   })
   @ApiOperation({ operationId: 'getThreadComments' })
-  @ZodResponse({ type: CommentListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentListResponseDto })
   getThreadComments(
     @Auth() auth: AuthContext,
     @Param('threadId') threadId: string,
@@ -85,7 +85,7 @@ export class CommentController {
   @ApiParam({ name: 'threadId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getCommentThreadRootComments' })
-  @ZodResponse({ type: CommentListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentListResponseDto })
   getThreadRootComments(
     @Auth() auth: AuthContext,
     @Param('threadId') threadId: string,
@@ -108,7 +108,7 @@ export class CommentController {
   @ApiParam({ name: 'commentId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getCommentReplies' })
-  @ZodResponse({ type: CommentListResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentListResponseDto })
   getCommentReplies(
     @Auth() auth: AuthContext,
     @Param('commentId') commentId: string,
@@ -132,7 +132,7 @@ export class CommentController {
   @ApiParam({ name: 'commentId', type: String })
   @ApiBody({ type: CommentUpdateDto })
   @ApiOperation({ operationId: 'updateComment' })
-  @ZodResponse({ type: CommentResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentResponseDto })
   updateComment(@Auth() auth: AuthContext, @Param('commentId') commentId: string, @Body() dto: CommentUpdateDto) {
     return this.service.updateComment(auth, commentId, dto);
   }
@@ -140,7 +140,7 @@ export class CommentController {
   @Delete('comments/:commentId')
   @ApiParam({ name: 'commentId', type: String })
   @ApiOperation({ operationId: 'deleteComment' })
-  @ZodResponse({ type: CommentResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentResponseDto })
   deleteComment(@Auth() auth: AuthContext, @Param('commentId') commentId: string) {
     return this.service.deleteComment(auth, commentId);
   }
@@ -148,7 +148,7 @@ export class CommentController {
   @Get('threads/:threadId/read-state')
   @ApiParam({ name: 'threadId', type: String })
   @ApiOperation({ operationId: 'getCommentThreadReadState' })
-  @ZodResponse({ type: CommentThreadReadStateDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentThreadReadStateDto })
   getThreadReadState(@Auth() auth: AuthContext, @Param('threadId') threadId: string) {
     return this.service.getThreadReadState(auth, threadId);
   }
@@ -156,7 +156,7 @@ export class CommentController {
   @Patch('threads/:threadId/read')
   @ApiParam({ name: 'threadId', type: String })
   @ApiOperation({ operationId: 'markCommentThreadRead' })
-  @ZodResponse({ type: CommentThreadReadStateDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentThreadReadStateDto })
   markThreadRead(@Auth() auth: AuthContext, @Param('threadId') threadId: string) {
     return this.service.markThreadRead(auth, threadId);
   }
@@ -164,7 +164,7 @@ export class CommentController {
   @Patch('threads/:threadId/resolve')
   @ApiParam({ name: 'threadId', type: String })
   @ApiOperation({ operationId: 'resolveCommentThread' })
-  @ZodResponse({ type: CommentThreadStatusResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentThreadStatusResponseDto })
   resolveThread(@Auth() auth: AuthContext, @Param('threadId') threadId: string) {
     return this.service.resolveThread(auth, threadId);
   }
@@ -172,7 +172,7 @@ export class CommentController {
   @Patch('threads/:threadId/unresolve')
   @ApiParam({ name: 'threadId', type: String })
   @ApiOperation({ operationId: 'unresolveCommentThread' })
-  @ZodResponse({ type: CommentThreadStatusResponseDto })
+  @ZodResponse({ status: HttpStatus.OK, type: CommentThreadStatusResponseDto })
   unresolveThread(@Auth() auth: AuthContext, @Param('threadId') threadId: string) {
     return this.service.unresolveThread(auth, threadId);
   }

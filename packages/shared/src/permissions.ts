@@ -12,6 +12,9 @@ export enum ProjectRole {
   Viewer = 'viewer',
 }
 
+export type OrganizationRoleValue = `${OrganizationRole}`;
+export type ProjectRoleValue = `${ProjectRole}`;
+
 export enum Permission {
   All = 'all',
   OrganizationRead = 'organization.read',
@@ -31,7 +34,7 @@ export enum Permission {
   ApiKeyManage = 'api-key.manage',
 }
 
-const rolePermissions: Record<ProjectRole, Permission[]> = {
+const rolePermissions: Record<ProjectRoleValue, Permission[]> = {
   [ProjectRole.Owner]: [Permission.All],
   [ProjectRole.Editor]: [
     Permission.ProjectRead,
@@ -53,18 +56,18 @@ const rolePermissions: Record<ProjectRole, Permission[]> = {
   [ProjectRole.Viewer]: [Permission.ProjectRead, Permission.DiagramRead, Permission.SnapshotRead],
 };
 
-const organizationRolePermissions: Record<OrganizationRole, Permission[]> = {
+const organizationRolePermissions: Record<OrganizationRoleValue, Permission[]> = {
   [OrganizationRole.Owner]: [Permission.All],
   [OrganizationRole.Admin]: [Permission.OrganizationRead, Permission.OrganizationManage, Permission.ProjectCreate],
   [OrganizationRole.Member]: [Permission.OrganizationRead, Permission.ProjectCreate],
   [OrganizationRole.Guest]: [Permission.OrganizationRead],
 };
 
-export function permissionsForOrganizationRole(role: OrganizationRole): Permission[] {
+export function permissionsForOrganizationRole(role: OrganizationRoleValue): Permission[] {
   return organizationRolePermissions[role];
 }
 
-export function permissionsForProjectRole(role: ProjectRole): Permission[] {
+export function permissionsForProjectRole(role: ProjectRoleValue): Permission[] {
   return rolePermissions[role];
 }
 

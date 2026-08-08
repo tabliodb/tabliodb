@@ -1,15 +1,22 @@
 import { useMutation } from '@tanstack/react-query';
-import type { UserCreateDto, UserPasswordResetDto, UserStatusUpdateDto } from '@tabliodb/sdk';
+import {
+  createUser,
+  resetUserPassword,
+  revokeUserSessions,
+  updateUserStatus,
+  type UserCreateDto,
+  type UserPasswordResetDto,
+  type UserStatusUpdateDto,
+} from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { usersKeys } from './user.keys';
 
-const createUserMutationFn = (body: UserCreateDto) => sdk.users.create(body);
+const createUserMutationFn = (body: UserCreateDto) => createUser({ userCreateDto: body });
 const resetUserPasswordMutationFn = (variables: { body: UserPasswordResetDto; userId: string }) =>
-  sdk.users.resetPassword(variables.userId, variables.body);
-const revokeUserSessionsMutationFn = (variables: { userId: string }) => sdk.users.revokeSessions(variables.userId);
+  resetUserPassword({ userId: variables.userId, userPasswordResetDto: variables.body });
+const revokeUserSessionsMutationFn = (variables: { userId: string }) => revokeUserSessions({ userId: variables.userId });
 const updateUserStatusMutationFn = (variables: { body: UserStatusUpdateDto; userId: string }) =>
-  sdk.users.updateStatus(variables.userId, variables.body);
+  updateUserStatus({ userId: variables.userId, userStatusUpdateDto: variables.body });
 
 type UseCreateUserMutationParams = {
   mutationConfig?: MutationConfig<typeof createUserMutationFn>;

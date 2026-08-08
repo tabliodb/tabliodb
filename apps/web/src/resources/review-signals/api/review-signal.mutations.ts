@@ -1,19 +1,24 @@
 import { useMutation } from '@tanstack/react-query';
-import type { ReviewSignalSettingsDto } from '@tabliodb/sdk';
+import {
+  ignoreReviewSignal,
+  unignoreReviewSignal,
+  updateDiagramReviewSignalSettings,
+  updateProjectReviewSignalSettings,
+  type ReviewSignalSettingsDto,
+} from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { sdk } from '@/services/sdk';
 import { reviewSignalKeys } from './review-signal.keys';
 
-const ignoreReviewSignalMutationFn = (signalId: string) => sdk.reviewSignals.ignore(signalId);
-const unignoreReviewSignalMutationFn = (signalId: string) => sdk.reviewSignals.unignore(signalId);
+const ignoreReviewSignalMutationFn = (signalId: string) => ignoreReviewSignal({ signalId });
+const unignoreReviewSignalMutationFn = (signalId: string) => unignoreReviewSignal({ signalId });
 const updateDiagramReviewSignalSettingsMutationFn = (variables: {
   diagramId: string;
   settings: ReviewSignalSettingsDto;
-}) => sdk.reviewSignals.updateDiagramSettings(variables.diagramId, variables.settings);
+}) => updateDiagramReviewSignalSettings({ diagramId: variables.diagramId, reviewSignalSettingsDto: variables.settings });
 const updateProjectReviewSignalSettingsMutationFn = (variables: {
   projectId: string;
   settings: ReviewSignalSettingsDto;
-}) => sdk.reviewSignals.updateProjectSettings(variables.projectId, variables.settings);
+}) => updateProjectReviewSignalSettings({ projectId: variables.projectId, reviewSignalSettingsDto: variables.settings });
 
 type UseIgnoreReviewSignalMutationParams = {
   mutationConfig?: MutationConfig<typeof ignoreReviewSignalMutationFn>;

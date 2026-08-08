@@ -19,36 +19,45 @@ import {
 } from '@tabliodb/schema-core';
 import { generateDiagramMarkdown } from '@tabliodb/docs';
 import { generateDiagramSvg } from '@tabliodb/render';
-import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import {
+  OrganizationRole,
+  Permission,
+  ProjectRole,
+  isGranted,
+  permissionsForProjectRole,
+  type OrganizationRoleValue,
+  type ProjectRoleValue,
+} from '@tabliodb/shared';
+import {
+  Action as SdkDiagramReviewAction,
+  CurrentStatus as SdkDiagramReviewStatus,
+  DefaultProjectRole as SdkDefaultProjectRole,
+  Dialect as SdkDialect,
+  DisabledRuleKeys as SdkDisabledRuleKeys,
+  Format as SdkExportFormat,
+  Mode as SdkImportMode,
+  Role as SdkOrganizationMemberRole,
+  Role2 as SdkProjectMemberRole,
+  Role3 as SdkTeamProjectRole,
+  Source as SdkImportSource,
   TabliodbApiError,
-  type AuditLogDto,
-  type DiagramExportQuery,
-  type DiagramExportResponseDto,
-  type DiagramImportDto,
-  type DiagramReviewAction,
-  type DiagramReviewStatus,
-  type DiagramResponseDto,
-  type NotificationInboxItemDto,
-  type OrganizationDto,
-  type OrganizationMemberDto,
-  type OrganizationSettingsDto,
-  type ProjectMemberDto,
-  type ProjectResponseDto,
-  type SnapshotDiffResponseDto,
-  type SnapshotResponseDto,
-  type TeamMemberDto,
-  type TeamProjectAccessDto,
-  type TeamProjectRole,
-  type TeamResponseDto,
-  type CommentResponseDto,
-  type CommentTargetType,
-  type CommentLexicalDocumentDto,
-  type CommentThreadReaderDto,
-  type CommentThreadListItemDto,
-  type ReviewSignalEffectiveSettingsDto,
-  type ReviewSignalResponseDto,
+  type AuditLogDtoOutput,
+  type DiagramExportResponseDtoOutput,
+  type DiagramResponseDtoOutput,
+  type NotificationInboxItemDtoOutput,
+  type OrganizationDtoOutput,
+  type OrganizationMemberDtoOutput,
+  type OrganizationSettingsDtoOutput,
+  type ProjectMemberDtoOutput,
+  type ProjectResponseDtoOutput,
+  type ReviewSignalEffectiveSettingsDtoOutput,
+  type ReviewSignalResponseDtoOutput,
   type ReviewSignalSettingsDto,
+  type SnapshotDiffResponseDtoOutput,
+  type SnapshotResponseDtoOutput,
+  type TeamMemberDtoOutput,
+  type TeamProjectAccessDtoOutput,
+  type TeamResponseDtoOutput,
 } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
 import {
@@ -157,6 +166,7 @@ import { authQueries, useLogoutMutation } from '@/resources/auth';
 import {
   defaultDiagramName,
   diagramsQueries,
+  type DiagramExportQuery,
   useCreateDiagramReviewActionMutation,
   useExportDiagramMutation,
   useImportDiagramMutation,
@@ -181,6 +191,11 @@ import {
 import { notificationQueries } from '@/resources/notifications';
 import {
   commentQueries,
+  type CommentLexicalDocumentDto,
+  type CommentResponseDto,
+  type CommentTargetType,
+  type CommentThreadListItemDto,
+  type CommentThreadReaderDto,
   useCreateCommentThreadMutation,
   useDeleteCommentMutation,
   useMarkCommentThreadReadMutation,
@@ -225,6 +240,112 @@ import { TableStructureSidebar } from './components/TableStructureSidebar';
 
 const CommentComposer = lazy(() => import('./components/CommentComposer'));
 
+type AuditLogDto = AuditLogDtoOutput;
+type DiagramExportResponseDto = DiagramExportResponseDtoOutput;
+type DiagramResponseDto = DiagramResponseDtoOutput;
+type DiagramReviewAction = `${SdkDiagramReviewAction}`;
+type DiagramReviewStatus = `${SdkDiagramReviewStatus}`;
+type NotificationInboxItemDto = NotificationInboxItemDtoOutput;
+type OrganizationDto = OrganizationDtoOutput;
+type OrganizationMemberDto = OrganizationMemberDtoOutput;
+type OrganizationSettingsDto = OrganizationSettingsDtoOutput;
+type ProjectMemberDto = ProjectMemberDtoOutput;
+type ProjectResponseDto = ProjectResponseDtoOutput;
+type ReviewSignalEffectiveSettingsDto = ReviewSignalEffectiveSettingsDtoOutput;
+type ReviewSignalResponseDto = ReviewSignalResponseDtoOutput;
+type SnapshotDiffResponseDto = SnapshotDiffResponseDtoOutput;
+type SnapshotResponseDto = SnapshotResponseDtoOutput;
+type TeamMemberDto = TeamMemberDtoOutput;
+type TeamProjectAccessDto = TeamProjectAccessDtoOutput;
+type TeamProjectRole = `${SdkTeamProjectRole}`;
+type TeamResponseDto = TeamResponseDtoOutput;
+type DiagramExportFormat = 'tabliodb_json' | 'sql' | 'markdown' | 'svg';
+type EditorImportSource = 'tabliodb_json' | 'sql';
+type WorkspaceDefaultProjectRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+
+const sdkDialectByValue: Record<DatabaseDialect, SdkDialect> = {
+  mariadb: SdkDialect.Mariadb,
+  mysql: SdkDialect.Mysql,
+  postgresql: SdkDialect.Postgresql,
+  sqlite: SdkDialect.Sqlite,
+  sqlserver: SdkDialect.Sqlserver,
+};
+
+const sdkDisabledRuleKeyByValue: Record<DiagramReviewSignalCode, SdkDisabledRuleKeys> = {
+  duplicate_column_name: SdkDisabledRuleKeys.DuplicateColumnName,
+  duplicate_table_name: SdkDisabledRuleKeys.DuplicateTableName,
+  email_column_not_unique: SdkDisabledRuleKeys.EmailColumnNotUnique,
+  foreign_key_missing_index: SdkDisabledRuleKeys.ForeignKeyMissingIndex,
+  money_column_uses_float: SdkDisabledRuleKeys.MoneyColumnUsesFloat,
+  relationship_column_type_mismatch: SdkDisabledRuleKeys.RelationshipColumnTypeMismatch,
+  table_missing_primary_key: SdkDisabledRuleKeys.TableMissingPrimaryKey,
+  unused_enum: SdkDisabledRuleKeys.UnusedEnum,
+};
+
+const sdkDefaultProjectRoleByValue: Record<WorkspaceDefaultProjectRole, SdkDefaultProjectRole> = {
+  [ProjectRole.Commenter]: SdkDefaultProjectRole.Commenter,
+  [ProjectRole.Editor]: SdkDefaultProjectRole.Editor,
+  [ProjectRole.Viewer]: SdkDefaultProjectRole.Viewer,
+};
+
+const sdkOrganizationMemberRoleByValue: Record<OrganizationRoleValue, SdkOrganizationMemberRole> = {
+  [OrganizationRole.Admin]: SdkOrganizationMemberRole.Admin,
+  [OrganizationRole.Guest]: SdkOrganizationMemberRole.Guest,
+  [OrganizationRole.Member]: SdkOrganizationMemberRole.Member,
+  [OrganizationRole.Owner]: SdkOrganizationMemberRole.Owner,
+};
+
+const sdkProjectMemberRoleByValue: Record<ProjectRoleValue, SdkProjectMemberRole> = {
+  [ProjectRole.Commenter]: SdkProjectMemberRole.Commenter,
+  [ProjectRole.Editor]: SdkProjectMemberRole.Editor,
+  [ProjectRole.Owner]: SdkProjectMemberRole.Owner,
+  [ProjectRole.Viewer]: SdkProjectMemberRole.Viewer,
+};
+
+const sdkTeamProjectRoleByValue: Record<TeamProjectRole, SdkTeamProjectRole> = {
+  commenter: SdkTeamProjectRole.Commenter,
+  editor: SdkTeamProjectRole.Editor,
+  viewer: SdkTeamProjectRole.Viewer,
+};
+
+const sdkImportSourceByValue: Record<EditorImportSource, SdkImportSource> = {
+  sql: SdkImportSource.Sql,
+  tabliodb_json: SdkImportSource.TabliodbJson,
+};
+
+const sdkExportFormatByValue: Record<DiagramExportFormat, SdkExportFormat> = {
+  markdown: SdkExportFormat.Markdown,
+  sql: SdkExportFormat.Sql,
+  svg: SdkExportFormat.Svg,
+  tabliodb_json: SdkExportFormat.TabliodbJson,
+};
+
+const sdkDiagramReviewActionByValue: Record<DiagramReviewAction, SdkDiagramReviewAction> = {
+  approved: SdkDiagramReviewAction.Approved,
+  changes_requested: SdkDiagramReviewAction.ChangesRequested,
+  commented: SdkDiagramReviewAction.Commented,
+};
+
+function toDatabaseDialect(dialect: DatabaseDialect | SdkDialect): DatabaseDialect {
+  return dialect as DatabaseDialect;
+}
+
+function toProjectRoleValue(role: ProjectRoleValue | SdkProjectMemberRole | SdkTeamProjectRole): ProjectRoleValue {
+  return role as ProjectRoleValue;
+}
+
+function toOrganizationRoleValue(role: OrganizationRoleValue | SdkOrganizationMemberRole): OrganizationRoleValue {
+  return role as OrganizationRoleValue;
+}
+
+function toWorkspaceDefaultProjectRole(role: SdkDefaultProjectRole): WorkspaceDefaultProjectRole {
+  return role as unknown as WorkspaceDefaultProjectRole;
+}
+
+function toDiagramReviewSignalCode(ruleKey: DiagramReviewSignalCode | SdkDisabledRuleKeys): DiagramReviewSignalCode {
+  return ruleKey as DiagramReviewSignalCode;
+}
+
 const addTableFormSchema = z.object({
   tableName: z.string().trim().max(64, 'Keep the table name under 64 characters.'),
 });
@@ -252,7 +373,11 @@ const importSqlFormSchema = z.object({
 
 type ImportSqlFormState = z.infer<typeof importSqlFormSchema>;
 
-type EditorImportRequest = Pick<DiagramImportDto, 'content' | 'dialect' | 'source'>;
+type EditorImportRequest = {
+  content: string;
+  dialect?: DatabaseDialect;
+  source: EditorImportSource;
+};
 
 type EditorCommentTarget = {
   targetId: string | null;
@@ -1055,8 +1180,8 @@ export function EditorPage() {
 
     const payload = await resolveDiagramExport(
       {
-        dialect: model.dialect,
-        format: 'sql',
+        dialect: sdkDialectByValue[model.dialect],
+        format: sdkExportFormatByValue.sql,
       },
       () => {
         const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
@@ -1064,7 +1189,7 @@ export function EditorPage() {
         return {
           content: generatedSql.sql,
           filename: `${getExportFileStem()}.${model.dialect}.sql`,
-          format: 'sql',
+          format: sdkExportFormatByValue.sql,
           mediaType: 'application/sql',
           warnings: toDiagramExportWarnings(generatedSql.warnings),
         };
@@ -1084,8 +1209,8 @@ export function EditorPage() {
 
     const payload = await resolveDiagramExport(
       {
-        dialect: model.dialect,
-        format: 'sql',
+        dialect: sdkDialectByValue[model.dialect],
+        format: sdkExportFormatByValue.sql,
       },
       () => {
         const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
@@ -1093,7 +1218,7 @@ export function EditorPage() {
         return {
           content: generatedSql.sql,
           filename: `${getExportFileStem()}.${model.dialect}.sql`,
-          format: 'sql',
+          format: sdkExportFormatByValue.sql,
           mediaType: 'application/sql',
           warnings: toDiagramExportWarnings(generatedSql.warnings),
         };
@@ -1108,10 +1233,10 @@ export function EditorPage() {
       return;
     }
 
-    const payload = await resolveDiagramExport({ format: 'tabliodb_json' }, () => ({
+    const payload = await resolveDiagramExport({ format: sdkExportFormatByValue.tabliodb_json }, () => ({
       content: `${stringifyDiagramModel(model)}\n`,
       filename: `${getExportFileStem()}.tabliodb.json`,
-      format: 'tabliodb_json',
+      format: sdkExportFormatByValue.tabliodb_json,
       mediaType: 'application/json',
       warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
     }));
@@ -1124,10 +1249,10 @@ export function EditorPage() {
       return;
     }
 
-    const payload = await resolveDiagramExport({ format: 'markdown' }, () => ({
+    const payload = await resolveDiagramExport({ format: sdkExportFormatByValue.markdown }, () => ({
       content: generateDiagramMarkdown(model),
       filename: `${getExportFileStem()}.schema.md`,
-      format: 'markdown',
+      format: sdkExportFormatByValue.markdown,
       mediaType: 'text/markdown',
       warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
     }));
@@ -1140,10 +1265,10 @@ export function EditorPage() {
       return;
     }
 
-    const payload = await resolveDiagramExport({ format: 'svg' }, () => ({
+    const payload = await resolveDiagramExport({ format: sdkExportFormatByValue.svg }, () => ({
       content: generateDiagramSvg(model),
       filename: `${getExportFileStem()}.diagram.svg`,
-      format: 'svg',
+      format: sdkExportFormatByValue.svg,
       mediaType: 'image/svg+xml',
       warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
     }));
@@ -1199,8 +1324,11 @@ export function EditorPage() {
     // Import melewati backend agar validasi, update diagram_documents, dan bentuk response-nya sama dengan SDK publik.
     await importDiagramMutation.mutateAsync({
       body: {
-        ...importRequest,
-        mode: 'replace',
+        content: importRequest.content,
+        dialect: importRequest.dialect ? sdkDialectByValue[importRequest.dialect] : undefined,
+        // Enum generated dipakai di boundary SDK supaya perubahan OpenAPI akan dikomplain saat compile.
+        mode: SdkImportMode.Replace,
+        source: sdkImportSourceByValue[importRequest.source],
       },
       diagramId: activeDiagram.id,
     });
@@ -1929,7 +2057,7 @@ function updateLiveModelFromDiagram(
 ): DiagramModel {
   const nextModel = {
     ...currentModel,
-    dialect: diagram.dialect,
+    dialect: toDatabaseDialect(diagram.dialect),
     metadata: {
       ...currentModel.metadata,
       // Diagram metadata follows the server record immediately; version history is created only by the Snapshot action.
@@ -2766,7 +2894,7 @@ function CommentsDialog({
     }
 
     reviewActionMutation.mutate({
-      body: { action },
+      body: { action: sdkDiagramReviewActionByValue[action] },
       diagramId,
     });
   }
@@ -5020,20 +5148,21 @@ function WorkspaceSettingsDialog({
     updateSettingsMutation.mutate({
       body: {
         allowMemberProjectCreate: values.allowMemberProjectCreate,
-        defaultProjectRole: values.defaultProjectRole === 'none' ? null : values.defaultProjectRole,
+        defaultProjectRole:
+          values.defaultProjectRole === 'none' ? null : sdkDefaultProjectRoleByValue[values.defaultProjectRole],
         name: values.name,
       },
       organizationId: project.organizationId,
     });
   }
 
-  function handleUpdateWorkspaceMemberRole(member: OrganizationMemberDto, role: OrganizationRole) {
+  function handleUpdateWorkspaceMemberRole(member: OrganizationMemberDto, role: OrganizationRoleValue) {
     if (member.role === role) {
       return;
     }
 
     updateMemberMutation.mutate({
-      body: { role },
+      body: { role: sdkOrganizationMemberRoleByValue[role] },
       organizationId: project.organizationId,
       userId: member.userId,
     });
@@ -5113,7 +5242,7 @@ function WorkspaceSettingsDialog({
     upsertTeamProjectAccessMutation.mutate({
       body: {
         projectId: values.projectId,
-        role: values.role as TeamProjectRole,
+        role: sdkTeamProjectRoleByValue[values.role as TeamProjectRole],
       },
       organizationId: project.organizationId,
       teamId: selectedTeam.id,
@@ -5140,7 +5269,7 @@ function WorkspaceSettingsDialog({
     upsertTeamProjectAccessMutation.mutate({
       body: {
         projectId: access.projectId,
-        role,
+        role: sdkTeamProjectRoleByValue[role],
       },
       organizationId: project.organizationId,
       teamId: selectedTeam.id,
@@ -5812,7 +5941,7 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
     addProjectMemberMutation.mutate({
       body: {
         email: values.email,
-        role: values.role,
+        role: sdkProjectMemberRoleByValue[values.role],
       },
       projectId: project.id,
     });
@@ -5825,13 +5954,13 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
     });
   }
 
-  function handleUpdateMemberRole(member: ProjectMemberDto, role: ProjectRole) {
+  function handleUpdateMemberRole(member: ProjectMemberDto, role: ProjectRoleValue) {
     if (member.role === role) {
       return;
     }
 
     updateProjectMemberMutation.mutate({
-      body: { role },
+      body: { role: sdkProjectMemberRoleByValue[role] },
       projectId: project.id,
       userId: member.userId,
     });
@@ -6134,7 +6263,7 @@ function DiagramSettingsDialog({
 
     const updatedDiagram = await updateDiagramMutation.mutateAsync({
       body: {
-        dialect: values.dialect,
+        dialect: sdkDialectByValue[values.dialect],
         name: values.name,
       },
       diagramId: diagram.id,
@@ -6338,22 +6467,22 @@ function getDiagramSettingsDefaults(
   reviewSettings?: ReviewSignalEffectiveSettingsDto,
 ): DiagramSettingsFormState {
   return {
-    dialect: diagram.dialect,
-    disabledRuleKeys: reviewSettings?.diagram.disabledRuleKeys ?? [],
+    dialect: toDatabaseDialect(diagram.dialect),
+    disabledRuleKeys: reviewSettings?.diagram.disabledRuleKeys.map(toDiagramReviewSignalCode) ?? [],
     name: diagram.name,
   };
 }
 
 function getReviewSignalSettingsDefaults(settings?: ReviewSignalSettingsDto): ReviewSignalSettingsFormState {
   return {
-    disabledRuleKeys: settings?.disabledRuleKeys ?? [],
+    disabledRuleKeys: settings?.disabledRuleKeys?.map(toDiagramReviewSignalCode) ?? [],
   };
 }
 
 function toReviewSignalSettingsDto(values: ReviewSignalSettingsFormState): ReviewSignalSettingsDto {
   return {
     // Duplicate keys can happen if a custom script mutates form state; normalizing here keeps payloads deterministic.
-    disabledRuleKeys: Array.from(new Set(values.disabledRuleKeys)),
+    disabledRuleKeys: Array.from(new Set(values.disabledRuleKeys)).map((ruleKey) => sdkDisabledRuleKeyByValue[ruleKey]),
   };
 }
 
@@ -6370,7 +6499,9 @@ function getWorkspaceSettingsDefaults(
 ): WorkspaceSettingsFormState {
   return {
     allowMemberProjectCreate: settings?.allowMemberProjectCreate ?? true,
-    defaultProjectRole: settings?.defaultProjectRole ?? 'none',
+    defaultProjectRole: settings?.defaultProjectRole
+      ? toWorkspaceDefaultProjectRole(settings.defaultProjectRole)
+      : 'none',
     name: settings?.name ?? project.organizationName,
   };
 }
@@ -6514,7 +6645,7 @@ function ProjectMemberRow({
   isUpdating: boolean;
   member: ProjectMemberDto;
   onRemove: (member: ProjectMemberDto) => void;
-  onRoleChange: (member: ProjectMemberDto, role: ProjectRole) => void;
+  onRoleChange: (member: ProjectMemberDto, role: ProjectRoleValue) => void;
 }) {
   const isBusy = isRemoving || isUpdating;
 
@@ -6533,7 +6664,7 @@ function ProjectMemberRow({
       <Select
         className={selectClassName}
         disabled={isBusy}
-        onValueChange={(role) => onRoleChange(member, role as ProjectRole)}
+        onValueChange={(role) => onRoleChange(member, toProjectRoleValue(role as SdkProjectMemberRole))}
         options={projectRoleOptions.map((role) => ({
           label: formatProjectRole(role),
           value: role,
@@ -6566,7 +6697,7 @@ function OrganizationMemberRow({
   isUpdating: boolean;
   member: OrganizationMemberDto;
   onRemove: (member: OrganizationMemberDto) => void;
-  onRoleChange: (member: OrganizationMemberDto, role: OrganizationRole) => void;
+  onRoleChange: (member: OrganizationMemberDto, role: OrganizationRoleValue) => void;
 }) {
   const isBusy = isRemoving || isUpdating;
 
@@ -6585,7 +6716,7 @@ function OrganizationMemberRow({
       <Select
         className={selectClassName}
         disabled={isBusy}
-        onValueChange={(role) => onRoleChange(member, role as OrganizationRole)}
+        onValueChange={(role) => onRoleChange(member, toOrganizationRoleValue(role as SdkOrganizationMemberRole))}
         options={organizationRoleOptions.map((role) => ({
           label: formatOrganizationRole(role),
           value: role,
@@ -6607,7 +6738,7 @@ function OrganizationMemberRow({
   );
 }
 
-function ProjectRoleBadge({ role }: { role: ProjectRole }) {
+function ProjectRoleBadge({ role }: { role: ProjectRoleValue }) {
   if (role === ProjectRole.Owner) {
     return <Badge variant="yellow">{formatProjectRole(role)}</Badge>;
   }
@@ -6623,7 +6754,7 @@ function ProjectRoleBadge({ role }: { role: ProjectRole }) {
   return <Badge>{formatProjectRole(role)}</Badge>;
 }
 
-function OrganizationRoleBadge({ role }: { role: OrganizationRole }) {
+function OrganizationRoleBadge({ role }: { role: OrganizationRoleValue }) {
   if (role === OrganizationRole.Owner) {
     return <Badge variant="yellow">{formatOrganizationRole(role)}</Badge>;
   }
@@ -6639,7 +6770,7 @@ function OrganizationRoleBadge({ role }: { role: OrganizationRole }) {
   return <Badge>{formatOrganizationRole(role)}</Badge>;
 }
 
-function formatProjectRole(role: ProjectRole): string {
+function formatProjectRole(role: ProjectRoleValue): string {
   return {
     [ProjectRole.Commenter]: 'Commenter',
     [ProjectRole.Editor]: 'Editor',
@@ -6658,7 +6789,7 @@ function formatDiagramDialect(dialect: DatabaseDialect): string {
   }[dialect];
 }
 
-function formatOrganizationRole(role: OrganizationDto['role']): string {
+function formatOrganizationRole(role: OrganizationRoleValue): string {
   return {
     [OrganizationRole.Admin]: 'Admin',
     [OrganizationRole.Guest]: 'Guest',
@@ -6671,7 +6802,7 @@ function isOrganizationManager(organization: OrganizationDto): boolean {
   return organization.role === 'owner' || organization.role === 'admin';
 }
 
-function hasProjectPermission(role: ProjectRole, permission: Permission): boolean {
+function hasProjectPermission(role: ProjectRoleValue, permission: Permission): boolean {
   return isGranted({
     current: permissionsForProjectRole(role),
     requested: [permission],
@@ -6914,7 +7045,7 @@ function readMetadataBoolean(metadata: Record<string, unknown>, key: string): bo
 
 function formatProjectRoleValue(role: string): string {
   if (Object.values(ProjectRole).includes(role as ProjectRole)) {
-    return formatProjectRole(role as ProjectRole);
+    return formatProjectRole(role as ProjectRoleValue);
   }
 
   return role;
@@ -6922,7 +7053,7 @@ function formatProjectRoleValue(role: string): string {
 
 function formatOrganizationRoleValue(role: string): string {
   if (Object.values(OrganizationRole).includes(role as OrganizationRole)) {
-    return formatOrganizationRole(role as OrganizationRole);
+    return formatOrganizationRole(role as OrganizationRoleValue);
   }
 
   return role;
