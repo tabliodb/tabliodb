@@ -195,11 +195,11 @@ export function generateCreateSchemaSqlWithWarnings(
     ),
     ...renderIndexStatements(normalizedModel, dialect),
     ...(includeComments ? renderCommentStatements(normalizedModel, dialect) : []),
-  ];
+  ].filter(Boolean);
 
   return {
     // The generator returns a stable, reviewable SQL script with blank lines between logical schema sections.
-    sql: `${statements.filter(Boolean).join('\n\n')}\n`,
+    sql: statements.length > 0 ? `${statements.join('\n\n')}\n` : '-- No SQL objects defined in this diagram yet.\n',
     warnings: getSqlGenerationWarnings(normalizedModel, options),
   };
 }
@@ -288,6 +288,14 @@ export function getSqlGenerationWarnings(model: DiagramModel, options: GenerateS
     }
 
     for (const column of getTableColumns(normalizedModel, table.id)) {
+      if (column.autoIncrement && !renderAutoIncrementKeyword(column, dialect)) {
+        warnings.push({
+          code: 'auto_increment_not_supported',
+          message: `${dialect} export cannot emit auto increment for "${table.name}.${column.name}" with type "${renderType(column.type, normalizedModel, dialect)}".`,
+          target: { id: column.id, type: 'column' },
+        });
+      }
+
       if (column.unsigned && !definition.supportsUnsigned) {
         warnings.push({
           code: 'unsigned_not_supported',
@@ -328,6 +336,22 @@ export function getSqlGenerationWarnings(model: DiagramModel, options: GenerateS
   }
 
   for (const relationship of Object.values(normalizedModel.relationships)) {
+    if (relationship.sourceColumnIds.length !== relationship.targetColumnIds.length) {
+      warnings.push({
+        code: 'relationship_column_count_mismatch',
+        message: `Relationship "${relationship.name ?? relationship.id}" has ${relationship.sourceColumnIds.length} source columns but ${relationship.targetColumnIds.length} target columns, so it cannot be emitted as a foreign key.`,
+        target: { id: relationship.id, type: 'relationship' },
+      });
+    }
+
+    if (!isRelationshipMatchTypeSupported(relationship, dialect)) {
+      warnings.push({
+        code: 'match_type_not_supported',
+        message: `${dialect} export ignores match type "${relationship.matchType}" on relationship "${relationship.name ?? relationship.id}".`,
+        target: { id: relationship.id, type: 'relationship' },
+      });
+    }
+
     if (relationship.deferrable && !definition.supportsDeferrableConstraints) {
       warnings.push({
         code: 'deferrable_not_supported',
@@ -2130,6 +2154,23 @@ function renderRelationshipAddChangeMigrationStatements(
       return [];
     }
 
+    if (relationship.sourceColumnIds.length !== relationship.targetColumnIds.length) {
+      warnings.push({
+        code: 'relationship_column_count_mismatch',
+        message: `Relationship "${relationship.name ?? relationship.id}" has ${relationship.sourceColumnIds.length} source columns but ${relationship.targetColumnIds.length} target columns, so it cannot be emitted as a foreign key.`,
+        target: { id: relationship.id, type: 'relationship' },
+      });
+      return [];
+    }
+
+    if (!isRelationshipMatchTypeSupported(relationship, dialect)) {
+      warnings.push({
+        code: 'match_type_not_supported',
+        message: `${dialect} migration preview ignores match type "${relationship.matchType}" on relationship "${relationship.name ?? relationship.id}".`,
+        target: { id: relationship.id, type: 'relationship' },
+      });
+    }
+
     return renderForeignKeyConstraint(to, relationship, dialect).map((constraint) => {
       const targetTable = to.tables[relationship.targetTableId]!;
 
@@ -2271,8 +2312,9 @@ function renderColumn(
   const parts = [
     quoteIdentifier(column.name, dialect),
     renderType(column.type, model, dialect),
+    renderColumnCollation(column),
     column.unsigned && definition.supportsUnsigned ? 'UNSIGNED' : undefined,
-    column.autoIncrement && definition.autoIncrementKeyword ? definition.autoIncrementKeyword : undefined,
+    renderAutoIncrementKeyword(column, dialect),
     column.primaryKey && options.renderInlinePrimaryKey ? 'PRIMARY KEY' : undefined,
     column.nullable ? undefined : 'NOT NULL',
     column.unique && options.renderInlineUnique ? 'UNIQUE' : undefined,
@@ -2297,6 +2339,27 @@ function shouldRenderInlineUnique(model: DiagramModel, column: DatabaseColumn): 
 
   // If the user has a named unique index for this column, the index statement owns the SQL instead of duplicating UNIQUE inline.
   return !hasNamedSingleColumnUniqueIndex;
+}
+
+function renderColumnCollation(column: DatabaseColumn): string | undefined {
+  const collation = column.collation?.trim();
+
+  // Collation is intentionally treated as a SQL fragment, just like default/check expressions, because dialects use different naming rules.
+  return collation ? `COLLATE ${collation}` : undefined;
+}
+
+function renderAutoIncrementKeyword(column: DatabaseColumn, dialect: SqlDialect): string | undefined {
+  if (!column.autoIncrement || !isAutoIncrementColumnType(column.type)) {
+    return undefined;
+  }
+
+  const definition: DialectDefinition = sqlDialectRegistry[dialect];
+
+  return definition.autoIncrementKeyword;
+}
+
+function isAutoIncrementColumnType(type: ColumnTypeSpec): boolean {
+  return type.family === 'integer' || type.family === 'bigint';
 }
 
 function renderCompositePrimaryKey(columns: DatabaseColumn[], table: DatabaseTable, dialect: SqlDialect): string {
@@ -2345,9 +2408,7 @@ function renderForeignKeyConstraint(
     `CONSTRAINT ${quoteIdentifier(relationship.name ?? `${targetTable.name}_${targetColumnNames.join('_')}_fkey`, dialect)}`,
     `FOREIGN KEY (${targetColumns.join(', ')})`,
     `REFERENCES ${renderTableName(sourceTable, dialect)} (${sourceColumns.join(', ')})`,
-    relationship.matchType && relationship.matchType !== 'simple' && dialect === 'postgresql'
-      ? `MATCH ${relationship.matchType.toUpperCase()}`
-      : undefined,
+    renderRelationshipMatchType(relationship, dialect),
     relationship.onDelete ? `ON DELETE ${renderReferentialAction(relationship.onDelete)}` : undefined,
     relationship.onUpdate ? `ON UPDATE ${renderReferentialAction(relationship.onUpdate)}` : undefined,
     relationship.deferrable && sqlDialectRegistry[dialect].supportsDeferrableConstraints ? 'DEFERRABLE' : undefined,
@@ -2895,4 +2956,25 @@ function quoteStringLiteral(value: string): string {
 
 function renderReferentialAction(action: NonNullable<DatabaseRelationship['onDelete']>): string {
   return action.replaceAll('_', ' ').toUpperCase();
+}
+
+function renderRelationshipMatchType(relationship: DatabaseRelationship, dialect: SqlDialect): string | undefined {
+  if (!relationship.matchType || relationship.matchType === 'simple') {
+    return undefined;
+  }
+
+  if (isRelationshipMatchTypeSupported(relationship, dialect)) {
+    return `MATCH ${relationship.matchType.toUpperCase()}`;
+  }
+
+  return undefined;
+}
+
+function isRelationshipMatchTypeSupported(relationship: DatabaseRelationship, dialect: SqlDialect): boolean {
+  if (!relationship.matchType || relationship.matchType === 'simple') {
+    return true;
+  }
+
+  // PostgreSQL supports MATCH FULL in regular foreign-key DDL; MATCH PARTIAL is intentionally treated as unsupported here.
+  return dialect === 'postgresql' && relationship.matchType === 'full';
 }
