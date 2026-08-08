@@ -1,12 +1,24 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, FieldError, Surface } from '@tabliodb/ui';
-import { Database, Loader2 } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { Badge, Button, FieldError, Surface, type InputProps, cn } from '@tabliodb/ui';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  CheckCircle2,
+  Database,
+  Globe2,
+  Loader2,
+  LockKeyhole,
+  Mail,
+  UserRound,
+} from 'lucide-react';
+import { useMemo, useState, type ComponentType } from 'react';
+import { useForm, type SubmitErrorHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ControlledInput } from '@/features/app/FormControls';
-import { getErrorMessage } from '@/features/app/RouteStates';
+import { InlineErrorState } from '@/features/app/RouteStates';
 import { useCompleteSetupMutation } from '@/resources/setup';
 
 const setupFormSchema = z.object({
@@ -18,6 +30,76 @@ const setupFormSchema = z.object({
 });
 
 type SetupFormState = z.infer<typeof setupFormSchema>;
+type SetupFieldName = keyof SetupFormState;
+type SetupStep = {
+  autoComplete: string;
+  description: string;
+  helper: string;
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  name: SetupFieldName;
+  placeholder: string;
+  title: string;
+  type?: InputProps['type'];
+};
+
+const setupSteps: readonly SetupStep[] = [
+  {
+    autoComplete: 'name',
+    description: 'This account becomes the first instance owner and can manage users, auth settings, and workspaces.',
+    helper: 'Use a real person name so audit logs stay readable later.',
+    icon: UserRound,
+    label: 'Owner name',
+    name: 'ownerName',
+    placeholder: 'Tabliodb Owner',
+    title: 'Who will own this instance?',
+  },
+  {
+    autoComplete: 'email',
+    description: 'This email is used to sign in and receive future admin-related messages.',
+    helper: 'For self-hosting, prefer an email that belongs to your team or company.',
+    icon: Mail,
+    label: 'Owner email',
+    name: 'ownerEmail',
+    placeholder: 'owner@company.com',
+    title: 'Where should the owner sign in?',
+    type: 'email',
+  },
+  {
+    autoComplete: 'new-password',
+    description: 'Create the first password for the owner account. You can rotate it later from user management.',
+    helper: 'Use at least 8 characters. A password manager is the tidy path here.',
+    icon: LockKeyhole,
+    label: 'Owner password',
+    name: 'ownerPassword',
+    placeholder: 'Minimum 8 characters',
+    title: 'Secure the owner account',
+    type: 'password',
+  },
+  {
+    autoComplete: 'organization',
+    description: 'A workspace groups users, projects, teams, diagrams, and access policy.',
+    helper: 'This does not rename the product. The app stays Tabliodb; this only names the first workspace.',
+    icon: Building2,
+    label: 'Workspace name',
+    name: 'workspaceName',
+    placeholder: 'Personal Workspace',
+    title: 'Name the first workspace',
+  },
+  {
+    autoComplete: 'url',
+    description: 'Tabliodb uses this URL to build links such as invitations and password recovery.',
+    helper: 'For local development, the browser URL is fine. In production, use your real HTTPS domain.',
+    icon: Globe2,
+    label: 'Public URL',
+    name: 'publicUrl',
+    placeholder: 'https://tabliodb.company.com',
+    title: 'What URL will people use?',
+    type: 'url',
+  },
+];
+
+const totalStepCount = setupSteps.length + 1;
 
 function getSetupDefaults(): SetupFormState {
   return {
@@ -44,13 +126,17 @@ function isOptionalUrl(value: string): boolean {
 
 export function SetupPage() {
   const navigate = useNavigate();
+  const [stepIndex, setStepIndex] = useState(0);
   const form = useForm<SetupFormState>({
     defaultValues: getSetupDefaults(),
     mode: 'onBlur',
     resolver: zodResolver(setupFormSchema),
   });
   const { errors } = form.formState;
-
+  const values = form.watch();
+  const isReviewStep = stepIndex === setupSteps.length;
+  const currentStep = isReviewStep ? null : setupSteps[stepIndex];
+  const progressPercent = Math.round(((stepIndex + 1) / totalStepCount) * 100);
   const setupMutation = useCompleteSetupMutation({
     mutationConfig: {
       onSuccess: () => {
@@ -59,109 +145,227 @@ export function SetupPage() {
       },
     },
   });
+  const reviewItems = useMemo(
+    () => [
+      { label: 'Owner', value: values.ownerName || 'Not set' },
+      { label: 'Email', value: values.ownerEmail || 'Not set' },
+      { label: 'Password', value: values.ownerPassword ? 'Hidden after setup' : 'Not set' },
+      { label: 'Workspace', value: values.workspaceName || 'Not set' },
+      { label: 'Public URL', value: values.publicUrl || 'Server default' },
+    ],
+    [values.ownerEmail, values.ownerName, values.ownerPassword, values.publicUrl, values.workspaceName],
+  );
+
+  async function handlePrimaryAction() {
+    if (!isReviewStep && currentStep) {
+      // Wizard validates only the current field on Next, so users fix one clear problem at a time.
+      const isStepValid = await form.trigger(currentStep.name, { shouldFocus: true });
+
+      if (!isStepValid) {
+        return;
+      }
+
+      setStepIndex((current) => Math.min(current + 1, totalStepCount - 1));
+      return;
+    }
+
+    await form.handleSubmit(handleSubmit, handleInvalidSubmit)();
+  }
+
+  function handleBack() {
+    setStepIndex((current) => Math.max(current - 1, 0));
+  }
+
+  function handleSubmit(valuesToSubmit: SetupFormState) {
+    setupMutation.mutate({
+      ownerEmail: valuesToSubmit.ownerEmail,
+      ownerName: valuesToSubmit.ownerName,
+      ownerPassword: valuesToSubmit.ownerPassword,
+      publicUrl: valuesToSubmit.publicUrl.trim() || undefined,
+      workspaceName: valuesToSubmit.workspaceName,
+    });
+  }
+
+  const handleInvalidSubmit: SubmitErrorHandler<SetupFormState> = (invalidFields) => {
+    const firstInvalidStepIndex = setupSteps.findIndex((step) => Boolean(invalidFields[step.name]));
+
+    // Final review can still catch stale invalid fields if a browser autofill or edit changed a previous value.
+    if (firstInvalidStepIndex >= 0) {
+      setStepIndex(firstInvalidStepIndex);
+    }
+  };
+
+  const StepIcon = currentStep?.icon ?? CheckCircle2;
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 py-10 text-[rgb(var(--tabliodb-ink))]">
-      <Surface className="w-full max-w-lg p-5" depth="md">
-        <form
-          onSubmit={form.handleSubmit((values) =>
-            setupMutation.mutate({
-              ownerEmail: values.ownerEmail,
-              ownerName: values.ownerName,
-              ownerPassword: values.ownerPassword,
-              publicUrl: values.publicUrl.trim() || undefined,
-              workspaceName: values.workspaceName,
-            }),
-          )}
-        >
-          <div className="mb-5 flex items-center gap-2">
-            <div className="grid size-10 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+    <main className="grid min-h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-4 py-8 text-[rgb(var(--tabliodb-ink))] sm:px-6">
+      <Surface className="grid w-full max-w-5xl overflow-hidden p-0 md:grid-cols-[320px_minmax(0,1fr)]" depth="md">
+        <aside className="border-b border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-5 md:border-b-0 md:border-r">
+          <div className="flex items-center gap-3">
+            <div className="grid size-11 place-items-center rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]">
               <Database className="size-5" />
             </div>
             <div>
               <h1 className="text-base font-extrabold">Tabliodb</h1>
-              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Set up this instance</p>
+              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Instance setup wizard</p>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Owner name
+
+          <div className="mt-7">
+            <div className="mb-2 flex items-center justify-between text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              <span>
+                Step {stepIndex + 1} of {totalStepCount}
               </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.ownerName)}
-                autoComplete="name"
-                control={form.control}
-                disabled={setupMutation.isPending}
-                name="ownerName"
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full border border-[rgb(var(--tabliodb-primary-border))] bg-white">
+              <div
+                className="h-full rounded-full bg-[rgb(var(--tabliodb-primary))] transition-[width]"
+                style={{ width: `${progressPercent}%` }}
               />
-              <FieldError>{errors.ownerName?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Owner email
-              </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.ownerEmail)}
-                autoComplete="email"
-                control={form.control}
-                disabled={setupMutation.isPending}
-                name="ownerEmail"
-                type="email"
-              />
-              <FieldError>{errors.ownerEmail?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Password
-              </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.ownerPassword)}
-                autoComplete="new-password"
-                control={form.control}
-                disabled={setupMutation.isPending}
-                name="ownerPassword"
-                type="password"
-              />
-              <FieldError>{errors.ownerPassword?.message}</FieldError>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Workspace
-              </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.workspaceName)}
-                autoComplete="organization"
-                control={form.control}
-                disabled={setupMutation.isPending}
-                name="workspaceName"
-              />
-              <FieldError>{errors.workspaceName?.message}</FieldError>
-            </label>
+            </div>
           </div>
-          <label className="mt-3 block text-sm">
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Public URL
-            </span>
-            <ControlledInput
-              aria-invalid={Boolean(errors.publicUrl)}
-              autoComplete="url"
-              control={form.control}
+
+          <ol className="mt-6 grid gap-2">
+            {setupSteps.map((step, index) => (
+              <li
+                className={cn(
+                  'flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-xs font-extrabold transition',
+                  index === stepIndex
+                    ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
+                    : index < stepIndex
+                      ? 'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]'
+                      : 'border-transparent bg-white text-[rgb(var(--tabliodb-ink-muted))]',
+                )}
+                key={step.name}
+              >
+                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white">
+                  {index < stepIndex ? <CheckCircle2 className="size-4" /> : index + 1}
+                </span>
+                <span className="min-w-0 truncate">{step.label}</span>
+              </li>
+            ))}
+            <li
+              className={cn(
+                'flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-xs font-extrabold transition',
+                isReviewStep
+                  ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
+                  : 'border-transparent bg-white text-[rgb(var(--tabliodb-ink-muted))]',
+              )}
+            >
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white">
+                {isReviewStep ? totalStepCount : <CheckCircle2 className="size-4" />}
+              </span>
+              <span>Review</span>
+            </li>
+          </ol>
+        </aside>
+
+        <form
+          className="grid min-h-[520px] grid-rows-[1fr_auto] p-5 sm:p-7"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handlePrimaryAction();
+          }}
+        >
+          <section className="grid content-center gap-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="grid size-14 place-items-center rounded-[22px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))] shadow-[0_3px_0_rgb(var(--tabliodb-sky-border))]">
+                <StepIcon className="size-7" />
+              </div>
+              <Badge variant={isReviewStep ? 'green' : 'blue'}>{isReviewStep ? 'Ready' : 'Setup'}</Badge>
+            </div>
+
+            {currentStep ? (
+              <div className="max-w-xl">
+                <p className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
+                  {currentStep.label}
+                </p>
+                <h2 className="mt-2 text-3xl font-extrabold leading-tight tracking-normal text-[rgb(var(--tabliodb-ink))]">
+                  {currentStep.title}
+                </h2>
+                <p className="mt-3 text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink-muted))]">
+                  {currentStep.description}
+                </p>
+
+                <label className="mt-7 block">
+                  <span className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    {currentStep.label}
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(errors[currentStep.name])}
+                    autoComplete={currentStep.autoComplete}
+                    autoFocus
+                    className="h-14 rounded-[18px] px-4 text-[16px] font-extrabold"
+                    control={form.control}
+                    disabled={setupMutation.isPending}
+                    name={currentStep.name}
+                    placeholder={currentStep.placeholder}
+                    type={currentStep.type}
+                  />
+                  <FieldError>{errors[currentStep.name]?.message}</FieldError>
+                </label>
+
+                <p className="mt-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] px-3 py-2 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                  {currentStep.helper}
+                </p>
+              </div>
+            ) : (
+              <div className="max-w-xl">
+                <p className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
+                  Review
+                </p>
+                <h2 className="mt-2 text-3xl font-extrabold leading-tight tracking-normal text-[rgb(var(--tabliodb-ink))]">
+                  Check the first owner and workspace
+                </h2>
+                <p className="mt-3 text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink-muted))]">
+                  This creates the first admin account, the first workspace, and the starter project used by the editor.
+                </p>
+
+                <div className="mt-7 grid gap-2">
+                  {reviewItems.map((item) => (
+                    <div
+                      className="grid gap-1 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] px-4 py-3 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center"
+                      key={item.label}
+                    >
+                      <span className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                        {item.label}
+                      </span>
+                      <span className="min-w-0 truncate text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">
+                        {item.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {setupMutation.error ? (
+              <InlineErrorState error={setupMutation.error} title="Setup failed" />
+            ) : null}
+          </section>
+
+          <footer className="mt-7 flex flex-col-reverse gap-3 border-t border-[rgb(var(--tabliodb-border))] pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <Button disabled={stepIndex === 0 || setupMutation.isPending} onClick={handleBack} variant="secondary">
+              <ArrowLeft className="size-4" />
+              Back
+            </Button>
+            <Button
+              className="gap-2"
               disabled={setupMutation.isPending}
-              name="publicUrl"
-              type="url"
-            />
-            <FieldError>{errors.publicUrl?.message}</FieldError>
-          </label>
-          {setupMutation.error ? (
-            <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-              {getErrorMessage(setupMutation.error)}
-            </div>
-          ) : null}
-          <Button className="mt-5 w-full gap-2" disabled={setupMutation.isPending} type="submit">
-            {setupMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
-            Create owner and workspace
-          </Button>
+              type="submit"
+              variant={isReviewStep ? 'primary' : 'sky'}
+            >
+              {setupMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : isReviewStep ? (
+                <Database className="size-4" />
+              ) : (
+                <ArrowRight className="size-4" />
+              )}
+              {isReviewStep ? 'Create owner and workspace' : 'Next'}
+            </Button>
+          </footer>
         </form>
       </Surface>
     </main>
