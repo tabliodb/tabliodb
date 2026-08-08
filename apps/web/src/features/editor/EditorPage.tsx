@@ -99,6 +99,7 @@ import {
   Bell,
   Building2,
   Check,
+  ChevronDown,
   ChevronsUpDown,
   CircleCheck,
   CircleDot,
@@ -4703,6 +4704,7 @@ function DiagramTablesSidebar({
   selectedTableId: string | null;
 }) {
   const [tableSearchTerm, setTableSearchTerm] = useState('');
+  const listRef = useRef<HTMLDivElement | null>(null);
   const tables = useMemo(
     () => Object.values(model.tables).sort((left, right) => left.name.localeCompare(right.name)),
     [model.tables],
@@ -4721,6 +4723,26 @@ function DiagramTablesSidebar({
       : tables;
   }, [model.groups, tableSearchTerm, tables]);
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
+  const visibleTables = useMemo(() => {
+    if (!selectedTable || filteredTables.some((table) => table.id === selectedTable.id)) {
+      return filteredTables;
+    }
+
+    // Table yang dipilih dari canvas tetap tampil walau search term sedang memfilter list agar user tidak kehilangan konteks.
+    return [selectedTable, ...filteredTables];
+  }, [filteredTables, selectedTable]);
+
+  useEffect(() => {
+    if (!selectedTableId) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      listRef.current
+        ?.querySelector<HTMLElement>(`[data-tabliodb-table-item-id="${CSS.escape(selectedTableId)}"]`)
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }, [selectedTableId, visibleTables.length]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -4754,96 +4776,109 @@ function DiagramTablesSidebar({
         </div>
       </div>
 
-      <div
-        className={cn(
-          'tabliodb-scrollbar min-h-0 overflow-y-auto',
-          selectedTable ? 'max-h-[32dvh] shrink-0 border-b border-[rgb(var(--tabliodb-border))]' : 'flex-1',
-        )}
-      >
-        <div className="grid gap-1 p-2">
-          {filteredTables.length === 0 ? (
+      <div ref={listRef} className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto">
+        <div className="grid gap-2 p-2">
+          {visibleTables.length === 0 ? (
             <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
               No matching tables
             </div>
           ) : (
-            filteredTables.map((table) => (
-              <TableListButton
+            visibleTables.map((table) => (
+              <TableAccordionItem
                 key={table.id}
                 model={model}
-                onSelect={() => onTableSelect(table.id)}
+                onClearTableSelection={onClearTableSelection}
+                onColumnSelect={onColumnSelect}
+                onModelChange={onModelChange}
+                onSelect={() => (table.id === selectedTable?.id ? onClearTableSelection() : onTableSelect(table.id))}
+                readOnly={readOnly}
                 selected={table.id === selectedTable?.id}
+                selectedColumnId={selectedColumnId}
                 table={table}
               />
             ))
           )}
         </div>
       </div>
-
-      {selectedTable ? (
-        <div className="min-h-0 flex-1">
-          <TableStructureSidebar
-            activeColumnId={selectedColumnId}
-            model={model}
-            onClearTableSelection={onClearTableSelection}
-            onColumnSelect={onColumnSelect}
-            onHide={onHide}
-            onModelChange={onModelChange}
-            readOnly={readOnly}
-            selectedTableId={selectedTable.id}
-            showHeader={false}
-          />
-        </div>
-      ) : (
-        <div className="grid min-h-0 flex-1 place-items-center p-5 text-center">
-          <div>
-            <div className="mx-auto grid size-12 place-items-center rounded-[18px] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
-              <Database className="size-5" />
-            </div>
-            <p className="mt-3 text-sm font-extrabold">Select a table</p>
-            <p className="mt-1 text-xs font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-              Pick a table from the list or click one on the canvas to edit its structure.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function TableListButton({
+function TableAccordionItem({
   model,
+  onClearTableSelection,
+  onColumnSelect,
+  onModelChange,
   onSelect,
+  readOnly,
   selected,
+  selectedColumnId,
   table,
 }: {
   model: DiagramModel;
+  onClearTableSelection: () => void;
+  onColumnSelect?: (columnId: string) => void;
+  onModelChange: (model: DiagramModel) => void;
   onSelect: () => void;
+  readOnly: boolean;
   selected: boolean;
+  selectedColumnId: string | null;
   table: DatabaseTable;
 }) {
   const columnCount = getTableColumns(model, table.id).length;
   const group = table.groupId ? model.groups[table.groupId] : null;
 
   return (
-    <button
+    <article
       className={cn(
-        'flex min-h-13 w-full cursor-pointer items-center gap-2.5 rounded-[var(--tabliodb-radius-md)] border px-2.5 py-2 text-left transition',
+        'overflow-hidden rounded-[var(--tabliodb-radius-lg)] border bg-white transition',
         selected
-          ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))] shadow-[inset_3px_0_0_rgb(var(--tabliodb-primary)),0_2px_0_rgb(var(--tabliodb-border))]'
+          ? 'border-[rgb(var(--tabliodb-active-chip-border))] shadow-[0_2px_0_rgb(var(--tabliodb-border))]'
           : 'border-transparent hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
       )}
-      onClick={onSelect}
-      type="button"
+      data-tabliodb-table-item-id={table.id}
     >
-      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: getDisplayTableColor(table.color) }} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-extrabold leading-5">{table.name}</span>
-        <span className="block truncate text-[11px] font-bold leading-4 text-[rgb(var(--tabliodb-ink-muted))]">
-          {group?.name ?? table.schema ?? 'Main schema'}
+      <button
+        aria-expanded={selected}
+        className="flex min-h-13 w-full cursor-pointer items-center gap-2.5 px-2.5 py-2 text-left transition"
+        onClick={onSelect}
+        type="button"
+      >
+        <span
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: getDisplayTableColor(table.color) }}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-extrabold leading-5">{table.name}</span>
+          <span className="block truncate text-[11px] font-bold leading-4 text-[rgb(var(--tabliodb-ink-muted))]">
+            {group?.name ?? table.schema ?? 'Main schema'}
+          </span>
         </span>
-      </span>
-      <Badge variant={selected ? 'green' : 'neutral'}>{columnCount}</Badge>
-    </button>
+        <Badge variant={selected ? 'green' : 'neutral'}>{columnCount}</Badge>
+        <ChevronDown
+          className={cn(
+            'size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))] transition-transform',
+            selected ? 'rotate-180 text-[rgb(var(--tabliodb-primary-text))]' : undefined,
+          )}
+        />
+      </button>
+      {selected ? (
+        <div className="border-t border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))]">
+          <TableStructureSidebar
+            activeColumnId={selectedColumnId}
+            model={model}
+            onClearTableSelection={onClearTableSelection}
+            onColumnSelect={onColumnSelect}
+            onHide={() => undefined}
+            onModelChange={onModelChange}
+            readOnly={readOnly}
+            selectedTableId={table.id}
+            showHeader={false}
+            variant="accordion"
+          />
+        </div>
+      ) : null}
+    </article>
   );
 }
 

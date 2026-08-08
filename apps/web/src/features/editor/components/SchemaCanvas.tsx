@@ -9,6 +9,7 @@ import {
 } from '@antv/x6';
 import {
   applyDiagramCommand,
+  defaultTableMinWidth,
   getRelationshipColumnPairs,
   getTableColumns,
   type DatabaseColumn,
@@ -41,7 +42,7 @@ const tableNodeShape = 'tabliodb-table';
 const noteNodeShape = 'tabliodb-note';
 const groupNodeIdPrefix = 'tabliodb-group:';
 
-const tableNodeWidth = 288; // 288 / 12 = 24 grid units (Pas!)
+const tableNodeWidth = 288; // Default width saat table baru dibuat, bukan batas terkecil saat user resize.
 const tableHeaderHeight = 36; // Disarankan ubah 38 -> 36 (36 / 12 = 3 units)
 const tableColumnHeight = 24; // Disarankan ubah 26 -> 24 (24 / 12 = 2 units)
 const tablePaddingBottom = 12; // Disarankan ubah 6 -> 12 (1 unit)
@@ -52,7 +53,7 @@ const noteNodeDefaultWidth = 264; // Disarankan ubah 260 -> 264 (22 units)
 const noteNodeMinHeight = 120; // Disarankan ubah 118 -> 120 (10 units)
 const noteNodeMaxHeight = 216; // Disarankan ubah 220 -> 216 (18 units)
 const tableResizeMaxWidth = 720; // 720 / 12 = 60 units (Pas!)
-const tableResizeMinWidth = 240; // 240 / 12 = 20 units (Pas!)
+const tableResizeMinWidth = defaultTableMinWidth; // Mengikuti schema-core agar preview canvas dan model tidak berbeda saat resize mentok.
 
 const diagramVisualGridSize = 12;
 const diagramDragGridSize = 12;
@@ -373,10 +374,7 @@ export function SchemaCanvas({
         floatingInsetLeftRef.current + 12,
         Math.max(12, containerRect.width - menuWidth - 12),
       );
-      const safeMaxLeft = Math.max(
-        safeMinLeft,
-        containerRect.width - floatingInsetRightRef.current - menuWidth - 12,
-      );
+      const safeMaxLeft = Math.max(safeMinLeft, containerRect.width - floatingInsetRightRef.current - menuWidth - 12);
 
       setRelationshipMenu({
         left: clamp(event.clientX - containerRect.left - menuWidth / 2, safeMinLeft, safeMaxLeft),
@@ -853,7 +851,15 @@ export function SchemaCanvas({
       fitKeyRef.current = fitKey;
       fitGraphContent(graph);
     }
-  }, [commentTargetSummaries, fitKey, model, readOnly, relationshipMenu?.relationshipId, selectedColumnId, selectedTableId]);
+  }, [
+    commentTargetSummaries,
+    fitKey,
+    model,
+    readOnly,
+    relationshipMenu?.relationshipId,
+    selectedColumnId,
+    selectedTableId,
+  ]);
 
   useEffect(() => {
     const graph = graphRef.current;
@@ -1261,12 +1267,7 @@ function RelationshipQuickEditor({
 function RelationshipEndpointPill({ label, tone }: { label: string; tone: 'source' | 'target' }) {
   return (
     <div className="min-w-0 rounded-[10px] bg-slate-800 px-3 py-2">
-      <span
-        className={cn(
-          'mb-1 block size-1.5 rounded-full',
-          tone === 'source' ? 'bg-pink-400' : 'bg-emerald-400',
-        )}
-      />
+      <span className={cn('mb-1 block size-1.5 rounded-full', tone === 'source' ? 'bg-pink-400' : 'bg-emerald-400')} />
       <span className="block truncate font-mono text-[11px] font-black leading-none text-cyan-200">{label}</span>
     </div>
   );
@@ -2082,9 +2083,7 @@ function createColumnPorts(
       portSides.map((side) => {
         const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2;
 
-        const relatedTerminal = terminals.find(
-          (terminal) => terminal.columnId === column.id && terminal.side === side,
-        );
+        const relatedTerminal = terminals.find((terminal) => terminal.columnId === column.id && terminal.side === side);
         const activeTerminal = terminals.find(
           (terminal) => terminal.active && terminal.columnId === column.id && terminal.side === side,
         );
@@ -2232,7 +2231,7 @@ function refreshTableResizePreview(
 }
 
 function getTableWidth(table: DatabaseTable): number {
-  return Math.max(table.width, tableNodeWidth);
+  return Math.max(table.width, tableResizeMinWidth);
 }
 
 function getNoteWidth(note: DiagramNote): number {
@@ -2488,18 +2487,17 @@ function renderNoteNode(data: NoteNodeData): string {
 
 function renderTableNode(data: TableNodeData): string {
   const rows = data.columns
-    .map((column) =>
-      renderColumnRow(column, data.columnCommentMarkers[column.id], data.selectedColumnId === column.id),
-    )
+    .map((column) => renderColumnRow(column, data.columnCommentMarkers[column.id], data.selectedColumnId === column.id))
     .join('');
   const commentMarker = renderCommentMarker(data.commentMarker, `table ${data.tableName}`, 'table', data.tableId);
   const displayClass = data.columns.length === 0 ? 'is-collapsed' : '';
-  const resizeHandle = data.readOnly || !data.selected
-    ? ''
-    : [
-        '<button aria-label="Resize table from left" class="tabliodb-table-node__resize-zone tabliodb-table-node__resize-zone--left" data-resize-side="left" type="button"></button>',
-        '<button aria-label="Resize table from right" class="tabliodb-table-node__resize-zone tabliodb-table-node__resize-zone--right" data-resize-side="right" type="button"></button>',
-      ].join('');
+  const resizeHandle =
+    data.readOnly || !data.selected
+      ? ''
+      : [
+          '<button aria-label="Resize table from left" class="tabliodb-table-node__resize-zone tabliodb-table-node__resize-zone--left" data-resize-side="left" type="button"></button>',
+          '<button aria-label="Resize table from right" class="tabliodb-table-node__resize-zone tabliodb-table-node__resize-zone--right" data-resize-side="right" type="button"></button>',
+        ].join('');
 
   return `
     <div class="tabliodb-table-node ${data.selected ? 'is-selected' : ''} ${displayClass}" data-tabliodb-table-id="${escapeHtml(data.tableId)}" style="--table-accent: ${escapeHtml(data.color)}">

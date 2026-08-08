@@ -34,7 +34,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { formatColumnType } from '../diagram-model';
 import { getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
@@ -95,6 +95,7 @@ export type TableStructureSidebarProps = {
   readOnly?: boolean;
   selectedTableId: string;
   showHeader?: boolean;
+  variant?: 'panel' | 'accordion';
 };
 
 export function TableStructureSidebar({
@@ -107,9 +108,11 @@ export function TableStructureSidebar({
   readOnly = false,
   selectedTableId,
   showHeader = true,
+  variant = 'panel',
 }: TableStructureSidebarProps) {
   const table = model.tables[selectedTableId] ?? null;
   const columns = useMemo(() => (table ? getTableColumns(model, table.id) : []), [model, table]);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [activeAttributesColumnId, setActiveAttributesColumnId] = useState<string | null>(null);
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
@@ -118,6 +121,7 @@ export function TableStructureSidebar({
   const tableGroup = table?.groupId ? (model.groups[table.groupId] ?? null) : null;
   const selectedColumn = columns.find((column) => column.id === selectedColumnId) ?? columns[0] ?? null;
   const columnIds = columns.map((column) => column.id).join('|');
+  const embedded = variant === 'accordion';
 
   useEffect(() => {
     if (!table) {
@@ -142,9 +146,13 @@ export function TableStructureSidebar({
     }
 
     window.requestAnimationFrame(() => {
-      document
-        .querySelector(`[data-tabliodb-sidebar-column-id="${CSS.escape(activeColumnId)}"]`)
-        ?.scrollIntoView({ block: 'nearest' });
+      const columnRow =
+        scrollContainerRef.current?.querySelector<HTMLElement>(
+          `[data-tabliodb-sidebar-column-id="${CSS.escape(activeColumnId)}"]`,
+        ) ?? null;
+
+      // Scroll diarahkan dari container sidebar lokal agar column yang diklik di canvas tetap terlihat walau list table sudah panjang.
+      columnRow?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
   }, [activeColumnId, columns, selectedColumnId]);
 
@@ -342,7 +350,7 @@ export function TableStructureSidebar({
   const tableCollapsed = isTableDisplayCollapsed(table);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className={cn('flex min-h-0 flex-col', embedded ? 'h-auto bg-transparent' : 'h-full bg-white')}>
       {showHeader ? (
         <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] px-3">
           <div
@@ -363,9 +371,12 @@ export function TableStructureSidebar({
       ) : null}
 
       <div
+        ref={scrollContainerRef}
         className={cn(
-          'tabliodb-scrollbar min-h-0 flex-1 p-3',
-          activeAttributesColumnId ? 'overflow-hidden' : 'overflow-y-auto',
+          'tabliodb-scrollbar min-h-0',
+          embedded
+            ? 'overflow-visible p-2'
+            : cn('flex-1 p-3', activeAttributesColumnId ? 'overflow-hidden' : 'overflow-y-auto'),
         )}
       >
         {readOnly ? (
@@ -374,191 +385,389 @@ export function TableStructureSidebar({
           </div>
         ) : null}
 
-        <section className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
-          <label className="block text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-            Table name
-          </label>
-          <InlineTextInput
-            ariaLabel="Table name"
-            className="mt-2"
-            disabled={readOnly}
-            onCommit={handleTableNameCommit}
-            validate={createInlineStringValidator(inlineTableNameSchema)}
-            value={table.name}
-          />
-          <div className="mt-3">
-            <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Color
+        <section
+          className={cn(
+            'rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))]',
+            embedded ? 'p-2' : 'p-3',
+          )}
+        >
+          <div className={cn('grid gap-2', embedded ? 'grid-cols-[minmax(0,1fr)_32px] items-end' : 'grid-cols-1')}>
+            <div className="min-w-0">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Table name
+              </label>
+              <InlineTextInput
+                ariaLabel="Table name"
+                className="mt-1.5"
+                disabled={readOnly}
+                onCommit={handleTableNameCommit}
+                validate={createInlineStringValidator(inlineTableNameSchema)}
+                value={table.name}
+              />
             </div>
-            {readOnly ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                <span className="size-3 rounded-full" style={{ backgroundColor: getDisplayTableColor(table.color) }} />
-                {getTableColorLabel(getDisplayTableColor(table.color))}
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {tableColorOptions.map((color) => {
-                  const colorLabel = getTableColorLabel(color);
-
-                  return (
-                    <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
-                      <button
-                        aria-label={`Use ${colorLabel}`}
-                        className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
-                        onClick={() => handleColorChange(color)}
-                        style={{
-                          backgroundColor: color,
-                          boxShadow:
-                            getDisplayTableColor(table.color) === color
-                              ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
-                              : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
-                        }}
-                        type="button"
-                      />
-                    </WithTooltip>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="mt-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Canvas view
-              </span>
-              <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                {tableCollapsed ? 'Collapsed' : tableDisplayMode === 'pk_fk_only' ? 'Keys only' : 'All columns'}
-              </span>
-            </div>
-            {!readOnly ? (
-              <>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <TableDisplayModeButton
-                    active={!tableCollapsed && tableDisplayMode === 'all_columns'}
-                    disabled={readOnly}
-                    icon={Columns3}
-                    label="All columns"
-                    onClick={() => handleDisplayModeChange('all_columns')}
-                  />
-                  <TableDisplayModeButton
-                    active={!tableCollapsed && tableDisplayMode === 'pk_fk_only'}
-                    disabled={readOnly}
-                    icon={KeyRound}
-                    label="Keys only"
-                    onClick={() => handleDisplayModeChange('pk_fk_only')}
-                  />
-                </div>
-                <Button
-                  className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
-                  onClick={handleCollapseToggle}
-                  size="sm"
-                  variant="secondary"
+            {embedded ? (
+              <Popover>
+                <WithTooltip content={`Table options for ${table.name}`}>
+                  <PopoverTrigger asChild>
+                    <button
+                      aria-label={`Table options for ${table.name}`}
+                      className="grid size-8 cursor-pointer place-items-center rounded-[var(--tabliodb-radius-sm)] border border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink-muted))] shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] hover:text-[rgb(var(--tabliodb-ink))]"
+                      type="button"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </button>
+                  </PopoverTrigger>
+                </WithTooltip>
+                <PopoverContent
+                  align="end"
+                  className="tabliodb-scrollbar max-h-[min(78dvh,540px)] w-[300px] overflow-y-auto overscroll-contain"
+                  side="right"
                 >
-                  {tableCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
-                  {tableCollapsed ? 'Expand table' : 'Collapse table'}
-                </Button>
-              </>
+                  <div className="grid gap-3">
+                    <div>
+                      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                        Color
+                      </div>
+                      {readOnly ? (
+                        <div className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                          <span
+                            className="size-3 rounded-full"
+                            style={{ backgroundColor: getDisplayTableColor(table.color) }}
+                          />
+                          {getTableColorLabel(getDisplayTableColor(table.color))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {tableColorOptions.map((color) => {
+                            const colorLabel = getTableColorLabel(color);
+
+                            return (
+                              <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
+                                <button
+                                  aria-label={`Use ${colorLabel}`}
+                                  className="size-6 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
+                                  onClick={() => handleColorChange(color)}
+                                  style={{
+                                    backgroundColor: color,
+                                    boxShadow:
+                                      getDisplayTableColor(table.color) === color
+                                        ? `0 0 0 1px #ffffff, 0 0 0 3px ${color}, 0 1px 0 rgb(var(--tabliodb-border-strong))`
+                                        : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 1px 0 rgb(var(--tabliodb-border-strong))',
+                                  }}
+                                  type="button"
+                                />
+                              </WithTooltip>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-[rgb(var(--tabliodb-border))] pt-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                          Canvas view
+                        </span>
+                        <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                          {tableCollapsed
+                            ? 'Collapsed'
+                            : tableDisplayMode === 'pk_fk_only'
+                              ? 'Keys only'
+                              : 'All columns'}
+                        </span>
+                      </div>
+                      {!readOnly ? (
+                        <>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <TableDisplayModeButton
+                              active={!tableCollapsed && tableDisplayMode === 'all_columns'}
+                              disabled={readOnly}
+                              icon={Columns3}
+                              label="All columns"
+                              onClick={() => handleDisplayModeChange('all_columns')}
+                            />
+                            <TableDisplayModeButton
+                              active={!tableCollapsed && tableDisplayMode === 'pk_fk_only'}
+                              disabled={readOnly}
+                              icon={KeyRound}
+                              label="Keys only"
+                              onClick={() => handleDisplayModeChange('pk_fk_only')}
+                            />
+                          </div>
+                          <Button
+                            className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
+                            onClick={handleCollapseToggle}
+                            size="sm"
+                            variant="secondary"
+                          >
+                            {tableCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+                            {tableCollapsed ? 'Expand table' : 'Collapse table'}
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+
+                    <div className="border-t border-[rgb(var(--tabliodb-border))] pt-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                          Module
+                        </span>
+                        <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                          {tableGroup ? `${tableGroup.tableIds.length} tables` : 'None'}
+                        </span>
+                      </div>
+                      {!readOnly ? (
+                        <Select
+                          className={compactSelectClassName}
+                          disabled={groups.length === 0}
+                          onValueChange={handleGroupMembershipChange}
+                          options={[
+                            { label: 'No module', value: unsetGroupValue },
+                            ...groups.map((group) => ({
+                              label: group.name,
+                              value: group.id,
+                            })),
+                          ]}
+                          value={tableGroup?.id ?? unsetGroupValue}
+                        />
+                      ) : (
+                        <div className="rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-2 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                          {tableGroup?.name ?? 'No module'}
+                        </div>
+                      )}
+                      {tableGroup && !readOnly ? (
+                        <div className="mt-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
+                          <InlineTextInput
+                            ariaLabel="Module name"
+                            disabled={readOnly}
+                            onCommit={handleGroupNameCommit}
+                            placeholder="Module name"
+                            validate={createInlineStringValidator(inlineGroupNameSchema)}
+                            value={tableGroup.name}
+                          />
+                          <Button
+                            className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
+                            disabled={readOnly}
+                            onClick={handleDeleteGroup}
+                            size="sm"
+                            variant="secondary"
+                          >
+                            <Trash2 className="size-3.5" />
+                            {confirmDeleteGroup ? 'Confirm delete module' : 'Delete module'}
+                          </Button>
+                        </div>
+                      ) : !readOnly ? (
+                        <Button
+                          className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
+                          onClick={handleCreateGroup}
+                          size="sm"
+                          variant="soft"
+                        >
+                          <Plus className="size-3.5" />
+                          Create module
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    {!readOnly ? (
+                      <div className="border-t border-[rgb(var(--tabliodb-border))] pt-3">
+                        <Button
+                          className="h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-danger-shadow))]"
+                          onClick={handleDeleteTable}
+                          size="sm"
+                          variant="danger"
+                        >
+                          <Trash2 className="size-3.5" />
+                          {confirmDeleteTable ? 'Confirm delete table' : 'Delete table'}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                </PopoverContent>
+              </Popover>
             ) : null}
           </div>
-          <div className="mt-3 border-t border-[rgb(var(--tabliodb-border))] pt-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Module
-              </span>
-              <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                {tableGroup ? `${tableGroup.tableIds.length} tables` : 'None'}
-              </span>
-            </div>
-            {!readOnly ? (
-              <Select
-                className={compactSelectClassName}
-                disabled={groups.length === 0}
-                onValueChange={handleGroupMembershipChange}
-                options={[
-                  { label: 'No module', value: unsetGroupValue },
-                  ...groups.map((group) => ({
-                    label: group.name,
-                    value: group.id,
-                  })),
-                ]}
-                value={tableGroup?.id ?? unsetGroupValue}
-              />
-            ) : (
-              <div className="rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-2 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                {tableGroup?.name ?? 'No module'}
-              </div>
-            )}
-            {tableGroup && !readOnly ? (
-              <div className="mt-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
-                <InlineTextInput
-                  ariaLabel="Module name"
-                  disabled={readOnly}
-                  onCommit={handleGroupNameCommit}
-                  placeholder="Module name"
-                  validate={createInlineStringValidator(inlineGroupNameSchema)}
-                  value={tableGroup.name}
-                />
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {tableColorOptions.map((color) => {
-                    const colorLabel = getTableColorLabel(color);
 
-                    return (
-                      <WithTooltip content={`Set module color to ${colorLabel}`} key={color}>
-                        <button
-                          aria-label={`Use ${colorLabel} for module`}
-                          className="size-5 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={readOnly}
-                          onClick={() => handleGroupColorChange(color)}
-                          style={{
-                            backgroundColor: color,
-                            boxShadow:
-                              getDisplayTableColor(tableGroup.color) === color
-                                ? `0 0 0 1px #ffffff, 0 0 0 3px ${color}, 0 1px 0 rgb(var(--tabliodb-border-strong))`
-                                : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 1px 0 rgb(var(--tabliodb-border-strong))',
-                          }}
-                          type="button"
-                        />
-                      </WithTooltip>
-                    );
-                  })}
+          {!embedded ? (
+            <>
+              <div className="mt-3">
+                <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Color
                 </div>
+                {readOnly ? (
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    <span
+                      className="size-3 rounded-full"
+                      style={{ backgroundColor: getDisplayTableColor(table.color) }}
+                    />
+                    {getTableColorLabel(getDisplayTableColor(table.color))}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {tableColorOptions.map((color) => {
+                      const colorLabel = getTableColorLabel(color);
+
+                      return (
+                        <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
+                          <button
+                            aria-label={`Use ${colorLabel}`}
+                            className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
+                            onClick={() => handleColorChange(color)}
+                            style={{
+                              backgroundColor: color,
+                              boxShadow:
+                                getDisplayTableColor(table.color) === color
+                                  ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
+                                  : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
+                            }}
+                            type="button"
+                          />
+                        </WithTooltip>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="mt-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Canvas view
+                  </span>
+                  <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {tableCollapsed ? 'Collapsed' : tableDisplayMode === 'pk_fk_only' ? 'Keys only' : 'All columns'}
+                  </span>
+                </div>
+                {!readOnly ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <TableDisplayModeButton
+                        active={!tableCollapsed && tableDisplayMode === 'all_columns'}
+                        disabled={readOnly}
+                        icon={Columns3}
+                        label="All columns"
+                        onClick={() => handleDisplayModeChange('all_columns')}
+                      />
+                      <TableDisplayModeButton
+                        active={!tableCollapsed && tableDisplayMode === 'pk_fk_only'}
+                        disabled={readOnly}
+                        icon={KeyRound}
+                        label="Keys only"
+                        onClick={() => handleDisplayModeChange('pk_fk_only')}
+                      />
+                    </div>
+                    <Button
+                      className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
+                      onClick={handleCollapseToggle}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      {tableCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+                      {tableCollapsed ? 'Expand table' : 'Collapse table'}
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+              <div className="mt-3 border-t border-[rgb(var(--tabliodb-border))] pt-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Module
+                  </span>
+                  <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {tableGroup ? `${tableGroup.tableIds.length} tables` : 'None'}
+                  </span>
+                </div>
+                {!readOnly ? (
+                  <Select
+                    className={compactSelectClassName}
+                    disabled={groups.length === 0}
+                    onValueChange={handleGroupMembershipChange}
+                    options={[
+                      { label: 'No module', value: unsetGroupValue },
+                      ...groups.map((group) => ({
+                        label: group.name,
+                        value: group.id,
+                      })),
+                    ]}
+                    value={tableGroup?.id ?? unsetGroupValue}
+                  />
+                ) : (
+                  <div className="rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-2 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {tableGroup?.name ?? 'No module'}
+                  </div>
+                )}
+                {tableGroup && !readOnly ? (
+                  <div className="mt-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
+                    <InlineTextInput
+                      ariaLabel="Module name"
+                      disabled={readOnly}
+                      onCommit={handleGroupNameCommit}
+                      placeholder="Module name"
+                      validate={createInlineStringValidator(inlineGroupNameSchema)}
+                      value={tableGroup.name}
+                    />
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {tableColorOptions.map((color) => {
+                        const colorLabel = getTableColorLabel(color);
+
+                        return (
+                          <WithTooltip content={`Set module color to ${colorLabel}`} key={color}>
+                            <button
+                              aria-label={`Use ${colorLabel} for module`}
+                              className="size-5 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={readOnly}
+                              onClick={() => handleGroupColorChange(color)}
+                              style={{
+                                backgroundColor: color,
+                                boxShadow:
+                                  getDisplayTableColor(tableGroup.color) === color
+                                    ? `0 0 0 1px #ffffff, 0 0 0 3px ${color}, 0 1px 0 rgb(var(--tabliodb-border-strong))`
+                                    : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 1px 0 rgb(var(--tabliodb-border-strong))',
+                              }}
+                              type="button"
+                            />
+                          </WithTooltip>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
+                      disabled={readOnly}
+                      onClick={handleDeleteGroup}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      <Trash2 className="size-3.5" />
+                      {confirmDeleteGroup ? 'Confirm delete module' : 'Delete module'}
+                    </Button>
+                  </div>
+                ) : !readOnly ? (
+                  <Button
+                    className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
+                    onClick={handleCreateGroup}
+                    size="sm"
+                    variant="soft"
+                  >
+                    <Plus className="size-3.5" />
+                    Create module from table
+                  </Button>
+                ) : null}
+              </div>
+              {!readOnly ? (
                 <Button
-                  className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
-                  disabled={readOnly}
-                  onClick={handleDeleteGroup}
+                  className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-danger-shadow))]"
+                  onClick={handleDeleteTable}
                   size="sm"
-                  variant="secondary"
+                  variant="danger"
                 >
                   <Trash2 className="size-3.5" />
-                  {confirmDeleteGroup ? 'Confirm delete module' : 'Delete module'}
+                  {confirmDeleteTable ? 'Confirm delete table' : 'Delete table'}
                 </Button>
-              </div>
-            ) : !readOnly ? (
-              <Button
-                className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
-                onClick={handleCreateGroup}
-                size="sm"
-                variant="soft"
-              >
-                <Plus className="size-3.5" />
-                Create module from table
-              </Button>
-            ) : null}
-          </div>
-          {!readOnly ? (
-            <Button
-              className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-danger-shadow))]"
-              onClick={handleDeleteTable}
-              size="sm"
-              variant="danger"
-            >
-              <Trash2 className="size-3.5" />
-              {confirmDeleteTable ? 'Confirm delete table' : 'Delete table'}
-            </Button>
+              ) : null}
+            </>
           ) : null}
         </section>
 
-        <section className="mt-3">
+        <section className={embedded ? 'mt-2' : 'mt-3'}>
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-[13px] font-extrabold leading-5">Columns</h2>
