@@ -12,12 +12,14 @@ import {
   getRelationshipColumnPairs,
   getTableColumns,
   type DatabaseColumn,
+  type DatabaseRelationship,
   type DatabaseTable,
   type DiagramGroup,
   type DiagramModel,
   type DiagramNote,
   type TableDisplayMode,
 } from '@tabliodb/schema-core';
+import { cn } from '@tabliodb/ui';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@/resources/comments';
 import type { AwarenessState } from '@tabliodb/shared';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
@@ -75,7 +77,9 @@ export type SchemaCanvasProps = {
   model: DiagramModel;
   onLocalCursorChange?: (cursor: AwarenessState['cursor']) => void;
   onCommentTargetOpen?: (target: { targetId: string; targetType: CommentTargetType }) => void;
+  onColumnSelect?: (columnId: string) => void;
   selectedTableId: string | null;
+  selectedColumnId?: string | null;
   onModelChange: (model: DiagramModel) => void;
   onSelectedTableChange: (tableId: string | null) => void;
   remoteCursors?: RemoteCanvasCursor[];
@@ -99,6 +103,7 @@ type TableNodeData = {
   commentMarker: CommentMarkerCount;
   displayMode: TableDisplayMode;
   readOnly: boolean;
+  selectedColumnId: string | null;
   selected: boolean;
   tableId: string;
   tableName: string;
@@ -126,8 +131,6 @@ type PortSide = 'left' | 'right';
 type RelationshipTerminal = {
   active: boolean;
   columnId: string;
-  laneIndex: number;
-  laneTotal: number;
   portId: string;
   relationshipId: string;
   role: 'foreign' | 'primary';
@@ -143,6 +146,18 @@ type RelationshipPlan = {
 type RemoteCanvasCursorPosition = RemoteCanvasCursor & {
   left: number;
   top: number;
+};
+
+type RelationshipMenuState = {
+  left: number;
+  relationshipId: string;
+  top: number;
+};
+
+type ParsedColumnPortId = {
+  columnId: string;
+  side: PortSide;
+  tableId: string;
 };
 
 type CanvasRect = {
@@ -173,11 +188,13 @@ export function SchemaCanvas({
   fitSignal,
   model,
   onCommentTargetOpen,
+  onColumnSelect,
   onLocalCursorChange,
   onModelChange,
   onSelectedTableChange,
   readOnly = false,
   remoteCursors = [],
+  selectedColumnId = null,
   selectedTableId,
   toolbar,
   toolbarOffsetLeft = '1rem',
@@ -186,11 +203,16 @@ export function SchemaCanvas({
   const graphRef = useRef<Graph | null>(null);
   const fitKeyRef = useRef<string | null>(null);
   const modelRef = useRef(model);
+  const selectedTableIdRef = useRef(selectedTableId);
+  const selectedRelationshipIdRef = useRef<string | null>(null);
+  const resizingTableIdRef = useRef<string | null>(null);
   const onLocalCursorChangeRef = useRef(onLocalCursorChange);
   const onCommentTargetOpenRef = useRef(onCommentTargetOpen);
+  const onColumnSelectRef = useRef(onColumnSelect);
   const onModelChangeRef = useRef(onModelChange);
   const onSelectedTableChangeRef = useRef(onSelectedTableChange);
   const remoteCursorsRef = useRef(remoteCursors);
+  const [relationshipMenu, setRelationshipMenu] = useState<RelationshipMenuState | null>(null);
   const [remoteCursorPositions, setRemoteCursorPositions] = useState<RemoteCanvasCursorPosition[]>([]);
   const [minimapOpen, setMinimapOpen] = useState(true);
   const [minimapState, setMinimapState] = useState<CanvasMinimapState | null>(null);
@@ -198,6 +220,14 @@ export function SchemaCanvas({
   useEffect(() => {
     modelRef.current = model;
   }, [model]);
+
+  useEffect(() => {
+    selectedTableIdRef.current = selectedTableId;
+  }, [selectedTableId]);
+
+  useEffect(() => {
+    selectedRelationshipIdRef.current = relationshipMenu?.relationshipId ?? null;
+  }, [relationshipMenu?.relationshipId]);
 
   useEffect(() => {
     onModelChangeRef.current = onModelChange;
@@ -212,12 +242,23 @@ export function SchemaCanvas({
   }, [onCommentTargetOpen]);
 
   useEffect(() => {
+    onColumnSelectRef.current = onColumnSelect;
+  }, [onColumnSelect]);
+
+  useEffect(() => {
     onSelectedTableChangeRef.current = onSelectedTableChange;
   }, [onSelectedTableChange]);
 
   useEffect(() => {
     remoteCursorsRef.current = remoteCursors;
   }, [remoteCursors]);
+
+  useEffect(() => {
+    if (relationshipMenu && !model.relationships[relationshipMenu.relationshipId]) {
+      // Popup relationship ikut ditutup saat relationship dihapus dari model agar UI tidak menunjuk edge stale.
+      setRelationshipMenu(null);
+    }
+  }, [model.relationships, relationshipMenu]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -283,6 +324,7 @@ export function SchemaCanvas({
 
     graph.on('node:click', ({ node }) => {
       const data = node.getData<TableNodeData>();
+      setRelationshipMenu(null);
 
       if (isTableNodeData(data)) {
         onSelectedTableChangeRef.current(data.tableId);
@@ -295,7 +337,53 @@ export function SchemaCanvas({
     });
 
     graph.on('blank:click', () => {
+      setRelationshipMenu(null);
       onSelectedTableChangeRef.current(null);
+    });
+
+    graph.on('edge:click', ({ edge, e }) => {
+      const relationship = modelRef.current.relationships[edge.id];
+
+      if (!relationship) {
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const event = e as unknown as MouseEvent;
+      const menuWidth = 330;
+      const menuHeight = 128;
+
+      setRelationshipMenu({
+        left: clamp(event.clientX - containerRect.left - menuWidth / 2, 12, containerRect.width - menuWidth - 12),
+        relationshipId: relationship.id,
+        top: clamp(event.clientY - containerRect.top - menuHeight / 2, 12, containerRect.height - menuHeight - 12),
+      });
+    });
+
+    graph.on('edge:connected', ({ edge, isNew }) => {
+      if (!isNew || readOnly) {
+        return;
+      }
+
+      const sourcePort = parseColumnPortId(edge.getSourcePortId() ?? undefined);
+      const targetPort = parseColumnPortId(edge.getTargetPortId() ?? undefined);
+
+      // Edge hasil drag X6 hanya menjadi relationship domain kalau dua endpoint benar-benar berasal dari port column.
+      graph.removeCell(edge);
+
+      if (!sourcePort || !targetPort || sourcePort.tableId === targetPort.tableId) {
+        return;
+      }
+
+      const nextRelationshipCommand = createRelationshipCommandFromPorts(modelRef.current, sourcePort, targetPort);
+
+      if (!nextRelationshipCommand) {
+        return;
+      }
+
+      onModelChangeRef.current(applyDiagramCommand(modelRef.current, nextRelationshipCommand));
+      onSelectedTableChangeRef.current(nextRelationshipCommand.targetTableId);
+      onColumnSelectRef.current?.(nextRelationshipCommand.targetColumnIds[0]);
     });
 
     const getCommentMarkerFromEvent = (event: MouseEvent) => {
@@ -306,6 +394,16 @@ export function SchemaCanvas({
       }
 
       return target.closest<HTMLElement>('.tabliodb-table-node__comment-marker');
+    };
+
+    const getColumnRowFromEvent = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement) || target.closest('.tabliodb-table-node__comment-marker')) {
+        return null;
+      }
+
+      return target.closest<HTMLElement>('.tabliodb-table-node__column');
     };
 
     const handleCommentMarkerMouseDown = (event: MouseEvent) => {
@@ -334,6 +432,22 @@ export function SchemaCanvas({
       event.preventDefault();
       event.stopPropagation();
       onCommentTargetOpenRef.current?.({ targetId, targetType });
+    };
+
+    const handleColumnRowClick = (event: MouseEvent) => {
+      const columnRow = getColumnRowFromEvent(event);
+      const columnId = columnRow?.dataset.tabliodbColumnId;
+      const tableId = columnRow?.closest<HTMLElement>('[data-tabliodb-table-id]')?.dataset.tabliodbTableId;
+
+      if (!columnRow || !columnId || !tableId) {
+        return;
+      }
+
+      // Klik row column di canvas memilih table sekaligus column supaya sidebar kiri langsung menunjuk field yang sama.
+      event.preventDefault();
+      setRelationshipMenu(null);
+      onSelectedTableChangeRef.current(tableId);
+      onColumnSelectRef.current?.(columnId);
     };
 
     const handleNoteInteractiveMouseDown = (event: MouseEvent) => {
@@ -433,11 +547,12 @@ export function SchemaCanvas({
         return;
       }
 
-      const handle = target.closest<HTMLElement>('.tabliodb-table-node__resize-handle');
+      const handle = target.closest<HTMLElement>('.tabliodb-table-node__resize-zone');
       const tableElement = handle?.closest<HTMLElement>('[data-tabliodb-table-id]');
       const tableId = tableElement?.dataset.tabliodbTableId;
+      const resizeSide = handle?.dataset.resizeSide === 'left' ? 'left' : 'right';
 
-      if (!handle || !tableId || readOnly) {
+      if (!handle || !tableId || readOnly || !tableElement?.classList.contains('is-selected')) {
         return;
       }
 
@@ -451,34 +566,70 @@ export function SchemaCanvas({
       event.preventDefault();
       event.stopPropagation();
       onSelectedTableChangeRef.current(tableId);
+      resizingTableIdRef.current = tableId;
 
       const startClientX = event.clientX;
+      const startPosition = node.getPosition();
       const startWidth = getTableWidth(table);
       const graphScale = getGraphScale(graph);
       let latestWidth = startWidth;
+      let latestPosition = startPosition;
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         moveEvent.preventDefault();
-        const rawWidth = startWidth + (moveEvent.clientX - startClientX) / graphScale;
+        const pointerDelta = (moveEvent.clientX - startClientX) / graphScale;
+        const snappedDelta = Math.round(pointerDelta / diagramDragGridSize) * diagramDragGridSize;
+        const rawWidth = resizeSide === 'left' ? startWidth - snappedDelta : startWidth + snappedDelta;
         const snappedWidth = Math.round(rawWidth / diagramDragGridSize) * diagramDragGridSize;
         latestWidth = clampTableNodeWidth(snappedWidth);
+        latestPosition =
+          resizeSide === 'left'
+            ? { x: startPosition.x + (startWidth - latestWidth), y: startPosition.y }
+            : startPosition;
+
+        // Resize kiri menggeser posisi x agar sisi kanan tetap terkunci, mirip editor diagram profesional.
+        node.position(latestPosition.x, latestPosition.y);
         node.resize(latestWidth, node.getSize().height);
+        refreshTableResizePreview(
+          graph,
+          modelRef.current,
+          tableId,
+          latestWidth,
+          latestPosition,
+          selectedTableIdRef.current,
+          selectedRelationshipIdRef.current,
+          readOnly,
+        );
       };
 
       const handleMouseUp = () => {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        resizingTableIdRef.current = null;
 
-        if (latestWidth !== startWidth) {
-          // Width is committed once at drag-end so quick resize movement does not spam snapshot model updates.
-          const finalWidth = Math.round(latestWidth / diagramDragGridSize) * diagramDragGridSize;
-          onModelChangeRef.current(
-            applyDiagramCommand(modelRef.current, {
+        if (latestWidth !== startWidth || latestPosition.x !== startPosition.x) {
+          // Model tetap di-commit sekali pada drag-end, sementara X6 menerima preview live agar edge tidak tertinggal.
+          let nextModel = modelRef.current;
+
+          if (latestPosition.x !== startPosition.x || latestPosition.y !== startPosition.y) {
+            nextModel = applyDiagramCommand(nextModel, {
+              type: 'table.move',
+              tableId,
+              position: latestPosition,
+            });
+          }
+
+          if (latestWidth !== startWidth) {
+            const finalWidth = Math.round(latestWidth / diagramDragGridSize) * diagramDragGridSize;
+
+            nextModel = applyDiagramCommand(nextModel, {
               type: 'table.resize',
               tableId,
               width: clampTableNodeWidth(finalWidth),
-            }),
-          );
+            });
+          }
+
+          onModelChangeRef.current(nextModel);
         }
       };
 
@@ -488,6 +639,7 @@ export function SchemaCanvas({
 
     container.addEventListener('mousedown', handleCommentMarkerMouseDown, true);
     container.addEventListener('click', handleCommentMarkerClick, true);
+    container.addEventListener('click', handleColumnRowClick, true);
     container.addEventListener('mousedown', handleNoteInteractiveMouseDown, true);
     container.addEventListener('click', handleNoteActionClick, true);
     container.addEventListener('focusout', handleNoteFocusOut, true);
@@ -521,6 +673,11 @@ export function SchemaCanvas({
       const position = node.getPosition();
 
       if (isTableNodeData(data)) {
+        if (resizingTableIdRef.current === data.tableId) {
+          // Saat resize dari sisi kiri, node.position() dipanggil secara programmatic; commit model tetap dilakukan sekali di mouseup.
+          return;
+        }
+
         const table = modelRef.current.tables[data.tableId];
 
         if (!table) {
@@ -629,6 +786,7 @@ export function SchemaCanvas({
     return () => {
       container.removeEventListener('mousedown', handleCommentMarkerMouseDown, true);
       container.removeEventListener('click', handleCommentMarkerClick, true);
+      container.removeEventListener('click', handleColumnRowClick, true);
       container.removeEventListener('mousedown', handleNoteInteractiveMouseDown, true);
       container.removeEventListener('click', handleNoteActionClick, true);
       container.removeEventListener('focusout', handleNoteFocusOut, true);
@@ -656,13 +814,21 @@ export function SchemaCanvas({
       return;
     }
 
-    syncGraphFromModel(graph, model, selectedTableId, commentTargetSummaries, readOnly);
+    syncGraphFromModel(
+      graph,
+      model,
+      selectedTableId,
+      selectedColumnId,
+      relationshipMenu?.relationshipId ?? null,
+      commentTargetSummaries,
+      readOnly,
+    );
 
     if (fitKeyRef.current !== fitKey) {
       fitKeyRef.current = fitKey;
       fitGraphContent(graph);
     }
-  }, [commentTargetSummaries, fitKey, model, readOnly, selectedTableId]);
+  }, [commentTargetSummaries, fitKey, model, readOnly, relationshipMenu?.relationshipId, selectedColumnId, selectedTableId]);
 
   useEffect(() => {
     const graph = graphRef.current;
@@ -743,6 +909,36 @@ export function SchemaCanvas({
     graphRef.current?.centerPoint(x, y);
   }
 
+  const activeRelationship = relationshipMenu ? (model.relationships[relationshipMenu.relationshipId] ?? null) : null;
+
+  function handleRelationshipCardinalityChange(cardinality: DatabaseRelationship['cardinality']) {
+    if (!activeRelationship || readOnly || activeRelationship.cardinality === cardinality) {
+      return;
+    }
+
+    onModelChange(
+      applyDiagramCommand(model, {
+        changes: { cardinality },
+        relationshipId: activeRelationship.id,
+        type: 'relationship.update',
+      }),
+    );
+  }
+
+  function handleRelationshipDelete() {
+    if (!activeRelationship || readOnly || !window.confirm('Delete this relationship?')) {
+      return;
+    }
+
+    onModelChange(
+      applyDiagramCommand(model, {
+        relationshipId: activeRelationship.id,
+        type: 'relationship.delete',
+      }),
+    );
+    setRelationshipMenu(null);
+  }
+
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden bg-[rgb(var(--tabliodb-canvas))]">
       <div className="tabliodb-x6-canvas absolute inset-0" ref={containerRef} />
@@ -762,6 +958,18 @@ export function SchemaCanvas({
         >
           Map
         </button>
+      ) : null}
+      {relationshipMenu && activeRelationship ? (
+        <RelationshipQuickEditor
+          left={relationshipMenu.left}
+          model={model}
+          onCardinalityChange={handleRelationshipCardinalityChange}
+          onClose={() => setRelationshipMenu(null)}
+          onDelete={handleRelationshipDelete}
+          readOnly={readOnly}
+          relationship={activeRelationship}
+          top={relationshipMenu.top}
+        />
       ) : null}
       {remoteCursorPositions.length > 0 ? (
         <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
@@ -926,6 +1134,98 @@ function CanvasMinimap({
         />
       </svg>
     </section>
+  );
+}
+
+function RelationshipQuickEditor({
+  left,
+  model,
+  onCardinalityChange,
+  onClose,
+  onDelete,
+  readOnly,
+  relationship,
+  top,
+}: {
+  left: number;
+  model: DiagramModel;
+  onCardinalityChange: (cardinality: DatabaseRelationship['cardinality']) => void;
+  onClose: () => void;
+  onDelete: () => void;
+  readOnly: boolean;
+  relationship: DatabaseRelationship;
+  top: number;
+}) {
+  const sourceLabel = getRelationshipEndpointLabel(model, relationship, 'source');
+  const targetLabel = getRelationshipEndpointLabel(model, relationship, 'target');
+  const cardinalityOptions: Array<{ label: string; value: DatabaseRelationship['cardinality'] }> = [
+    { label: '1:1', value: 'one_to_one' },
+    { label: '1:N', value: 'one_to_many' },
+    { label: 'N:N', value: 'many_to_many' },
+  ];
+
+  return (
+    <section
+      className="absolute z-40 w-[330px] rounded-[18px] border border-slate-700 bg-slate-900 p-3 text-white shadow-[0_5px_0_rgb(15_23_42),0_18px_36px_rgb(15_23_42/0.24)]"
+      onMouseDown={(event) => event.stopPropagation()}
+      style={{ left, top }}
+    >
+      <div className="grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)_24px] items-center gap-2">
+        <RelationshipEndpointPill label={sourceLabel} tone="source" />
+        <span className="text-center text-sm font-black text-slate-500">-&gt;</span>
+        <RelationshipEndpointPill label={targetLabel} tone="target" />
+        <button
+          aria-label="Close relationship actions"
+          className="grid size-6 cursor-pointer place-items-center rounded-full text-sm font-black text-slate-400 transition hover:bg-slate-800 hover:text-white"
+          onClick={onClose}
+          type="button"
+        >
+          x
+        </button>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="inline-flex rounded-[12px] bg-slate-800 p-1">
+          {cardinalityOptions.map((option) => (
+            <button
+              className={cn(
+                'h-8 min-w-12 cursor-pointer rounded-[9px] px-3 text-xs font-black transition',
+                relationship.cardinality === option.value
+                  ? 'bg-teal-500 text-white shadow-[0_2px_0_rgb(13_148_136)]'
+                  : 'text-slate-300 hover:bg-slate-700 hover:text-white',
+              )}
+              disabled={readOnly}
+              key={option.value}
+              onClick={() => onCardinalityChange(option.value)}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <button
+          className="h-8 cursor-pointer rounded-[10px] px-3 text-xs font-black text-slate-400 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={readOnly}
+          onClick={onDelete}
+          type="button"
+        >
+          Delete
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function RelationshipEndpointPill({ label, tone }: { label: string; tone: 'source' | 'target' }) {
+  return (
+    <div className="min-w-0 rounded-[10px] bg-slate-800 px-3 py-2">
+      <span
+        className={cn(
+          'mb-1 block size-1.5 rounded-full',
+          tone === 'source' ? 'bg-pink-400' : 'bg-emerald-400',
+        )}
+      />
+      <span className="block truncate font-mono text-[11px] font-black leading-none text-cyan-200">{label}</span>
+    </div>
   );
 }
 
@@ -1189,10 +1489,12 @@ function syncGraphFromModel(
   graph: Graph,
   model: DiagramModel,
   selectedTableId: string | null,
+  selectedColumnId: string | null,
+  selectedRelationshipId: string | null,
   commentTargetSummaries: CommentThreadTargetSummaryDto[],
   readOnly: boolean,
 ): void {
-  const relationshipPlan = createRelationshipPlan(model, selectedTableId);
+  const relationshipPlan = createRelationshipPlan(model, selectedTableId, selectedRelationshipId);
   // Marker summary dihitung sekali per sync supaya node table tidak mengulang scan thread untuk setiap row.
   const commentMarkerSummary = createCommentMarkerSummary(model, commentTargetSummaries);
   const groupMetadata = Object.values(model.groups).map((group) => createGroupNodeMetadata(model, group));
@@ -1231,6 +1533,7 @@ function syncGraphFromModel(
           model,
           table,
           selectedTableId,
+          selectedColumnId,
           relationshipPlan.terminalsByTable.get(table.id) ?? [],
           commentMarkerSummary,
           readOnly,
@@ -1482,17 +1785,11 @@ function getPortItems(ports: NodeMetadata['ports'] | undefined): unknown[] {
   return ports?.items ?? [];
 }
 
-function getEndpointLaneGap(laneTotal: number): number {
-  if (laneTotal <= 2) return 7; // lega, default nyaman
-  if (laneTotal <= 4) return 6; // masih aman di row 24px
-  if (laneTotal <= 6) return 5; // mulai rapat tapi masih oke
-  return 4; // emergency padat
-}
-
 function createTableNodeMetadata(
   model: DiagramModel,
   table: DatabaseTable,
   selectedTableId: string | null,
+  selectedColumnId: string | null,
   terminals: RelationshipTerminal[],
   commentMarkerSummary: CommentMarkerSummary,
   readOnly: boolean,
@@ -1517,6 +1814,7 @@ function createTableNodeMetadata(
       commentMarker: getTableCommentMarkerCount(commentMarkerSummary, table.id),
       displayMode,
       readOnly,
+      selectedColumnId,
       selected: table.id === selectedTableId,
       tableId: table.id,
       tableName: table.name,
@@ -1623,8 +1921,11 @@ function createRelationshipEdgeMetadata(model: DiagramModel, plan: RelationshipP
   });
 }
 
-function createRelationshipPlan(model: DiagramModel, selectedTableId: string | null): RelationshipPlan {
-  const groupedTerminals = new Map<string, Omit<RelationshipTerminal, 'laneIndex' | 'laneTotal'>[]>();
+function createRelationshipPlan(
+  model: DiagramModel,
+  selectedTableId: string | null,
+  selectedRelationshipId: string | null,
+): RelationshipPlan {
   const terminalsByRelationship = new Map<string, { source?: RelationshipTerminal; target?: RelationshipTerminal }>();
   const terminalsByTable = new Map<string, RelationshipTerminal[]>();
 
@@ -1664,48 +1965,39 @@ function createRelationshipPlan(model: DiagramModel, selectedTableId: string | n
       targetSide = sourceIsLeft ? 'left' : 'right';
     }
 
-    const active = selectedTableId === relationship.sourceTableId || selectedTableId === relationship.targetTableId;
-
-    pushGroupedTerminal(
-      groupedTerminals,
-      createTerminalBase({
-        active,
-        columnId: columnPair.sourceColumnId,
-        relationshipId: relationship.id,
-        role: 'primary',
-        side: sourceSide,
-        tableId: relationship.sourceTableId,
-      }),
-    );
-    pushGroupedTerminal(
-      groupedTerminals,
-      createTerminalBase({
-        active,
-        columnId: columnPair.targetColumnId,
-        relationshipId: relationship.id,
-        role: 'foreign',
-        side: targetSide,
-        tableId: relationship.targetTableId,
-      }),
-    );
-  }
-
-  for (const terminals of groupedTerminals.values()) {
-    terminals.forEach((terminal, laneIndex) => {
-      const hydratedTerminal: RelationshipTerminal = {
-        ...terminal,
-        laneIndex,
-        laneTotal: terminals.length,
-      };
-      const existing = terminalsByRelationship.get(terminal.relationshipId) ?? {};
-
-      terminalsByRelationship.set(terminal.relationshipId, {
-        source: terminal.role === 'primary' ? hydratedTerminal : existing.source,
-        target: terminal.role === 'foreign' ? hydratedTerminal : existing.target,
-      });
-
-      terminalsByTable.set(terminal.tableId, [...(terminalsByTable.get(terminal.tableId) ?? []), hydratedTerminal]);
+    const active =
+      selectedRelationshipId === relationship.id ||
+      selectedTableId === relationship.sourceTableId ||
+      selectedTableId === relationship.targetTableId;
+    const sourceTerminal = createTerminalBase({
+      active,
+      columnId: columnPair.sourceColumnId,
+      relationshipId: relationship.id,
+      role: 'primary',
+      side: sourceSide,
+      tableId: relationship.sourceTableId,
     });
+    const targetTerminal = createTerminalBase({
+      active,
+      columnId: columnPair.targetColumnId,
+      relationshipId: relationship.id,
+      role: 'foreign',
+      side: targetSide,
+      tableId: relationship.targetTableId,
+    });
+
+    terminalsByRelationship.set(relationship.id, {
+      source: sourceTerminal,
+      target: targetTerminal,
+    });
+    terminalsByTable.set(sourceTerminal.tableId, [
+      ...(terminalsByTable.get(sourceTerminal.tableId) ?? []),
+      sourceTerminal,
+    ]);
+    terminalsByTable.set(targetTerminal.tableId, [
+      ...(terminalsByTable.get(targetTerminal.tableId) ?? []),
+      targetTerminal,
+    ]);
   }
 
   return { terminalsByRelationship, terminalsByTable };
@@ -1718,19 +2010,12 @@ function createTerminalBase(options: {
   role: RelationshipTerminal['role'];
   side: PortSide;
   tableId: string;
-}): Omit<RelationshipTerminal, 'laneIndex' | 'laneTotal'> {
+}): RelationshipTerminal {
   return {
     ...options,
-    portId: `${options.relationshipId}:${options.role}:${options.columnId}:${options.side}`,
+    // Port id stabil per column membuat banyak garis di column yang sama menyatu pada satu titik, seperti DrawSQL.
+    portId: createColumnPortId(options.tableId, options.columnId, options.side),
   };
-}
-
-function pushGroupedTerminal(
-  groupedTerminals: Map<string, Omit<RelationshipTerminal, 'laneIndex' | 'laneTotal'>[]>,
-  terminal: Omit<RelationshipTerminal, 'laneIndex' | 'laneTotal'>,
-): void {
-  const key = `${terminal.tableId}:${terminal.columnId}:${terminal.side}`;
-  groupedTerminals.set(key, [...(groupedTerminals.get(key) ?? []), terminal]);
 }
 
 function createColumnPorts(
@@ -1741,6 +2026,7 @@ function createColumnPorts(
   selected: boolean,
 ): NodeMetadata['ports'] {
   const visibleColumns = getVisibleTableColumns(model, table);
+  const portSides: PortSide[] = ['left', 'right'];
 
   return {
     groups: {
@@ -1749,50 +2035,157 @@ function createColumnPorts(
         position: 'absolute',
       },
     },
-    items: terminals.flatMap((terminal) => {
-      const columnIndex = visibleColumns.findIndex((column) => column.id === terminal.columnId);
-      const y =
-        columnIndex >= 0
-          ? tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2
-          : tableHeaderHeight / 2;
+    items: visibleColumns.flatMap((column, columnIndex) =>
+      portSides.map((side) => {
+        const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2;
 
-      // === GANTI DI SINI ===
-      const laneGap = getEndpointLaneGap(terminal.laneTotal);
-      const laneOffset = (terminal.laneIndex - (terminal.laneTotal - 1) / 2) * laneGap;
-      // =====================
+        const relatedTerminal = terminals.find(
+          (terminal) => terminal.columnId === column.id && terminal.side === side,
+        );
+        const activeTerminal = terminals.find(
+          (terminal) => terminal.active && terminal.columnId === column.id && terminal.side === side,
+        );
+        const isVisible = selected || Boolean(activeTerminal);
+        const color = activeTerminal ? relationshipActiveColor : '#5865f2';
 
-      const color = terminal.active ? relationshipActiveColor : relationshipNeutralColor;
-
-      const isVisible = selected;
-
-      return [
-        {
+        return {
           args: {
-            x: terminal.side === 'left' ? 0 : getTableWidth(table),
-            y: y + laneOffset,
+            x: side === 'left' ? 0 : getTableWidth(table),
+            y,
           },
           attrs: {
             portBody: {
               cursor: readOnly ? 'default' : 'crosshair',
-              fill: isVisible ? '#58cc02' : 'transparent',
-              magnet: !readOnly && isVisible, // ← drag new relation hanya saat terlihat
-              r: isVisible ? (terminal.active ? relationshipPortRadius + 1 : relationshipPortRadius) : 0,
+              fill: isVisible ? color : 'transparent',
+              magnet: !readOnly,
+              opacity: isVisible ? 1 : 0,
+              r: isVisible
+                ? activeTerminal
+                  ? relationshipPortRadius + 1
+                  : relationshipPortRadius
+                : relationshipPortRadius,
               stroke: isVisible ? color : 'transparent',
-              strokeWidth: isVisible ? (terminal.active ? 1.5 : 2) : 0,
-              // magnet: !readOnly,
-              // fill: '#ffffff',
-              // stroke: color,
-              // strokeWidth: terminal.active ? 3 : 2,
-              // r: terminal.active ? relationshipPortRadius + 1 : relationshipPortRadius,
+              strokeWidth: isVisible ? (relatedTerminal ? 2 : 1.5) : 0,
             },
           },
           group: 'absolute',
-          id: terminal.portId,
+          id: createColumnPortId(table.id, column.id, side),
           zIndex: 10,
-        },
-      ];
-    }),
+        };
+      }),
+    ),
   };
+}
+
+function createColumnPortId(tableId: string, columnId: string, side: PortSide): string {
+  return `column-port:${tableId}:${columnId}:${side}`;
+}
+
+function parseColumnPortId(portId: string | null | undefined): ParsedColumnPortId | null {
+  const parts = portId?.split(':') ?? [];
+  const side = parts[3];
+
+  if (parts.length !== 4 || parts[0] !== 'column-port' || (side !== 'left' && side !== 'right')) {
+    return null;
+  }
+
+  return {
+    columnId: parts[2],
+    side,
+    tableId: parts[1],
+  };
+}
+
+function createRelationshipCommandFromPorts(
+  model: DiagramModel,
+  sourcePort: ParsedColumnPortId,
+  targetPort: ParsedColumnPortId,
+) {
+  const sourceColumn = model.columns[sourcePort.columnId];
+  const targetColumn = model.columns[targetPort.columnId];
+
+  if (!sourceColumn || !targetColumn) {
+    return null;
+  }
+
+  const targetLooksPrimary = targetColumn.primaryKey && !sourceColumn.primaryKey;
+  const primaryPort = targetLooksPrimary ? targetPort : sourcePort;
+  const foreignPort = targetLooksPrimary ? sourcePort : targetPort;
+  const duplicate = Object.values(model.relationships).some(
+    (relationship) =>
+      relationship.sourceTableId === primaryPort.tableId &&
+      relationship.targetTableId === foreignPort.tableId &&
+      relationship.sourceColumnIds[0] === primaryPort.columnId &&
+      relationship.targetColumnIds[0] === foreignPort.columnId,
+  );
+
+  if (duplicate) {
+    return null;
+  }
+
+  return {
+    cardinality: 'one_to_many' as const,
+    sourceColumnIds: [primaryPort.columnId],
+    sourceTableId: primaryPort.tableId,
+    targetColumnIds: [foreignPort.columnId],
+    targetTableId: foreignPort.tableId,
+    type: 'relationship.create' as const,
+  };
+}
+
+function refreshTableResizePreview(
+  graph: Graph,
+  model: DiagramModel,
+  tableId: string,
+  width: number,
+  position: DatabaseTable['position'],
+  selectedTableId: string | null,
+  selectedRelationshipId: string | null,
+  readOnly: boolean,
+): void {
+  const table = model.tables[tableId];
+  const node = graph.getCellById(tableId) as X6Node | null | undefined;
+
+  if (!table || !node?.isNode()) {
+    return;
+  }
+
+  const previewTable = {
+    ...table,
+    position,
+    width,
+  };
+  const previewModel = {
+    ...model,
+    tables: {
+      ...model.tables,
+      [tableId]: previewTable,
+    },
+  };
+  const relationshipPlan = createRelationshipPlan(previewModel, selectedTableId, selectedRelationshipId);
+
+  graph.batchUpdate('tabliodb-resize-preview', () => {
+    node.setProp(
+      'ports',
+      createColumnPorts(
+        previewModel,
+        previewTable,
+        relationshipPlan.terminalsByTable.get(tableId) ?? [],
+        readOnly,
+        tableId === selectedTableId,
+      ),
+    );
+
+    for (const edgeMetadata of createRelationshipEdgeMetadata(previewModel, relationshipPlan)) {
+      const relationshipId = edgeMetadata.id;
+      const relationship = relationshipId ? previewModel.relationships[relationshipId] : null;
+
+      if (relationship?.sourceTableId === tableId || relationship?.targetTableId === tableId) {
+        // Reapplying the edge metadata forces X6 to recalculate endpoints against the live resized port positions.
+        syncRelationshipEdge(graph, edgeMetadata);
+      }
+    }
+  });
 }
 
 function getTableWidth(table: DatabaseTable): number {
@@ -1969,6 +2362,7 @@ function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNod
     current.columnCountLabel === next.columnCountLabel &&
     current.displayMode === next.displayMode &&
     current.readOnly === next.readOnly &&
+    current.selectedColumnId === next.selectedColumnId &&
     current.selected === next.selected &&
     current.tableId === next.tableId &&
     current.tableName === next.tableName &&
@@ -2015,6 +2409,19 @@ function fitGraphContent(graph: Graph): void {
   graph.centerContent();
 }
 
+function getRelationshipEndpointLabel(
+  model: DiagramModel,
+  relationship: DatabaseRelationship,
+  role: 'source' | 'target',
+): string {
+  const tableId = role === 'source' ? relationship.sourceTableId : relationship.targetTableId;
+  const columnIds = role === 'source' ? relationship.sourceColumnIds : relationship.targetColumnIds;
+  const table = model.tables[tableId];
+  const columns = columnIds.map((columnId) => model.columns[columnId]?.name ?? columnId).join(', ');
+
+  return `${table?.name ?? tableId}.${columns || '?'}`;
+}
+
 function renderNoteNode(data: NoteNodeData): string {
   const commentMarker = renderCommentMarker(data.commentMarker, 'note', 'note', data.noteId);
   const deleteButton = data.readOnly
@@ -2037,12 +2444,19 @@ function renderNoteNode(data: NoteNodeData): string {
 }
 
 function renderTableNode(data: TableNodeData): string {
-  const rows = data.columns.map((column) => renderColumnRow(column, data.columnCommentMarkers[column.id])).join('');
+  const rows = data.columns
+    .map((column) =>
+      renderColumnRow(column, data.columnCommentMarkers[column.id], data.selectedColumnId === column.id),
+    )
+    .join('');
   const commentMarker = renderCommentMarker(data.commentMarker, `table ${data.tableName}`, 'table', data.tableId);
   const displayClass = data.columns.length === 0 ? 'is-collapsed' : '';
-  const resizeHandle = data.readOnly
+  const resizeHandle = data.readOnly || !data.selected
     ? ''
-    : '<button aria-label="Resize table" class="tabliodb-table-node__resize-handle" type="button"></button>';
+    : [
+        '<button aria-label="Resize table from left" class="tabliodb-table-node__resize-zone tabliodb-table-node__resize-zone--left" data-resize-side="left" type="button"></button>',
+        '<button aria-label="Resize table from right" class="tabliodb-table-node__resize-zone tabliodb-table-node__resize-zone--right" data-resize-side="right" type="button"></button>',
+      ].join('');
 
   return `
     <div class="tabliodb-table-node ${data.selected ? 'is-selected' : ''} ${displayClass}" data-tabliodb-table-id="${escapeHtml(data.tableId)}" style="--table-accent: ${escapeHtml(data.color)}">
@@ -2065,7 +2479,11 @@ const keyRoundSvg =
 const SnowFlakeSvg =
   `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-snowflake-icon lucide-snowflake"><path d="m10 20-1.25-2.5L6 18"/><path d="M10 4 8.75 6.5 6 6"/><path d="m14 20 1.25-2.5L18 18"/><path d="m14 4 1.25 2.5L18 6"/><path d="m17 21-3-6h-4"/><path d="m17 3-3 6 1.5 3"/><path d="M2 12h6.5L10 9"/><path d="m20 10-1.5 2 1.5 2"/><path d="M22 12h-6.5L14 15"/><path d="m4 10 1.5 2L4 14"/><path d="m7 21 3-6-1.5-3"/><path d="m7 3 3 6h4"/></svg>`.trim();
 
-function renderColumnRow(column: DatabaseColumn, commentMarkerCount: CommentMarkerCount | undefined): string {
+function renderColumnRow(
+  column: DatabaseColumn,
+  commentMarkerCount: CommentMarkerCount | undefined,
+  selected: boolean,
+): string {
   const commentMarker = renderCommentMarker(commentMarkerCount, `column ${column.name}`, 'column', column.id);
   const badges = [
     column.primaryKey ? `<span class="tabliodb-table-node__badge">${keyRoundSvg}</span>` : '',
@@ -2073,7 +2491,7 @@ function renderColumnRow(column: DatabaseColumn, commentMarkerCount: CommentMark
   ].join('');
 
   return `
-    <div class="tabliodb-table-node__column">
+    <div class="tabliodb-table-node__column ${selected ? 'is-selected' : ''}" data-tabliodb-column-id="${escapeHtml(column.id)}">
       <span class="tabliodb-table-node__column-name ${column.primaryKey ? 'font-extrabold! text-black!' : ''}">${escapeHtml(column.name)}</span>
       <span class="tabliodb-table-node__column-type">${escapeHtml(formatColumnType(column.type))}${column.nullable ? '<span class="font-extrabold!">?</span>' : ''}</span>
       <span class="tabliodb-table-node__badges">${commentMarker}${badges}</span>

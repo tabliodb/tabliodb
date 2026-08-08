@@ -86,6 +86,7 @@ type InlineStringValidationResult = {
 };
 
 export type TableStructureSidebarProps = {
+  activeColumnId?: string | null;
   model: DiagramModel;
   onClearTableSelection: () => void;
   onColumnSelect?: (columnId: string) => void;
@@ -97,6 +98,7 @@ export type TableStructureSidebarProps = {
 };
 
 export function TableStructureSidebar({
+  activeColumnId = null,
   model,
   onClearTableSelection,
   onColumnSelect,
@@ -128,6 +130,23 @@ export function TableStructureSidebar({
       setSelectedColumnId(columns[0]?.id ?? null);
     }
   }, [columnIds, columns, selectedColumnId, table]);
+
+  useEffect(() => {
+    if (!activeColumnId || !columns.some((column) => column.id === activeColumnId)) {
+      return;
+    }
+
+    if (selectedColumnId !== activeColumnId) {
+      // Fokus eksternal dari canvas harus menang atas selection lokal supaya sidebar mengikuti row column yang user klik.
+      setSelectedColumnId(activeColumnId);
+    }
+
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-tabliodb-sidebar-column-id="${CSS.escape(activeColumnId)}"]`)
+        ?.scrollIntoView({ block: 'nearest' });
+    });
+  }, [activeColumnId, columns, selectedColumnId]);
 
   useEffect(() => {
     setActiveAttributesColumnId(null);
@@ -723,6 +742,7 @@ function ColumnEditorRow({
           ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))] shadow-[inset_3px_0_0_rgb(var(--tabliodb-primary)),0_2px_0_rgb(var(--tabliodb-border))]'
           : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
       )}
+      data-tabliodb-sidebar-column-id={column.id}
       onFocus={() => onSelect(column.id)}
       onMouseDown={() => onSelect(column.id)}
     >

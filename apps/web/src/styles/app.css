@@ -221,7 +221,20 @@ body {
   min-height: 26px;
   border-bottom: 1px solid rgb(var(--tabliodb-border));
   padding: 0 12px;
+  cursor: pointer;
   font-size: 10px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.tabliodb-table-node__column:hover {
+  background: rgb(var(--tabliodb-sky-soft));
+}
+
+.tabliodb-table-node__column.is-selected {
+  background: #dff4ff;
+  color: rgb(var(--tabliodb-sky-text));
 }
 
 .tabliodb-table-node__column:last-child {
@@ -287,35 +300,23 @@ body {
   font-weight: 900;
 }
 
-.tabliodb-table-node__resize-handle {
+.tabliodb-table-node__resize-zone {
   position: absolute;
-  top: 12px;
-  right: 0;
-  bottom: 12px;
-  width: 10px;
+  top: 0;
+  bottom: 0;
+  width: 12px;
   cursor: ew-resize;
   border: 0;
-  border-radius: 999px 0 0 999px;
   background: transparent;
-}
-
-.tabliodb-table-node__resize-handle::after {
-  position: absolute;
-  top: 50%;
-  right: 2px;
-  width: 3px;
-  height: 28px;
-  transform: translateY(-50%);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--table-accent) 55%, rgb(var(--tabliodb-border-strong)));
-  content: '';
   opacity: 0;
-  transition: opacity 120ms ease;
 }
 
-.tabliodb-table-node:hover .tabliodb-table-node__resize-handle::after,
-.tabliodb-table-node__resize-handle:focus-visible::after {
-  opacity: 1;
+.tabliodb-table-node__resize-zone--left {
+  left: -6px;
+}
+
+.tabliodb-table-node__resize-zone--right {
+  right: -6px;
 }
 
 .tabliodb-note-node {

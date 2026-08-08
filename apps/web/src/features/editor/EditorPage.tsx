@@ -1503,6 +1503,7 @@ export function EditorPage() {
   }
 
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
+  const selectedColumnId = selectedCommentTarget?.targetType === 'column' ? selectedCommentTarget.targetId : null;
   const sqlPreview = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
   // Expanded sidebars share one comfortable width so table controls do not collapse into cramped rows.
   const expandedSidebarWidth = 'var(--tabliodb-sidebar-width)';
@@ -1912,11 +1913,13 @@ export function EditorPage() {
             fitSignal={fitSignal}
             model={model}
             onCommentTargetOpen={handleCommentMarkerOpen}
+            onColumnSelect={(columnId) => setSelectedCommentTarget({ targetId: columnId, targetType: 'column' })}
             onLocalCursorChange={handleCanvasCursorChange}
             onModelChange={handleModelChange}
             onSelectedTableChange={handleSelectedTableChange}
             readOnly={!canEditDiagram}
             remoteCursors={remoteCanvasCursors}
+            selectedColumnId={selectedColumnId}
             selectedTableId={selectedTableId}
             toolbar={canvasToolbar}
             toolbarOffsetLeft={canvasToolbarOffsetLeft}
@@ -1943,6 +1946,7 @@ export function EditorPage() {
               onModelChange={handleModelChange}
               onTableSelect={handleSelectedTableChange}
               readOnly={!canEditDiagram}
+              selectedColumnId={selectedColumnId}
               selectedTableId={selectedTableId}
             />
           )}
@@ -4485,6 +4489,7 @@ function DiagramTablesSidebar({
   onModelChange,
   onTableSelect,
   readOnly,
+  selectedColumnId,
   selectedTableId,
 }: {
   model: DiagramModel;
@@ -4494,6 +4499,7 @@ function DiagramTablesSidebar({
   onModelChange: (model: DiagramModel) => void;
   onTableSelect: (tableId: string | null) => void;
   readOnly: boolean;
+  selectedColumnId: string | null;
   selectedTableId: string | null;
 }) {
   const [tableSearchTerm, setTableSearchTerm] = useState('');
@@ -4576,6 +4582,7 @@ function DiagramTablesSidebar({
       {selectedTable ? (
         <div className="min-h-0 flex-1">
           <TableStructureSidebar
+            activeColumnId={selectedColumnId}
             model={model}
             onClearTableSelection={onClearTableSelection}
             onColumnSelect={onColumnSelect}
