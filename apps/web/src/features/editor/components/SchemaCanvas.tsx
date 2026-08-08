@@ -20,7 +20,7 @@ import {
 } from '@tabliodb/schema-core';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@/resources/comments';
 import type { AwarenessState } from '@tabliodb/shared';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import {
   createCommentMarkerSummary,
   formatCommentMarkerCount,
@@ -80,6 +80,8 @@ export type SchemaCanvasProps = {
   onSelectedTableChange: (tableId: string | null) => void;
   remoteCursors?: RemoteCanvasCursor[];
   readOnly?: boolean;
+  toolbar?: ReactNode;
+  toolbarOffsetLeft?: string;
 };
 
 export type RemoteCanvasCursor = {
@@ -177,6 +179,8 @@ export function SchemaCanvas({
   readOnly = false,
   remoteCursors = [],
   selectedTableId,
+  toolbar,
+  toolbarOffsetLeft = '1rem',
 }: SchemaCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -742,6 +746,11 @@ export function SchemaCanvas({
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden bg-[rgb(var(--tabliodb-canvas))]">
       <div className="tabliodb-x6-canvas absolute inset-0" ref={containerRef} />
+      {toolbar ? (
+        <div className="absolute top-4 z-20 transition-[left] duration-200" style={{ left: toolbarOffsetLeft }}>
+          {toolbar}
+        </div>
+      ) : null}
       {minimapState && minimapOpen ? (
         <CanvasMinimap onCenter={handleMinimapCenter} onClose={() => setMinimapOpen(false)} state={minimapState} />
       ) : minimapState ? (

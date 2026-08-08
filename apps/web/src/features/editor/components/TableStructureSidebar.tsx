@@ -93,6 +93,7 @@ export type TableStructureSidebarProps = {
   onModelChange: (model: DiagramModel) => void;
   readOnly?: boolean;
   selectedTableId: string;
+  showHeader?: boolean;
 };
 
 export function TableStructureSidebar({
@@ -103,6 +104,7 @@ export function TableStructureSidebar({
   onModelChange,
   readOnly = false,
   selectedTableId,
+  showHeader = true,
 }: TableStructureSidebarProps) {
   const table = model.tables[selectedTableId] ?? null;
   const columns = useMemo(() => (table ? getTableColumns(model, table.id) : []), [model, table]);
@@ -322,22 +324,24 @@ export function TableStructureSidebar({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] px-3">
-        <div
-          className="grid size-8 shrink-0 place-items-center rounded-[13px] text-white shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
-          style={{ backgroundColor: getDisplayTableColor(table.color) }}
-        >
-          <Columns3 className="size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-            Table structure
+      {showHeader ? (
+        <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] px-3">
+          <div
+            className="grid size-8 shrink-0 place-items-center rounded-[13px] text-white shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
+            style={{ backgroundColor: getDisplayTableColor(table.color) }}
+          >
+            <Columns3 className="size-4" />
           </div>
-          <div className="truncate text-[13px] font-extrabold leading-5">{table.name}</div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Table structure
+            </div>
+            <div className="truncate text-[13px] font-extrabold leading-5">{table.name}</div>
+          </div>
+          <IconButton size="lg" icon={PanelLeft} label="Hide sidebar" onClick={onHide} variant="ghost" />
+          <IconButton icon={X} label="Clear table selection" onClick={onClearTableSelection} variant="ghost" />
         </div>
-        <IconButton size="lg" icon={PanelLeft} label="Hide sidebar" onClick={onHide} variant="ghost" />
-        <IconButton icon={X} label="Back to projects" onClick={onClearTableSelection} variant="ghost" />
-      </div>
+      ) : null}
 
       <div
         className={cn(
@@ -367,30 +371,36 @@ export function TableStructureSidebar({
             <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
               Color
             </div>
-            <div className="flex flex-wrap gap-2">
-              {tableColorOptions.map((color) => {
-                const colorLabel = getTableColorLabel(color);
+            {readOnly ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <span className="size-3 rounded-full" style={{ backgroundColor: getDisplayTableColor(table.color) }} />
+                {getTableColorLabel(getDisplayTableColor(table.color))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {tableColorOptions.map((color) => {
+                  const colorLabel = getTableColorLabel(color);
 
-                return (
-                  <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
-                    <button
-                      aria-label={`Use ${colorLabel}`}
-                      className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={readOnly}
-                      onClick={() => handleColorChange(color)}
-                      style={{
-                        backgroundColor: color,
-                        boxShadow:
-                          getDisplayTableColor(table.color) === color
-                            ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
-                            : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
-                      }}
-                      type="button"
-                    />
-                  </WithTooltip>
-                );
-              })}
-            </div>
+                  return (
+                    <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
+                      <button
+                        aria-label={`Use ${colorLabel}`}
+                        className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
+                        onClick={() => handleColorChange(color)}
+                        style={{
+                          backgroundColor: color,
+                          boxShadow:
+                            getDisplayTableColor(table.color) === color
+                              ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
+                              : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
+                        }}
+                        type="button"
+                      />
+                    </WithTooltip>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="mt-3">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -401,32 +411,35 @@ export function TableStructureSidebar({
                 {tableCollapsed ? 'Collapsed' : tableDisplayMode === 'pk_fk_only' ? 'Keys only' : 'All columns'}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <TableDisplayModeButton
-                active={!tableCollapsed && tableDisplayMode === 'all_columns'}
-                disabled={readOnly}
-                icon={Columns3}
-                label="All columns"
-                onClick={() => handleDisplayModeChange('all_columns')}
-              />
-              <TableDisplayModeButton
-                active={!tableCollapsed && tableDisplayMode === 'pk_fk_only'}
-                disabled={readOnly}
-                icon={KeyRound}
-                label="Keys only"
-                onClick={() => handleDisplayModeChange('pk_fk_only')}
-              />
-            </div>
-            <Button
-              className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
-              disabled={readOnly}
-              onClick={handleCollapseToggle}
-              size="sm"
-              variant="secondary"
-            >
-              {tableCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
-              {tableCollapsed ? 'Expand table' : 'Collapse table'}
-            </Button>
+            {!readOnly ? (
+              <>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <TableDisplayModeButton
+                    active={!tableCollapsed && tableDisplayMode === 'all_columns'}
+                    disabled={readOnly}
+                    icon={Columns3}
+                    label="All columns"
+                    onClick={() => handleDisplayModeChange('all_columns')}
+                  />
+                  <TableDisplayModeButton
+                    active={!tableCollapsed && tableDisplayMode === 'pk_fk_only'}
+                    disabled={readOnly}
+                    icon={KeyRound}
+                    label="Keys only"
+                    onClick={() => handleDisplayModeChange('pk_fk_only')}
+                  />
+                </div>
+                <Button
+                  className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
+                  onClick={handleCollapseToggle}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {tableCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+                  {tableCollapsed ? 'Expand table' : 'Collapse table'}
+                </Button>
+              </>
+            ) : null}
           </div>
           <div className="mt-3 border-t border-[rgb(var(--tabliodb-border))] pt-3">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -437,20 +450,26 @@ export function TableStructureSidebar({
                 {tableGroup ? `${tableGroup.tableIds.length} tables` : 'None'}
               </span>
             </div>
-            <Select
-              className={compactSelectClassName}
-              disabled={readOnly || groups.length === 0}
-              onValueChange={handleGroupMembershipChange}
-              options={[
-                { label: 'No module', value: unsetGroupValue },
-                ...groups.map((group) => ({
-                  label: group.name,
-                  value: group.id,
-                })),
-              ]}
-              value={tableGroup?.id ?? unsetGroupValue}
-            />
-            {tableGroup ? (
+            {!readOnly ? (
+              <Select
+                className={compactSelectClassName}
+                disabled={groups.length === 0}
+                onValueChange={handleGroupMembershipChange}
+                options={[
+                  { label: 'No module', value: unsetGroupValue },
+                  ...groups.map((group) => ({
+                    label: group.name,
+                    value: group.id,
+                  })),
+                ]}
+                value={tableGroup?.id ?? unsetGroupValue}
+              />
+            ) : (
+              <div className="rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-2 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                {tableGroup?.name ?? 'No module'}
+              </div>
+            )}
+            {tableGroup && !readOnly ? (
               <div className="mt-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
                 <InlineTextInput
                   ariaLabel="Module name"
@@ -495,10 +514,9 @@ export function TableStructureSidebar({
                   {confirmDeleteGroup ? 'Confirm delete module' : 'Delete module'}
                 </Button>
               </div>
-            ) : (
+            ) : !readOnly ? (
               <Button
                 className="mt-2 h-8 w-full gap-1.5 rounded-[10px] text-[12px]"
-                disabled={readOnly}
                 onClick={handleCreateGroup}
                 size="sm"
                 variant="soft"
@@ -506,18 +524,19 @@ export function TableStructureSidebar({
                 <Plus className="size-3.5" />
                 Create module from table
               </Button>
-            )}
+            ) : null}
           </div>
-          <Button
-            className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-danger-shadow))]"
-            disabled={readOnly}
-            onClick={handleDeleteTable}
-            size="sm"
-            variant="danger"
-          >
-            <Trash2 className="size-3.5" />
-            {confirmDeleteTable ? 'Confirm delete table' : 'Delete table'}
-          </Button>
+          {!readOnly ? (
+            <Button
+              className="mt-3 h-8 w-full gap-1.5 rounded-[10px] text-[12px] shadow-[0_2px_0_rgb(var(--tabliodb-danger-shadow))]"
+              onClick={handleDeleteTable}
+              size="sm"
+              variant="danger"
+            >
+              <Trash2 className="size-3.5" />
+              {confirmDeleteTable ? 'Confirm delete table' : 'Delete table'}
+            </Button>
+          ) : null}
         </section>
 
         <section className="mt-3">
@@ -528,10 +547,12 @@ export function TableStructureSidebar({
                 {columns.length} fields in {table.name}
               </p>
             </div>
-            <Button disabled={readOnly} onClick={handleAddColumn} size="sm" variant="soft">
-              <Plus className="size-4" />
-              Column
-            </Button>
+            {!readOnly ? (
+              <Button onClick={handleAddColumn} size="sm" variant="soft">
+                <Plus className="size-4" />
+                Column
+              </Button>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -896,12 +917,14 @@ function ColumnAttributesPopoverContent({
           Auto increment
         </label>
 
-        <div className="border-t border-[rgb(var(--tabliodb-border))] pt-2.5">
-          <Button className="w-full justify-start" disabled={disabled} onClick={onDelete} size="sm" variant="danger">
-            <Trash2 className="size-4" />
-            {confirmDeleteColumn ? 'Confirm delete column' : 'Delete column'}
-          </Button>
-        </div>
+        {!disabled ? (
+          <div className="border-t border-[rgb(var(--tabliodb-border))] pt-2.5">
+            <Button className="w-full justify-start" onClick={onDelete} size="sm" variant="danger">
+              <Trash2 className="size-4" />
+              {confirmDeleteColumn ? 'Confirm delete column' : 'Delete column'}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

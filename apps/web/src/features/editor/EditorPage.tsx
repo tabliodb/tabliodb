@@ -6,11 +6,13 @@ import {
   diagramReviewSignalCodes,
   getDiagramModelIntegrityWarnings,
   getRelationshipColumnPairs,
+  getTableColumns,
   applyDiagramCommand,
   createDiagramEntityId,
   parseDiagramModel,
   stringifyDiagramModel,
   type DatabaseDialect,
+  type DatabaseTable,
   type DiagramEntityKind,
   type DiagramModel,
   type DiagramModelIntegrityWarning,
@@ -24,6 +26,7 @@ import {
   Permission,
   ProjectRole,
   isGranted,
+  permissionsForOrganizationRole,
   permissionsForProjectRole,
   type OrganizationRoleValue,
   type ProjectRoleValue,
@@ -109,7 +112,6 @@ import {
   FileUp,
   FileWarning,
   FolderPlus,
-  GitBranch,
   History,
   ImageDown,
   Loader2,
@@ -122,7 +124,6 @@ import {
   Save,
   Search,
   Settings,
-  Share2,
   ShieldCheck,
   SlidersHorizontal,
   StickyNote,
@@ -237,6 +238,7 @@ import { CommentBody } from './components/CommentBody';
 import { SchemaCanvas, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
+import { getDisplayTableColor } from './table-colors';
 
 const CommentComposer = lazy(() => import('./components/CommentComposer'));
 
@@ -536,6 +538,7 @@ export function EditorPage() {
   const [snapshotHistoryOpen, setSnapshotHistoryOpen] = useState(false);
   const [importJsonOpen, setImportJsonOpen] = useState(false);
   const [importSqlOpen, setImportSqlOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
@@ -602,6 +605,15 @@ export function EditorPage() {
     : false;
   const canCommentDiagram = activeProject
     ? hasProjectPermission(activeProject.projectRole, Permission.DiagramComment)
+    : false;
+  const canManageWorkspace = activeOrganization
+    ? hasOrganizationPermission(activeOrganization.role, Permission.OrganizationManage)
+    : false;
+  const canCreateProject = activeOrganization
+    ? hasOrganizationPermission(activeOrganization.role, Permission.ProjectCreate)
+    : false;
+  const canManageProject = activeProject
+    ? hasProjectPermission(activeProject.projectRole, Permission.ProjectUpdate)
     : false;
 
   const snapshotsQuery = useQuery(
@@ -1464,7 +1476,7 @@ export function EditorPage() {
       <ErrorState
         error={
           new Error(
-            isOrganizationManager(activeOrganization)
+            canCreateProject
               ? 'No project found. Create a project from this workspace to start designing.'
               : 'No project is available for your account yet. Ask a workspace owner to grant you project or team access.',
           )
@@ -1497,6 +1509,18 @@ export function EditorPage() {
   const collapsedSidebarWidth = '44px';
   const leftSidebarWidth = leftSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
   const rightSidebarWidth = rightSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
+  const canvasToolbarOffsetLeft = leftSidebarOpen
+    ? `calc(${expandedSidebarWidth} + 16px)`
+    : `calc(${collapsedSidebarWidth} + 12px)`;
+  const canvasToolbar = canEditDiagram ? (
+    <div className="flex items-center gap-2 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-1.5 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgb(15_23_42/0.12)] backdrop-blur">
+      <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} triggerSize="sm" />
+      <Button className="gap-2" disabled={!canEditDiagram} onClick={handleAddNote} size="sm" variant="secondary">
+        <StickyNote className="size-4" />
+        Note
+      </Button>
+    </div>
+  ) : null;
 
   return (
     <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
@@ -1505,40 +1529,79 @@ export function EditorPage() {
           <div className="flex shrink-0 items-center gap-2">
             <img src={LOGO} alt="Tabliodb" className="w-32" />
           </div>
-          <div className="min-w-0 border-l border-[rgb(var(--tabliodb-border))] pl-3">
-            <h1 className="truncate text-[14px] font-extrabold leading-5">
-              {activeProject?.name ?? defaultProjectName}
-            </h1>
-            <p className="truncate text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-              {activeDiagram?.name ?? defaultDiagramName} / {model.dialect} / snapshot v{latestSnapshot?.version ?? 0}
-            </p>
-          </div>
+          <WorkspaceProjectMenu
+            activeDiagram={activeDiagram}
+            activeOrganization={activeOrganization}
+            activeProject={activeProject}
+            canCreateProject={canCreateProject}
+            diagrams={diagrams}
+            onCreateProject={() => setCreateProjectOpen(true)}
+            onDiagramSelect={(diagram) => {
+              modelRef.current = null;
+              persistedDraftSignatureRef.current = null;
+              setModel(null);
+              setSelectedTableId(null);
+              setSelectedCommentTarget(null);
+              navigate(
+                routes.diagram.to({
+                  diagramId: diagram.id,
+                  projectId: activeProject.id,
+                  workspaceSlug: getWorkspaceSlug(activeProject),
+                }),
+              );
+            }}
+            onOrganizationSelect={(organization) => {
+              modelRef.current = null;
+              persistedDraftSignatureRef.current = null;
+              setModel(null);
+              setSelectedTableId(null);
+              setSelectedCommentTarget(null);
+              setProjectSearchTerm('');
+              navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+            }}
+            onProjectSearchChange={setProjectSearchTerm}
+            onProjectSelect={(project) => {
+              modelRef.current = null;
+              persistedDraftSignatureRef.current = null;
+              setModel(null);
+              setSelectedTableId(null);
+              setSelectedCommentTarget(null);
+              navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+            }}
+            organizations={organizations}
+            projectSearchTerm={projectSearchTerm}
+            projects={filteredProjects}
+          />
         </div>
         <div className="flex items-center gap-1">
           <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
-          <div className="hidden items-center gap-1 xl:flex">
-            <IconButton
-              disabled={!canEditDiagram || !canUndoModelChange}
-              icon={Undo2}
-              label="Undo last edit"
-              onClick={handleUndoModelChange}
-            />
-            <IconButton
-              disabled={!canEditDiagram || !canRedoModelChange}
-              icon={Redo2}
-              label="Redo last edit"
-              onClick={handleRedoModelChange}
-            />
-          </div>
+          {canEditDiagram ? (
+            <div className="hidden items-center gap-1 xl:flex">
+              <IconButton
+                disabled={!canUndoModelChange}
+                icon={Undo2}
+                label="Undo last edit"
+                onClick={handleUndoModelChange}
+              />
+              <IconButton
+                disabled={!canRedoModelChange}
+                icon={Redo2}
+                label="Redo last edit"
+                onClick={handleRedoModelChange}
+              />
+            </div>
+          ) : null}
           <CollaborationPresence collaborators={collaborators} status={collaborationStatus} />
-          <div className="relative">
-            <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
-            {openCommentThreadCount > 0 ? (
-              <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
-                {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
-              </span>
-            ) : null}
-          </div>
+          {canCommentDiagram ? (
+            <div className="relative">
+              <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
+              {openCommentThreadCount > 0 ? (
+                <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
+                  {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
             <DropdownMenuTrigger asChild>
               <div className="relative">
@@ -1603,55 +1666,57 @@ export function EditorPage() {
             label="Snapshot history"
             onClick={() => setSnapshotHistoryOpen(true)}
           />
-          <IconButton disabled icon={GitBranch} label="Branches coming soon" />
           <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
           {activeProject ? (
             <>
-              <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
-              <ProjectSettingsDialog
-                onArchived={() => {
-                  modelRef.current = null;
-                  persistedDraftSignatureRef.current = null;
-                  setModel(null);
-                  setSelectedTableId(null);
-                  setSelectedCommentTarget(null);
-                  navigate(routes.home.to(), { replace: true });
-                }}
-                project={activeProject}
-              />
-              <DiagramSettingsDialog
-                canEdit={canEditDiagram}
-                diagram={activeDiagram}
-                model={model}
-                onUpdated={(diagram) => {
-                  setModel((current) => {
-                    if (!current) {
-                      return current;
-                    }
+              {canManageWorkspace ? (
+                <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
+              ) : null}
+              {canManageProject ? (
+                <ProjectSettingsDialog
+                  onArchived={() => {
+                    modelRef.current = null;
+                    persistedDraftSignatureRef.current = null;
+                    setModel(null);
+                    setSelectedTableId(null);
+                    setSelectedCommentTarget(null);
+                    navigate(routes.home.to(), { replace: true });
+                  }}
+                  project={activeProject}
+                />
+              ) : null}
+              {canEditDiagram ? (
+                <DiagramSettingsDialog
+                  canEdit={canEditDiagram}
+                  diagram={activeDiagram}
+                  model={model}
+                  onUpdated={(diagram) => {
+                    setModel((current) => {
+                      if (!current) {
+                        return current;
+                      }
 
-                    const nextModel = updateLiveModelFromDiagram(current, diagram, modelRef);
+                      const nextModel = updateLiveModelFromDiagram(current, diagram, modelRef);
 
-                    syncModelToCollaboration(nextModel);
+                      syncModelToCollaboration(nextModel);
 
-                    return nextModel;
-                  });
-                }}
-              />
+                      return nextModel;
+                    });
+                  }}
+                />
+              ) : null}
             </>
           ) : null}
-          <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} />
-          <Button className="gap-2" disabled={!canEditDiagram} onClick={handleAddNote} variant="secondary">
-            <StickyNote className="size-4" />
-            Note
-          </Button>
-          <Button
-            className="gap-2"
-            disabled={saveSnapshotMutation.isPending || !canCreateSnapshot}
-            onClick={handleSaveSnapshot}
-          >
-            {saveSnapshotMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            Snapshot
-          </Button>
+          {canCreateSnapshot ? (
+            <Button className="gap-2" disabled={saveSnapshotMutation.isPending} onClick={handleSaveSnapshot}>
+              {saveSnapshotMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              Snapshot
+            </Button>
+          ) : null}
           <Button className="gap-2" onClick={() => setSqlPreviewOpen(true)} variant="sky">
             <Play className="size-4" />
             SQL
@@ -1661,39 +1726,47 @@ export function EditorPage() {
               <IconButton icon={MoreHorizontal} label="More actions" variant="secondary" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={!canEditDiagram || !canUndoModelChange} onSelect={handleUndoModelChange}>
-                <Undo2 className="size-4" />
-                Undo last edit
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={!canEditDiagram || !canRedoModelChange} onSelect={handleRedoModelChange}>
-                <Redo2 className="size-4" />
-                Redo last edit
-              </DropdownMenuItem>
-              <DropdownMenuSeparatorItem />
+              {canEditDiagram ? (
+                <>
+                  <DropdownMenuItem disabled={!canUndoModelChange} onSelect={handleUndoModelChange}>
+                    <Undo2 className="size-4" />
+                    Undo last edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={!canRedoModelChange} onSelect={handleRedoModelChange}>
+                    <Redo2 className="size-4" />
+                    Redo last edit
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparatorItem />
+                </>
+              ) : null}
               <DropdownMenuItem onSelect={() => setFitSignal((value) => value + 1)}>
                 <LocateFixed className="size-4" />
                 Fit diagram
               </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!canEditDiagram || importDiagramMutation.isPending}
-                onSelect={() => {
-                  importDiagramMutation.reset();
-                  setImportJsonOpen(true);
-                }}
-              >
-                <FileUp className="size-4" />
-                Import Tabliodb JSON
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!canEditDiagram || importDiagramMutation.isPending}
-                onSelect={() => {
-                  importDiagramMutation.reset();
-                  setImportSqlOpen(true);
-                }}
-              >
-                <Code2 className="size-4" />
-                Import SQL DDL
-              </DropdownMenuItem>
+              {canEditDiagram ? (
+                <>
+                  <DropdownMenuItem
+                    disabled={importDiagramMutation.isPending}
+                    onSelect={() => {
+                      importDiagramMutation.reset();
+                      setImportJsonOpen(true);
+                    }}
+                  >
+                    <FileUp className="size-4" />
+                    Import Tabliodb JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={importDiagramMutation.isPending}
+                    onSelect={() => {
+                      importDiagramMutation.reset();
+                      setImportSqlOpen(true);
+                    }}
+                  >
+                    <Code2 className="size-4" />
+                    Import SQL DDL
+                  </DropdownMenuItem>
+                </>
+              ) : null}
               <DropdownMenuSeparatorItem />
               <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportSql()}>
                 <Copy className="size-4" />
@@ -1719,26 +1792,16 @@ export function EditorPage() {
                 <ImageDown className="size-4" />
                 Export PNG diagram
               </DropdownMenuItem>
-              <DropdownMenuSeparatorItem />
-              <DropdownMenuItem disabled>
-                <Share2 className="size-4" />
-                Share workspace coming soon
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => navigate(routes.profile.to())}>
-                <UserRound className="size-4" />
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => navigate(routes.adminUsers.to())}>
-                <ShieldCheck className="size-4" />
-                Admin users
-              </DropdownMenuItem>
-              <DropdownMenuSeparatorItem />
-              <DropdownMenuItem disabled={logoutMutation.isPending} onSelect={() => logoutMutation.mutate(undefined)}>
-                <LogOut className="size-4" />
-                Logout
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <UserAccountMenu
+            canOpenAdmin={canManageWorkspace}
+            isLoggingOut={logoutMutation.isPending}
+            onAdmin={() => navigate(routes.adminUsers.to())}
+            onLogout={() => logoutMutation.mutate(undefined)}
+            onProfile={() => navigate(routes.profile.to())}
+            user={currentUser}
+          />
         </div>
       </header>
 
@@ -1823,119 +1886,26 @@ export function EditorPage() {
         selectedTableId={selectedTable?.id ?? null}
       />
 
-      <div
-        className="grid min-h-0 flex-1 transition-[grid-template-columns] duration-200"
-        style={{ gridTemplateColumns: `${leftSidebarWidth} minmax(0,1fr) ${rightSidebarWidth}` }}
-      >
-        <aside className="relative min-w-0 overflow-hidden border-r border-[rgb(var(--tabliodb-border))] bg-white">
-          {!leftSidebarOpen ? (
-            <SidebarRail
-              icon={PanelLeft}
-              label="Show left sidebar"
-              onClick={() => setLeftSidebarOpen(true)}
-              side="left"
-            />
-          ) : selectedTable ? (
-            <TableStructureSidebar
-              model={model}
-              onClearTableSelection={() => handleSelectedTableChange(null)}
-              onHide={() => setLeftSidebarOpen(false)}
-              onColumnSelect={(columnId) => setSelectedCommentTarget({ targetId: columnId, targetType: 'column' })}
-              onModelChange={handleModelChange}
-              readOnly={!canEditDiagram}
-              selectedTableId={selectedTable.id}
-            />
-          ) : (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="flex h-(--tabliodb-header-height) shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4">
-                <div className="grid size-8 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-                  <Database className="size-4" />
-                </div>
-                <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold">Workspace</span>
-                <IconButton
-                  size="lg"
-                  icon={PanelLeft}
-                  label="Hide left sidebar"
-                  onClick={() => setLeftSidebarOpen(false)}
-                />
-              </div>
-              <div className="tabliodb-sclrollbar min-h-0 flex-1 overflow-y-auto p-3">
-                <WorkspaceSwitcher
-                  activeOrganization={activeOrganization}
-                  onSelect={(organization) => {
-                    modelRef.current = null;
-                    persistedDraftSignatureRef.current = null;
-                    setModel(null);
-                    setSelectedTableId(null);
-                    setSelectedCommentTarget(null);
-                    setProjectSearchTerm('');
-                    navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
-                  }}
-                  organizations={organizations}
-                />
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                    Projects
-                  </span>
-                  <CreateProjectDialog
-                    organizationId={activeOrganization?.id ?? null}
-                    onCreated={(project) => {
-                      modelRef.current = null;
-                      persistedDraftSignatureRef.current = null;
-                      setModel(null);
-                      setSelectedTableId(null);
-                      setSelectedCommentTarget(null);
-                      navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
-                    }}
-                  />
-                </div>
-                <div className="relative mb-4">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
-                  <Input
-                    className="pl-9"
-                    onChange={(event) => setProjectSearchTerm(event.target.value)}
-                    placeholder="Search projects"
-                    value={projectSearchTerm}
-                  />
-                </div>
-                {filteredProjects.length === 0 ? (
-                  <div className="rounded-(--tabliodb-radius-md) border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                    No matching projects
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {filteredProjects.map((project) => (
-                      <button
-                        className={`flex w-full cursor-pointer items-center justify-between rounded-(--tabliodb-radius-md) border px-3 py-2 text-left text-[13px] font-bold transition ${
-                          project.id === activeProject?.id
-                            ? 'border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]'
-                            : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface))]'
-                        }`}
-                        key={project.id}
-                        onClick={() => {
-                          modelRef.current = null;
-                          persistedDraftSignatureRef.current = null;
-                          setModel(null);
-                          setSelectedTableId(null);
-                          setSelectedCommentTarget(null);
-                          navigate(
-                            routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }),
-                          );
-                        }}
-                        type="button"
-                      >
-                        <span className="min-w-0 truncate">{project.name}</span>
-                        <span className="text-xs opacity-70">{project.slug}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </aside>
+      {canCreateProject ? (
+        <CreateProjectDialog
+          onCreated={(project) => {
+            modelRef.current = null;
+            persistedDraftSignatureRef.current = null;
+            setModel(null);
+            setSelectedTableId(null);
+            setSelectedCommentTarget(null);
+            setCreateProjectOpen(false);
+            navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+          }}
+          onOpenChange={setCreateProjectOpen}
+          open={createProjectOpen}
+          organizationId={activeOrganization.id}
+          trigger={null}
+        />
+      ) : null}
 
-        <section className="flex min-h-0 min-w-0">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <section className="absolute inset-0 flex min-h-0 min-w-0">
           <SchemaCanvas
             commentTargetSummaries={commentTargetSummaries}
             fitKey={activeDiagram?.id ?? 'empty'}
@@ -1948,29 +1918,65 @@ export function EditorPage() {
             readOnly={!canEditDiagram}
             remoteCursors={remoteCanvasCursors}
             selectedTableId={selectedTableId}
+            toolbar={canvasToolbar}
+            toolbarOffsetLeft={canvasToolbarOffsetLeft}
           />
         </section>
 
+        <aside
+          className="absolute inset-y-0 left-0 z-30 min-w-0 overflow-hidden border-r border-[rgb(var(--tabliodb-border))] bg-white shadow-[12px_0_28px_rgb(15_23_42/0.06)] transition-[width] duration-200"
+          style={{ width: leftSidebarWidth }}
+        >
+          {!leftSidebarOpen ? (
+            <SidebarRail
+              icon={PanelLeft}
+              label="Show left sidebar"
+              onClick={() => setLeftSidebarOpen(true)}
+              side="left"
+            />
+          ) : (
+            <DiagramTablesSidebar
+              model={model}
+              onClearTableSelection={() => handleSelectedTableChange(null)}
+              onHide={() => setLeftSidebarOpen(false)}
+              onColumnSelect={(columnId) => setSelectedCommentTarget({ targetId: columnId, targetType: 'column' })}
+              onModelChange={handleModelChange}
+              onTableSelect={handleSelectedTableChange}
+              readOnly={!canEditDiagram}
+              selectedTableId={selectedTableId}
+            />
+          )}
+        </aside>
+
         {rightSidebarOpen ? (
-          <SchemaInspector
-            // Tombol ignore hanya aktif untuk signal server-backed; draft lokal tetap menampilkan lint langsung supaya user tidak bisa ignore state yang belum tersimpan.
-            canIgnoreReviewSignals={canEditDiagram && persistedReviewSignals !== null}
-            commentTargetSummaries={commentTargetSummaries}
-            isIgnoringReviewSignal={ignoreReviewSignalMutation.isPending}
-            latestSnapshotVersion={latestSnapshot?.version ?? 0}
-            model={model}
-            onHide={() => setRightSidebarOpen(false)}
-            onModelChange={handleModelChange}
-            onCommentTargetSelect={setSelectedCommentTarget}
-            onReviewSignalIgnore={(signalId) => ignoreReviewSignalMutation.mutate(signalId)}
-            onTableSelect={handleSelectedTableChange}
-            readOnly={!canEditDiagram}
-            reviewSettings={reviewSignalSettingsQuery.data?.effective}
-            reviewSignals={persistedReviewSignals}
-            selectedTableId={selectedTableId}
-          />
+          <div
+            className="absolute inset-y-0 right-0 z-30 min-w-0 shadow-[-12px_0_28px_rgb(15_23_42/0.06)] transition-[width] duration-200"
+            style={{ width: rightSidebarWidth }}
+          >
+            <SchemaInspector
+              // Tombol ignore hanya aktif untuk signal server-backed; draft lokal tetap menampilkan lint langsung supaya user tidak bisa ignore state yang belum tersimpan.
+              canIgnoreReviewSignals={canEditDiagram && persistedReviewSignals !== null}
+              className="h-full w-full"
+              commentTargetSummaries={commentTargetSummaries}
+              isIgnoringReviewSignal={ignoreReviewSignalMutation.isPending}
+              latestSnapshotVersion={latestSnapshot?.version ?? 0}
+              model={model}
+              onHide={() => setRightSidebarOpen(false)}
+              onModelChange={handleModelChange}
+              onCommentTargetSelect={setSelectedCommentTarget}
+              onReviewSignalIgnore={(signalId) => ignoreReviewSignalMutation.mutate(signalId)}
+              onTableSelect={handleSelectedTableChange}
+              readOnly={!canEditDiagram}
+              reviewSettings={reviewSignalSettingsQuery.data?.effective}
+              reviewSignals={persistedReviewSignals}
+              selectedTableId={selectedTableId}
+            />
+          </div>
         ) : (
-          <aside className="min-w-0 overflow-hidden border-l border-[rgb(var(--tabliodb-border))] bg-white">
+          <aside
+            className="absolute inset-y-0 right-0 z-30 min-w-0 overflow-hidden border-l border-[rgb(var(--tabliodb-border))] bg-white transition-[width] duration-200"
+            style={{ width: rightSidebarWidth }}
+          >
             <SidebarRail
               icon={PanelRight}
               label="Show inspector"
@@ -4216,6 +4222,424 @@ function SidebarRail({
   );
 }
 
+function WorkspaceProjectMenu({
+  activeDiagram,
+  activeOrganization,
+  activeProject,
+  canCreateProject,
+  diagrams,
+  onCreateProject,
+  onDiagramSelect,
+  onOrganizationSelect,
+  onProjectSearchChange,
+  onProjectSelect,
+  organizations,
+  projectSearchTerm,
+  projects,
+}: {
+  activeDiagram: DiagramResponseDto;
+  activeOrganization: OrganizationDto;
+  activeProject: ProjectResponseDto;
+  canCreateProject: boolean;
+  diagrams: DiagramResponseDto[];
+  onCreateProject: () => void;
+  onDiagramSelect: (diagram: DiagramResponseDto) => void;
+  onOrganizationSelect: (organization: OrganizationDto) => void;
+  onProjectSearchChange: (value: string) => void;
+  onProjectSelect: (project: ProjectResponseDto) => void;
+  organizations: OrganizationDto[];
+  projectSearchTerm: string;
+  projects: ProjectResponseDto[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <DropdownMenu onOpenChange={setOpen} open={open}>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex min-w-0 cursor-pointer items-center gap-2 border-l border-[rgb(var(--tabliodb-border))] py-1 pl-3 text-left transition hover:text-[rgb(var(--tabliodb-primary-text))]"
+          type="button"
+        >
+          <div className="min-w-0">
+            <h1 className="truncate text-[14px] font-extrabold leading-5">{activeProject.name}</h1>
+            <p className="truncate text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              {activeDiagram.name} / {activeDiagram.dialect} / {activeOrganization.name}
+            </p>
+          </div>
+          <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[380px] p-2">
+        <div className="px-2 py-1">
+          <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Workspace
+          </div>
+          <div className="mt-1 grid max-h-36 gap-1 overflow-y-auto">
+            {organizations.map((organization) => {
+              const isActive = organization.id === activeOrganization.id;
+
+              return (
+                <DropdownMenuItem
+                  className="justify-between"
+                  key={organization.id}
+                  onSelect={() => {
+                    if (!isActive) {
+                      onOrganizationSelect(organization);
+                    }
+
+                    setOpen(false);
+                  }}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-extrabold">{organization.name}</span>
+                    <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                      {organization.slug}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <Badge variant={isOrganizationManager(organization) ? 'blue' : 'neutral'}>
+                      {formatOrganizationRole(organization.role)}
+                    </Badge>
+                    {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
+        </div>
+
+        <DropdownMenuSeparatorItem />
+
+        <div className="px-2 py-1.5">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Projects
+            </div>
+            {canCreateProject ? (
+              <Button
+                onClick={(event) => {
+                  event.preventDefault();
+                  setOpen(false);
+                  // Dialog project dibuat di luar dropdown supaya focus trap Radix tidak saling bertabrakan.
+                  onCreateProject();
+                }}
+                size="sm"
+                variant="soft"
+              >
+                <FolderPlus className="size-3.5" />
+                Project
+              </Button>
+            ) : null}
+          </div>
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+            <Input
+              className="h-9 pl-9 text-[13px]"
+              onChange={(event) => onProjectSearchChange(event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
+              placeholder="Search projects"
+              value={projectSearchTerm}
+            />
+          </div>
+          {projects.length === 0 ? (
+            <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              No matching projects
+            </div>
+          ) : (
+            <div className="grid max-h-52 gap-1 overflow-y-auto">
+              {projects.map((project) => {
+                const isActive = project.id === activeProject.id;
+
+                return (
+                  <DropdownMenuItem
+                    className="justify-between"
+                    key={project.id}
+                    onSelect={() => {
+                      if (!isActive) {
+                        onProjectSelect(project);
+                      }
+
+                      setOpen(false);
+                    }}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-extrabold">{project.name}</span>
+                      <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                        {project.slug}
+                      </span>
+                    </span>
+                    {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                  </DropdownMenuItem>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {diagrams.length > 1 ? (
+          <>
+            <DropdownMenuSeparatorItem />
+            <div className="px-2 py-1.5">
+              <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Diagrams
+              </div>
+              <div className="grid max-h-40 gap-1 overflow-y-auto">
+                {diagrams.map((diagram) => {
+                  const isActive = diagram.id === activeDiagram.id;
+
+                  return (
+                    <DropdownMenuItem
+                      className="justify-between"
+                      key={diagram.id}
+                      onSelect={() => {
+                        if (!isActive) {
+                          onDiagramSelect(diagram);
+                        }
+
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="min-w-0 truncate text-[13px] font-extrabold">{diagram.name}</span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <Badge variant="green">{diagram.dialect}</Badge>
+                        {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function UserAccountMenu({
+  canOpenAdmin,
+  isLoggingOut,
+  onAdmin,
+  onLogout,
+  onProfile,
+  user,
+}: {
+  canOpenAdmin: boolean;
+  isLoggingOut: boolean;
+  onAdmin: () => void;
+  onLogout: () => void;
+  onProfile: () => void;
+  user: AvatarIdentity & { email: string };
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="ml-1 flex h-[var(--tabliodb-control-lg)] max-w-54 cursor-pointer items-center gap-2 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-2 pr-3 text-left shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+          type="button"
+        >
+          <UserAvatar className="size-8 rounded-full text-[11px]" user={user} />
+          <span className="hidden min-w-0 lg:block">
+            <span className="block truncate text-[12px] font-extrabold leading-4">{user.name}</span>
+            <span className="block truncate text-[11px] font-bold leading-4 text-[rgb(var(--tabliodb-ink-muted))]">
+              {user.email}
+            </span>
+          </span>
+          <ChevronsUpDown className="hidden size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))] sm:block" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72 p-2">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <UserAvatar className="size-10 rounded-[14px] text-xs" user={user} />
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-extrabold">{user.name}</div>
+            <div className="truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">{user.email}</div>
+          </div>
+        </div>
+        <DropdownMenuSeparatorItem />
+        <DropdownMenuItem onSelect={onProfile}>
+          <UserRound className="size-4" />
+          Profile
+        </DropdownMenuItem>
+        {canOpenAdmin ? (
+          <DropdownMenuItem onSelect={onAdmin}>
+            <ShieldCheck className="size-4" />
+            Admin users
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSeparatorItem />
+        <DropdownMenuItem disabled={isLoggingOut} onSelect={onLogout}>
+          <LogOut className="size-4" />
+          Logout
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function DiagramTablesSidebar({
+  model,
+  onClearTableSelection,
+  onColumnSelect,
+  onHide,
+  onModelChange,
+  onTableSelect,
+  readOnly,
+  selectedTableId,
+}: {
+  model: DiagramModel;
+  onClearTableSelection: () => void;
+  onColumnSelect?: (columnId: string) => void;
+  onHide: () => void;
+  onModelChange: (model: DiagramModel) => void;
+  onTableSelect: (tableId: string | null) => void;
+  readOnly: boolean;
+  selectedTableId: string | null;
+}) {
+  const [tableSearchTerm, setTableSearchTerm] = useState('');
+  const tables = useMemo(
+    () => Object.values(model.tables).sort((left, right) => left.name.localeCompare(right.name)),
+    [model.tables],
+  );
+  const filteredTables = useMemo(() => {
+    const search = tableSearchTerm.trim().toLowerCase();
+
+    return search
+      ? tables.filter((table) => {
+          const group = table.groupId ? model.groups[table.groupId] : null;
+
+          return [table.name, table.schema ?? '', group?.name ?? ''].some((value) =>
+            value.toLowerCase().includes(search),
+          );
+        })
+      : tables;
+  }, [model.groups, tableSearchTerm, tables]);
+  const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] px-3">
+        <div className="grid size-8 shrink-0 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]">
+          <Database className="size-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Tables
+          </div>
+          <div className="truncate text-[13px] font-extrabold leading-5">
+            {tables.length} table{tables.length === 1 ? '' : 's'}
+          </div>
+        </div>
+        {selectedTable ? (
+          <IconButton icon={X} label="Clear table selection" onClick={onClearTableSelection} variant="ghost" />
+        ) : null}
+        <IconButton size="lg" icon={PanelLeft} label="Hide left sidebar" onClick={onHide} variant="ghost" />
+      </div>
+
+      <div className="border-b border-[rgb(var(--tabliodb-border))] p-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+          <Input
+            className="h-9 pl-9 text-[13px]"
+            onChange={(event) => setTableSearchTerm(event.target.value)}
+            placeholder="Search tables"
+            value={tableSearchTerm}
+          />
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          'tabliodb-scrollbar min-h-0 overflow-y-auto',
+          selectedTable ? 'max-h-[32dvh] shrink-0 border-b border-[rgb(var(--tabliodb-border))]' : 'flex-1',
+        )}
+      >
+        <div className="grid gap-1 p-2">
+          {filteredTables.length === 0 ? (
+            <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              No matching tables
+            </div>
+          ) : (
+            filteredTables.map((table) => (
+              <TableListButton
+                key={table.id}
+                model={model}
+                onSelect={() => onTableSelect(table.id)}
+                selected={table.id === selectedTable?.id}
+                table={table}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
+      {selectedTable ? (
+        <div className="min-h-0 flex-1">
+          <TableStructureSidebar
+            model={model}
+            onClearTableSelection={onClearTableSelection}
+            onColumnSelect={onColumnSelect}
+            onHide={onHide}
+            onModelChange={onModelChange}
+            readOnly={readOnly}
+            selectedTableId={selectedTable.id}
+            showHeader={false}
+          />
+        </div>
+      ) : (
+        <div className="grid min-h-0 flex-1 place-items-center p-5 text-center">
+          <div>
+            <div className="mx-auto grid size-12 place-items-center rounded-[18px] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
+              <Database className="size-5" />
+            </div>
+            <p className="mt-3 text-sm font-extrabold">Select a table</p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+              Pick a table from the list or click one on the canvas to edit its structure.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TableListButton({
+  model,
+  onSelect,
+  selected,
+  table,
+}: {
+  model: DiagramModel;
+  onSelect: () => void;
+  selected: boolean;
+  table: DatabaseTable;
+}) {
+  const columnCount = getTableColumns(model, table.id).length;
+  const group = table.groupId ? model.groups[table.groupId] : null;
+
+  return (
+    <button
+      className={cn(
+        'flex min-h-13 w-full cursor-pointer items-center gap-2.5 rounded-[var(--tabliodb-radius-md)] border px-2.5 py-2 text-left transition',
+        selected
+          ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))] shadow-[inset_3px_0_0_rgb(var(--tabliodb-primary)),0_2px_0_rgb(var(--tabliodb-border))]'
+          : 'border-transparent hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
+      )}
+      onClick={onSelect}
+      type="button"
+    >
+      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: getDisplayTableColor(table.color) }} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-extrabold leading-5">{table.name}</span>
+        <span className="block truncate text-[11px] font-bold leading-4 text-[rgb(var(--tabliodb-ink-muted))]">
+          {group?.name ?? table.schema ?? 'Main schema'}
+        </span>
+      </span>
+      <Badge variant={selected ? 'green' : 'neutral'}>{columnCount}</Badge>
+    </button>
+  );
+}
+
 function SqlPreviewDialog({
   copied,
   dialect,
@@ -4730,85 +5154,21 @@ function ImportSqlPreview({ preview }: { preview: ImportSqlDraftPreview }) {
   );
 }
 
-function WorkspaceSwitcher({
-  activeOrganization,
-  onSelect,
-  organizations,
-}: {
-  activeOrganization: OrganizationDto | null;
-  onSelect: (organization: OrganizationDto) => void;
-  organizations: OrganizationDto[];
-}) {
-  return (
-    <div className="mb-4">
-      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-        Workspace
-      </div>
-      <DropdownMenu>
-        <WithTooltip content="Switch workspace">
-          <DropdownMenuTrigger asChild>
-            <button
-              className="flex h-(--tabliodb-control-lg) w-full cursor-pointer items-center gap-2.5 rounded-(--tabliodb-radius-lg) border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-left shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
-              type="button"
-            >
-              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
-                <Building2 className="size-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-extrabold">
-                  {activeOrganization?.name ?? 'Select workspace'}
-                </div>
-                <div className="truncate text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                  {activeOrganization ? formatOrganizationRole(activeOrganization.role) : 'No workspace'}
-                </div>
-              </div>
-              <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
-            </button>
-          </DropdownMenuTrigger>
-        </WithTooltip>
-        <DropdownMenuContent align="start" className="w-64">
-          {organizations.map((organization) => {
-            const isActive = organization.id === activeOrganization?.id;
-
-            return (
-              <DropdownMenuItem
-                className="justify-between"
-                key={organization.id}
-                onSelect={() => {
-                  if (!isActive) {
-                    onSelect(organization);
-                  }
-                }}
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-extrabold">{organization.name}</span>
-                  <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                    {organization.slug}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <Badge variant={isOrganizationManager(organization) ? 'blue' : 'neutral'}>
-                    {formatOrganizationRole(organization.role)}
-                  </Badge>
-                  {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
-                </span>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
-
 function CreateProjectDialog({
   onCreated,
+  onOpenChange,
+  open,
   organizationId,
+  trigger,
 }: {
   onCreated: (project: ProjectResponseDto) => void;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   organizationId: string | null;
+  trigger?: ReactNode | null;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = open ?? internalOpen;
   const form = useForm<ProjectFormState>({
     defaultValues: {
       description: '',
@@ -4824,14 +5184,15 @@ function CreateProjectDialog({
       onSuccess: (project) => {
         // New project langsung dinavigasikan agar user merasa aksi create menghasilkan workspace yang nyata.
         form.reset({ description: '', name: '' });
-        setOpen(false);
+        handleOpenChange(false);
         onCreated(project);
       },
     },
   });
 
   function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
 
     if (!nextOpen && !createProjectMutation.isPending) {
       form.reset({ description: '', name: '' });
@@ -4848,13 +5209,17 @@ function CreateProjectDialog({
   }
 
   return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogTrigger asChild>
-        <Button disabled={!organizationId} size="sm" variant="secondary">
-          <FolderPlus className="size-4" />
-          New
-        </Button>
-      </DialogTrigger>
+    <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
+      {trigger !== null ? (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button disabled={!organizationId} size="sm" variant="secondary">
+              <FolderPlus className="size-4" />
+              New
+            </Button>
+          )}
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="w-[min(94vw,520px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
@@ -6802,6 +7167,13 @@ function isOrganizationManager(organization: OrganizationDto): boolean {
   return organization.role === 'owner' || organization.role === 'admin';
 }
 
+function hasOrganizationPermission(role: OrganizationRoleValue, permission: Permission): boolean {
+  return isGranted({
+    current: permissionsForOrganizationRole(role),
+    requested: [permission],
+  });
+}
+
 function hasProjectPermission(role: ProjectRoleValue, permission: Permission): boolean {
   return isGranted({
     current: permissionsForProjectRole(role),
@@ -7414,9 +7786,15 @@ function getMemberInitials(member: Pick<ProjectMemberDto, 'email' | 'name'>): st
 function AddTableDialog({
   disabled = false,
   onCreate,
+  triggerClassName,
+  triggerSize = 'sm',
+  triggerVariant = 'secondary',
 }: {
   disabled?: boolean;
   onCreate: (tableName?: string) => void;
+  triggerClassName?: string;
+  triggerSize?: 'default' | 'sm' | 'lg';
+  triggerVariant?: 'primary' | 'secondary' | 'soft';
 }) {
   const [open, setOpen] = useState(false);
   const form = useForm<AddTableFormState>({
@@ -7452,7 +7830,12 @@ function AddTableDialog({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <Button className="ml-2 gap-2" disabled={disabled} variant="secondary">
+        <Button
+          className={cn('gap-2', triggerClassName)}
+          disabled={disabled}
+          size={triggerSize}
+          variant={triggerVariant}
+        >
           <Plus className="size-4" />
           Table
         </Button>
