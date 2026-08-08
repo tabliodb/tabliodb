@@ -74,6 +74,7 @@ export type SchemaCanvasProps = {
   commentTargetSummaries?: CommentThreadTargetSummaryDto[];
   fitSignal: number;
   fitKey: string;
+  minimapToggleSignal?: number;
   model: DiagramModel;
   onLocalCursorChange?: (cursor: AwarenessState['cursor']) => void;
   onCommentTargetOpen?: (target: { targetId: string; targetType: CommentTargetType }) => void;
@@ -186,6 +187,7 @@ export function SchemaCanvas({
   commentTargetSummaries = [],
   fitKey,
   fitSignal,
+  minimapToggleSignal = 0,
   model,
   onCommentTargetOpen,
   onColumnSelect,
@@ -837,6 +839,13 @@ export function SchemaCanvas({
       fitGraphContent(graph);
     }
   }, [fitSignal]);
+
+  useEffect(() => {
+    if (minimapToggleSignal > 0) {
+      // Parent editor hanya mengirim sinyal; canvas tetap memiliki state minimap lokal agar tombol Map di dalam canvas bekerja mandiri.
+      setMinimapOpen((open) => !open);
+    }
+  }, [minimapToggleSignal]);
 
   useEffect(() => {
     const graph = graphRef.current;

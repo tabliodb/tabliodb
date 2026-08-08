@@ -117,6 +117,8 @@ import {
   Loader2,
   LocateFixed,
   LogOut,
+  Keyboard,
+  Map as MapIcon,
   MessageSquareText,
   MoreHorizontal,
   Play,
@@ -540,6 +542,8 @@ export function EditorPage() {
   const [importSqlOpen, setImportSqlOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
+  const [minimapToggleSignal, setMinimapToggleSignal] = useState(0);
+  const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
   const modelHistoryRef = useRef<EditorModelHistory>(createEmptyEditorModelHistory());
@@ -844,6 +848,12 @@ export function EditorPage() {
       const key = event.key.toLowerCase();
       const hasHistoryModifier = event.ctrlKey || event.metaKey;
 
+      if (event.key === '?' && !isInteractiveShortcutTarget(event.target)) {
+        event.preventDefault();
+        setKeyboardShortcutsOpen(true);
+        return;
+      }
+
       if (hasHistoryModifier && key === 'z' && !event.shiftKey && !isEditableShortcutTarget(event.target)) {
         event.preventDefault();
         handleUndoModelChange();
@@ -857,6 +867,42 @@ export function EditorPage() {
       ) {
         event.preventDefault();
         handleRedoModelChange();
+        return;
+      }
+
+      if (hasHistoryModifier && key === 'k' && canCommentDiagram && !isEditableShortcutTarget(event.target)) {
+        event.preventDefault();
+        setCommentsOpen(true);
+        return;
+      }
+
+      if (hasHistoryModifier && key === 's' && canCreateSnapshot && !isEditableShortcutTarget(event.target)) {
+        event.preventDefault();
+        handleSaveSnapshot();
+        return;
+      }
+
+      if (!hasHistoryModifier && key === 'f' && !isInteractiveShortcutTarget(event.target)) {
+        event.preventDefault();
+        setFitSignal((value) => value + 1);
+        return;
+      }
+
+      if (!hasHistoryModifier && key === 'm' && !isInteractiveShortcutTarget(event.target)) {
+        event.preventDefault();
+        setMinimapToggleSignal((value) => value + 1);
+        return;
+      }
+
+      if (!hasHistoryModifier && event.key === '[' && !isInteractiveShortcutTarget(event.target)) {
+        event.preventDefault();
+        setLeftSidebarOpen((open) => !open);
+        return;
+      }
+
+      if (!hasHistoryModifier && event.key === ']' && !isInteractiveShortcutTarget(event.target)) {
+        event.preventDefault();
+        setRightSidebarOpen((open) => !open);
         return;
       }
 
@@ -899,7 +945,16 @@ export function EditorPage() {
     return () => {
       window.removeEventListener('keydown', handleEditorKeyboardShortcut);
     };
-  }, [canEditDiagram, handleModelChange, handleRedoModelChange, handleUndoModelChange, selectedTableId]);
+  }, [
+    canCommentDiagram,
+    canCreateSnapshot,
+    canEditDiagram,
+    handleModelChange,
+    handleRedoModelChange,
+    handleSaveSnapshot,
+    handleUndoModelChange,
+    selectedTableId,
+  ]);
 
   const publishAwareness = useCallback(
     (
@@ -1668,6 +1723,7 @@ export function EditorPage() {
             onClick={() => setSnapshotHistoryOpen(true)}
           />
           <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
+          <IconButton icon={Keyboard} label="Keyboard shortcuts" onClick={() => setKeyboardShortcutsOpen(true)} />
           {activeProject ? (
             <>
               {canManageWorkspace ? (
@@ -1744,6 +1800,14 @@ export function EditorPage() {
                 <LocateFixed className="size-4" />
                 Fit diagram
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setMinimapToggleSignal((value) => value + 1)}>
+                <MapIcon className="size-4" />
+                Toggle minimap
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setKeyboardShortcutsOpen(true)}>
+                <Keyboard className="size-4" />
+                Keyboard shortcuts
+              </DropdownMenuItem>
               {canEditDiagram ? (
                 <>
                   <DropdownMenuItem
@@ -1815,6 +1879,14 @@ export function EditorPage() {
         open={sqlPreviewOpen}
         sql={sqlPreview.sql}
         warnings={sqlPreview.warnings}
+      />
+
+      <KeyboardShortcutsDialog
+        canComment={canCommentDiagram}
+        canEdit={canEditDiagram}
+        canSnapshot={canCreateSnapshot}
+        onOpenChange={setKeyboardShortcutsOpen}
+        open={keyboardShortcutsOpen}
       />
 
       <ImportJsonDialog
@@ -1911,6 +1983,7 @@ export function EditorPage() {
             commentTargetSummaries={commentTargetSummaries}
             fitKey={activeDiagram?.id ?? 'empty'}
             fitSignal={fitSignal}
+            minimapToggleSignal={minimapToggleSignal}
             model={model}
             onCommentTargetOpen={handleCommentMarkerOpen}
             onColumnSelect={(columnId) => setSelectedCommentTarget({ targetId: columnId, targetType: 'column' })}
@@ -2058,6 +2131,108 @@ function isInteractiveShortcutTarget(target: EventTarget | null): boolean {
       'input, textarea, select, button, a, [contenteditable="true"], [data-lexical-editor="true"], [role="dialog"], [role="menu"], [data-radix-popper-content-wrapper]',
     ),
   );
+}
+
+function KeyboardShortcutsDialog({
+  canComment,
+  canEdit,
+  canSnapshot,
+  onOpenChange,
+  open,
+}: {
+  canComment: boolean;
+  canEdit: boolean;
+  canSnapshot: boolean;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const shortcutGroups = [
+    {
+      items: [
+        { action: 'Open shortcut palette', keys: ['?'] },
+        { action: 'Fit diagram', keys: ['F'] },
+        { action: 'Toggle minimap', keys: ['M'] },
+        { action: 'Toggle left sidebar', keys: ['['] },
+        { action: 'Toggle right sidebar', keys: [']'] },
+      ],
+      title: 'Canvas',
+    },
+    {
+      items: [
+        ...(canEdit
+          ? [
+              { action: 'Undo last edit', keys: [getPrimaryModifierKey(), 'Z'] },
+              { action: 'Redo last edit', keys: [getPrimaryModifierKey(), 'Shift', 'Z'] },
+              { action: 'Delete selected table', keys: ['Delete'] },
+            ]
+          : []),
+        ...(canComment ? [{ action: 'Open comments', keys: [getPrimaryModifierKey(), 'K'] }] : []),
+        ...(canSnapshot ? [{ action: 'Create snapshot', keys: [getPrimaryModifierKey(), 'S'] }] : []),
+      ],
+      title: 'Editor',
+    },
+  ].filter((group) => group.items.length > 0);
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="w-[min(94vw,620px)]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Keyboard className="size-5 text-[rgb(var(--tabliodb-primary-text))]" />
+            Keyboard shortcuts
+          </DialogTitle>
+          <DialogDescription>Fast editor actions that stay disabled while typing in form fields.</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="grid gap-4">
+          {shortcutGroups.map((group) => (
+            <section
+              className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white p-3 shadow-[0_2px_0_rgb(var(--tabliodb-border))]"
+              key={group.title}
+            >
+              <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                {group.title}
+              </h3>
+              <div className="grid gap-2">
+                {group.items.map((item) => (
+                  <div className="flex items-center justify-between gap-3" key={`${group.title}:${item.action}`}>
+                    <span className="min-w-0 text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">
+                      {item.action}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1">
+                      {item.keys.map((key) => (
+                        <ShortcutKey key={`${item.action}:${key}`}>{key}</ShortcutKey>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </DialogBody>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ShortcutKey({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="inline-flex h-7 min-w-7 items-center justify-center rounded-[9px] border border-[rgb(var(--tabliodb-border-strong))] bg-[rgb(var(--tabliodb-surface-raised))] px-2 text-[11px] font-black text-[rgb(var(--tabliodb-ink))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]">
+      {children}
+    </kbd>
+  );
+}
+
+function getPrimaryModifierKey(): string {
+  if (typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)) {
+    return 'Cmd';
+  }
+
+  return 'Ctrl';
 }
 
 function updateLiveModelFromDiagram(
