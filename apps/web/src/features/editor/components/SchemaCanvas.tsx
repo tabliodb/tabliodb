@@ -74,6 +74,8 @@ export type SchemaCanvasProps = {
   commentTargetSummaries?: CommentThreadTargetSummaryDto[];
   fitSignal: number;
   fitKey: string;
+  floatingInsetLeft?: number;
+  floatingInsetRight?: number;
   minimapToggleSignal?: number;
   model: DiagramModel;
   onLocalCursorChange?: (cursor: AwarenessState['cursor']) => void;
@@ -87,6 +89,7 @@ export type SchemaCanvasProps = {
   readOnly?: boolean;
   toolbar?: ReactNode;
   toolbarOffsetLeft?: string;
+  minimapOffsetRight?: string;
 };
 
 export type RemoteCanvasCursor = {
@@ -187,6 +190,8 @@ export function SchemaCanvas({
   commentTargetSummaries = [],
   fitKey,
   fitSignal,
+  floatingInsetLeft = 16,
+  floatingInsetRight = 16,
   minimapToggleSignal = 0,
   model,
   onCommentTargetOpen,
@@ -200,10 +205,13 @@ export function SchemaCanvas({
   selectedTableId,
   toolbar,
   toolbarOffsetLeft = '1rem',
+  minimapOffsetRight = '1rem',
 }: SchemaCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const fitKeyRef = useRef<string | null>(null);
+  const floatingInsetLeftRef = useRef(floatingInsetLeft);
+  const floatingInsetRightRef = useRef(floatingInsetRight);
   const modelRef = useRef(model);
   const selectedTableIdRef = useRef(selectedTableId);
   const selectedRelationshipIdRef = useRef<string | null>(null);
@@ -216,12 +224,19 @@ export function SchemaCanvas({
   const remoteCursorsRef = useRef(remoteCursors);
   const [relationshipMenu, setRelationshipMenu] = useState<RelationshipMenuState | null>(null);
   const [remoteCursorPositions, setRemoteCursorPositions] = useState<RemoteCanvasCursorPosition[]>([]);
-  const [minimapOpen, setMinimapOpen] = useState(true);
+  // Minimap dimulai dalam keadaan minimized agar editor pertama kali terbuka dengan fokus penuh ke canvas.
+  const [minimapOpen, setMinimapOpen] = useState(false);
   const [minimapState, setMinimapState] = useState<CanvasMinimapState | null>(null);
 
   useEffect(() => {
     modelRef.current = model;
   }, [model]);
+
+  useEffect(() => {
+    // Graph X6 tidak diremount saat sidebar dibuka-tutup, jadi quick editor relationship membaca safe-area terbaru lewat ref.
+    floatingInsetLeftRef.current = floatingInsetLeft;
+    floatingInsetRightRef.current = floatingInsetRight;
+  }, [floatingInsetLeft, floatingInsetRight]);
 
   useEffect(() => {
     selectedTableIdRef.current = selectedTableId;
@@ -354,9 +369,17 @@ export function SchemaCanvas({
       const event = e as unknown as MouseEvent;
       const menuWidth = 330;
       const menuHeight = 128;
+      const safeMinLeft = Math.min(
+        floatingInsetLeftRef.current + 12,
+        Math.max(12, containerRect.width - menuWidth - 12),
+      );
+      const safeMaxLeft = Math.max(
+        safeMinLeft,
+        containerRect.width - floatingInsetRightRef.current - menuWidth - 12,
+      );
 
       setRelationshipMenu({
-        left: clamp(event.clientX - containerRect.left - menuWidth / 2, 12, containerRect.width - menuWidth - 12),
+        left: clamp(event.clientX - containerRect.left - menuWidth / 2, safeMinLeft, safeMaxLeft),
         relationshipId: relationship.id,
         top: clamp(event.clientY - containerRect.top - menuHeight / 2, 12, containerRect.height - menuHeight - 12),
       });
@@ -957,12 +980,18 @@ export function SchemaCanvas({
         </div>
       ) : null}
       {minimapState && minimapOpen ? (
-        <CanvasMinimap onCenter={handleMinimapCenter} onClose={() => setMinimapOpen(false)} state={minimapState} />
+        <CanvasMinimap
+          offsetRight={minimapOffsetRight}
+          onCenter={handleMinimapCenter}
+          onClose={() => setMinimapOpen(false)}
+          state={minimapState}
+        />
       ) : minimapState ? (
         <button
           aria-label="Show minimap"
-          className="absolute bottom-4 right-4 z-20 h-9 cursor-pointer rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
+          className="absolute bottom-4 z-20 h-9 cursor-pointer rounded-(--tabliodb-radius-md) border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-xs font-extrabold text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] transition-[right,background,box-shadow,transform] duration-200 hover:bg-[rgb(var(--tabliodb-surface-raised))] active:translate-y-0.5 active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]"
           onClick={() => setMinimapOpen(true)}
+          style={{ right: minimapOffsetRight }}
           type="button"
         >
           Map
@@ -1017,10 +1046,12 @@ export function SchemaCanvas({
 }
 
 function CanvasMinimap({
+  offsetRight,
   onCenter,
   onClose,
   state,
 }: {
+  offsetRight: string;
   onCenter: (x: number, y: number) => void;
   onClose: () => void;
   state: CanvasMinimapState;
@@ -1047,7 +1078,10 @@ function CanvasMinimap({
   }
 
   return (
-    <section className="absolute bottom-4 right-4 z-20 w-48 rounded-(--tabliodb-radius-lg) border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur">
+    <section
+      className="absolute bottom-4 z-20 w-[clamp(144px,16vw,192px)] rounded-(--tabliodb-radius-lg) border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgba(15,23,42,0.14)] transition-[right] duration-200 backdrop-blur"
+      style={{ right: offsetRight }}
+    >
       <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
         <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Minimap

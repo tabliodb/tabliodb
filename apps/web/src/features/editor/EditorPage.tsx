@@ -1563,25 +1563,33 @@ export function EditorPage() {
   // Expanded sidebars share one comfortable width so table controls do not collapse into cramped rows.
   const expandedSidebarWidth = 'var(--tabliodb-sidebar-width)';
   const collapsedSidebarWidth = '44px';
+  const expandedSidebarWidthPx = 320;
+  const collapsedSidebarWidthPx = 44;
   const leftSidebarWidth = leftSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
   const rightSidebarWidth = rightSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
+  // Floating canvas controls menghormati rail/sidebar yang sedang terlihat agar toolbar dan minimap tidak tertutup panel.
   const canvasToolbarOffsetLeft = leftSidebarOpen
     ? `calc(${expandedSidebarWidth} + 16px)`
     : `calc(${collapsedSidebarWidth} + 12px)`;
+  const canvasMinimapOffsetRight = rightSidebarOpen
+    ? `calc(${expandedSidebarWidth} + 16px)`
+    : `calc(${collapsedSidebarWidth} + 12px)`;
+  const canvasFloatingInsetLeft = (leftSidebarOpen ? expandedSidebarWidthPx : collapsedSidebarWidthPx) + 16;
+  const canvasFloatingInsetRight = (rightSidebarOpen ? expandedSidebarWidthPx : collapsedSidebarWidthPx) + 16;
   const canvasToolbar = canEditDiagram ? (
-    <div className="flex items-center gap-2 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-1.5 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgb(15_23_42/0.12)] backdrop-blur">
+    <div className="tabliodb-scrollbar flex max-w-[calc(100vw-7rem)] items-center gap-2 overflow-x-auto rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white/95 p-1.5 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_30px_rgb(15_23_42/0.12)] backdrop-blur">
       <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} triggerSize="sm" />
       <Button className="gap-2" disabled={!canEditDiagram} onClick={handleAddNote} size="sm" variant="secondary">
         <StickyNote className="size-4" />
-        Note
+        <span className="hidden sm:inline">Note</span>
       </Button>
     </div>
   ) : null;
 
   return (
     <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
-      <header className="flex h-(--tabliodb-header-height) shrink-0 items-center justify-between border-b border-[rgb(var(--tabliodb-border))] bg-white px-4">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="flex h-(--tabliodb-header-height) shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] bg-white px-3 sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="flex shrink-0 items-center gap-2">
             <img src={LOGO} alt="Tabliodb" className="w-32" />
           </div>
@@ -1629,8 +1637,11 @@ export function EditorPage() {
             projects={filteredProjects}
           />
         </div>
-        <div className="flex items-center gap-1">
-          <Badge variant={canEditDiagram ? 'green' : 'yellow'}>{formatProjectRole(activeProject.projectRole)}</Badge>
+        {/* Aksi sekunder tetap tersedia di More menu, lalu disembunyikan bertahap di header supaya identitas project tidak terdesak. */}
+        <div className="flex shrink-0 items-center gap-1">
+          <Badge className="hidden md:inline-flex" variant={canEditDiagram ? 'green' : 'yellow'}>
+            {formatProjectRole(activeProject.projectRole)}
+          </Badge>
           {canEditDiagram ? (
             <div className="hidden items-center gap-1 xl:flex">
               <IconButton
@@ -1669,7 +1680,7 @@ export function EditorPage() {
                 ) : null}
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[380px] p-2">
+            <DropdownMenuContent align="end" className="w-[min(92vw,380px)] p-2">
               <div className="flex items-start justify-between gap-3 px-2 py-1.5">
                 <div className="min-w-0">
                   <div className="text-[13px] font-extrabold">Notifications</div>
@@ -1696,7 +1707,7 @@ export function EditorPage() {
                   No mentions or replies yet
                 </div>
               ) : (
-                <div className="grid gap-1">
+                <div className="tabliodb-scrollbar grid max-h-[min(60dvh,420px)] gap-1 overflow-y-auto pr-1">
                   {inboxNotifications.map((notification) => (
                     <NotificationInboxMenuItem
                       key={notification.id}
@@ -1717,13 +1728,24 @@ export function EditorPage() {
             </DropdownMenuContent>
           </DropdownMenu>
           <IconButton
+            className="hidden lg:inline-flex"
             disabled={snapshotsQuery.isPending}
             icon={History}
             label="Snapshot history"
             onClick={() => setSnapshotHistoryOpen(true)}
           />
-          <IconButton icon={LocateFixed} label="Fit diagram" onClick={() => setFitSignal((value) => value + 1)} />
-          <IconButton icon={Keyboard} label="Keyboard shortcuts" onClick={() => setKeyboardShortcutsOpen(true)} />
+          <IconButton
+            className="hidden xl:inline-flex"
+            icon={LocateFixed}
+            label="Fit diagram"
+            onClick={() => setFitSignal((value) => value + 1)}
+          />
+          <IconButton
+            className="hidden 2xl:inline-flex"
+            icon={Keyboard}
+            label="Keyboard shortcuts"
+            onClick={() => setKeyboardShortcutsOpen(true)}
+          />
           {activeProject ? (
             <>
               {canManageWorkspace ? (
@@ -1765,18 +1787,18 @@ export function EditorPage() {
             </>
           ) : null}
           {canCreateSnapshot ? (
-            <Button className="gap-2" disabled={saveSnapshotMutation.isPending} onClick={handleSaveSnapshot}>
+            <Button className="gap-2 px-3" disabled={saveSnapshotMutation.isPending} onClick={handleSaveSnapshot}>
               {saveSnapshotMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Save className="size-4" />
               )}
-              Snapshot
+              <span className="hidden xl:inline">Snapshot</span>
             </Button>
           ) : null}
-          <Button className="gap-2" onClick={() => setSqlPreviewOpen(true)} variant="sky">
+          <Button className="gap-2 px-3" onClick={() => setSqlPreviewOpen(true)} variant="sky">
             <Play className="size-4" />
-            SQL
+            <span className="hidden xl:inline">SQL</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1983,7 +2005,10 @@ export function EditorPage() {
             commentTargetSummaries={commentTargetSummaries}
             fitKey={activeDiagram?.id ?? 'empty'}
             fitSignal={fitSignal}
+            floatingInsetLeft={canvasFloatingInsetLeft}
+            floatingInsetRight={canvasFloatingInsetRight}
             minimapToggleSignal={minimapToggleSignal}
+            minimapOffsetRight={canvasMinimapOffsetRight}
             model={model}
             onCommentTargetOpen={handleCommentMarkerOpen}
             onColumnSelect={(columnId) => setSelectedCommentTarget({ targetId: columnId, targetType: 'column' })}
@@ -4448,12 +4473,12 @@ function WorkspaceProjectMenu({
           <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[380px] p-2">
+      <DropdownMenuContent align="start" className="w-[min(92vw,380px)] p-2">
         <div className="px-2 py-1">
           <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Workspace
           </div>
-          <div className="mt-1 grid max-h-36 gap-1 overflow-y-auto">
+          <div className="tabliodb-scrollbar mt-1 grid max-h-36 gap-1 overflow-y-auto pr-1">
             {organizations.map((organization) => {
               const isActive = organization.id === activeOrganization.id;
 
@@ -4525,7 +4550,7 @@ function WorkspaceProjectMenu({
               No matching projects
             </div>
           ) : (
-            <div className="grid max-h-52 gap-1 overflow-y-auto">
+            <div className="tabliodb-scrollbar grid max-h-52 gap-1 overflow-y-auto pr-1">
               {projects.map((project) => {
                 const isActive = project.id === activeProject.id;
 
@@ -4562,7 +4587,7 @@ function WorkspaceProjectMenu({
               <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Diagrams
               </div>
-              <div className="grid max-h-40 gap-1 overflow-y-auto">
+              <div className="tabliodb-scrollbar grid max-h-40 gap-1 overflow-y-auto pr-1">
                 {diagrams.map((diagram) => {
                   const isActive = diagram.id === activeDiagram.id;
 
