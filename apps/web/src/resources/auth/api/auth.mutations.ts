@@ -8,6 +8,7 @@ import {
   clearSessionBinding,
   prepareSessionBinding,
   requestPasswordReset,
+  startOidcLogin,
   updateCurrentUserPassword,
   updateCurrentUserProfile,
   updateCurrentUserTemporaryPassword,
@@ -16,6 +17,7 @@ import {
   type CurrentUserProfileUpdateDto,
   type CurrentUserTemporaryPasswordUpdateDto,
   type LoginCredentialDto,
+  type OidcLoginStartDto,
   type PasswordResetConfirmDto,
   type PasswordResetRequestDto,
 } from '@tabliodb/sdk';
@@ -45,6 +47,19 @@ const loginMutationFn = async (body: LoginCredentialDto) => {
       : body,
   });
 };
+const startOidcLoginMutationFn = async (body: OidcLoginStartDto) => {
+  const sessionBinding = await prepareSessionBinding();
+
+  return startOidcLogin({
+    oidcLoginStartDto: sessionBinding
+      ? {
+          ...body,
+          // OIDC leaves the page before the session exists; this pending key is activated only after callback completion.
+          sessionBinding,
+        }
+      : body,
+  });
+};
 const logoutMutationFn = () => logout();
 const passwordResetRequestMutationFn = (body: PasswordResetRequestDto) =>
   requestPasswordReset({ passwordResetRequestDto: body });
@@ -69,6 +84,9 @@ type UseUpdateTemporaryPasswordMutationParams = {
 type UseLoginMutationParams = {
   mutationConfig?: MutationConfig<typeof loginMutationFn>;
 };
+type UseStartOidcLoginMutationParams = {
+  mutationConfig?: MutationConfig<typeof startOidcLoginMutationFn>;
+};
 
 export function useLoginMutation(params: UseLoginMutationParams = {}) {
   return useMutation({
@@ -81,6 +99,13 @@ export function useLoginMutation(params: UseLoginMutationParams = {}) {
       queryClient.invalidateQueries({ queryKey: projectsKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
+  });
+}
+
+export function useStartOidcLoginMutation(params: UseStartOidcLoginMutationParams = {}) {
+  return useMutation({
+    mutationFn: startOidcLoginMutationFn,
+    ...params.mutationConfig,
   });
 }
 

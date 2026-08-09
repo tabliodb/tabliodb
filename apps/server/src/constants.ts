@@ -26,6 +26,7 @@ export enum TabliodbQuery {
 export enum AuthType {
   Password = 'password',
   ApiKey = 'api-key',
+  Oidc = 'oidc',
 }
 
 export enum AuditAction {

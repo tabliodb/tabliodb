@@ -39,6 +39,20 @@ export const routes = {
     path: '/login',
     to: () => '/login',
   },
+  oidcComplete: {
+    path: '/auth/oidc/complete',
+    to: ({ returnTo }: { returnTo?: string } = {}) => {
+      const url = new URLSearchParams();
+
+      if (returnTo) {
+        url.set('returnTo', returnTo);
+      }
+
+      const search = url.toString();
+
+      return search ? `/auth/oidc/complete?${search}` : '/auth/oidc/complete';
+    },
+  },
   forgotPassword: {
     path: '/forgot-password',
     to: () => '/forgot-password',

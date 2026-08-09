@@ -11,6 +11,7 @@ import { adminSettingsLoader } from '@/features/admin/loaders/adminSettingsLoade
 import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
 import { LoadingState } from '@/features/app/RouteStates';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
+import { oidcCompleteLoader } from '@/features/auth/loaders/oidcCompleteLoader';
 import { passwordRecoveryLoader } from '@/features/auth/loaders/passwordRecoveryLoader';
 import { requireAuthenticated } from '@/features/auth/middleware/requireAuthenticated';
 import { editorLoader } from '@/features/editor/loaders/editorLoader';
@@ -72,6 +73,11 @@ export const router = createBrowserRouter([
                 element: <LoginPage />,
                 loader: loginLoader,
                 path: routes.login.path,
+              },
+              {
+                element: <LoadingState message="Completing SSO sign-in" />,
+                loader: oidcCompleteLoader,
+                path: routes.oidcComplete.path,
               },
               {
                 element: <ForgotPasswordPage />,

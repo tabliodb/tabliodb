@@ -17,6 +17,14 @@ local ttl = redis.call("PTTL", KEYS[1])
 return { count, ttl }
 `;
 
+const getAndDeleteScript = `
+local value = redis.call("GET", KEYS[1])
+if value then
+  redis.call("DEL", KEYS[1])
+end
+return value
+`;
+
 @Injectable()
 export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -84,6 +92,23 @@ export class RedisService implements OnModuleDestroy {
     try {
       const result = await client.set(`tabliodb:${key}`, value, 'PX', ttlMs, 'NX');
       return result === 'OK';
+    } catch (error) {
+      this.warnUnavailable(error);
+      return null;
+    }
+  }
+
+  async getAndDelete(key: string): Promise<string | null> {
+    const client = await this.getReadyClient();
+
+    if (!client) {
+      return null;
+    }
+
+    try {
+      // Redis GETDEL is not available everywhere a self-hoster might run, so a tiny Lua script keeps consume atomic.
+      const result = await client.eval(getAndDeleteScript, 1, `tabliodb:${key}`);
+      return typeof result === 'string' ? result : null;
     } catch (error) {
       this.warnUnavailable(error);
       return null;

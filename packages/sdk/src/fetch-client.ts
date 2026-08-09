@@ -124,6 +124,17 @@ export type LoginCredentialDto = {
   password: string;
   sessionBinding?: SessionBindingDto;
 };
+export type OidcLoginProviderDtoOutput = {
+  buttonLabel: string;
+  enabled: boolean;
+};
+export type OidcLoginStartDto = {
+  returnTo?: string;
+  sessionBinding?: SessionBindingDto;
+};
+export type OidcLoginStartResponseDtoOutput = {
+  authorizationUrl: string;
+};
 export type LogoutResponseDtoOutput = {
   successful: boolean;
 };
@@ -1692,6 +1703,45 @@ export function login(
         body: loginCredentialDto,
       }),
     ),
+  );
+}
+export function getOidcLoginProvider(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: OidcLoginProviderDtoOutput;
+    }>('/auth/oidc/provider', {
+      ...opts,
+    }),
+  );
+}
+export function startOidcLogin(
+  {
+    oidcLoginStartDto,
+  }: {
+    oidcLoginStartDto: OidcLoginStartDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: OidcLoginStartResponseDtoOutput;
+    }>(
+      '/auth/oidc/start',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: oidcLoginStartDto,
+      }),
+    ),
+  );
+}
+export function completeOidcLogin(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchText('/auth/oidc/callback', {
+      ...opts,
+    }),
   );
 }
 export function logout(opts?: Oazapfts.RequestOpts) {

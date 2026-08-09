@@ -29,6 +29,26 @@ const LoginCredentialSchema = z
   })
   .meta({ id: 'LoginCredentialDto' });
 
+const OidcLoginProviderSchema = z
+  .object({
+    buttonLabel: z.string(),
+    enabled: z.boolean(),
+  })
+  .meta({ id: 'OidcLoginProviderDto' });
+
+const OidcLoginStartSchema = z
+  .object({
+    returnTo: z.string().max(500).optional(),
+    sessionBinding: SessionBindingSchema.optional(),
+  })
+  .meta({ id: 'OidcLoginStartDto' });
+
+const OidcLoginStartResponseSchema = z
+  .object({
+    authorizationUrl: z.url(),
+  })
+  .meta({ id: 'OidcLoginStartResponseDto' });
+
 const SignUpSchema = LoginCredentialSchema.extend({
   name: z.string().min(1),
 }).meta({ id: 'SignUpDto' });
@@ -130,6 +150,9 @@ const PasswordResetConfirmResponseSchema = z
   .meta({ id: 'PasswordResetConfirmResponseDto' });
 
 export class LoginCredentialDto extends createZodDto(LoginCredentialSchema) {}
+export class OidcLoginProviderDto extends createZodDto(OidcLoginProviderSchema) {}
+export class OidcLoginStartDto extends createZodDto(OidcLoginStartSchema) {}
+export class OidcLoginStartResponseDto extends createZodDto(OidcLoginStartResponseSchema) {}
 export class SessionBindingDto extends createZodDto(SessionBindingSchema) {}
 export class SignUpDto extends createZodDto(SignUpSchema) {}
 export class LoginResponseDto extends createZodDto(LoginResponseSchema) {}

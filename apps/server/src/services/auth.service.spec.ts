@@ -49,6 +49,7 @@ describe(AuthService.name, () => {
     createForUser: vi.fn(),
   };
   const redisService = {
+    getAndDelete: vi.fn(),
     setIfAbsent: vi.fn(),
   };
   const sessionRepository = {
@@ -60,6 +61,8 @@ describe(AuthService.name, () => {
   };
   const setupRepository = {
     getAuthSettings: vi.fn(),
+    getOidcProviderSettings: vi.fn(),
+    getSecretSettingValue: vi.fn(),
     getStatus: vi.fn(),
   };
   const userRepository = {
@@ -96,6 +99,7 @@ describe(AuthService.name, () => {
       },
       server: {
         publicUrl: 'https://tabliodb.test',
+        webPublicUrl: 'https://app.tabliodb.test',
       },
     });
     setupRepository.getStatus.mockResolvedValue({
@@ -104,6 +108,15 @@ describe(AuthService.name, () => {
     setupRepository.getAuthSettings.mockResolvedValue({
       allowedDomains: [],
       signupPolicy: 'invite_only',
+    });
+    setupRepository.getOidcProviderSettings.mockResolvedValue({
+      autoCreateUsers: false,
+      buttonLabel: 'Continue with SSO',
+      clientId: null,
+      clientSecretConfigured: false,
+      enabled: false,
+      issuerUrl: null,
+      scopes: ['openid', 'email', 'profile'],
     });
     cryptoRepository.hashBcrypt.mockResolvedValue('hashed-password');
     cryptoRepository.hashSha256.mockReturnValue(Buffer.from('hashed-session-token'));
@@ -186,6 +199,45 @@ describe(AuthService.name, () => {
 
     expect(userRepository.create).not.toHaveBeenCalled();
     expect(organizationRepository.createPersonalOrganization).not.toHaveBeenCalled();
+  });
+
+  it('exposes an OIDC login provider only when setup and provider config are complete', async () => {
+    setupRepository.getOidcProviderSettings.mockResolvedValueOnce({
+      autoCreateUsers: true,
+      buttonLabel: 'Sign in with Company SSO',
+      clientId: 'tabliodb',
+      clientSecretConfigured: true,
+      enabled: true,
+      issuerUrl: 'https://idp.company.test',
+      scopes: ['openid', 'email', 'profile'],
+    });
+
+    await expect(service.getOidcLoginProvider()).resolves.toEqual({
+      buttonLabel: 'Sign in with Company SSO',
+      enabled: true,
+    });
+
+    setupRepository.getStatus.mockResolvedValueOnce({
+      isSetupComplete: false,
+    });
+    setupRepository.getOidcProviderSettings.mockResolvedValueOnce({
+      autoCreateUsers: true,
+      buttonLabel: 'Sign in with Company SSO',
+      clientId: 'tabliodb',
+      clientSecretConfigured: true,
+      enabled: true,
+      issuerUrl: 'https://idp.company.test',
+      scopes: ['openid', 'email', 'profile'],
+    });
+
+    await expect(service.getOidcLoginProvider()).resolves.toEqual({
+      buttonLabel: 'Sign in with Company SSO',
+      enabled: false,
+    });
+  });
+
+  it('keeps OIDC redirect failures on the configured web URL', () => {
+    expect(service.createOidcFailureRedirect()).toBe('https://app.tabliodb.test/login?oidcError=failed');
   });
 
   it('updates the current user profile with normalized values', async () => {

@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Permission, isGranted } from '@tabliodb/shared';
+import { generators, Issuer, type Client, type TokenSet } from 'openid-client';
 import { parse } from 'cookie';
 import { webcrypto } from 'node:crypto';
 import { IncomingHttpHeaders } from 'node:http';
@@ -20,11 +21,15 @@ import {
   CurrentUserTemporaryPasswordUpdateDto,
   LoginCredentialDto,
   LoginResponseDto,
+  OidcLoginProviderDto,
+  OidcLoginStartDto,
+  OidcLoginStartResponseDto,
   PasswordResetConfirmDto,
   PasswordResetConfirmResponseDto,
   PasswordResetRequestDto,
   PasswordResetRequestResponseDto,
   SessionBindingDto,
+  SessionBindingSchema,
   SignUpDto,
 } from '../dtos/auth.dto.js';
 import { ApiKeyRepository } from '../repositories/api-key.repository.js';
@@ -34,7 +39,11 @@ import { CryptoRepository } from '../repositories/crypto.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { PasswordResetRepository } from '../repositories/password-reset.repository.js';
 import { SessionRepository } from '../repositories/session.repository.js';
-import { SetupRepository, type InstanceAuthSettings } from '../repositories/setup.repository.js';
+import {
+  SetupRepository,
+  type InstanceAuthSettings,
+  type OidcProviderSettings,
+} from '../repositories/setup.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
 import { FileService, type UploadedAvatarFile } from './file.service.js';
@@ -46,6 +55,8 @@ const SESSION_PROOF_ALGORITHM = 'ecdsa-p256-sha256';
 const SESSION_PROOF_CLOCK_SKEW_MS = 2 * 60 * 1000;
 const SESSION_PROOF_NONCE_MAX_LENGTH = 120;
 const SESSION_PROOF_TTL_MS = 2 * 60 * 1000;
+const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
+const OIDC_STATE_PREFIX = 'oidc:state';
 
 export type ValidateRequest = {
   headers: IncomingHttpHeaders;
@@ -59,9 +70,32 @@ type SessionTokenCandidate = {
   token: string;
 };
 
+type StoredOidcLoginState = {
+  codeVerifier: string;
+  createdAt: number;
+  expiresAt: number;
+  nonce: string;
+  returnTo: string;
+  sessionBinding?: SessionBindingDto;
+};
+
+type OidcCallbackQuery = Record<string, string | string[] | undefined>;
+
+type CompletedOidcLogin = {
+  login: LoginResponseDto;
+  redirectTo: string;
+};
+
+type OidcUserProfile = {
+  email: string;
+  name: string;
+};
+
 @Injectable()
 export class AuthService {
   private lastSessionProofNoncePrunedAt = 0;
+  private lastOidcStatePrunedAt = 0;
+  private readonly oidcLoginStates = new Map<string, StoredOidcLoginState>();
   private readonly usedSessionProofNonces = new Map<string, number>();
 
   constructor(
@@ -116,6 +150,92 @@ export class AuthService {
     }
 
     return this.createLoginResponse(user, { sessionBinding: dto.sessionBinding });
+  }
+
+  async getOidcLoginProvider(): Promise<OidcLoginProviderDto> {
+    const [setup, settings] = await Promise.all([
+      this.setupRepository.getStatus(),
+      this.setupRepository.getOidcProviderSettings(),
+    ]);
+    const enabled = setup.isSetupComplete && this.isOidcLoginReady(settings);
+
+    return {
+      buttonLabel: settings.buttonLabel,
+      enabled,
+    };
+  }
+
+  async startOidcLogin(dto: OidcLoginStartDto): Promise<OidcLoginStartResponseDto> {
+    const { client, settings } = await this.createOidcClient();
+    const state = generators.state();
+    const nonce = generators.nonce();
+    const codeVerifier = generators.codeVerifier();
+    const codeChallenge = generators.codeChallenge(codeVerifier);
+    const returnTo = this.normalizeOidcReturnTo(dto.returnTo);
+    const sessionBinding = this.parseSessionBinding(dto.sessionBinding);
+
+    await this.storeOidcLoginState(state, {
+      codeVerifier,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + OIDC_STATE_TTL_MS,
+      nonce,
+      returnTo,
+      ...(sessionBinding ? { sessionBinding } : {}),
+    });
+
+    return {
+      authorizationUrl: client.authorizationUrl({
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256',
+        nonce,
+        redirect_uri: this.getOidcCallbackUrl(),
+        scope: settings.scopes.join(' '),
+        state,
+      }),
+    };
+  }
+
+  async completeOidcLogin(query: OidcCallbackQuery): Promise<CompletedOidcLogin> {
+    const error = readQueryValue(query.error);
+    if (error) {
+      throw new UnauthorizedException('OIDC provider rejected the login request');
+    }
+
+    const state = readQueryValue(query.state);
+    const code = readQueryValue(query.code);
+    if (!state || !code) {
+      throw new BadRequestException('OIDC callback is missing code or state');
+    }
+
+    const storedState = await this.consumeOidcLoginState(state);
+    if (!storedState) {
+      throw new UnauthorizedException('OIDC login state is invalid or expired');
+    }
+
+    const { client, settings } = await this.createOidcClient();
+    const tokenSet = await client.callback(
+      this.getOidcCallbackUrl(),
+      { code, state },
+      {
+        code_verifier: storedState.codeVerifier,
+        nonce: storedState.nonce,
+        state,
+      },
+    );
+    const profile = await this.readOidcProfile(client, tokenSet);
+    const user = await this.findOrCreateOidcUser(profile, settings);
+    const login = await this.createLoginResponse(user, {
+      sessionBinding: storedState.sessionBinding,
+    });
+
+    return {
+      login,
+      redirectTo: this.createOidcCompletionRedirect(storedState.returnTo),
+    };
+  }
+
+  createOidcFailureRedirect(): string {
+    return new URL('/login?oidcError=failed', this.configRepository.getEnv().server.webPublicUrl).toString();
   }
 
   async logout(auth: AuthContext): Promise<void> {
@@ -480,6 +600,213 @@ export class AuthService {
     });
   }
 
+  private async createOidcClient(): Promise<{ client: Client; settings: OidcProviderSettings }> {
+    const settings = await this.setupRepository.getOidcProviderSettings();
+
+    if (!this.isOidcLoginReady(settings)) {
+      throw new BadRequestException('OIDC login is not configured');
+    }
+
+    const secret = await this.setupRepository.getSecretSettingValue('auth.oidc.client_secret');
+    const clientSecret = readSecretValue(secret, 'clientSecret');
+
+    if (!clientSecret) {
+      throw new BadRequestException('OIDC client secret is not configured');
+    }
+
+    const issuer = await Issuer.discover(settings.issuerUrl!);
+    const client = new issuer.Client({
+      client_id: settings.clientId!,
+      client_secret: clientSecret,
+      redirect_uris: [this.getOidcCallbackUrl()],
+      response_types: ['code'],
+    });
+
+    return { client, settings };
+  }
+
+  private isOidcLoginReady(settings: OidcProviderSettings): boolean {
+    return Boolean(
+      settings.enabled &&
+      settings.issuerUrl &&
+      settings.clientId &&
+      settings.clientSecretConfigured &&
+      settings.scopes.includes('openid'),
+    );
+  }
+
+  private async readOidcProfile(client: Client, tokenSet: TokenSet): Promise<OidcUserProfile> {
+    const claims = tokenSet.claims();
+    let email = readClaimString(claims, 'email');
+    let name = readClaimString(claims, 'name') ?? readClaimString(claims, 'preferred_username') ?? email;
+    const emailVerified = claims.email_verified;
+
+    if (!email && tokenSet.access_token) {
+      const userinfo = await client.userinfo(tokenSet.access_token);
+      email = readClaimString(userinfo, 'email');
+      name = readClaimString(userinfo, 'name') ?? readClaimString(userinfo, 'preferred_username') ?? email;
+    }
+
+    if (!email) {
+      throw new UnauthorizedException('OIDC profile does not include an email address');
+    }
+
+    if (emailVerified === false) {
+      throw new UnauthorizedException('OIDC email address is not verified');
+    }
+
+    return {
+      email: email.trim().toLowerCase(),
+      name: name?.trim() || email.split('@')[0] || email,
+    };
+  }
+
+  private async findOrCreateOidcUser(
+    profile: OidcUserProfile,
+    settings: OidcProviderSettings,
+  ): Promise<{
+    avatarUrl?: string | null;
+    cursorColor: string;
+    email: string;
+    id: string;
+    name: string;
+    passwordChangeRequired?: boolean;
+  }> {
+    const existingUser = await this.userRepository.getByEmail(profile.email);
+
+    if (existingUser) {
+      return existingUser;
+    }
+
+    const anyUser = await this.userRepository.getAnyByEmail(profile.email);
+    if (anyUser) {
+      throw new UnauthorizedException('This account is not available for OIDC login');
+    }
+
+    if (!settings.autoCreateUsers) {
+      throw new UnauthorizedException('Ask an administrator to create your Tabliodb account before using SSO');
+    }
+
+    await this.assertOidcAutoCreateAllowed(profile.email);
+
+    const user = await this.userRepository.create({
+      cursorColor: '#58cc02',
+      email: profile.email,
+      name: profile.name,
+      passwordHash: null,
+    });
+
+    await this.organizationRepository.createPersonalOrganization({
+      name: `${user.name}'s Workspace`,
+      userId: user.id,
+    });
+
+    return user;
+  }
+
+  private async assertOidcAutoCreateAllowed(email: string): Promise<void> {
+    const settings = await this.setupRepository.getAuthSettings();
+
+    if (settings.signupPolicy !== 'allowed_domains') {
+      return;
+    }
+
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (domain && settings.allowedDomains.includes(domain)) {
+      return;
+    }
+
+    throw new BadRequestException('Email domain is not allowed for this Tabliodb instance');
+  }
+
+  private async storeOidcLoginState(state: string, value: StoredOidcLoginState): Promise<void> {
+    const storedInRedis = await this.redisService.setIfAbsent(
+      `${OIDC_STATE_PREFIX}:${state}`,
+      JSON.stringify(value),
+      OIDC_STATE_TTL_MS,
+    );
+
+    if (storedInRedis === true) {
+      return;
+    }
+
+    if (storedInRedis === false) {
+      // State collision is extremely unlikely, but Redis owns callback consumption when configured, so do not create a split-brain fallback.
+      throw new BadRequestException('OIDC login state could not be prepared');
+    }
+
+    this.pruneExpiredOidcStates(Date.now());
+    // In-memory fallback keeps single-process development usable when Redis is not configured or temporarily unavailable.
+    this.oidcLoginStates.set(state, value);
+  }
+
+  private async consumeOidcLoginState(state: string): Promise<StoredOidcLoginState | null> {
+    const redisValue = await this.redisService.getAndDelete(`${OIDC_STATE_PREFIX}:${state}`);
+    const parsedRedisValue = redisValue ? parseOidcLoginState(redisValue) : null;
+
+    if (parsedRedisValue) {
+      return parsedRedisValue.expiresAt > Date.now() ? parsedRedisValue : null;
+    }
+
+    const fallback = this.oidcLoginStates.get(state) ?? null;
+    this.oidcLoginStates.delete(state);
+
+    if (!fallback || fallback.expiresAt <= Date.now()) {
+      return null;
+    }
+
+    return fallback;
+  }
+
+  private pruneExpiredOidcStates(now: number): void {
+    if (now - this.lastOidcStatePrunedAt < OIDC_STATE_TTL_MS) {
+      return;
+    }
+
+    this.lastOidcStatePrunedAt = now;
+
+    for (const [state, value] of this.oidcLoginStates.entries()) {
+      if (value.expiresAt <= now) {
+        this.oidcLoginStates.delete(state);
+      }
+    }
+  }
+
+  private parseSessionBinding(value: SessionBindingDto | undefined): SessionBindingDto | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const result = SessionBindingSchema.safeParse(value);
+
+    return result.success ? result.data : undefined;
+  }
+
+  private getOidcCallbackUrl(): string {
+    return new URL('/api/auth/oidc/callback', this.configRepository.getEnv().server.publicUrl).toString();
+  }
+
+  private createOidcCompletionRedirect(returnTo: string): string {
+    const url = new URL('/auth/oidc/complete', this.configRepository.getEnv().server.webPublicUrl);
+    url.searchParams.set('returnTo', returnTo);
+
+    return url.toString();
+  }
+
+  private normalizeOidcReturnTo(value: string | undefined): string {
+    if (!value) {
+      return '/';
+    }
+
+    const trimmed = value.trim();
+
+    if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/api')) {
+      return '/';
+    }
+
+    return trimmed;
+  }
+
   private async validateApiKey(token: string): Promise<AuthContext> {
     const hashed = this.cryptoRepository.hashSha256(token);
     const apiKey = await this.apiKeyRepository.getByToken(hashed);
@@ -728,6 +1055,61 @@ function readHeader(value: string | string[] | undefined | null): string | null 
   }
 
   return value ?? null;
+}
+
+function readQueryValue(value: string | string[] | undefined): string | null {
+  const firstValue = Array.isArray(value) ? value[0] : value;
+
+  return firstValue?.trim() || null;
+}
+
+function readSecretValue(value: JsonValue | null, key: string): string | null {
+  if (value && typeof value === 'object' && !Array.isArray(value) && typeof value[key] === 'string') {
+    return value[key].trim() || null;
+  }
+
+  return null;
+}
+
+function readClaimString(claims: unknown, key: string): string | null {
+  if (!claims || typeof claims !== 'object' || Array.isArray(claims)) {
+    return null;
+  }
+
+  const value = (claims as Record<string, unknown>)[key];
+
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function parseOidcLoginState(value: string): StoredOidcLoginState | null {
+  try {
+    const parsed = JSON.parse(value) as Partial<StoredOidcLoginState>;
+    const sessionBindingResult = parsed.sessionBinding
+      ? SessionBindingSchema.safeParse(parsed.sessionBinding)
+      : { success: true as const, data: undefined };
+
+    if (
+      typeof parsed.codeVerifier === 'string' &&
+      typeof parsed.createdAt === 'number' &&
+      typeof parsed.expiresAt === 'number' &&
+      typeof parsed.nonce === 'string' &&
+      typeof parsed.returnTo === 'string' &&
+      sessionBindingResult.success
+    ) {
+      return {
+        codeVerifier: parsed.codeVerifier,
+        createdAt: parsed.createdAt,
+        expiresAt: parsed.expiresAt,
+        nonce: parsed.nonce,
+        returnTo: parsed.returnTo,
+        ...(sessionBindingResult.data ? { sessionBinding: sessionBindingResult.data } : {}),
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 function createSessionProofPayload(input: { method: string; nonce: string; path: string; timestamp: string }): string {

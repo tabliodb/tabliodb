@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Patch,
   Post,
+  Query,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -26,6 +27,9 @@ import {
   LoginCredentialDto,
   LoginResponseDto,
   LogoutResponseDto,
+  OidcLoginProviderDto,
+  OidcLoginStartDto,
+  OidcLoginStartResponseDto,
   PasswordResetConfirmDto,
   PasswordResetConfirmResponseDto,
   PasswordResetRequestDto,
@@ -157,6 +161,43 @@ export class AuthController {
       authType: AuthType.Password,
       secure: this.service.getCookieSecureDefault(),
     });
+  }
+
+  @Get('oidc/provider')
+  @ApiOperation({ operationId: 'getOidcLoginProvider' })
+  @ZodResponse({ status: HttpStatus.OK, type: OidcLoginProviderDto })
+  getOidcLoginProvider(): Promise<OidcLoginProviderDto> {
+    return this.service.getOidcLoginProvider();
+  }
+
+  @Post('oidc/start')
+  @RateLimit({ key: 'auth:oidc-start', limit: 20, windowMs: 60_000 })
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: OidcLoginStartDto })
+  @ApiOperation({ operationId: 'startOidcLogin' })
+  @ZodResponse({ status: HttpStatus.OK, type: OidcLoginStartResponseDto })
+  startOidcLogin(@Body() dto: OidcLoginStartDto): Promise<OidcLoginStartResponseDto> {
+    return this.service.startOidcLogin(dto);
+  }
+
+  @Get('oidc/callback')
+  @RateLimit({ key: 'auth:oidc-callback', limit: 60, windowMs: 60_000 })
+  @ApiOperation({ operationId: 'completeOidcLogin' })
+  async completeOidcLogin(
+    @Res() response: Response,
+    @Query() query: Record<string, string | string[] | undefined>,
+  ): Promise<void> {
+    try {
+      const result = await this.service.completeOidcLogin(query);
+      respondWithAuthCookies(response, result.login, {
+        accessToken: result.login.accessToken,
+        authType: AuthType.Oidc,
+        secure: this.service.getCookieSecureDefault(),
+      });
+      response.redirect(result.redirectTo);
+    } catch {
+      response.redirect(this.service.createOidcFailureRedirect());
+    }
   }
 
   @Post('logout')

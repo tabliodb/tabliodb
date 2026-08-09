@@ -8,7 +8,12 @@ import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ControlledInput } from '@/features/app/FormControls';
 import { InlineErrorState } from '@/features/app/RouteStates';
-import { useLoginMutation, useLogoutMutation, useUpdateCurrentUserTemporaryPasswordMutation } from '@/resources/auth';
+import {
+  useLoginMutation,
+  useLogoutMutation,
+  useStartOidcLoginMutation,
+  useUpdateCurrentUserTemporaryPasswordMutation,
+} from '@/resources/auth';
 import type { LoginLoaderData } from './loaders/loginLoader';
 
 const loginFormSchema = z.object({
@@ -81,6 +86,13 @@ export function LoginPage() {
       },
     },
   });
+  const startOidcLoginMutation = useStartOidcLoginMutation({
+    mutationConfig: {
+      onSuccess: (data) => {
+        window.location.assign(data.authorizationUrl);
+      },
+    },
+  });
   const logoutMutation = useLogoutMutation({
     mutationConfig: {
       onSuccess: () => {
@@ -92,6 +104,7 @@ export function LoginPage() {
   });
   const isTemporaryMode = Boolean(temporaryUser);
   const isTemporaryPending = temporaryPasswordMutation.isPending || logoutMutation.isPending;
+  const isLoginPending = loginMutation.isPending || startOidcLoginMutation.isPending;
 
   return (
     <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 text-[rgb(var(--tabliodb-ink))]">
@@ -200,7 +213,7 @@ export function LoginPage() {
                 aria-invalid={Boolean(loginErrors.email)}
                 autoComplete="email"
                 control={loginForm.control}
-                disabled={loginMutation.isPending}
+                disabled={isLoginPending}
                 name="email"
                 type="email"
               />
@@ -220,19 +233,52 @@ export function LoginPage() {
                 aria-invalid={Boolean(loginErrors.password)}
                 autoComplete="current-password"
                 control={loginForm.control}
-                disabled={loginMutation.isPending}
+                disabled={isLoginPending}
                 name="password"
                 type="password"
               />
               <FieldError>{loginErrors.password?.message}</FieldError>
             </label>
+            {loaderData.oidcError ? (
+              <InlineErrorState
+                className="mb-4 p-3"
+                error="SSO sign-in could not be completed. Please try again or use email and password."
+                title="Could not complete SSO"
+              />
+            ) : null}
             {loginMutation.error ? (
               <InlineErrorState className="mb-4 p-3" error={loginMutation.error} title="Could not sign in" />
             ) : null}
-            <Button className="w-full gap-2" disabled={loginMutation.isPending} type="submit">
+            <Button className="w-full gap-2" disabled={isLoginPending} type="submit">
               {loginMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
               Continue
             </Button>
+            {loaderData.oidcProvider.enabled ? (
+              <>
+                <div className="my-4 flex items-center gap-3 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                  <span className="h-px flex-1 bg-[rgb(var(--tabliodb-border))]" />
+                  Or
+                  <span className="h-px flex-1 bg-[rgb(var(--tabliodb-border))]" />
+                </div>
+                <Button
+                  className="w-full gap-2"
+                  disabled={isLoginPending}
+                  onClick={() => startOidcLoginMutation.mutate({ returnTo: routes.home.to() })}
+                  type="button"
+                  variant="sky"
+                >
+                  {startOidcLoginMutation.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="size-4" />
+                  )}
+                  {loaderData.oidcProvider.buttonLabel}
+                </Button>
+              </>
+            ) : null}
+            {startOidcLoginMutation.error ? (
+              <InlineErrorState className="mt-4 p-3" error={startOidcLoginMutation.error} title="Could not start SSO" />
+            ) : null}
           </form>
         )}
       </Surface>
