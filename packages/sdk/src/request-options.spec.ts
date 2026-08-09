@@ -63,6 +63,31 @@ describe(createTabliodbRequestOptions.name, () => {
     expect(headers.get('authorization')).toBe('Bearer server-token');
     expect(headers.has('x-csrf-token')).toBe(false);
   });
+
+  it('sends API key automation requests without browser-only CSRF or session proof headers', async () => {
+    setDocumentCookie('tabliodb_csrf_token=csrf-token');
+    const calls: RequestInit[] = [];
+    const fetchSpy: typeof fetch = async (_input, init = {}) => {
+      calls.push(init);
+      return new Response('{}');
+    };
+    const options = createTabliodbRequestOptions({
+      apiKey: 'tabliodb_api_key_secret',
+      fetch: fetchSpy,
+    });
+
+    await options.fetch?.('/api/projects', {
+      headers: options.headers as unknown as HeadersInit,
+      method: 'POST',
+    });
+
+    const init = calls[0] ?? {};
+    const headers = new Headers(init.headers);
+
+    expect(headers.get('x-api-key')).toBe('tabliodb_api_key_secret');
+    expect(headers.has('x-csrf-token')).toBe(false);
+    expect(headers.has('x-tabliodb-session-proof-signature')).toBe(false);
+  });
 });
 
 function setDocumentCookie(cookie: string) {
