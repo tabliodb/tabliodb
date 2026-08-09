@@ -7,7 +7,7 @@ import { Link, useLoaderData, useNavigate } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ControlledInput } from '@/features/app/FormControls';
-import { getErrorMessage } from '@/features/app/RouteStates';
+import { InlineErrorState } from '@/features/app/RouteStates';
 import { useLoginMutation, useLogoutMutation, useUpdateCurrentUserTemporaryPasswordMutation } from '@/resources/auth';
 import type { LoginLoaderData } from './loaders/loginLoader';
 
@@ -154,9 +154,11 @@ export function LoginPage() {
             </label>
 
             {temporaryPasswordMutation.error ? (
-              <div className="mb-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                {getErrorMessage(temporaryPasswordMutation.error)}
-              </div>
+              <InlineErrorState
+                className="mb-4 p-3"
+                error={temporaryPasswordMutation.error}
+                title="Could not save password"
+              />
             ) : null}
 
             <Button className="w-full gap-2" disabled={isTemporaryPending} type="submit">
@@ -225,9 +227,7 @@ export function LoginPage() {
               <FieldError>{loginErrors.password?.message}</FieldError>
             </label>
             {loginMutation.error ? (
-              <div className="mb-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                {getErrorMessage(loginMutation.error)}
-              </div>
+              <InlineErrorState className="mb-4 p-3" error={loginMutation.error} title="Could not sign in" />
             ) : null}
             <Button className="w-full gap-2" disabled={loginMutation.isPending} type="submit">
               {loginMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}

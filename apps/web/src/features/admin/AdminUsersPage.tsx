@@ -47,7 +47,7 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledTextarea } from '@/features/app/FormControls';
-import { EmptyState, InlineErrorState, InlineLoadingState, getErrorMessage } from '@/features/app/RouteStates';
+import { EmptyState, InlineErrorState, InlineLoadingState } from '@/features/app/RouteStates';
 import { useCreateInvitationMutation } from '@/resources/invitations';
 import {
   type UserListQuery,
@@ -188,9 +188,7 @@ export function AdminUsersPage() {
         <StatCard label="Page org admins" value={stats.organizationAdmins} tone="yellow" />
       </section>
 
-      {userActionError ? (
-        <InlineErrorState error={userActionError} title="User action failed" />
-      ) : null}
+      {userActionError ? <InlineErrorState error={userActionError} title="User action failed" /> : null}
 
       <Surface className="overflow-hidden" depth="md">
         <div className="flex flex-col gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] p-4 lg:flex-row lg:items-center lg:justify-between">
@@ -391,13 +389,17 @@ function InviteUserDialog() {
                       checked={form.watch('organizationRole') === SdkOrganizationRole.Member}
                       description="Can join workspace projects."
                       label="Member"
-                      onClick={() => form.setValue('organizationRole', SdkOrganizationRole.Member, { shouldDirty: true })}
+                      onClick={() =>
+                        form.setValue('organizationRole', SdkOrganizationRole.Member, { shouldDirty: true })
+                      }
                     />
                     <RoleOption
                       checked={form.watch('organizationRole') === SdkOrganizationRole.Admin}
                       description="Can help manage users."
                       label="Admin"
-                      onClick={() => form.setValue('organizationRole', SdkOrganizationRole.Admin, { shouldDirty: true })}
+                      onClick={() =>
+                        form.setValue('organizationRole', SdkOrganizationRole.Admin, { shouldDirty: true })
+                      }
                     />
                   </div>
                 </fieldset>
@@ -448,9 +450,7 @@ function InviteUserDialog() {
               ) : null}
 
               {createInvitationMutation.error ? (
-                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(createInvitationMutation.error)}
-                </div>
+                <InlineErrorState error={createInvitationMutation.error} title="Could not create invitation" />
               ) : null}
             </div>
           </DialogBody>
@@ -612,9 +612,7 @@ function CreateUserDialog() {
               </label>
 
               {createUserMutation.error ? (
-                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(createUserMutation.error)}
-                </div>
+                <InlineErrorState error={createUserMutation.error} title="Could not create user" />
               ) : null}
             </div>
           </DialogBody>
@@ -714,9 +712,7 @@ function ResetUserPasswordDialog({
               </label>
 
               {resetPasswordMutation.error ? (
-                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(resetPasswordMutation.error)}
-                </div>
+                <InlineErrorState error={resetPasswordMutation.error} title="Could not reset password" />
               ) : null}
             </div>
           </DialogBody>

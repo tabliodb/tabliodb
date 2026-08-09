@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
 import { Button, FieldError, Surface } from '@tabliodb/ui';
 import { Database, Loader2, LogIn, MailCheck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -6,9 +7,8 @@ import { useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ControlledInput } from '@/features/app/FormControls';
-import { getErrorMessage } from '@/features/app/RouteStates';
+import { InlineErrorState, InlineLoadingState } from '@/features/app/RouteStates';
 import { invitationsQueries, useAcceptInvitationMutation } from '@/resources/invitations';
-import { useQuery } from '@tanstack/react-query';
 
 const acceptInvitationFormSchema = z.object({
   name: z.string().trim().min(1, 'Name is required.'),
@@ -69,7 +69,15 @@ export function AcceptInvitationPage() {
         </div>
 
         <div className="p-5">
-          {isPendingInvite ? (
+          {invitationQuery.isPending ? (
+            <InlineLoadingState message="Loading invitation" />
+          ) : invitationQuery.error ? (
+            <InlineErrorState
+              error={invitationQuery.error}
+              onRetry={() => void invitationQuery.refetch()}
+              title="Could not load invitation"
+            />
+          ) : isPendingInvite ? (
             <form
               onSubmit={form.handleSubmit((values) =>
                 acceptInvitationMutation.mutate({
@@ -111,9 +119,11 @@ export function AcceptInvitationPage() {
                 <FieldError>{errors.password?.message}</FieldError>
               </label>
               {acceptInvitationMutation.error ? (
-                <div className="mb-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(acceptInvitationMutation.error)}
-                </div>
+                <InlineErrorState
+                  className="mb-4 p-3"
+                  error={acceptInvitationMutation.error}
+                  title="Could not accept invitation"
+                />
               ) : null}
               <Button className="w-full gap-2" disabled={acceptInvitationMutation.isPending} type="submit">
                 {acceptInvitationMutation.isPending ? (

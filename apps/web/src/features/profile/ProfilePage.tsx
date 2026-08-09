@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledInput } from '@/features/app/FormControls';
-import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
+import { ErrorState, InlineErrorState, LoadingState } from '@/features/app/RouteStates';
 import {
   authQueries,
   useDeleteAvatarMutation,
@@ -327,11 +327,7 @@ export function ProfilePage() {
             </label>
           </section>
 
-          {mutationError ? (
-            <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-              {getErrorMessage(mutationError)}
-            </div>
-          ) : null}
+          {mutationError ? <InlineErrorState error={mutationError} title="Could not save profile" /> : null}
 
           <div className="sticky bottom-5 flex justify-end">
             <Button disabled={isPending || !canSave} type="submit">

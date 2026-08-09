@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
-import { ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
+import { ErrorState, InlineErrorState, LoadingState } from '@/features/app/RouteStates';
 import { setupQueries, useUpdateAuthSettingsMutation } from '@/resources/setup';
 
 const signupPolicyOptions = [
@@ -170,9 +170,7 @@ export function AdminSettingsPage() {
           </label>
 
           {updateAuthSettingsMutation.error ? (
-            <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-              {getErrorMessage(updateAuthSettingsMutation.error)}
-            </div>
+            <InlineErrorState error={updateAuthSettingsMutation.error} title="Could not save sign-up settings" />
           ) : null}
         </Surface>
 

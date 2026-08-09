@@ -6,7 +6,7 @@ import { Link, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
 import { ControlledInput } from '@/features/app/FormControls';
-import { getErrorMessage } from '@/features/app/RouteStates';
+import { InlineErrorState } from '@/features/app/RouteStates';
 import { usePasswordResetConfirmMutation } from '@/resources/auth';
 
 const resetPasswordFormSchema = z
@@ -105,9 +105,7 @@ export function ResetPasswordPage() {
             </label>
 
             {resetMutation.error ? (
-              <div className="mb-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                {getErrorMessage(resetMutation.error)}
-              </div>
+              <InlineErrorState className="mb-4 p-3" error={resetMutation.error} title="Could not update password" />
             ) : null}
 
             <Button className="w-full gap-2" disabled={resetMutation.isPending || !token} type="submit">
