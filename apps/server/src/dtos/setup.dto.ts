@@ -29,6 +29,33 @@ const InstanceAuthSettingsUpdateSchema = z
   })
   .meta({ id: 'InstanceAuthSettingsUpdateDto' });
 
+const OidcProviderSettingsSchema = z
+  .object({
+    autoCreateUsers: z.boolean(),
+    buttonLabel: z.string(),
+    clientId: z.string().nullable(),
+    clientSecretConfigured: z.boolean(),
+    clientSecretKeyId: z.string().nullable(),
+    clientSecretUpdatedAt: DateTimeSchema.nullable(),
+    enabled: z.boolean(),
+    issuerUrl: z.string().nullable(),
+    scopes: z.array(z.string()),
+  })
+  .meta({ id: 'OidcProviderSettingsDto' });
+
+const OidcProviderSettingsUpdateSchema = z
+  .object({
+    autoCreateUsers: z.boolean(),
+    buttonLabel: z.string().min(1).max(60),
+    clearClientSecret: z.boolean().optional(),
+    clientId: z.string().min(1).max(200).nullable(),
+    clientSecret: z.string().min(1).max(4096).optional(),
+    enabled: z.boolean(),
+    issuerUrl: z.url().nullable(),
+    scopes: z.array(z.string().min(1).max(80)).max(20),
+  })
+  .meta({ id: 'OidcProviderSettingsUpdateDto' });
+
 const SetupCreateSchema = z
   .object({
     ownerEmail: z.string().email(),
@@ -57,5 +84,7 @@ const SetupCreateResponseSchema = z
 export class SetupStatusResponseDto extends createZodDto(SetupStatusResponseSchema) {}
 export class InstanceAuthSettingsDto extends createZodDto(InstanceAuthSettingsSchema) {}
 export class InstanceAuthSettingsUpdateDto extends createZodDto(InstanceAuthSettingsUpdateSchema) {}
+export class OidcProviderSettingsDto extends createZodDto(OidcProviderSettingsSchema) {}
+export class OidcProviderSettingsUpdateDto extends createZodDto(OidcProviderSettingsUpdateSchema) {}
 export class SetupCreateDto extends createZodDto(SetupCreateSchema) {}
 export class SetupCreateResponseDto extends createZodDto(SetupCreateResponseSchema) {}

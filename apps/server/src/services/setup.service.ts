@@ -4,6 +4,8 @@ import type { AuthContext } from '../database.js';
 import {
   InstanceAuthSettingsDto,
   InstanceAuthSettingsUpdateDto,
+  OidcProviderSettingsDto,
+  OidcProviderSettingsUpdateDto,
   SetupCreateDto,
   SetupCreateResponseDto,
   SetupStatusResponseDto,
@@ -78,6 +80,93 @@ export class SetupService {
     return after;
   }
 
+  async getOidcProviderSettings(auth: AuthContext): Promise<OidcProviderSettingsDto> {
+    await this.requireInstanceManager(auth);
+
+    return this.setupRepository.getOidcProviderSettings();
+  }
+
+  async updateOidcProviderSettings(
+    auth: AuthContext,
+    dto: OidcProviderSettingsUpdateDto,
+  ): Promise<OidcProviderSettingsDto> {
+    await this.requireInstanceManager(auth);
+
+    const before = await this.setupRepository.getOidcProviderSettings();
+    const scopes = this.normalizeOidcScopes(dto.scopes);
+    const clientSecret = dto.clientSecret?.trim();
+    const willClearClientSecret = dto.clearClientSecret === true && !clientSecret;
+    const clientSecretConfigured = Boolean(clientSecret || (before.clientSecretConfigured && !willClearClientSecret));
+    const publicSettings = {
+      autoCreateUsers: dto.autoCreateUsers,
+      buttonLabel: dto.buttonLabel.trim(),
+      clientId: dto.clientId?.trim() || null,
+      enabled: dto.enabled,
+      issuerUrl: dto.issuerUrl?.trim().replace(/\/+$/, '') || null,
+      scopes,
+    };
+
+    if (publicSettings.enabled) {
+      this.assertOidcProviderIsComplete(publicSettings, clientSecretConfigured);
+    }
+
+    if (clientSecret) {
+      await this.setupRepository.upsertSecretSetting('auth.oidc.client_secret', { clientSecret }, auth.user.id);
+    } else if (willClearClientSecret) {
+      await this.setupRepository.deleteSecretSetting('auth.oidc.client_secret');
+    }
+
+    const after = await this.setupRepository.updateOidcProviderPublicSettings({
+      ...publicSettings,
+      updatedById: auth.user.id,
+    });
+
+    await this.auditLogRepository.create({
+      action: AuditAction.InstanceOidcSettingsUpdated,
+      actorId: auth.user.id,
+      entityId: 'auth.oidc.provider',
+      entityType: 'system_setting',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: {
+        autoCreateUsers: {
+          after: after.autoCreateUsers,
+          before: before.autoCreateUsers,
+        },
+        buttonLabel: {
+          after: after.buttonLabel,
+          before: before.buttonLabel,
+        },
+        clientId: {
+          after: after.clientId,
+          before: before.clientId,
+        },
+        clientSecretConfigured: {
+          after: after.clientSecretConfigured,
+          before: before.clientSecretConfigured,
+        },
+        clientSecretUpdated: Boolean(clientSecret || willClearClientSecret),
+        enabled: {
+          after: after.enabled,
+          before: before.enabled,
+        },
+        issuerUrl: {
+          after: after.issuerUrl,
+          before: before.issuerUrl,
+        },
+        scopes: {
+          after: after.scopes,
+          before: before.scopes,
+        },
+      } satisfies Record<string, JsonValue>,
+      organizationId: null,
+      projectId: null,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
+
+    return after;
+  }
+
   async complete(dto: SetupCreateDto): Promise<SetupCreateResponseDto> {
     const passwordHash = await this.cryptoRepository.hashBcrypt(dto.ownerPassword, SALT_ROUNDS);
     const result = await this.setupRepository.createInitialSetup({
@@ -134,5 +223,52 @@ export class SetupService {
     }
 
     return [...domains].sort();
+  }
+
+  private normalizeOidcScopes(input: string[]): string[] {
+    const scopes = new Set<string>();
+
+    for (const value of input) {
+      const scope = value.trim();
+
+      if (!scope) {
+        continue;
+      }
+
+      if (!/^[A-Za-z0-9:._/-]+$/.test(scope)) {
+        throw new BadRequestException(`Invalid OIDC scope "${value}"`);
+      }
+
+      scopes.add(scope);
+    }
+
+    scopes.add('openid');
+
+    return [...scopes];
+  }
+
+  private assertOidcProviderIsComplete(
+    settings: {
+      clientId: string | null;
+      issuerUrl: string | null;
+      scopes: string[];
+    },
+    clientSecretConfigured: boolean,
+  ): void {
+    if (!settings.issuerUrl) {
+      throw new BadRequestException('OIDC issuer URL is required when OIDC is enabled');
+    }
+
+    if (!settings.clientId) {
+      throw new BadRequestException('OIDC client id is required when OIDC is enabled');
+    }
+
+    if (!clientSecretConfigured) {
+      throw new BadRequestException('OIDC client secret is required when OIDC is enabled');
+    }
+
+    if (!settings.scopes.includes('openid')) {
+      throw new BadRequestException('OIDC scope must include openid');
+    }
   }
 }

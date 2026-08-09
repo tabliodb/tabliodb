@@ -1039,6 +1039,27 @@ export type InstanceAuthSettingsUpdateDto = {
   allowedDomains: string[];
   signupPolicy: SignupPolicy;
 };
+export type OidcProviderSettingsDtoOutput = {
+  autoCreateUsers: boolean;
+  buttonLabel: string;
+  clientId: string | null;
+  clientSecretConfigured: boolean;
+  clientSecretKeyId: string | null;
+  clientSecretUpdatedAt: string | null;
+  enabled: boolean;
+  issuerUrl: string | null;
+  scopes: string[];
+};
+export type OidcProviderSettingsUpdateDto = {
+  autoCreateUsers: boolean;
+  buttonLabel: string;
+  clearClientSecret?: boolean;
+  clientId: string | null;
+  clientSecret?: string;
+  enabled: boolean;
+  issuerUrl: string | null;
+  scopes: string[];
+};
 export type SnapshotCreateDto = {
   diagramId: string;
   message?: string;
@@ -3047,6 +3068,38 @@ export function updateInstanceAuthSettings(
         ...opts,
         method: 'POST',
         body: instanceAuthSettingsUpdateDto,
+      }),
+    ),
+  );
+}
+export function getOidcProviderSettings(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: OidcProviderSettingsDtoOutput;
+    }>('/setup/oidc-provider', {
+      ...opts,
+    }),
+  );
+}
+export function updateOidcProviderSettings(
+  {
+    oidcProviderSettingsUpdateDto,
+  }: {
+    oidcProviderSettingsUpdateDto: OidcProviderSettingsUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: OidcProviderSettingsDtoOutput;
+    }>(
+      '/setup/oidc-provider',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: oidcProviderSettingsUpdateDto,
       }),
     ),
   );

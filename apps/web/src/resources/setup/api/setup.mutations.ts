@@ -4,7 +4,9 @@ import {
   completeSetup,
   prepareSessionBinding,
   updateInstanceAuthSettings,
+  updateOidcProviderSettings,
   type InstanceAuthSettingsUpdateDto,
+  type OidcProviderSettingsUpdateDto,
   type SetupCreateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
@@ -26,12 +28,17 @@ const completeSetupMutationFn = async (body: SetupCreateDto) => {
 };
 const updateAuthSettingsMutationFn = (body: InstanceAuthSettingsUpdateDto) =>
   updateInstanceAuthSettings({ instanceAuthSettingsUpdateDto: body });
+const updateOidcProviderMutationFn = (body: OidcProviderSettingsUpdateDto) =>
+  updateOidcProviderSettings({ oidcProviderSettingsUpdateDto: body });
 
 type UseCompleteSetupMutationParams = {
   mutationConfig?: MutationConfig<typeof completeSetupMutationFn>;
 };
 type UseUpdateAuthSettingsMutationParams = {
   mutationConfig?: MutationConfig<typeof updateAuthSettingsMutationFn>;
+};
+type UseUpdateOidcProviderMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateOidcProviderMutationFn>;
 };
 
 export function useCompleteSetupMutation(params: UseCompleteSetupMutationParams = {}) {
@@ -63,6 +70,17 @@ export function useUpdateAuthSettingsMutation(params: UseUpdateAuthSettingsMutat
             }
           : current,
       );
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useUpdateOidcProviderMutation(params: UseUpdateOidcProviderMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateOidcProviderMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      queryClient.setQueryData(setupKeys.oidcProvider(), data);
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

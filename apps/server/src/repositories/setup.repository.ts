@@ -38,6 +38,32 @@ export type SecretSettingState = {
   updatedAt: string | null;
 };
 
+export type OidcProviderSettings = {
+  autoCreateUsers: boolean;
+  buttonLabel: string;
+  clientId: string | null;
+  clientSecretConfigured: boolean;
+  clientSecretKeyId: string | null;
+  clientSecretUpdatedAt: string | null;
+  enabled: boolean;
+  issuerUrl: string | null;
+  scopes: string[];
+};
+
+export type OidcProviderPublicSettings = Pick<
+  OidcProviderSettings,
+  'autoCreateUsers' | 'buttonLabel' | 'clientId' | 'enabled' | 'issuerUrl' | 'scopes'
+>;
+
+const defaultOidcProviderSettings: OidcProviderPublicSettings = {
+  autoCreateUsers: false,
+  buttonLabel: 'Continue with SSO',
+  clientId: null,
+  enabled: false,
+  issuerUrl: null,
+  scopes: ['openid', 'email', 'profile'],
+};
+
 @Injectable()
 export class SetupRepository {
   constructor(
@@ -76,6 +102,42 @@ export class SetupRepository {
     ]);
 
     return this.getAuthSettings();
+  }
+
+  async getOidcProviderSettings(): Promise<OidcProviderSettings> {
+    const [publicSetting, secretState] = await Promise.all([
+      this.getSettingValue('auth.oidc.provider'),
+      this.getSecretSettingState('auth.oidc.client_secret'),
+    ]);
+    const publicSettings = this.readOidcProviderPublicSettings(publicSetting);
+
+    return {
+      ...publicSettings,
+      clientSecretConfigured: secretState.isConfigured,
+      clientSecretKeyId: secretState.keyId,
+      clientSecretUpdatedAt: secretState.updatedAt,
+    };
+  }
+
+  async updateOidcProviderPublicSettings(
+    settings: OidcProviderPublicSettings & { updatedById: string },
+  ): Promise<OidcProviderSettings> {
+    await this.upsertSettings([
+      {
+        key: 'auth.oidc.provider',
+        updatedById: settings.updatedById,
+        value: {
+          autoCreateUsers: settings.autoCreateUsers,
+          buttonLabel: settings.buttonLabel,
+          clientId: settings.clientId,
+          enabled: settings.enabled,
+          issuerUrl: settings.issuerUrl,
+          scopes: settings.scopes,
+        },
+      },
+    ]);
+
+    return this.getOidcProviderSettings();
   }
 
   async getSecretSettingState(key: SecretSettingKey): Promise<SecretSettingState> {
@@ -340,6 +402,28 @@ export class SetupRepository {
     }
 
     return 'invite_only';
+  }
+
+  private readOidcProviderPublicSettings(value: JsonValue): OidcProviderPublicSettings {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return defaultOidcProviderSettings;
+    }
+
+    const setting = value as Record<string, JsonValue>;
+
+    return {
+      autoCreateUsers: typeof setting.autoCreateUsers === 'boolean' ? setting.autoCreateUsers : false,
+      buttonLabel:
+        typeof setting.buttonLabel === 'string' && setting.buttonLabel.trim()
+          ? setting.buttonLabel
+          : defaultOidcProviderSettings.buttonLabel,
+      clientId: typeof setting.clientId === 'string' && setting.clientId.trim() ? setting.clientId : null,
+      enabled: typeof setting.enabled === 'boolean' ? setting.enabled : false,
+      issuerUrl: typeof setting.issuerUrl === 'string' && setting.issuerUrl.trim() ? setting.issuerUrl : null,
+      scopes: Array.isArray(setting.scopes)
+        ? setting.scopes.filter((scope): scope is string => typeof scope === 'string' && scope.trim().length > 0)
+        : defaultOidcProviderSettings.scopes,
+    };
   }
 }
 

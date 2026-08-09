@@ -7,7 +7,10 @@ import { setupQueries } from '@/resources/setup';
 export async function adminSettingsLoader() {
   try {
     // Instance auth settings adalah data utama halaman ini, jadi loader menyiapkan cache sebelum component render.
-    await queryClient.ensureQueryData(setupQueries.authSettings());
+    await Promise.all([
+      queryClient.ensureQueryData(setupQueries.authSettings()),
+      queryClient.ensureQueryData(setupQueries.oidcProvider()),
+    ]);
   } catch (error) {
     if (error instanceof TabliodbApiError && error.status === 401) {
       throw redirect(routes.login.to());

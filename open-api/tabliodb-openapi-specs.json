@@ -3262,6 +3262,80 @@
         ]
       }
     },
+    "/setup/oidc-provider": {
+      "get": {
+        "operationId": "getOidcProviderSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderSettingsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "setup"
+        ]
+      },
+      "post": {
+        "operationId": "updateOidcProviderSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcProviderSettingsUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderSettingsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
     "/snapshots": {
       "post": {
         "operationId": "createSnapshot",
@@ -9407,6 +9481,111 @@
         "required": [
           "allowedDomains",
           "signupPolicy"
+        ]
+      },
+      "OidcProviderSettingsDto_Output": {
+        "type": "object",
+        "properties": {
+          "autoCreateUsers": {
+            "type": "boolean"
+          },
+          "buttonLabel": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string",
+            "nullable": true
+          },
+          "clientSecretConfigured": {
+            "type": "boolean"
+          },
+          "clientSecretKeyId": {
+            "type": "string",
+            "nullable": true
+          },
+          "clientSecretUpdatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "issuerUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "autoCreateUsers",
+          "buttonLabel",
+          "clientId",
+          "clientSecretConfigured",
+          "clientSecretKeyId",
+          "clientSecretUpdatedAt",
+          "enabled",
+          "issuerUrl",
+          "scopes"
+        ],
+        "additionalProperties": false
+      },
+      "OidcProviderSettingsUpdateDto": {
+        "type": "object",
+        "properties": {
+          "autoCreateUsers": {
+            "type": "boolean"
+          },
+          "buttonLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "clearClientSecret": {
+            "type": "boolean"
+          },
+          "clientId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "nullable": true
+          },
+          "clientSecret": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "issuerUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "scopes": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          }
+        },
+        "required": [
+          "autoCreateUsers",
+          "buttonLabel",
+          "clientId",
+          "enabled",
+          "issuerUrl",
+          "scopes"
         ]
       },
       "SetupCreateDto": {

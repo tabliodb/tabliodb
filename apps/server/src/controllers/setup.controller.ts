@@ -8,6 +8,8 @@ import { AuthType } from '../constants.js';
 import {
   InstanceAuthSettingsDto,
   InstanceAuthSettingsUpdateDto,
+  OidcProviderSettingsDto,
+  OidcProviderSettingsUpdateDto,
   SetupCreateDto,
   SetupCreateResponseDto,
   SetupStatusResponseDto,
@@ -50,6 +52,29 @@ export class SetupController {
     @Body() dto: InstanceAuthSettingsUpdateDto,
   ): Promise<InstanceAuthSettingsDto> {
     return this.service.updateAuthSettings(auth, dto);
+  }
+
+  @Get('oidc-provider')
+  @Authenticated()
+  @RequirePermission(Permission.OrganizationManage)
+  @ApiOperation({ operationId: 'getOidcProviderSettings' })
+  @ZodResponse({ status: HttpStatus.OK, type: OidcProviderSettingsDto })
+  getOidcProviderSettings(@Auth() auth: AuthContext): Promise<OidcProviderSettingsDto> {
+    return this.service.getOidcProviderSettings(auth);
+  }
+
+  @Post('oidc-provider')
+  @Authenticated()
+  @RequirePermission(Permission.OrganizationManage)
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: OidcProviderSettingsUpdateDto })
+  @ApiOperation({ operationId: 'updateOidcProviderSettings' })
+  @ZodResponse({ status: HttpStatus.OK, type: OidcProviderSettingsDto })
+  updateOidcProviderSettings(
+    @Auth() auth: AuthContext,
+    @Body() dto: OidcProviderSettingsUpdateDto,
+  ): Promise<OidcProviderSettingsDto> {
+    return this.service.updateOidcProviderSettings(auth, dto);
   }
 
   @Post()
