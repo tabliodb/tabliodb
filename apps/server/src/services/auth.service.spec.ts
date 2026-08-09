@@ -42,6 +42,7 @@ describe(AuthService.name, () => {
     uploadUserAvatar: vi.fn(),
   };
   const organizationRepository = {
+    addMemberIfAbsent: vi.fn(),
     createPersonalOrganization: vi.fn(),
   };
   const passwordResetRepository = {
@@ -111,6 +112,8 @@ describe(AuthService.name, () => {
     });
     setupRepository.getOidcProviderSettings.mockResolvedValue({
       autoCreateUsers: false,
+      autoJoinOrganizationId: null,
+      autoJoinOrganizationRole: null,
       buttonLabel: 'Continue with SSO',
       clientId: null,
       clientSecretConfigured: false,
@@ -204,6 +207,8 @@ describe(AuthService.name, () => {
   it('exposes an OIDC login provider only when setup and provider config are complete', async () => {
     setupRepository.getOidcProviderSettings.mockResolvedValueOnce({
       autoCreateUsers: true,
+      autoJoinOrganizationId: null,
+      autoJoinOrganizationRole: null,
       buttonLabel: 'Sign in with Company SSO',
       clientId: 'tabliodb',
       clientSecretConfigured: true,
@@ -222,6 +227,8 @@ describe(AuthService.name, () => {
     });
     setupRepository.getOidcProviderSettings.mockResolvedValueOnce({
       autoCreateUsers: true,
+      autoJoinOrganizationId: null,
+      autoJoinOrganizationRole: null,
       buttonLabel: 'Sign in with Company SSO',
       clientId: 'tabliodb',
       clientSecretConfigured: true,

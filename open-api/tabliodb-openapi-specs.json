@@ -8503,6 +8503,17 @@
           "autoCreateUsers": {
             "type": "boolean"
           },
+          "autoJoinOrganizationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
+          },
+          "autoJoinOrganizationRole": {
+            "type": "string",
+            "enum": ["member", "guest"],
+            "nullable": true
+          },
           "buttonLabel": {
             "type": "string"
           },
@@ -8539,6 +8550,8 @@
         },
         "required": [
           "autoCreateUsers",
+          "autoJoinOrganizationId",
+          "autoJoinOrganizationRole",
           "buttonLabel",
           "clientId",
           "clientSecretConfigured",
@@ -8555,6 +8568,17 @@
         "properties": {
           "autoCreateUsers": {
             "type": "boolean"
+          },
+          "autoJoinOrganizationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
+          },
+          "autoJoinOrganizationRole": {
+            "type": "string",
+            "enum": ["member", "guest"],
+            "nullable": true
           },
           "buttonLabel": {
             "type": "string",
@@ -8593,7 +8617,16 @@
             }
           }
         },
-        "required": ["autoCreateUsers", "buttonLabel", "clientId", "enabled", "issuerUrl", "scopes"]
+        "required": [
+          "autoCreateUsers",
+          "autoJoinOrganizationId",
+          "autoJoinOrganizationRole",
+          "buttonLabel",
+          "clientId",
+          "enabled",
+          "issuerUrl",
+          "scopes"
+        ]
       },
       "SetupCreateDto": {
         "type": "object",

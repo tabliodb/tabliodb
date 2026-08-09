@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { OrganizationRole } from '@tabliodb/shared';
 import { AuditAction, SALT_ROUNDS } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import {
@@ -13,6 +14,7 @@ import {
 import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { CryptoRepository } from '../repositories/crypto.repository.js';
+import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { SetupRepository } from '../repositories/setup.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
@@ -25,6 +27,7 @@ export class SetupService {
     private readonly authService: AuthService,
     private readonly configRepository: ConfigRepository,
     private readonly cryptoRepository: CryptoRepository,
+    private readonly organizationRepository: OrganizationRepository,
     private readonly setupRepository: SetupRepository,
     private readonly userRepository: UserRepository,
   ) {}
@@ -99,6 +102,10 @@ export class SetupService {
     const clientSecretConfigured = Boolean(clientSecret || (before.clientSecretConfigured && !willClearClientSecret));
     const publicSettings = {
       autoCreateUsers: dto.autoCreateUsers,
+      autoJoinOrganizationId: dto.autoJoinOrganizationId,
+      autoJoinOrganizationRole: dto.autoJoinOrganizationId
+        ? (dto.autoJoinOrganizationRole ?? OrganizationRole.Member)
+        : null,
       buttonLabel: dto.buttonLabel.trim(),
       clientId: dto.clientId?.trim() || null,
       enabled: dto.enabled,
@@ -109,6 +116,8 @@ export class SetupService {
     if (publicSettings.enabled) {
       this.assertOidcProviderIsComplete(publicSettings, clientSecretConfigured);
     }
+
+    await this.assertOidcAutoJoinOrganizationExists(publicSettings.autoJoinOrganizationId);
 
     if (clientSecret) {
       await this.setupRepository.upsertSecretSetting('auth.oidc.client_secret', { clientSecret }, auth.user.id);
@@ -131,6 +140,14 @@ export class SetupService {
         autoCreateUsers: {
           after: after.autoCreateUsers,
           before: before.autoCreateUsers,
+        },
+        autoJoinOrganizationId: {
+          after: after.autoJoinOrganizationId,
+          before: before.autoJoinOrganizationId,
+        },
+        autoJoinOrganizationRole: {
+          after: after.autoJoinOrganizationRole,
+          before: before.autoJoinOrganizationRole,
         },
         buttonLabel: {
           after: after.buttonLabel,
@@ -269,6 +286,18 @@ export class SetupService {
 
     if (!settings.scopes.includes('openid')) {
       throw new BadRequestException('OIDC scope must include openid');
+    }
+  }
+
+  private async assertOidcAutoJoinOrganizationExists(organizationId: string | null): Promise<void> {
+    if (!organizationId) {
+      return;
+    }
+
+    const organization = await this.organizationRepository.getActiveById(organizationId);
+
+    if (!organization) {
+      throw new BadRequestException('OIDC auto-join workspace does not exist or has been archived');
     }
   }
 }

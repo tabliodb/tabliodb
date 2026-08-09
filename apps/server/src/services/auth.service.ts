@@ -5,7 +5,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Permission, isGranted } from '@tabliodb/shared';
+import { OrganizationRole, Permission, isGranted } from '@tabliodb/shared';
 import { generators, Issuer, type Client, type TokenSet } from 'openid-client';
 import { parse } from 'cookie';
 import { webcrypto } from 'node:crypto';
@@ -696,12 +696,38 @@ export class AuthService {
       passwordHash: null,
     });
 
+    await this.provisionOidcWorkspace(user, settings);
+
+    return user;
+  }
+
+  private async provisionOidcWorkspace(
+    user: {
+      id: string;
+      name: string;
+    },
+    settings: OidcProviderSettings,
+  ): Promise<void> {
+    const role = settings.autoJoinOrganizationRole ?? OrganizationRole.Member;
+
+    if (settings.autoJoinOrganizationId) {
+      const member = await this.organizationRepository.addMemberIfAbsent({
+        organizationId: settings.autoJoinOrganizationId,
+        role,
+        userId: user.id,
+      });
+
+      if (!member || member.status !== 'active') {
+        throw new UnauthorizedException('OIDC workspace mapping is not available');
+      }
+
+      return;
+    }
+
     await this.organizationRepository.createPersonalOrganization({
       name: `${user.name}'s Workspace`,
       userId: user.id,
     });
-
-    return user;
   }
 
   private async assertOidcAutoCreateAllowed(email: string): Promise<void> {

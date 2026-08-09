@@ -40,6 +40,8 @@ export type SecretSettingState = {
 
 export type OidcProviderSettings = {
   autoCreateUsers: boolean;
+  autoJoinOrganizationId: string | null;
+  autoJoinOrganizationRole: OrganizationRole.Member | OrganizationRole.Guest | null;
   buttonLabel: string;
   clientId: string | null;
   clientSecretConfigured: boolean;
@@ -52,11 +54,20 @@ export type OidcProviderSettings = {
 
 export type OidcProviderPublicSettings = Pick<
   OidcProviderSettings,
-  'autoCreateUsers' | 'buttonLabel' | 'clientId' | 'enabled' | 'issuerUrl' | 'scopes'
+  | 'autoCreateUsers'
+  | 'autoJoinOrganizationId'
+  | 'autoJoinOrganizationRole'
+  | 'buttonLabel'
+  | 'clientId'
+  | 'enabled'
+  | 'issuerUrl'
+  | 'scopes'
 >;
 
 const defaultOidcProviderSettings: OidcProviderPublicSettings = {
   autoCreateUsers: false,
+  autoJoinOrganizationId: null,
+  autoJoinOrganizationRole: null,
   buttonLabel: 'Continue with SSO',
   clientId: null,
   enabled: false,
@@ -128,6 +139,8 @@ export class SetupRepository {
         updatedById: settings.updatedById,
         value: {
           autoCreateUsers: settings.autoCreateUsers,
+          autoJoinOrganizationId: settings.autoJoinOrganizationId,
+          autoJoinOrganizationRole: settings.autoJoinOrganizationRole,
           buttonLabel: settings.buttonLabel,
           clientId: settings.clientId,
           enabled: settings.enabled,
@@ -410,9 +423,17 @@ export class SetupRepository {
     }
 
     const setting = value as Record<string, JsonValue>;
+    const autoJoinOrganizationId =
+      typeof setting.autoJoinOrganizationId === 'string' && setting.autoJoinOrganizationId.trim()
+        ? setting.autoJoinOrganizationId
+        : null;
 
     return {
       autoCreateUsers: typeof setting.autoCreateUsers === 'boolean' ? setting.autoCreateUsers : false,
+      autoJoinOrganizationId,
+      autoJoinOrganizationRole: autoJoinOrganizationId
+        ? (this.readOidcAutoJoinOrganizationRole(setting.autoJoinOrganizationRole) ?? OrganizationRole.Member)
+        : null,
       buttonLabel:
         typeof setting.buttonLabel === 'string' && setting.buttonLabel.trim()
           ? setting.buttonLabel
@@ -424,6 +445,14 @@ export class SetupRepository {
         ? setting.scopes.filter((scope): scope is string => typeof scope === 'string' && scope.trim().length > 0)
         : defaultOidcProviderSettings.scopes,
     };
+  }
+
+  private readOidcAutoJoinOrganizationRole(value: JsonValue): OrganizationRole.Member | OrganizationRole.Guest | null {
+    if (value === OrganizationRole.Member || value === OrganizationRole.Guest) {
+      return value;
+    }
+
+    return null;
   }
 }
 

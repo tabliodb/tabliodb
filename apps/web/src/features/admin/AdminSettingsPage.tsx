@@ -1,13 +1,24 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { SignupPolicy } from '@tabliodb/sdk';
+import { AutoJoinOrganizationRole, SignupPolicy, type OrganizationDtoOutput } from '@tabliodb/sdk';
 import { Badge, Button, FieldError, Surface, cn } from '@tabliodb/ui';
-import { CheckCircle2, Globe2, Loader2, LockKeyhole, MailCheck, Save, ShieldCheck, UserPlus } from 'lucide-react';
+import {
+  Building2,
+  CheckCircle2,
+  Globe2,
+  Loader2,
+  LockKeyhole,
+  MailCheck,
+  Save,
+  ShieldCheck,
+  UserPlus,
+} from 'lucide-react';
 import { useEffect } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, InlineErrorState, LoadingState } from '@/features/app/RouteStates';
+import { organizationsQueries } from '@/resources/organizations';
 import { setupQueries, useUpdateAuthSettingsMutation, useUpdateOidcProviderMutation } from '@/resources/setup';
 
 const signupPolicyOptions = [
@@ -17,6 +28,8 @@ const signupPolicyOptions = [
   SignupPolicy.SsoOnly,
   SignupPolicy.PublicSignup,
 ] as const satisfies readonly SignupPolicy[];
+const oidcAutoJoinRoleOptions = [AutoJoinOrganizationRole.Member, AutoJoinOrganizationRole.Guest] as const;
+const oidcAutoJoinNoneValue = '__none__';
 
 const authSettingsFormSchema = z
   .object({
@@ -36,6 +49,8 @@ const authSettingsFormSchema = z
 const oidcProviderFormSchema = z
   .object({
     autoCreateUsers: z.boolean(),
+    autoJoinOrganizationId: z.string(),
+    autoJoinOrganizationRole: z.enum(oidcAutoJoinRoleOptions),
     buttonLabel: z.string().trim().min(1, 'Button label is required.').max(60, 'Button label is too long.'),
     clearClientSecret: z.boolean(),
     clientId: z.string().max(200, 'Client ID is too long.'),
@@ -91,6 +106,7 @@ const selectClassName =
 export function AdminSettingsPage() {
   const authSettingsQuery = useQuery(setupQueries.authSettings());
   const oidcProviderQuery = useQuery(setupQueries.oidcProvider());
+  const organizationsQuery = useQuery(organizationsQueries.list({ limit: 100 }));
   const updateAuthSettingsMutation = useUpdateAuthSettingsMutation();
   const updateOidcProviderMutation = useUpdateOidcProviderMutation();
   const authForm = useForm<AuthSettingsFormState>({
@@ -104,6 +120,8 @@ export function AdminSettingsPage() {
   const oidcForm = useForm<OidcProviderFormState>({
     defaultValues: {
       autoCreateUsers: false,
+      autoJoinOrganizationId: oidcAutoJoinNoneValue,
+      autoJoinOrganizationRole: AutoJoinOrganizationRole.Member,
       buttonLabel: 'Continue with SSO',
       clearClientSecret: false,
       clientId: '',
@@ -119,6 +137,7 @@ export function AdminSettingsPage() {
   const oidcErrors = oidcForm.formState.errors;
   const selectedPolicy = authForm.watch('signupPolicy');
   const parsedDomains = parseAllowedDomainsText(authForm.watch('allowedDomainsText'));
+  const autoJoinOrganizationId = oidcForm.watch('autoJoinOrganizationId');
   const oidcEnabled = oidcForm.watch('enabled');
   const oidcScopes = parseScopesText(oidcForm.watch('scopesText'));
 
@@ -140,6 +159,8 @@ export function AdminSettingsPage() {
 
     oidcForm.reset({
       autoCreateUsers: oidcProviderQuery.data.autoCreateUsers,
+      autoJoinOrganizationId: oidcProviderQuery.data.autoJoinOrganizationId ?? oidcAutoJoinNoneValue,
+      autoJoinOrganizationRole: oidcProviderQuery.data.autoJoinOrganizationRole ?? AutoJoinOrganizationRole.Member,
       buttonLabel: oidcProviderQuery.data.buttonLabel,
       clearClientSecret: false,
       clientId: oidcProviderQuery.data.clientId ?? '',
@@ -170,10 +191,14 @@ export function AdminSettingsPage() {
 
   function handleOidcSubmit(values: OidcProviderFormState) {
     const clientSecret = values.clientSecret.trim();
+    const autoJoinOrganizationId =
+      values.autoJoinOrganizationId === oidcAutoJoinNoneValue ? null : values.autoJoinOrganizationId;
 
     updateOidcProviderMutation.mutate(
       {
         autoCreateUsers: values.autoCreateUsers,
+        autoJoinOrganizationId,
+        autoJoinOrganizationRole: autoJoinOrganizationId ? values.autoJoinOrganizationRole : null,
         buttonLabel: values.buttonLabel.trim(),
         clearClientSecret: values.clearClientSecret,
         clientId: values.clientId.trim() || null,
@@ -187,6 +212,8 @@ export function AdminSettingsPage() {
           // Secret values are write-only; after save the form only keeps the configured status from the server.
           oidcForm.reset({
             autoCreateUsers: settings.autoCreateUsers,
+            autoJoinOrganizationId: settings.autoJoinOrganizationId ?? oidcAutoJoinNoneValue,
+            autoJoinOrganizationRole: settings.autoJoinOrganizationRole ?? AutoJoinOrganizationRole.Member,
             buttonLabel: settings.buttonLabel,
             clearClientSecret: false,
             clientId: settings.clientId ?? '',
@@ -200,7 +227,7 @@ export function AdminSettingsPage() {
     );
   }
 
-  if (authSettingsQuery.isPending || oidcProviderQuery.isPending) {
+  if (authSettingsQuery.isPending || oidcProviderQuery.isPending || organizationsQuery.isPending) {
     return <LoadingState message="Loading admin settings" />;
   }
 
@@ -211,6 +238,15 @@ export function AdminSettingsPage() {
   if (oidcProviderQuery.error) {
     return <ErrorState error={oidcProviderQuery.error} onRetry={() => void oidcProviderQuery.refetch()} />;
   }
+
+  if (organizationsQuery.error) {
+    return <ErrorState error={organizationsQuery.error} onRetry={() => void organizationsQuery.refetch()} />;
+  }
+
+  const autoJoinWorkspaceOptions = createAutoJoinWorkspaceOptions(
+    oidcProviderQuery.data.autoJoinOrganizationId,
+    organizationsQuery.data.items,
+  );
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-6 px-5 py-5">
@@ -303,7 +339,7 @@ export function AdminSettingsPage() {
       </form>
 
       <SettingsHeader
-        description="Prepare generic OIDC for company identity providers. Login wiring comes next, but secrets are already stored safely."
+        description="Prepare generic OIDC for company identity providers and decide where SSO users should land."
         title="OIDC provider"
       />
 
@@ -449,6 +485,47 @@ export function AdminSettingsPage() {
             </label>
           </div>
 
+          <div className="rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+            <div className="mb-3 flex items-start gap-2">
+              <div className="grid size-9 shrink-0 place-items-center rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
+                <Building2 className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-extrabold">Workspace mapping</h3>
+                <p className="mt-0.5 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                  Auto-created SSO users can land in a shared company workspace instead of a personal workspace.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+              <label className="block text-sm">
+                <FieldLabel>Auto-join workspace</FieldLabel>
+                <ControlledSelect
+                  className={selectClassName}
+                  control={oidcForm.control}
+                  disabled={updateOidcProviderMutation.isPending}
+                  name="autoJoinOrganizationId"
+                  options={autoJoinWorkspaceOptions}
+                />
+              </label>
+
+              <label className="block text-sm">
+                <FieldLabel>Default role</FieldLabel>
+                <ControlledSelect
+                  className={selectClassName}
+                  control={oidcForm.control}
+                  disabled={updateOidcProviderMutation.isPending || autoJoinOrganizationId === oidcAutoJoinNoneValue}
+                  name="autoJoinOrganizationRole"
+                  options={oidcAutoJoinRoleOptions.map((role) => ({
+                    label: formatAutoJoinRole(role),
+                    value: role,
+                  }))}
+                />
+              </label>
+            </div>
+          </div>
+
           {updateOidcProviderMutation.error ? (
             <InlineErrorState error={updateOidcProviderMutation.error} title="Could not save OIDC provider" />
           ) : null}
@@ -534,6 +611,39 @@ function formatDate(value: string): string {
     day: '2-digit',
     month: 'short',
   }).format(new Date(value));
+}
+
+function createAutoJoinWorkspaceOptions(
+  configuredOrganizationId: string | null,
+  organizations: OrganizationDtoOutput[],
+) {
+  const options = [
+    {
+      label: 'Do not auto-join',
+      value: oidcAutoJoinNoneValue,
+    },
+    ...organizations.map((organization) => ({
+      label: organization.name,
+      value: organization.id,
+    })),
+  ];
+
+  if (configuredOrganizationId && !organizations.some((organization) => organization.id === configuredOrganizationId)) {
+    // A stale/inaccessible mapping is still shown so the admin can intentionally clear or replace it.
+    options.push({
+      label: `Configured workspace (${configuredOrganizationId.slice(0, 8)})`,
+      value: configuredOrganizationId,
+    });
+  }
+
+  return options;
+}
+
+function formatAutoJoinRole(role: AutoJoinOrganizationRole): string {
+  return {
+    guest: 'Guest',
+    member: 'Member',
+  }[role];
 }
 
 function formatSignupPolicy(policy: SignupPolicy): string {

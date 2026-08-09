@@ -112,6 +112,15 @@ export class OrganizationRepository {
       .executeTakeFirst();
   }
 
+  getActiveById(organizationId: string) {
+    return this.db
+      .selectFrom('organizations')
+      .select(['id', 'name', 'slug'])
+      .where('id', '=', organizationId)
+      .where('archivedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
   async updateSettings(
     organizationId: string,
     dto: {
@@ -254,6 +263,42 @@ export class OrganizationRepository {
       .executeTakeFirstOrThrow();
 
     return Number(row.count);
+  }
+
+  async addMemberIfAbsent(options: {
+    createdById?: string | null;
+    organizationId: string;
+    role: OrganizationRole.Member | OrganizationRole.Guest;
+    userId: string;
+  }) {
+    const organization = await this.getActiveById(options.organizationId);
+
+    if (!organization) {
+      return undefined;
+    }
+
+    const existingMember = await this.getMember(options.organizationId, options.userId);
+
+    if (existingMember) {
+      // OIDC auto-join must never silently promote, demote, or reactivate an existing workspace membership.
+      return existingMember;
+    }
+
+    const now = new Date();
+
+    await this.db
+      .insertInto('organization_members')
+      .values({
+        createdById: options.createdById ?? null,
+        joinedAt: now,
+        organizationId: options.organizationId,
+        role: options.role,
+        status: 'active',
+        userId: options.userId,
+      })
+      .execute();
+
+    return this.getMember(options.organizationId, options.userId);
   }
 
   createPersonalOrganization(options: { userId: string; name: string }) {

@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { OrganizationRole } from '@tabliodb/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
@@ -18,6 +19,9 @@ describe(SetupService.name, () => {
   const cryptoRepository = {
     hashBcrypt: vi.fn(),
   };
+  const organizationRepository = {
+    getActiveById: vi.fn(),
+  };
   const setupRepository = {
     deleteSecretSetting: vi.fn(),
     getAuthSettings: vi.fn(),
@@ -36,6 +40,8 @@ describe(SetupService.name, () => {
     userRepository.getInstanceRole.mockResolvedValue({ role: 'owner' });
     setupRepository.getOidcProviderSettings.mockResolvedValue({
       autoCreateUsers: false,
+      autoJoinOrganizationId: null,
+      autoJoinOrganizationRole: null,
       buttonLabel: 'Continue with SSO',
       clientId: null,
       clientSecretConfigured: false,
@@ -47,6 +53,8 @@ describe(SetupService.name, () => {
     });
     setupRepository.updateOidcProviderPublicSettings.mockImplementation(async (settings) => ({
       autoCreateUsers: settings.autoCreateUsers,
+      autoJoinOrganizationId: settings.autoJoinOrganizationId,
+      autoJoinOrganizationRole: settings.autoJoinOrganizationRole,
       buttonLabel: settings.buttonLabel,
       clientId: settings.clientId,
       clientSecretConfigured: Boolean(setupRepository.upsertSecretSetting.mock.calls.length),
@@ -62,6 +70,7 @@ describe(SetupService.name, () => {
       authService as never,
       configRepository as never,
       cryptoRepository as never,
+      organizationRepository as never,
       setupRepository as never,
       userRepository as never,
     );
@@ -73,6 +82,8 @@ describe(SetupService.name, () => {
     await expect(
       service.updateOidcProviderSettings(createAuthContext(), {
         autoCreateUsers: false,
+        autoJoinOrganizationId: null,
+        autoJoinOrganizationRole: null,
         buttonLabel: 'Company SSO',
         clientId: 'tabliodb',
         enabled: true,
@@ -89,6 +100,8 @@ describe(SetupService.name, () => {
 
     await service.updateOidcProviderSettings(createAuthContext(), {
       autoCreateUsers: true,
+      autoJoinOrganizationId: null,
+      autoJoinOrganizationRole: null,
       buttonLabel: 'Company SSO',
       clientId: 'tabliodb',
       clientSecret: 'raw-secret',
@@ -114,6 +127,35 @@ describe(SetupService.name, () => {
       expect.objectContaining({
         action: AuditAction.InstanceOidcSettingsUpdated,
         metadata: expect.not.stringContaining('raw-secret'),
+      }),
+    );
+  });
+
+  it('validates the OIDC auto-join workspace before saving provider settings', async () => {
+    const service = createService();
+    organizationRepository.getActiveById.mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Company Workspace',
+      slug: 'company-workspace',
+    });
+
+    await service.updateOidcProviderSettings(createAuthContext(), {
+      autoCreateUsers: true,
+      autoJoinOrganizationId: '11111111-1111-4111-8111-111111111111',
+      autoJoinOrganizationRole: OrganizationRole.Member,
+      buttonLabel: 'Company SSO',
+      clientId: 'tabliodb',
+      clientSecret: 'raw-secret',
+      enabled: true,
+      issuerUrl: 'https://id.company.test',
+      scopes: ['openid', 'email', 'profile'],
+    });
+
+    expect(organizationRepository.getActiveById).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
+    expect(setupRepository.updateOidcProviderPublicSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        autoJoinOrganizationId: '11111111-1111-4111-8111-111111111111',
+        autoJoinOrganizationRole: 'member',
       }),
     );
   });

@@ -1,9 +1,11 @@
 import { createZodDto } from 'nestjs-zod';
+import { OrganizationRole } from '@tabliodb/shared';
 import { z } from 'zod';
 import { SessionBindingSchema } from './auth.dto.js';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const SignupPolicySchema = z.enum(['signup_disabled', 'invite_only', 'allowed_domains', 'sso_only', 'public_signup']);
+const OidcAutoJoinOrganizationRoleSchema = z.enum([OrganizationRole.Member, OrganizationRole.Guest]);
 
 const SetupStatusResponseSchema = z
   .object({
@@ -32,6 +34,8 @@ const InstanceAuthSettingsUpdateSchema = z
 const OidcProviderSettingsSchema = z
   .object({
     autoCreateUsers: z.boolean(),
+    autoJoinOrganizationId: z.string().uuid().nullable(),
+    autoJoinOrganizationRole: OidcAutoJoinOrganizationRoleSchema.nullable(),
     buttonLabel: z.string(),
     clientId: z.string().nullable(),
     clientSecretConfigured: z.boolean(),
@@ -46,6 +50,8 @@ const OidcProviderSettingsSchema = z
 const OidcProviderSettingsUpdateSchema = z
   .object({
     autoCreateUsers: z.boolean(),
+    autoJoinOrganizationId: z.string().uuid().nullable(),
+    autoJoinOrganizationRole: OidcAutoJoinOrganizationRoleSchema.nullable(),
     buttonLabel: z.string().min(1).max(60),
     clearClientSecret: z.boolean().optional(),
     clientId: z.string().min(1).max(200).nullable(),

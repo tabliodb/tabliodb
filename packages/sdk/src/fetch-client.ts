@@ -1052,6 +1052,8 @@ export type InstanceAuthSettingsUpdateDto = {
 };
 export type OidcProviderSettingsDtoOutput = {
   autoCreateUsers: boolean;
+  autoJoinOrganizationId: string | null;
+  autoJoinOrganizationRole: AutoJoinOrganizationRole | null;
   buttonLabel: string;
   clientId: string | null;
   clientSecretConfigured: boolean;
@@ -1063,6 +1065,8 @@ export type OidcProviderSettingsDtoOutput = {
 };
 export type OidcProviderSettingsUpdateDto = {
   autoCreateUsers: boolean;
+  autoJoinOrganizationId: string | null;
+  autoJoinOrganizationRole: AutoJoinOrganizationRole | null;
   buttonLabel: string;
   clearClientSecret?: boolean;
   clientId: string | null;
@@ -3866,6 +3870,10 @@ export enum SignupPolicy {
   AllowedDomains = 'allowed_domains',
   SsoOnly = 'sso_only',
   PublicSignup = 'public_signup',
+}
+export enum AutoJoinOrganizationRole {
+  Member = 'member',
+  Guest = 'guest',
 }
 export enum Type3 {
   Check = 'check',
