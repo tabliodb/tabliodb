@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { TabliodbHeader } from '../constants.js';
+import { sanitizeRequestPath } from '../utils/request-path.js';
 
 type ApiErrorResponse = {
   code: string;
@@ -32,15 +33,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const status = error instanceof HttpException ? error.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
     const exceptionResponse = error instanceof HttpException ? error.getResponse() : null;
     const normalized = normalizeException(exceptionResponse, error, status);
+    const requestPath = sanitizeRequestPath(request.originalUrl || request.url);
+    const requestId = readHeader(request.headers[TabliodbHeader.RequestId]);
     const body: ApiErrorResponse = {
       code: normalized.code,
       details: normalized.details,
       error: normalized.error,
       message: normalized.message,
       method: request.method,
-      path: request.originalUrl || request.url,
+      path: requestPath,
       // The request id is returned to the client so support/debugging can correlate UI reports with server logs.
-      requestId: readHeader(request.headers[TabliodbHeader.RequestId]),
+      requestId,
       statusCode: status,
       timestamp: new Date().toISOString(),
     };
@@ -48,7 +51,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       // Internal exception details are logged server-side but replaced with a stable user-facing response payload.
       this.logger.error(
-        `${request.method} ${request.originalUrl || request.url} failed with ${status}. ${formatErrorMessage(error)}`,
+        {
+          code: normalized.code,
+          event: 'http.exception',
+          method: request.method,
+          path: requestPath,
+          requestId,
+          statusCode: status,
+          message: formatErrorMessage(error),
+        },
+        error instanceof Error ? error.stack : undefined,
       );
     }
 
@@ -210,7 +222,7 @@ function readHeader(value: string | string[] | undefined): string | null {
 
 function formatErrorMessage(error: unknown): string {
   if (error instanceof Error) {
-    return error.stack ?? error.message;
+    return error.message;
   }
 
   try {

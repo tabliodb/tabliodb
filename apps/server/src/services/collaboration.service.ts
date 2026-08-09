@@ -48,6 +48,11 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
               createClient: () =>
                 new RedisClient(realtimeRedisUrl, {
                   maxRetriesPerRequest: null,
+                }).on('error', (error) => {
+                  this.logger.warn({
+                    event: 'realtime.redis_error',
+                    message: formatErrorMessage(error),
+                  });
                 }),
               // Namespace khusus membuat channel/lock realtime tidak berbenturan dengan rate limit, cache, atau job key lain.
               prefix: 'tabliodb:hocuspocus',
@@ -56,16 +61,40 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
         : []),
       new Database({
         fetch: async ({ documentName }) => {
-          const parsed = parseDiagramDocumentName(documentName);
-          return parsed ? this.collaborationRepository.loadDocument(parsed.diagramId) : null;
+          try {
+            const parsed = parseDiagramDocumentName(documentName);
+            return parsed ? this.collaborationRepository.loadDocument(parsed.diagramId) : null;
+          } catch (error) {
+            this.logger.error(
+              {
+                documentName,
+                event: 'realtime.document_fetch_failed',
+                message: formatErrorMessage(error),
+              },
+              formatErrorStack(error),
+            );
+            throw error;
+          }
         },
         store: async ({ documentName, lastContext, state }) => {
-          const parsed = parseDiagramDocumentName(documentName);
-          const context = readCollaborationContext(lastContext);
+          try {
+            const parsed = parseDiagramDocumentName(documentName);
+            const context = readCollaborationContext(lastContext);
 
-          if (parsed && context && !context.readOnly) {
-            // Realtime persistence only accepts updates from users that can update the diagram, mirroring REST snapshot permissions.
-            this.scheduleDocumentStore(parsed.diagramId, state);
+            if (parsed && context && !context.readOnly) {
+              // Realtime persistence only accepts updates from users that can update the diagram, mirroring REST snapshot permissions.
+              this.scheduleDocumentStore(parsed.diagramId, state);
+            }
+          } catch (error) {
+            this.logger.error(
+              {
+                documentName,
+                event: 'realtime.document_store_failed',
+                message: formatErrorMessage(error),
+              },
+              formatErrorStack(error),
+            );
+            throw error;
           }
         },
       }),
@@ -77,48 +106,145 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
 
     this.server = new Server({
       port: realtime.port,
-      onAuthenticate: async ({ connectionConfig, documentName, requestHeaders, requestParameters, token }) => {
-        const parsed = parseDiagramDocumentName(documentName);
-        if (!parsed) {
-          throw new UnauthorizedException('Invalid realtime document');
+      onAuthenticate: async ({
+        connectionConfig,
+        documentName,
+        requestHeaders,
+        requestParameters,
+        socketId,
+        token,
+      }) => {
+        try {
+          const parsed = parseDiagramDocumentName(documentName);
+          if (!parsed) {
+            throw new UnauthorizedException('Invalid realtime document');
+          }
+
+          const auth = await this.authenticateRealtimeConnection({
+            documentName,
+            requestHeaders,
+            requestParameters,
+            token: String(token || ''),
+          });
+          const context = await this.createConnectionContext(auth, parsed.diagramId);
+          connectionConfig.readOnly = context.readOnly;
+
+          this.logger.log({
+            diagramId: parsed.diagramId,
+            event: 'realtime.connection_authenticated',
+            readOnly: context.readOnly,
+            role: context.role,
+            socketId,
+            userId: context.userId,
+          });
+
+          // The context becomes available to later Hocuspocus hooks and gives us a clean boundary for authorization.
+          return context;
+        } catch (error) {
+          this.logger.warn({
+            documentName,
+            event: 'realtime.connection_rejected',
+            message: formatErrorMessage(error),
+            socketId,
+          });
+          throw error;
         }
-
-        const auth = await this.authenticateRealtimeConnection({
-          documentName,
-          requestHeaders,
-          requestParameters,
-          token: String(token || ''),
-        });
-        const context = await this.createConnectionContext(auth, parsed.diagramId);
-        connectionConfig.readOnly = context.readOnly;
-
-        // The context becomes available to later Hocuspocus hooks and gives us a clean boundary for authorization.
-        return context;
       },
       beforeHandleAwareness: async ({ context, states }) => {
+        try {
+          const collaborationContext = readCollaborationContext(context);
+
+          if (!collaborationContext) {
+            states.clear();
+            return;
+          }
+
+          for (const [clientId, state] of states.entries()) {
+            // Awareness is supplied by the client, but identity is a server-owned boundary.
+            // Cursor, viewport, and selection may pass through; user identity is rewritten from the authenticated session.
+            states.set(clientId, sanitizeAwarenessState(state, collaborationContext));
+          }
+        } catch (error) {
+          this.logger.warn({
+            event: 'realtime.awareness_sanitization_failed',
+            message: formatErrorMessage(error),
+          });
+          states.clear();
+        }
+      },
+      onConnect: async ({ documentName, socketId }) => {
+        this.logger.debug({
+          documentName,
+          event: 'realtime.connection_opened',
+          socketId,
+        });
+      },
+      onDisconnect: async ({ clientsCount, context, documentName, socketId }) => {
         const collaborationContext = readCollaborationContext(context);
 
-        if (!collaborationContext) {
-          states.clear();
-          return;
-        }
-
-        for (const [clientId, state] of states.entries()) {
-          // Awareness is supplied by the client, but identity is a server-owned boundary.
-          // Cursor, viewport, and selection may pass through; user identity is rewritten from the authenticated session.
-          states.set(clientId, sanitizeAwarenessState(state, collaborationContext));
-        }
+        this.logger.debug({
+          clientsCount,
+          diagramId: collaborationContext?.diagramId,
+          documentName,
+          event: 'realtime.connection_closed',
+          socketId,
+          userId: collaborationContext?.userId,
+        });
+      },
+      onDestroy: async () => {
+        this.logger.log({
+          event: 'realtime.server_destroyed',
+        });
       },
       extensions,
     });
 
-    await this.server.listen();
-    this.logger.log(`Hocuspocus realtime server listening on ws://localhost:${realtime.port}`);
+    try {
+      await this.server.listen();
+      this.logger.log({
+        event: 'realtime.server_started',
+        port: realtime.port,
+        redisEnabled: Boolean(realtimeRedisUrl),
+      });
+    } catch (error) {
+      this.server = undefined;
+      this.logger.error(
+        {
+          event: 'realtime.listen_failed',
+          message: formatErrorMessage(error),
+          port: realtime.port,
+        },
+        formatErrorStack(error),
+      );
+      throw error;
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (!this.server && this.pendingDocumentStores.size === 0) {
+      return;
+    }
+
+    this.logger.log({
+      event: 'realtime.server_stopping',
+      pendingDocumentStores: this.pendingDocumentStores.size,
+    });
     await this.flushPendingDocumentStores();
-    await this.server?.destroy();
+
+    try {
+      await this.server?.destroy();
+    } catch (error) {
+      this.logger.error(
+        {
+          event: 'realtime.server_destroy_failed',
+          message: formatErrorMessage(error),
+        },
+        formatErrorStack(error),
+      );
+      throw error;
+    } finally {
+      this.server = undefined;
+    }
   }
 
   private scheduleDocumentStore(diagramId: string, state: Uint8Array): void {
@@ -403,6 +529,10 @@ function isUuid(value: string): boolean {
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatErrorStack(error: unknown): string | undefined {
+  return error instanceof Error ? error.stack : undefined;
 }
 
 function headersToIncomingHttpHeaders(headers: Headers): IncomingHttpHeaders {

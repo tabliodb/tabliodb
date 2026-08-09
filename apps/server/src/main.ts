@@ -10,12 +10,17 @@ import { AppModule } from './app.module.js';
 import { ConfigRepository } from './repositories/config.repository.js';
 import { requestIdMiddleware } from './middleware/request-id.middleware.js';
 import { setupOpenApi } from './utils/openapi.js';
+import { StructuredLogger } from './utils/structured-logger.js';
 
-async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+const bootstrapLogger = new StructuredLogger();
+
+async function bootstrap(logger: StructuredLogger = bootstrapLogger) {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger });
   const config = app.get(ConfigRepository);
   const { server } = config.getEnv();
 
+  // Docker and orchestration platforms stop containers with SIGTERM; shutdown hooks let Nest call OnModuleDestroy before exit.
+  app.enableShutdownHooks(['SIGINT', 'SIGTERM']);
   app.setGlobalPrefix('api');
   app.use(requestIdMiddleware());
   app.use(cookieParser());
@@ -31,11 +36,25 @@ async function bootstrap() {
   setupOpenApi(app);
   configureStaticWeb(app, server.webDistPath);
 
+  await listen(app, server, logger);
+}
+
+async function listen(
+  app: NestExpressApplication,
+  server: { host?: string; port: number },
+  logger: StructuredLogger,
+): Promise<void> {
   if (server.host) {
     await app.listen(server.port, server.host);
   } else {
     await app.listen(server.port);
   }
+
+  logger.log({
+    event: 'server.started',
+    host: server.host ?? '0.0.0.0',
+    port: server.port,
+  });
 }
 
 function configureStaticWeb(app: NestExpressApplication, webDistPath: string): void {
@@ -58,4 +77,17 @@ function configureStaticWeb(app: NestExpressApplication, webDistPath: string): v
   });
 }
 
-void bootstrap();
+void bootstrap().catch((error) => {
+  bootstrapLogger.fatal(
+    {
+      event: 'server.start_failed',
+      message: formatBootstrapError(error),
+    },
+    error instanceof Error ? error.stack : undefined,
+  );
+  process.exitCode = 1;
+});
+
+function formatBootstrapError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
