@@ -93,6 +93,7 @@ import {
   Surface,
   WithTooltip,
   cn,
+  toast,
 } from '@tabliodb/ui';
 import {
   AtSign,
@@ -1364,7 +1365,10 @@ export function EditorPage() {
           query,
         });
       } catch (error) {
-        window.alert(`Server export failed, using the current local draft instead. ${getErrorMessage(error)}`);
+        toast.warning({
+          description: `Server export failed, so Tabliodb used the current local draft instead. ${getErrorMessage(error)}`,
+          title: 'Using local export',
+        });
       }
     }
 
@@ -1388,7 +1392,10 @@ export function EditorPage() {
       downloadBlobFile(`${getExportFileStem()}.diagram.png`, pngBlob);
     } catch (error) {
       console.error(error);
-      window.alert('PNG export failed. Please try exporting SVG instead.');
+      toast.danger({
+        description: 'Please try exporting SVG instead.',
+        title: 'PNG export failed',
+      });
     }
   }
 
