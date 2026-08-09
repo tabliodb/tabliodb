@@ -11,11 +11,16 @@ import type { Request, Response } from 'express';
 import { Observable, tap } from 'rxjs';
 import { TabliodbHeader } from '../constants.js';
 import type { AuthContext } from '../database.js';
-import { sanitizeRequestPath } from '../utils/request-path.js';
+import { MetricsService } from '../services/metrics.service.js';
+import { getRequestRoutePattern, sanitizeRequestPath } from '../utils/request-path.js';
+
+const nestPathMetadataKey = 'path';
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger(LoggingInterceptor.name);
+
+  constructor(private readonly metricsService: MetricsService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request & { user?: AuthContext }>();
@@ -25,15 +30,34 @@ export class LoggingInterceptor implements NestInterceptor {
     return next.handle().pipe(
       tap({
         error: (error) => {
+          const durationMs = Date.now() - startedAt;
+          const statusCode = getErrorStatus(error);
+          const record = createHttpLogRecord(context, request, durationMs);
+
+          this.metricsService.recordHttpRequest({
+            durationMs,
+            method: record.method,
+            path: record.routePattern,
+            statusCode,
+          });
           this.logger.warn({
-            ...createHttpLogRecord(request, Date.now() - startedAt),
+            ...record,
             event: 'http.request_failed',
-            statusCode: getErrorStatus(error),
+            statusCode,
           });
         },
         next: () => {
+          const durationMs = Date.now() - startedAt;
+          const record = createHttpLogRecord(context, request, durationMs);
+
+          this.metricsService.recordHttpRequest({
+            durationMs,
+            method: record.method,
+            path: record.routePattern,
+            statusCode: response.statusCode,
+          });
           this.logger.log({
-            ...createHttpLogRecord(request, Date.now() - startedAt),
+            ...record,
             event: 'http.request_completed',
             statusCode: response.statusCode,
           });
@@ -43,7 +67,7 @@ export class LoggingInterceptor implements NestInterceptor {
   }
 }
 
-function createHttpLogRecord(request: Request & { user?: AuthContext }, durationMs: number) {
+function createHttpLogRecord(context: ExecutionContext, request: Request & { user?: AuthContext }, durationMs: number) {
   return {
     authSource: request.user?.apiKey ? 'api-key' : request.user?.session?.source,
     durationMs,
@@ -51,9 +75,39 @@ function createHttpLogRecord(request: Request & { user?: AuthContext }, duration
     method: request.method,
     path: sanitizeRequestPath(request.originalUrl || request.url),
     requestId: readHeader(request.headers[TabliodbHeader.RequestId]),
+    routePattern: getNestRoutePattern(context) ?? getRequestRoutePattern(request),
     userAgent: readHeader(request.headers['user-agent']),
     userId: request.user?.user.id,
   };
+}
+
+function getNestRoutePattern(context: ExecutionContext): string | null {
+  const controllerPath = readRoutePathMetadata(Reflect.getMetadata(nestPathMetadataKey, context.getClass()));
+  const handlerPath = readRoutePathMetadata(Reflect.getMetadata(nestPathMetadataKey, context.getHandler()));
+
+  if (!controllerPath && !handlerPath) {
+    return null;
+  }
+
+  // The app uses a fixed global API prefix; route metadata keeps dynamic params as ":id" for low-cardinality metrics.
+  return normalizeRoutePattern(['api', controllerPath, handlerPath]);
+}
+
+function readRoutePathMetadata(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.find((item): item is string => typeof item === 'string') ?? '';
+  }
+
+  return typeof value === 'string' ? value : '';
+}
+
+function normalizeRoutePattern(parts: string[]): string {
+  const path = parts
+    .map((part) => part.trim().replace(/^\/+|\/+$/g, ''))
+    .filter(Boolean)
+    .join('/');
+
+  return `/${path}`;
 }
 
 function getErrorStatus(error: unknown): number {

@@ -30,6 +30,54 @@ export type ServerHealthResponseDtoOutput = {
   uptimeSeconds: number;
   version: string;
 };
+export type ServerHttpRouteMetricsDtoOutput = {
+  averageDurationMs: number;
+  count: number;
+  errorCount: number;
+  lastSeenAt: string;
+  lastStatusCode: number;
+  maxDurationMs: number;
+  method: string;
+  p95DurationMs: number;
+  path: string;
+};
+export type ServerMemoryMetricsDtoOutput = {
+  arrayBuffers: number;
+  external: number;
+  heapTotal: number;
+  heapUsed: number;
+  rss: number;
+};
+export type ServerMetricsResponseDtoOutput = {
+  generatedAt: string;
+  http: {
+    errorRequests: number;
+    methods: {
+      count: number;
+      method: string;
+    }[];
+    routes: ServerHttpRouteMetricsDtoOutput[];
+    statusGroups: {
+      clientError: number;
+      informational: number;
+      redirection: number;
+      serverError: number;
+      success: number;
+    };
+    totalRequests: number;
+  };
+  process: {
+    memoryBytes: ServerMemoryMetricsDtoOutput;
+    nodeVersion: string;
+    pid: number;
+    uptimeSeconds: number;
+  };
+  startedAt: string;
+  window: {
+    maxTrackedRoutes: number;
+    routeDurationSampleSize: number;
+  };
+};
 export type AuthUserDtoOutput = {
   id: string;
   email: string;
@@ -1456,6 +1504,16 @@ export function getServerHealth(opts?: Oazapfts.RequestOpts) {
       status: 200;
       data: ServerHealthResponseDtoOutput;
     }>('/server/health', {
+      ...opts,
+    }),
+  );
+}
+export function getServerMetrics(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ServerMetricsResponseDtoOutput;
+    }>('/server/metrics', {
       ...opts,
     }),
   );

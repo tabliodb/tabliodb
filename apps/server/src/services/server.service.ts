@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { performance } from 'node:perf_hooks';
-import type { ServerHealthResponse } from '../dtos/server.dto.js';
+import type { ServerHealthResponse, ServerMetricsResponse } from '../dtos/server.dto.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { DatabaseRepository } from '../repositories/database.repository.js';
+import { MetricsService } from './metrics.service.js';
 import { RedisService } from './redis.service.js';
 
 type DependencyHealth = ServerHealthResponse['dependencies']['database'];
@@ -12,6 +13,7 @@ export class ServerService {
   constructor(
     private readonly configRepository: ConfigRepository,
     private readonly databaseRepository: DatabaseRepository,
+    private readonly metricsService: MetricsService,
     private readonly redisService: RedisService,
   ) {}
 
@@ -39,6 +41,14 @@ export class ServerService {
       uptimeSeconds: Math.floor(process.uptime()),
       version: '0.1.0',
     };
+  }
+
+  getMetrics(): ServerMetricsResponse {
+    if (!this.configRepository.getEnv().metrics.enabled) {
+      throw new NotFoundException('Metrics endpoint is disabled');
+    }
+
+    return this.metricsService.getSnapshot();
   }
 
   private async checkDependency(task: () => Promise<void>): Promise<DependencyHealth> {

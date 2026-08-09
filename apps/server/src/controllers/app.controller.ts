@@ -2,7 +2,7 @@ import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
-import { ServerHealthResponseDto } from '../dtos/server.dto.js';
+import { ServerHealthResponseDto, ServerMetricsResponseDto } from '../dtos/server.dto.js';
 import { ServerService } from '../services/server.service.js';
 
 @ApiTags('server')
@@ -20,5 +20,12 @@ export class AppController {
     response.status(health.ok ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
 
     return health;
+  }
+
+  @Get('metrics')
+  @ApiOperation({ operationId: 'getServerMetrics' })
+  @ZodResponse({ status: HttpStatus.OK, type: ServerMetricsResponseDto })
+  getMetrics() {
+    return this.service.getMetrics();
   }
 }

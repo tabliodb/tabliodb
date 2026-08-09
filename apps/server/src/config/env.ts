@@ -38,6 +38,9 @@ export type TabliodbEnv = {
   secrets: {
     encryptionKey?: string;
   };
+  metrics: {
+    enabled: boolean;
+  };
 };
 
 function findUp(filename: string, startDirectory: string): string | null {
@@ -120,6 +123,11 @@ export function loadEnv(): TabliodbEnv {
     },
     secrets: {
       encryptionKey: process.env.TABLIODB_SECRET_KEY || undefined,
+    },
+    metrics: {
+      enabled:
+        process.env.TABLIODB_METRICS_ENABLED === 'true' ||
+        (process.env.TABLIODB_METRICS_ENABLED !== 'false' && process.env.NODE_ENV !== 'production'),
     },
   };
 }

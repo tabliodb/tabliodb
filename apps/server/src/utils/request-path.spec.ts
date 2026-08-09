@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeRequestPath } from './request-path.js';
+import { getRequestRoutePattern, sanitizeRequestPath } from './request-path.js';
 
 describe(sanitizeRequestPath.name, () => {
   it('redacts token route segments from public endpoints', () => {
@@ -11,5 +11,16 @@ describe(sanitizeRequestPath.name, () => {
     expect(sanitizeRequestPath('/api/projects?apiKey=secret&cursor=page-2&refreshToken=raw&sessionkey=local')).toBe(
       '/api/projects?apiKey=%5Bredacted%5D&cursor=page-2&refreshToken=%5Bredacted%5D&sessionkey=%5Bredacted%5D',
     );
+  });
+
+  it('uses express route patterns for low-cardinality metrics', () => {
+    expect(
+      getRequestRoutePattern({
+        originalUrl: '/api/projects/project-id/diagrams?cursor=next-token',
+        route: {
+          path: '/api/projects/:projectId/diagrams',
+        },
+      }),
+    ).toBe('/api/projects/:projectId/diagrams');
   });
 });
