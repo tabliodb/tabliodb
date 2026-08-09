@@ -5,7 +5,7 @@ import { cn } from '../lib/utils.js';
 
 // The shared primitive owns pointer affordance so every shadcn-style button reads as clickable across the app.
 export const buttonVariants = cva(
-  'inline-flex cursor-pointer select-none items-center justify-center gap-2 whitespace-nowrap rounded-[var(--tabliodb-radius-md)] text-[13px] font-extrabold leading-none tracking-normal outline-none transition-[background,border-color,box-shadow,color,transform] focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-0.5 [&_svg]:shrink-0',
+  'inline-flex min-w-0 max-w-full cursor-pointer select-none items-center justify-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap rounded-[var(--tabliodb-radius-md)] text-[13px] font-extrabold leading-none tracking-normal outline-none transition-[background,border-color,box-shadow,color,transform] focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-0.5 [&_svg]:shrink-0 [&>span]:min-w-0 [&>span]:truncate',
   {
     defaultVariants: {
       size: 'default',

@@ -58,7 +58,7 @@ export const DropdownMenuItem = forwardRef<
   <DropdownMenuPrimitive.Item
     className={cn(
       // Menu rows are direct command surfaces, so they intentionally use pointer cursor instead of Radix's neutral default.
-      'relative flex cursor-pointer select-none items-center gap-2 rounded-[var(--tabliodb-radius-sm)] px-3 py-2 text-[13px] font-bold outline-none transition-colors focus:bg-[rgb(var(--tabliodb-selected-surface))] focus:text-[rgb(var(--tabliodb-primary-text))] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+      'relative flex min-w-0 cursor-pointer select-none items-center gap-2 rounded-[var(--tabliodb-radius-sm)] px-3 py-2 text-[13px] font-bold outline-none transition-colors focus:bg-[rgb(var(--tabliodb-selected-surface))] focus:text-[rgb(var(--tabliodb-primary-text))] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 [&>span]:min-w-0 [&>span]:truncate',
       inset && 'pl-8',
       className,
     )}

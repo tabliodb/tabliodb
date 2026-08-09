@@ -799,7 +799,7 @@ function EnumEditorPanel({
               <ColumnFact label="Used by" value={String(countEnumUsage(model, databaseEnum.id))} />
             </div>
             {databaseEnum.comment ? (
-              <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              <p className="mt-3 wrap-break-word rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                 {databaseEnum.comment}
               </p>
             ) : null}
@@ -1287,7 +1287,7 @@ function ColumnInspector({
             <ColumnFact label="Default" value={column.defaultValue || '-'} />
           </div>
           {column.comment ? (
-            <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+            <p className="mt-3 wrap-break-word rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
               {column.comment}
             </p>
           ) : null}
@@ -1530,12 +1530,12 @@ function IndexBuilderPanel({
                 <ColumnFact label="Partial" value={index.where ? 'Yes' : 'No'} />
               </div>
               {index.where ? (
-                <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <p className="mt-3 wrap-break-word rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   WHERE {index.where}
                 </p>
               ) : null}
               {index.comment ? (
-                <p className="mt-2 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <p className="mt-2 wrap-break-word rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {index.comment}
                 </p>
               ) : null}
@@ -1994,11 +1994,11 @@ function CheckConstraintPanel({
                   <EditCheckDialog check={check} columns={columns} model={model} onModelChange={onModelChange} />
                 ) : null}
               </div>
-              <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              <p className="mt-3 wrap-break-word rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                 CHECK ({check.expression})
               </p>
               {check.comment ? (
-                <p className="mt-2 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <p className="mt-2 wrap-break-word rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {check.comment}
                 </p>
               ) : null}
@@ -2351,7 +2351,7 @@ function RelationshipInspector({
                 <ColumnFact label="Deferred" value={relationship.deferrable ? 'Yes' : 'No'} />
               </div>
               {relationship.comment ? (
-                <p className="mt-3 rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                <p className="mt-3 wrap-break-word rounded-[var(--tabliodb-radius-md)] bg-white p-3 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {relationship.comment}
                 </p>
               ) : null}
@@ -2637,11 +2637,13 @@ function CheckboxField<TFieldValues extends FieldValues>({
 
 function ColumnFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] px-3 py-2">
-      <div className="text-[10px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-subtle))]">
+    <div className="min-w-0 rounded-xl bg-[rgb(var(--tabliodb-surface-raised))] px-3 py-2">
+      <div className="truncate text-[10px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-subtle))]">
         {label}
       </div>
-      <div className="mt-0.5 truncate font-extrabold text-[rgb(var(--tabliodb-ink))]">{value}</div>
+      <div className="mt-0.5 line-clamp-2 wrap-break-word font-extrabold leading-4 text-[rgb(var(--tabliodb-ink))]">
+        {value}
+      </div>
     </div>
   );
 }
@@ -2666,7 +2668,7 @@ function CommentMarkerBadge({ count, label }: { count: CommentMarkerCount; label
 function ColumnBadge({ children }: { children: string }) {
   return (
     <WithTooltip content={getColumnBadgeTooltip(children)}>
-      <span className="rounded-md bg-[rgb(var(--tabliodb-surface-raised))] px-1.5 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+      <span className="inline-block max-w-full truncate rounded-md bg-[rgb(var(--tabliodb-surface-raised))] px-1.5 py-0.5 align-middle text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
         {children}
       </span>
     </WithTooltip>

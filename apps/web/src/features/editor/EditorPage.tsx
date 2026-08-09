@@ -7237,13 +7237,15 @@ function TeamListItem({
       type="button"
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <span className="truncate text-sm font-extrabold">{team.name}</span>
-        <Badge variant={isSelected ? 'green' : 'neutral'}>{team.memberCount} users</Badge>
+        <span className="min-w-0 flex-1 truncate text-sm font-extrabold">{team.name}</span>
+        <Badge className="shrink-0" variant={isSelected ? 'green' : 'neutral'}>
+          {team.memberCount} users
+        </Badge>
       </div>
-      <p className="line-clamp-2 min-h-8 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+      <p className="line-clamp-2 min-h-8 wrap-break-word text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
         {team.description || 'No description yet'}
       </p>
-      <div className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
+      <div className="truncate text-xs font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
         {team.projectAccessCount} project grants
       </div>
     </button>
@@ -7259,7 +7261,9 @@ function AuditLogRow({ auditLog }: { auditLog: AuditLogDto }) {
           {auditLog.actorName ?? auditLog.actorEmail ?? 'System'} - {formatDateTime(auditLog.createdAt)}
         </p>
       </div>
-      <Badge variant={getAuditLogTone(auditLog.action)}>{formatAuditLogAction(auditLog.action)}</Badge>
+      <Badge className="justify-self-start sm:justify-self-end" variant={getAuditLogTone(auditLog.action)}>
+        {formatAuditLogAction(auditLog.action)}
+      </Badge>
     </article>
   );
 }
@@ -7360,7 +7364,7 @@ function ProjectMemberRow({
         <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h4 className="truncate text-sm font-extrabold">{member.name}</h4>
+            <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{member.name}</h4>
             <ProjectRoleBadge role={member.role} />
           </div>
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
@@ -7412,7 +7416,7 @@ function OrganizationMemberRow({
         <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h4 className="truncate text-sm font-extrabold">{member.name}</h4>
+            <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{member.name}</h4>
             <OrganizationRoleBadge role={member.role} />
           </div>
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
