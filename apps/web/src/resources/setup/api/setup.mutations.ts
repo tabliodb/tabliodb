@@ -1,10 +1,29 @@
 import { useMutation } from '@tanstack/react-query';
-import { completeSetup, updateInstanceAuthSettings, type InstanceAuthSettingsUpdateDto, type SetupCreateDto } from '@tabliodb/sdk';
+import {
+  activatePreparedSessionBinding,
+  completeSetup,
+  prepareSessionBinding,
+  updateInstanceAuthSettings,
+  type InstanceAuthSettingsUpdateDto,
+  type SetupCreateDto,
+} from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { projectsKeys } from '@/resources/projects';
 import { setupKeys } from './setup.keys';
 
-const completeSetupMutationFn = (body: SetupCreateDto) => completeSetup({ setupCreateDto: body });
+const completeSetupMutationFn = async (body: SetupCreateDto) => {
+  const sessionBinding = await prepareSessionBinding();
+
+  return completeSetup({
+    setupCreateDto: sessionBinding
+      ? {
+          ...body,
+          // First owner session is browser-bound immediately after the instance setup succeeds.
+          sessionBinding,
+        }
+      : body,
+  });
+};
 const updateAuthSettingsMutationFn = (body: InstanceAuthSettingsUpdateDto) =>
   updateInstanceAuthSettings({ instanceAuthSettingsUpdateDto: body });
 
@@ -19,7 +38,8 @@ export function useCompleteSetupMutation(params: UseCompleteSetupMutationParams 
   return useMutation({
     mutationFn: completeSetupMutationFn,
     ...params.mutationConfig,
-    onSuccess: (data, variables, onMutateResult, context) => {
+    onSuccess: async (data, variables, onMutateResult, context) => {
+      await activatePreparedSessionBinding();
       // Setup response sudah membawa status terbaru, jadi cache setup bisa langsung akurat tanpa menunggu refetch.
       queryClient.setQueryData(setupKeys.status(), data.setup);
       queryClient.invalidateQueries({ queryKey: projectsKeys.all });

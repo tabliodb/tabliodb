@@ -5,6 +5,7 @@ import { configureTabliodbSdk, type TabliodbClientOptions } from './request-opti
 export * from './fetch-client.js';
 export * from './fetch-errors.js';
 export * from './request-options.js';
+export * from './session-binding.js';
 
 export type InitOptions = TabliodbClientOptions;
 
@@ -50,7 +51,7 @@ export function setHeaders(headers: CustomHeaders) {
 function assertMutableHeader(key: string) {
   const normalizedKey = key.toLowerCase();
 
-  if (normalizedKey === 'x-csrf-token') {
-    throw new Error('The x-csrf-token header is managed automatically by the SDK fetch configuration.');
+  if (normalizedKey === 'x-csrf-token' || normalizedKey.startsWith('x-tabliodb-session-proof-')) {
+    throw new Error('Security headers are managed automatically by the SDK fetch configuration.');
   }
 }

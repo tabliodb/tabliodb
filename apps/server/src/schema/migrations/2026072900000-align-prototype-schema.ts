@@ -171,6 +171,17 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     ALTER TABLE IF EXISTS sessions
       ADD COLUMN IF NOT EXISTS user_agent text,
       ADD COLUMN IF NOT EXISTS ip_address inet,
+      ADD COLUMN IF NOT EXISTS app_version text,
+      ADD COLUMN IF NOT EXISTS binding_algorithm text,
+      ADD COLUMN IF NOT EXISTS binding_key_fingerprint text,
+      ADD COLUMN IF NOT EXISTS binding_public_key_jwk jsonb,
+      ADD COLUMN IF NOT EXISTS binding_required boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS risk_score integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS last_seen_at timestamptz,
+      ADD COLUMN IF NOT EXISTS last_ip_address inet,
+      ADD COLUMN IF NOT EXISTS last_user_agent_hash text,
+      ADD COLUMN IF NOT EXISTS expires_at timestamptz,
+      ADD COLUMN IF NOT EXISTS revoked_reason text,
       ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
 
     ALTER TABLE IF EXISTS organizations

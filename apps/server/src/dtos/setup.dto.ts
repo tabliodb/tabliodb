@@ -1,5 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { SessionBindingSchema } from './auth.dto.js';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const SignupPolicySchema = z.enum(['signup_disabled', 'invite_only', 'allowed_domains', 'sso_only', 'public_signup']);
@@ -34,6 +35,7 @@ const SetupCreateSchema = z
     ownerName: z.string().min(1),
     ownerPassword: z.string().min(8),
     publicUrl: z.string().url().optional(),
+    sessionBinding: SessionBindingSchema.optional(),
     workspaceName: z.string().min(1),
   })
   .meta({ id: 'SetupCreateDto' });

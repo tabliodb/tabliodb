@@ -1,4 +1,5 @@
 import type { Permission } from '@tabliodb/shared';
+import type { JsonValue } from './schema/index.js';
 
 export type AuthUser = {
   id: string;
@@ -10,6 +11,10 @@ export type AuthUser = {
 };
 
 export type AuthSession = {
+  bindingAlgorithm: string | null;
+  bindingKeyFingerprint: string | null;
+  bindingPublicKeyJwk: JsonValue | null;
+  bindingRequired: boolean;
   id: string;
   source: 'bearer' | 'cookie' | 'header' | 'query';
 };

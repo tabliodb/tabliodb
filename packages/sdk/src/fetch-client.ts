@@ -49,9 +49,22 @@ export type CurrentUserPasswordUpdateDto = {
 export type CurrentUserTemporaryPasswordUpdateDto = {
   password: string;
 };
+export type SessionBindingPublicKeyDto = {
+  crv: Crv;
+  ext?: boolean;
+  key_ops?: string[];
+  kty: Kty;
+  x: string;
+  y: string;
+};
+export type SessionBindingDto = {
+  algorithm: Algorithm;
+  publicKey: SessionBindingPublicKeyDto;
+};
 export type SignUpDto = {
   email: string;
   password: string;
+  sessionBinding?: SessionBindingDto;
   name: string;
 };
 export type LoginResponseDtoOutput = {
@@ -61,6 +74,7 @@ export type LoginResponseDtoOutput = {
 export type LoginCredentialDto = {
   email: string;
   password: string;
+  sessionBinding?: SessionBindingDto;
 };
 export type LogoutResponseDtoOutput = {
   successful: boolean;
@@ -508,6 +522,7 @@ export type InvitationAcceptDto = {
   token: string;
   name: string;
   password: string;
+  sessionBinding?: SessionBindingDto;
 };
 export type InvitationAcceptResponseDtoOutput = {
   accessToken: string;
@@ -762,6 +777,7 @@ export type SetupCreateDto = {
   ownerName: string;
   ownerPassword: string;
   publicUrl?: string;
+  sessionBinding?: SessionBindingDto;
   workspaceName: string;
 };
 export type SetupCreateResponseDtoOutput = {
@@ -3148,6 +3164,15 @@ export enum Status {
   Disabled = 'disabled',
   Error = 'error',
   Ok = 'ok',
+}
+export enum Algorithm {
+  EcdsaP256Sha256 = 'ecdsa-p256-sha256',
+}
+export enum Crv {
+  P256 = 'P-256',
+}
+export enum Kty {
+  Ec = 'EC',
 }
 export enum Permissions {
   All = 'all',

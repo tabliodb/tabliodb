@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
 import { SALT_ROUNDS } from '../constants.js';
 import type { AuthContext } from '../database.js';
@@ -89,7 +95,9 @@ export class InvitationService {
       throw new NotFoundException('Invitation not found');
     }
 
-    const login = await this.authService.createLoginResponse(accepted.user);
+    const login = await this.authService.createLoginResponse(accepted.user, {
+      sessionBinding: dto.sessionBinding,
+    });
 
     return {
       ...login,

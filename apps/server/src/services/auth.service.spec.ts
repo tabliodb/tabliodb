@@ -1,5 +1,6 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Permission } from '@tabliodb/shared';
+import { webcrypto } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { AuthService } from './auth.service.js';
@@ -47,11 +48,15 @@ describe(AuthService.name, () => {
     consumeValidToken: vi.fn(),
     createForUser: vi.fn(),
   };
+  const redisService = {
+    setIfAbsent: vi.fn(),
+  };
   const sessionRepository = {
     create: vi.fn(),
     delete: vi.fn(),
     getByToken: vi.fn(),
     revokeAllForUser: vi.fn(),
+    updateActivity: vi.fn(),
   };
   const setupRepository = {
     getAuthSettings: vi.fn(),
@@ -79,6 +84,7 @@ describe(AuthService.name, () => {
       fileService as never,
       organizationRepository as never,
       passwordResetRepository as never,
+      redisService as never,
       sessionRepository as never,
       setupRepository as never,
       userRepository as never,
@@ -102,6 +108,7 @@ describe(AuthService.name, () => {
     cryptoRepository.hashBcrypt.mockResolvedValue('hashed-password');
     cryptoRepository.hashSha256.mockReturnValue(Buffer.from('hashed-session-token'));
     cryptoRepository.randomBytesAsText.mockReturnValue('raw-session-token');
+    redisService.setIfAbsent.mockResolvedValue(true);
     userRepository.getAnyByEmail.mockResolvedValue(undefined);
     userRepository.getByEmail.mockResolvedValue(undefined);
     userRepository.create.mockResolvedValue({
@@ -295,6 +302,10 @@ describe(AuthService.name, () => {
       {
         ...authWithLimitedApiKey,
         session: {
+          bindingAlgorithm: null,
+          bindingKeyFingerprint: null,
+          bindingPublicKeyJwk: null,
+          bindingRequired: false,
           id: 'current-session-id',
           source: 'cookie',
         },
@@ -348,6 +359,10 @@ describe(AuthService.name, () => {
       {
         ...authWithLimitedApiKey,
         session: {
+          bindingAlgorithm: null,
+          bindingKeyFingerprint: null,
+          bindingPublicKeyJwk: null,
+          bindingRequired: false,
           id: 'current-session-id',
           source: 'cookie',
         },
@@ -380,5 +395,65 @@ describe(AuthService.name, () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(userRepository.updatePasswordHash).not.toHaveBeenCalled();
+  });
+
+  it('accepts a browser-bound session proof once and rejects nonce replay', async () => {
+    const keyPair = await webcrypto.subtle.generateKey(
+      {
+        name: 'ECDSA',
+        namedCurve: 'P-256',
+      },
+      true,
+      ['sign', 'verify'],
+    );
+    const publicKey = await webcrypto.subtle.exportKey('jwk', keyPair.publicKey);
+    const timestamp = Date.now().toString();
+    const nonce = 'nonce-satu';
+    const path = '/api/auth/me';
+    const signature = await webcrypto.subtle.sign(
+      {
+        name: 'ECDSA',
+        hash: 'SHA-256',
+      },
+      keyPair.privateKey,
+      // This payload mirrors the SDK transport contract: method, path, timestamp, and nonce are signed together.
+      new TextEncoder().encode(['GET', path, timestamp, nonce].join('\n')),
+    );
+    const auth: AuthContext = {
+      ...authWithLimitedApiKey,
+      session: {
+        bindingAlgorithm: 'ecdsa-p256-sha256',
+        bindingKeyFingerprint: 'fingerprint-browser',
+        bindingPublicKeyJwk: publicKey as never,
+        bindingRequired: true,
+        id: 'session-id',
+        source: 'cookie',
+      },
+    };
+    const request = {
+      headers: {
+        'x-tabliodb-session-proof-alg': 'ecdsa-p256-sha256',
+        'x-tabliodb-session-proof-key': 'fingerprint-browser',
+        'x-tabliodb-session-proof-nonce': nonce,
+        'x-tabliodb-session-proof-signature': Buffer.from(signature).toString('base64url'),
+        'x-tabliodb-session-proof-timestamp': timestamp,
+      },
+      ipAddress: '127.0.0.1',
+      method: 'GET',
+      path,
+      userAgent: 'Vitest Browser',
+    };
+
+    await service.verifySessionProof(auth, request);
+
+    expect(redisService.setIfAbsent).toHaveBeenCalledWith('session-proof:session-id:nonce-satu', '1', 120_000);
+    expect(sessionRepository.updateActivity).toHaveBeenCalledWith('session-id', {
+      ipAddress: '127.0.0.1',
+      userAgentHash: 'aGFzaGVkLXNlc3Npb24tdG9rZW4',
+    });
+
+    redisService.setIfAbsent.mockResolvedValueOnce(false);
+
+    await expect(service.verifySessionProof(auth, request)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

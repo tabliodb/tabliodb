@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Permission, isGranted } from '@tabliodb/shared';
 import { parse } from 'cookie';
+import { webcrypto } from 'node:crypto';
 import { IncomingHttpHeaders } from 'node:http';
 import { AuditAction, AuthType, SALT_ROUNDS, TabliodbCookie, TabliodbHeader, TabliodbQuery } from '../constants.js';
 import { AuthContext } from '../database.js';
@@ -23,6 +24,7 @@ import {
   PasswordResetConfirmResponseDto,
   PasswordResetRequestDto,
   PasswordResetRequestResponseDto,
+  SessionBindingDto,
   SignUpDto,
 } from '../dtos/auth.dto.js';
 import { ApiKeyRepository } from '../repositories/api-key.repository.js';
@@ -36,9 +38,14 @@ import { SetupRepository, type InstanceAuthSettings } from '../repositories/setu
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
 import { FileService, type UploadedAvatarFile } from './file.service.js';
+import { RedisService } from './redis.service.js';
 
 const PASSWORD_RESET_TOKEN_BYTES = 32;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const SESSION_PROOF_ALGORITHM = 'ecdsa-p256-sha256';
+const SESSION_PROOF_CLOCK_SKEW_MS = 2 * 60 * 1000;
+const SESSION_PROOF_NONCE_MAX_LENGTH = 120;
+const SESSION_PROOF_TTL_MS = 2 * 60 * 1000;
 
 export type ValidateRequest = {
   headers: IncomingHttpHeaders;
@@ -54,6 +61,9 @@ type SessionTokenCandidate = {
 
 @Injectable()
 export class AuthService {
+  private lastSessionProofNoncePrunedAt = 0;
+  private readonly usedSessionProofNonces = new Map<string, number>();
+
   constructor(
     private readonly apiKeyRepository: ApiKeyRepository,
     private readonly auditLogRepository: AuditLogRepository,
@@ -62,6 +72,7 @@ export class AuthService {
     private readonly fileService: FileService,
     private readonly organizationRepository: OrganizationRepository,
     private readonly passwordResetRepository: PasswordResetRepository,
+    private readonly redisService: RedisService,
     private readonly sessionRepository: SessionRepository,
     private readonly setupRepository: SetupRepository,
     private readonly userRepository: UserRepository,
@@ -95,7 +106,7 @@ export class AuthService {
       userId: user.id,
     });
 
-    return this.createLoginResponse(user);
+    return this.createLoginResponse(user, { sessionBinding: dto.sessionBinding });
   }
 
   async login(dto: LoginCredentialDto): Promise<LoginResponseDto> {
@@ -104,7 +115,7 @@ export class AuthService {
       throw new UnauthorizedException('Incorrect email or password');
     }
 
-    return this.createLoginResponse(user);
+    return this.createLoginResponse(user, { sessionBinding: dto.sessionBinding });
   }
 
   async logout(auth: AuthContext): Promise<void> {
@@ -379,8 +390,94 @@ export class AuthService {
 
     return {
       user: session.user,
-      session: { id: session.id, source },
+      session: {
+        bindingAlgorithm: session.bindingAlgorithm,
+        bindingKeyFingerprint: session.bindingKeyFingerprint,
+        bindingPublicKeyJwk: session.bindingPublicKeyJwk,
+        bindingRequired: session.bindingRequired,
+        id: session.id,
+        source,
+      },
     };
+  }
+
+  async verifySessionProof(
+    auth: AuthContext,
+    request: {
+      headers: IncomingHttpHeaders;
+      ipAddress: string | null;
+      method: string;
+      path: string;
+      userAgent: string | null;
+    },
+  ): Promise<void> {
+    if (!auth.session?.bindingRequired) {
+      return;
+    }
+
+    const algorithm = readHeader(request.headers[TabliodbHeader.SessionProofAlgorithm]);
+    const keyFingerprint = readHeader(request.headers[TabliodbHeader.SessionProofKey]);
+    const nonce = readHeader(request.headers[TabliodbHeader.SessionProofNonce]);
+    const signature = readHeader(request.headers[TabliodbHeader.SessionProofSignature]);
+    const timestamp = readHeader(request.headers[TabliodbHeader.SessionProofTimestamp]);
+
+    if (
+      algorithm !== SESSION_PROOF_ALGORITHM ||
+      auth.session.bindingAlgorithm !== SESSION_PROOF_ALGORITHM ||
+      keyFingerprint !== auth.session.bindingKeyFingerprint
+    ) {
+      throw new UnauthorizedException('Session proof is missing or bound to another browser');
+    }
+
+    if (!nonce || nonce.length > SESSION_PROOF_NONCE_MAX_LENGTH || !signature || !timestamp) {
+      throw new UnauthorizedException('Session proof is incomplete');
+    }
+
+    const timestampMs = Number(timestamp);
+    if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > SESSION_PROOF_CLOCK_SKEW_MS) {
+      throw new UnauthorizedException('Session proof is expired');
+    }
+
+    if (!auth.session.bindingPublicKeyJwk || typeof auth.session.bindingPublicKeyJwk !== 'object') {
+      throw new UnauthorizedException('Session proof key is unavailable');
+    }
+
+    const payload = createSessionProofPayload({
+      method: request.method,
+      nonce,
+      path: request.path,
+      timestamp,
+    });
+    const publicKey = await webcrypto.subtle.importKey(
+      'jwk',
+      auth.session.bindingPublicKeyJwk as JsonWebKey,
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['verify'],
+    );
+    const isValid = await webcrypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      publicKey,
+      Buffer.from(signature, 'base64url'),
+      new TextEncoder().encode(payload),
+    );
+
+    if (!isValid) {
+      throw new UnauthorizedException('Session proof is invalid');
+    }
+
+    const isFreshNonce = await this.consumeSessionProofNonce(`session-proof:${auth.session.id}:${nonce}`);
+    if (!isFreshNonce) {
+      throw new UnauthorizedException('Session proof has already been used');
+    }
+
+    // Activity is written only after a valid proof so anomaly telemetry cannot be spoofed with a stolen token alone.
+    await this.sessionRepository.updateActivity(auth.session.id, {
+      ipAddress: request.ipAddress,
+      userAgentHash: request.userAgent
+        ? this.cryptoRepository.hashSha256(request.userAgent).toString('base64url')
+        : null,
+    });
   }
 
   private async validateApiKey(token: string): Promise<AuthContext> {
@@ -399,25 +496,33 @@ export class AuthService {
     };
   }
 
-  async createLoginResponse(user: {
-    avatarUrl?: string | null;
-    cursorColor: string;
-    email: string;
-    id: string;
-    name: string;
-    passwordChangeRequired?: boolean;
-  }) {
+  async createLoginResponse(
+    user: {
+      avatarUrl?: string | null;
+      cursorColor: string;
+      email: string;
+      id: string;
+      name: string;
+      passwordChangeRequired?: boolean;
+    },
+    options: { sessionBinding?: SessionBindingDto } = {},
+  ) {
     const accessToken = this.cryptoRepository.randomBytesAsText(32);
     const token = this.cryptoRepository.hashSha256(accessToken);
+    const sessionBinding = this.createSessionBindingRecord(options.sessionBinding);
 
     // The database stores only the SHA-256 hash, so a leaked session table does not expose usable bearer tokens.
     await this.sessionRepository.create({
-      tokenHash: token,
-      userId: user.id,
+      appVersion: null,
+      bindingAlgorithm: sessionBinding?.algorithm ?? null,
+      bindingKeyFingerprint: sessionBinding?.keyFingerprint ?? null,
+      bindingPublicKeyJwk: sessionBinding?.publicKey ?? null,
+      bindingRequired: Boolean(sessionBinding),
       deviceOs: '',
       deviceType: '',
-      appVersion: null,
       expiresAt: null,
+      tokenHash: token,
+      userId: user.id,
     });
 
     return {
@@ -431,6 +536,93 @@ export class AuthService {
         passwordChangeRequired: user.passwordChangeRequired ?? false,
       },
     };
+  }
+
+  private createSessionBindingRecord(binding: SessionBindingDto | undefined): {
+    algorithm: typeof SESSION_PROOF_ALGORITHM;
+    keyFingerprint: string;
+    publicKey: JsonValue;
+  } | null {
+    if (!binding) {
+      return null;
+    }
+
+    if (binding.algorithm !== SESSION_PROOF_ALGORITHM) {
+      throw new BadRequestException('Unsupported session binding algorithm');
+    }
+
+    const publicKey: JsonValue = {
+      crv: binding.publicKey.crv,
+      kty: binding.publicKey.kty,
+      x: binding.publicKey.x,
+      y: binding.publicKey.y,
+    };
+
+    if (
+      binding.publicKey.ext !== undefined &&
+      publicKey !== null &&
+      typeof publicKey === 'object' &&
+      !Array.isArray(publicKey)
+    ) {
+      // Optional JWK metadata is persisted only when the browser sends it, keeping the fingerprint canonical.
+      publicKey.ext = binding.publicKey.ext;
+    }
+
+    if (
+      binding.publicKey.key_ops !== undefined &&
+      publicKey !== null &&
+      typeof publicKey === 'object' &&
+      !Array.isArray(publicKey)
+    ) {
+      // WebCrypto usually includes key_ops on exported public keys; preserving it avoids surprising fingerprint drift.
+      publicKey.key_ops = binding.publicKey.key_ops;
+    }
+
+    return {
+      algorithm: SESSION_PROOF_ALGORITHM,
+      keyFingerprint: this.createSessionBindingFingerprint(SESSION_PROOF_ALGORITHM, publicKey),
+      publicKey,
+    };
+  }
+
+  private createSessionBindingFingerprint(algorithm: typeof SESSION_PROOF_ALGORITHM, publicKey: JsonValue): string {
+    // Fingerprinting the canonical JWK lets the client identify which local key must sign this session.
+    return this.cryptoRepository.hashSha256(`${algorithm}\n${stableJson(publicKey)}`).toString('base64url');
+  }
+
+  private async consumeSessionProofNonce(key: string): Promise<boolean> {
+    const redisResult = await this.redisService.setIfAbsent(key, '1', SESSION_PROOF_TTL_MS);
+
+    if (redisResult !== null) {
+      return redisResult;
+    }
+
+    return this.consumeSessionProofNonceInMemory(key);
+  }
+
+  private consumeSessionProofNonceInMemory(key: string): boolean {
+    const now = Date.now();
+
+    if (now - this.lastSessionProofNoncePrunedAt > SESSION_PROOF_TTL_MS) {
+      this.pruneExpiredSessionProofNonces(now);
+    }
+
+    if (this.usedSessionProofNonces.has(key)) {
+      return false;
+    }
+
+    this.usedSessionProofNonces.set(key, now + SESSION_PROOF_TTL_MS);
+    return true;
+  }
+
+  private pruneExpiredSessionProofNonces(now: number): void {
+    this.lastSessionProofNoncePrunedAt = now;
+
+    for (const [key, expiresAt] of this.usedSessionProofNonces.entries()) {
+      if (expiresAt <= now) {
+        this.usedSessionProofNonces.delete(key);
+      }
+    }
   }
 
   private async getFreshAuthUser(userId: string): Promise<CurrentUserResponseDto> {
@@ -528,4 +720,34 @@ function readSessionToken(
     source,
     token,
   };
+}
+
+function readHeader(value: string | string[] | undefined | null): string | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+function createSessionProofPayload(input: { method: string; nonce: string; path: string; timestamp: string }): string {
+  return [input.method.toUpperCase(), input.path, input.timestamp, input.nonce].join('\n');
+}
+
+function stableJson(value: JsonValue): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  }
+
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, JsonValue | undefined>;
+    const entries = Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key] as JsonValue)}`);
+
+    return `{${entries.join(',')}}`;
+  }
+
+  return JSON.stringify(value);
 }

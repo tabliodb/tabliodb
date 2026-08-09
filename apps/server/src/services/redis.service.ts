@@ -74,6 +74,22 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  async setIfAbsent(key: string, value: string, ttlMs: number): Promise<boolean | null> {
+    const client = await this.getReadyClient();
+
+    if (!client) {
+      return null;
+    }
+
+    try {
+      const result = await client.set(`tabliodb:${key}`, value, 'PX', ttlMs, 'NX');
+      return result === 'OK';
+    } catch (error) {
+      this.warnUnavailable(error);
+      return null;
+    }
+  }
+
   isConfigured(): boolean {
     return Boolean(this.client);
   }

@@ -88,8 +88,17 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       user_agent text,
       ip_address inet,
       app_version text,
+      binding_algorithm text,
+      binding_key_fingerprint text,
+      binding_public_key_jwk jsonb,
+      binding_required boolean NOT NULL DEFAULT false,
+      risk_score integer NOT NULL DEFAULT 0,
+      last_seen_at timestamptz,
+      last_ip_address inet,
+      last_user_agent_hash text,
       expires_at timestamptz,
       revoked_at timestamptz,
+      revoked_reason text,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     );

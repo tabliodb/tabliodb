@@ -74,6 +74,15 @@ export class AuthGuard implements CanActivate {
       },
     };
 
+    await this.authService.verifySessionProof(request.user, {
+      headers: request.headers,
+      ipAddress: request.ip ?? null,
+      method: request.method,
+      // originalUrl preserves the query string, so the signed payload matches the exact route the browser requested.
+      path: request.originalUrl,
+      userAgent: readHeader(request.headers['user-agent']),
+    });
+
     if (request.user.user.passwordChangeRequired && !options.allowTemporaryPassword) {
       throw new ForbiddenException('Change your temporary password before continuing');
     }

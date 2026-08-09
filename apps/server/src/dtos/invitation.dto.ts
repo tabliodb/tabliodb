@@ -1,7 +1,7 @@
 import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { LoginResponseDto } from './auth.dto.js';
+import { LoginResponseDto, SessionBindingSchema } from './auth.dto.js';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const InvitationStatusSchema = z.enum(['pending', 'accepted', 'revoked', 'expired']);
@@ -67,6 +67,7 @@ const InvitationAcceptSchema = z
     token: z.string().min(16),
     name: z.string().min(1),
     password: z.string().min(8),
+    sessionBinding: SessionBindingSchema.optional(),
   })
   .meta({ id: 'InvitationAcceptDto' });
 

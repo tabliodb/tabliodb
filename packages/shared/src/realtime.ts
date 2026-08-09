@@ -1,4 +1,5 @@
 export const REALTIME_DOCUMENT_PREFIX = 'diagram';
+export const REALTIME_SESSION_PROOF_TOKEN_TYPE = 'tabliodb-realtime-session-proof-v1';
 
 export type RealtimeDocumentName = `${typeof REALTIME_DOCUMENT_PREFIX}:${string}`;
 
@@ -39,4 +40,9 @@ export function parseDiagramDocumentName(documentName: string): { diagramId: str
   }
 
   return { diagramId };
+}
+
+export function realtimeSessionProofPath(documentName: string): string {
+  // WebSocket handshakes cannot carry browser-defined headers, so realtime signs this synthetic path in the auth token.
+  return `/_tabliodb/realtime-session-proof/${encodeURIComponent(documentName)}`;
 }

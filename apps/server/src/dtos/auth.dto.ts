@@ -5,10 +5,27 @@ import type { AuthContext } from '../database.js';
 
 export type AuthDto = AuthContext;
 
+export const SessionBindingSchema = z
+  .object({
+    algorithm: z.literal('ecdsa-p256-sha256'),
+    publicKey: z
+      .object({
+        crv: z.literal('P-256'),
+        ext: z.boolean().optional(),
+        key_ops: z.array(z.string()).optional(),
+        kty: z.literal('EC'),
+        x: z.string().min(1),
+        y: z.string().min(1),
+      })
+      .meta({ id: 'SessionBindingPublicKeyDto' }),
+  })
+  .meta({ id: 'SessionBindingDto' });
+
 const LoginCredentialSchema = z
   .object({
     email: z.string().email(),
     password: z.string().min(1),
+    sessionBinding: SessionBindingSchema.optional(),
   })
   .meta({ id: 'LoginCredentialDto' });
 
@@ -113,6 +130,7 @@ const PasswordResetConfirmResponseSchema = z
   .meta({ id: 'PasswordResetConfirmResponseDto' });
 
 export class LoginCredentialDto extends createZodDto(LoginCredentialSchema) {}
+export class SessionBindingDto extends createZodDto(SessionBindingSchema) {}
 export class SignUpDto extends createZodDto(SignUpSchema) {}
 export class LoginResponseDto extends createZodDto(LoginResponseSchema) {}
 export class CurrentUserResponseDto extends createZodDto(CurrentUserResponseSchema) {}

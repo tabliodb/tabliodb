@@ -99,8 +99,17 @@ export interface SessionTable {
   userAgent: NullableColumn<string>;
   ipAddress: NullableColumn<string>;
   appVersion: NullableColumn<string>;
+  bindingAlgorithm: NullableColumn<string>;
+  bindingKeyFingerprint: NullableColumn<string>;
+  bindingPublicKeyJwk: NullableJsonColumn;
+  bindingRequired: Defaulted<boolean>;
+  riskScore: Defaulted<number>;
+  lastSeenAt: NullableTimestamp;
+  lastIpAddress: NullableColumn<string>;
+  lastUserAgentHash: NullableColumn<string>;
   expiresAt: NullableTimestamp;
   revokedAt: NullableTimestamp;
+  revokedReason: NullableColumn<string>;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

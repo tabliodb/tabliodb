@@ -17,6 +17,10 @@ export class SessionRepository {
       .selectFrom('sessions')
       .select((eb) => [
         'sessions.id',
+        'sessions.bindingAlgorithm',
+        'sessions.bindingKeyFingerprint',
+        'sessions.bindingPublicKeyJwk',
+        'sessions.bindingRequired',
         'sessions.updatedAt',
         jsonObjectFrom(
           eb
@@ -41,6 +45,25 @@ export class SessionRepository {
       .where('sessions.revokedAt', 'is', null)
       .where((eb) => eb.or([eb('sessions.expiresAt', 'is', null), eb('sessions.expiresAt', '>', new Date())]))
       .executeTakeFirst();
+  }
+
+  async updateActivity(
+    id: string,
+    values: {
+      ipAddress: string | null;
+      userAgentHash: string | null;
+    },
+  ): Promise<void> {
+    await this.db
+      .updateTable('sessions')
+      .set({
+        lastIpAddress: values.ipAddress,
+        lastSeenAt: new Date(),
+        lastUserAgentHash: values.userAgentHash,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', id)
+      .execute();
   }
 
   async delete(id: string): Promise<void> {

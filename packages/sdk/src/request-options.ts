@@ -1,5 +1,6 @@
 import type { CustomHeaders, RequestOpts } from '@oazapfts/runtime';
 import { defaults } from './fetch-client.js';
+import { createSessionProofHeaders } from './session-binding.js';
 
 export type TabliodbClientOptions = Omit<RequestOpts, 'headers'> & {
   accessToken?: string;
@@ -28,7 +29,7 @@ export function createTabliodbRequestOptions(options: TabliodbClientOptions = {}
     baseUrl: requestOptions.baseUrl ?? defaults.baseUrl,
     credentials: requestOptions.credentials ?? 'include',
     ...requestOptions,
-    fetch: createCsrfAwareFetch(requestOptions.fetch, csrfProtection),
+    fetch: createSecurityAwareFetch(requestOptions.fetch, csrfProtection),
     headers: nextHeaders,
   };
 }
@@ -43,30 +44,43 @@ export function configureTabliodbSdk(options: TabliodbClientOptions = {}): Reque
   return requestOptions;
 }
 
-function createCsrfAwareFetch(customFetch: typeof fetch | undefined, enabled: boolean): typeof fetch | undefined {
-  if (!enabled) {
-    return customFetch;
-  }
-
+function createSecurityAwareFetch(
+  customFetch: typeof fetch | undefined,
+  csrfEnabled: boolean,
+): typeof fetch | undefined {
   return async (input, init = {}) => {
-    const method = (init.method ?? 'GET').toUpperCase();
+    const method = (init.method ?? (isRequest(input) ? input.method : 'GET')).toUpperCase();
+    const headers = new Headers(init.headers);
 
-    if (!unsafeMethods.has(method)) {
-      return (customFetch ?? fetch)(input, init);
+    if (csrfEnabled && unsafeMethods.has(method)) {
+      const csrfToken = readBrowserCookie(csrfCookieName);
+
+      if (csrfToken && !hasExplicitNonCookieAuth(headers) && !headers.has(csrfHeaderName)) {
+        headers.set(csrfHeaderName, csrfToken);
+      }
     }
 
-    const headers = new Headers(init.headers);
-    const csrfToken = readBrowserCookie(csrfCookieName);
+    const proofHeaders = await createSessionProofHeaders(input, {
+      ...init,
+      headers,
+      method,
+    });
 
-    if (csrfToken && !hasExplicitNonCookieAuth(headers) && !headers.has(csrfHeaderName)) {
-      headers.set(csrfHeaderName, csrfToken);
+    for (const [key, value] of Object.entries(proofHeaders)) {
+      // Proof headers are derived per request because nonce and timestamp must never be reused.
+      headers.set(key, value);
     }
 
     return (customFetch ?? fetch)(input, {
       ...init,
       headers,
+      method,
     });
   };
+}
+
+function isRequest(input: RequestInfo | URL): input is Request {
+  return typeof Request !== 'undefined' && input instanceof Request;
 }
 
 function hasExplicitNonCookieAuth(headers: Headers): boolean {

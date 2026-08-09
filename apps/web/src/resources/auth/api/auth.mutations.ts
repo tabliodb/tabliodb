@@ -4,6 +4,9 @@ import {
   deleteCurrentUserAvatar,
   login,
   logout,
+  activatePreparedSessionBinding,
+  clearSessionBinding,
+  prepareSessionBinding,
   requestPasswordReset,
   updateCurrentUserPassword,
   updateCurrentUserProfile,
@@ -29,7 +32,19 @@ const updatePasswordMutationFn = (body: CurrentUserPasswordUpdateDto) =>
   updateCurrentUserPassword({ currentUserPasswordUpdateDto: body });
 const updateTemporaryPasswordMutationFn = (body: CurrentUserTemporaryPasswordUpdateDto) =>
   updateCurrentUserTemporaryPassword({ currentUserTemporaryPasswordUpdateDto: body });
-const loginMutationFn = (body: LoginCredentialDto) => login({ loginCredentialDto: body });
+const loginMutationFn = async (body: LoginCredentialDto) => {
+  const sessionBinding = await prepareSessionBinding();
+
+  return login({
+    loginCredentialDto: sessionBinding
+      ? {
+          ...body,
+          // The server stores this public key on the new session; the private key never leaves this browser.
+          sessionBinding,
+        }
+      : body,
+  });
+};
 const logoutMutationFn = () => logout();
 const passwordResetRequestMutationFn = (body: PasswordResetRequestDto) =>
   requestPasswordReset({ passwordResetRequestDto: body });
@@ -59,7 +74,8 @@ export function useLoginMutation(params: UseLoginMutationParams = {}) {
   return useMutation({
     mutationFn: loginMutationFn,
     ...params.mutationConfig,
-    onSuccess: (data, variables, onMutateResult, context) => {
+    onSuccess: async (data, variables, onMutateResult, context) => {
+      await activatePreparedSessionBinding();
       // Login response membawa user yang sama dengan /auth/me, jadi cache session bisa langsung dipakai route berikutnya.
       queryClient.setQueryData(authKeys.me(), data.user);
       queryClient.invalidateQueries({ queryKey: projectsKeys.all });
@@ -76,7 +92,8 @@ export function useLogoutMutation(params: UseLogoutMutationParams = {}) {
   return useMutation({
     mutationFn: logoutMutationFn,
     ...params.mutationConfig,
-    onSuccess: (data, variables, onMutateResult, context) => {
+    onSuccess: async (data, variables, onMutateResult, context) => {
+      await clearSessionBinding();
       // Cookie session sudah dibersihkan server; cache client ikut dikosongkan agar workspace lama tidak muncul di login berikutnya.
       queryClient.clear();
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);

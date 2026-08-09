@@ -9,6 +9,11 @@ export enum TabliodbHeader {
   ApiKey = 'x-api-key',
   CsrfToken = 'x-csrf-token',
   RequestId = 'x-request-id',
+  SessionProofAlgorithm = 'x-tabliodb-session-proof-alg',
+  SessionProofKey = 'x-tabliodb-session-proof-key',
+  SessionProofNonce = 'x-tabliodb-session-proof-nonce',
+  SessionProofSignature = 'x-tabliodb-session-proof-signature',
+  SessionProofTimestamp = 'x-tabliodb-session-proof-timestamp',
   SessionToken = 'x-tabliodb-session-token',
   UserToken = 'x-tabliodb-user-token',
 }

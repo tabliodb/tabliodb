@@ -7,9 +7,11 @@ import type { IncomingHttpHeaders } from 'node:http';
 import {
   Permission,
   ProjectRole,
+  REALTIME_SESSION_PROOF_TOKEN_TYPE,
   isGranted,
   parseDiagramDocumentName,
   permissionsForProjectRole,
+  realtimeSessionProofPath,
   type AwarenessState,
 } from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
@@ -82,6 +84,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
         }
 
         const auth = await this.authenticateRealtimeConnection({
+          documentName,
           requestHeaders,
           requestParameters,
           token: String(token || ''),
@@ -126,9 +129,12 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
       clearTimeout(existingStore.timer);
     }
 
-    const timer = setTimeout(() => {
-      void this.flushPendingDocumentStore(diagramId);
-    }, Math.max(realtime.persistDebounceMs, 0));
+    const timer = setTimeout(
+      () => {
+        void this.flushPendingDocumentStore(diagramId);
+      },
+      Math.max(realtime.persistDebounceMs, 0),
+    );
 
     timer.unref?.();
     this.pendingDocumentStores.set(diagramId, {
@@ -162,19 +168,57 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
   }
 
   private authenticateRealtimeConnection(options: {
+    documentName: string;
     requestHeaders: Headers;
     requestParameters: URLSearchParams;
     token: string;
   }): Promise<AuthContext> {
+    const headers = headersToIncomingHttpHeaders(options.requestHeaders);
+    const queryParams = urlSearchParamsToRecord(options.requestParameters);
+    const proofToken = parseRealtimeSessionProofToken(options.token);
+
+    if (proofToken) {
+      return this.authService
+        .authenticate({
+          headers,
+          queryParams,
+        })
+        .then(async (auth) => {
+          await this.authService.verifySessionProof(auth, {
+            headers: proofToken.headers,
+            ipAddress: readClientIpAddress(headers),
+            method: 'WS',
+            path: realtimeSessionProofPath(options.documentName),
+            userAgent: readHeader(headers['user-agent']),
+          });
+
+          return auth;
+        });
+    }
+
     if (options.token) {
-      return this.authService.validateSessionToken(options.token);
+      return this.authService.validateSessionToken(options.token).then((auth) => {
+        this.assertRealtimeProofNotRequired(auth);
+        return auth;
+      });
     }
 
     // Browser clients keep the session token in an httpOnly cookie, so realtime auth mirrors REST by reading the WebSocket handshake.
-    return this.authService.authenticate({
-      headers: headersToIncomingHttpHeaders(options.requestHeaders),
-      queryParams: urlSearchParamsToRecord(options.requestParameters),
-    });
+    return this.authService
+      .authenticate({
+        headers,
+        queryParams,
+      })
+      .then((auth) => {
+        this.assertRealtimeProofNotRequired(auth);
+        return auth;
+      });
+  }
+
+  private assertRealtimeProofNotRequired(auth: AuthContext): void {
+    if (auth.session?.bindingRequired) {
+      throw new UnauthorizedException('Realtime session proof is required for this browser-bound session');
+    }
   }
 
   private async createConnectionContext(auth: AuthContext, diagramId: string): Promise<CollaborationContext> {
@@ -369,6 +413,54 @@ function headersToIncomingHttpHeaders(headers: Headers): IncomingHttpHeaders {
   });
 
   return incomingHeaders;
+}
+
+function parseRealtimeSessionProofToken(token: string): { headers: IncomingHttpHeaders } | null {
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(token) as {
+      headers?: Record<string, unknown>;
+      type?: unknown;
+    };
+
+    if (parsed.type !== REALTIME_SESSION_PROOF_TOKEN_TYPE || !parsed.headers || typeof parsed.headers !== 'object') {
+      return null;
+    }
+
+    const headers: IncomingHttpHeaders = {};
+
+    for (const [key, value] of Object.entries(parsed.headers)) {
+      if (typeof value === 'string') {
+        // Only string header values are accepted from the websocket auth token to keep the proof surface tiny.
+        headers[key.toLowerCase()] = value;
+      }
+    }
+
+    return { headers };
+  } catch {
+    return null;
+  }
+}
+
+function readClientIpAddress(headers: IncomingHttpHeaders): string | null {
+  const forwardedFor = readHeader(headers['x-forwarded-for']);
+
+  if (forwardedFor) {
+    return forwardedFor.split(',')[0]?.trim() || null;
+  }
+
+  return readHeader(headers['x-real-ip']);
+}
+
+function readHeader(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
 }
 
 function urlSearchParamsToRecord(parameters: URLSearchParams): Record<string, string | undefined> {

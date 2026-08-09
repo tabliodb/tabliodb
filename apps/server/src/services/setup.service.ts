@@ -92,7 +92,9 @@ export class SetupService {
       throw new BadRequestException('Tabliodb has already been set up');
     }
 
-    const login = await this.authService.createLoginResponse(result.user);
+    const login = await this.authService.createLoginResponse(result.user, {
+      sessionBinding: dto.sessionBinding,
+    });
 
     return {
       ...login,

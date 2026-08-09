@@ -5,7 +5,13 @@ import {
   writeDiagramModelToYjsDocument,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import { diagramDocumentName, type AwarenessState } from '@tabliodb/shared';
+import {
+  REALTIME_SESSION_PROOF_TOKEN_TYPE,
+  diagramDocumentName,
+  realtimeSessionProofPath,
+  type AwarenessState,
+} from '@tabliodb/shared';
+import { createSessionProofHeaders } from '@tabliodb/sdk';
 import * as Y from 'yjs';
 
 export type DiagramCollaborationOptions = {
@@ -24,11 +30,7 @@ export type AwarenessSubscriber = (states: RemoteAwarenessState[]) => void;
 export type DiagramModelSubscriber = (model: DiagramModel) => void;
 
 export type DiagramCollaborationConnection =
-  | 'authentication_failed'
-  | 'connected'
-  | 'connecting'
-  | 'disconnected'
-  | 'idle';
+  'authentication_failed' | 'connected' | 'connecting' | 'disconnected' | 'idle';
 
 export type DiagramCollaborationStatus = {
   connection: DiagramCollaborationConnection;
@@ -41,12 +43,13 @@ export type DiagramCollaborationStatusSubscriber = (status: DiagramCollaboration
 
 export function createDiagramCollaboration(options: DiagramCollaborationOptions) {
   const document = new Y.Doc();
+  const documentName = diagramDocumentName(options.diagramId);
   const localModelWriteOrigin = Symbol(`tabliodb:${options.diagramId}:local-model-write`);
   const provider = new HocuspocusProvider({
     document,
-    name: diagramDocumentName(options.diagramId),
-    // Browser UI relies on the httpOnly session cookie in the WebSocket handshake; explicit tokens remain useful for non-browser clients.
-    token: options.token ?? null,
+    name: documentName,
+    // Browser UI keeps auth in an httpOnly cookie, while this async token carries only the per-handshake proof signature.
+    token: options.token ?? (() => createRealtimeSessionProofToken(documentName)),
     url: options.url ?? getDefaultRealtimeUrl(),
   });
   const statusSubscribers = new Set<DiagramCollaborationStatusSubscriber>();
@@ -179,6 +182,17 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
 }
 
 export type DiagramCollaboration = ReturnType<typeof createDiagramCollaboration>;
+
+async function createRealtimeSessionProofToken(documentName: string): Promise<string> {
+  const proofHeaders = await createSessionProofHeaders(realtimeSessionProofPath(documentName), {
+    method: 'WS',
+  });
+
+  return JSON.stringify({
+    headers: proofHeaders,
+    type: REALTIME_SESSION_PROOF_TOKEN_TYPE,
+  });
+}
 
 function getDefaultRealtimeUrl(): string {
   if (typeof window === 'undefined') {
