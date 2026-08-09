@@ -35,6 +35,9 @@ export type TabliodbEnv = {
   storage: {
     localPath: string;
   };
+  secrets: {
+    encryptionKey?: string;
+  };
 };
 
 function findUp(filename: string, startDirectory: string): string | null {
@@ -114,6 +117,9 @@ export function loadEnv(): TabliodbEnv {
     },
     storage: {
       localPath: path.resolve(process.env.TABLIODB_STORAGE_PATH || path.join(process.cwd(), 'data', 'uploads')),
+    },
+    secrets: {
+      encryptionKey: process.env.TABLIODB_SECRET_KEY || undefined,
     },
   };
 }
