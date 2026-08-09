@@ -9,6 +9,7 @@
 :root {
   /* Palette dasar sengaja dipisah per peran agar warna kuat tidak dipakai mentah sebagai background area besar. */
   --tabliodb-primary: 88 204 2;
+  /* Hover solid mengikuti feel Duolingo: warna naik lebih terang/ceria, bukan digelapkan seperti sistem enterprise klasik. */
   --tabliodb-primary-hover: 97 224 2;
   --tabliodb-primary-shadow: 61 154 0;
   --tabliodb-primary-border: 154 226 93;
@@ -16,10 +17,11 @@
   --tabliodb-primary-soft-hover: 232 248 216;
   --tabliodb-primary-text: 48 118 0;
   --tabliodb-sky: 28 176 246;
-  --tabliodb-sky-hover: 21 157 225;
+  --tabliodb-sky-hover: 69 201 255;
   --tabliodb-sky-shadow: 16 128 186;
   --tabliodb-sky-border: 151 220 252;
   --tabliodb-sky-soft: 238 249 255;
+  --tabliodb-sky-soft-hover: 226 246 255;
   --tabliodb-sky-text: 13 101 151;
   --tabliodb-red: 221 35 52;
   --tabliodb-red-border: 243 147 157;
@@ -34,7 +36,7 @@
   --tabliodb-coral-soft: 255 244 241;
   --tabliodb-coral-text: 154 54 54;
   --tabliodb-lavender: 139 92 246;
-  --tabliodb-lavender-hover: 124 77 222;
+  --tabliodb-lavender-hover: 165 125 255;
   --tabliodb-lavender-shadow: 91 62 156;
   --tabliodb-lavender-border: 198 181 255;
   --tabliodb-lavender-soft: 247 244 255;
