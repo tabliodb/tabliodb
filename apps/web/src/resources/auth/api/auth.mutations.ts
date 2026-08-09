@@ -7,9 +7,11 @@ import {
   requestPasswordReset,
   updateCurrentUserPassword,
   updateCurrentUserProfile,
+  updateCurrentUserTemporaryPassword,
   uploadCurrentUserAvatar,
   type CurrentUserPasswordUpdateDto,
   type CurrentUserProfileUpdateDto,
+  type CurrentUserTemporaryPasswordUpdateDto,
   type LoginCredentialDto,
   type PasswordResetConfirmDto,
   type PasswordResetRequestDto,
@@ -25,6 +27,8 @@ const updateProfileMutationFn = (body: CurrentUserProfileUpdateDto) =>
   updateCurrentUserProfile({ currentUserProfileUpdateDto: body });
 const updatePasswordMutationFn = (body: CurrentUserPasswordUpdateDto) =>
   updateCurrentUserPassword({ currentUserPasswordUpdateDto: body });
+const updateTemporaryPasswordMutationFn = (body: CurrentUserTemporaryPasswordUpdateDto) =>
+  updateCurrentUserTemporaryPassword({ currentUserTemporaryPasswordUpdateDto: body });
 const loginMutationFn = (body: LoginCredentialDto) => login({ loginCredentialDto: body });
 const logoutMutationFn = () => logout();
 const passwordResetRequestMutationFn = (body: PasswordResetRequestDto) =>
@@ -43,6 +47,9 @@ type UseUpdateProfileMutationParams = {
 };
 type UseUpdatePasswordMutationParams = {
   mutationConfig?: MutationConfig<typeof updatePasswordMutationFn>;
+};
+type UseUpdateTemporaryPasswordMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateTemporaryPasswordMutationFn>;
 };
 type UseLoginMutationParams = {
   mutationConfig?: MutationConfig<typeof loginMutationFn>;
@@ -137,6 +144,18 @@ export function useUpdateCurrentUserPasswordMutation(params: UseUpdatePasswordMu
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Password change clears the temporary-password gate, so the auth cache must update before protected routes continue.
+      queryClient.setQueryData(authKeys.me(), data);
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useUpdateCurrentUserTemporaryPasswordMutation(params: UseUpdateTemporaryPasswordMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateTemporaryPasswordMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Temporary-password completion happens inside the login surface; updating auth cache unlocks protected routes instantly.
       queryClient.setQueryData(authKeys.me(), data);
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },

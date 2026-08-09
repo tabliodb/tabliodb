@@ -16,6 +16,7 @@ import {
   CurrentUserPasswordUpdateDto,
   CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
+  CurrentUserTemporaryPasswordUpdateDto,
   LoginCredentialDto,
   LoginResponseDto,
   PasswordResetConfirmDto,
@@ -183,6 +184,58 @@ export class AuthService {
         email: currentUser.email,
         name: currentUser.name,
         passwordChangeRequiredCleared: auth.user.passwordChangeRequired,
+        revokedSessions,
+      } satisfies Record<string, JsonValue>,
+      organizationId: user.organizations[0]?.id ?? null,
+      projectId: null,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
+
+    return this.getFreshAuthUser(auth.user.id);
+  }
+
+  async updateTemporaryPassword(
+    auth: AuthContext,
+    dto: CurrentUserTemporaryPasswordUpdateDto,
+  ): Promise<CurrentUserResponseDto> {
+    if (!auth.user.passwordChangeRequired) {
+      throw new BadRequestException('This account does not have a temporary password to replace');
+    }
+
+    const currentUser = await this.userRepository.getPasswordAuthUserById(auth.user.id);
+
+    if (!currentUser?.passwordHash) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    if (this.cryptoRepository.compareBcrypt(dto.password, currentUser.passwordHash)) {
+      throw new BadRequestException('Choose a password that is different from your temporary password');
+    }
+
+    const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
+    const user = await this.userRepository.updatePasswordHash(auth.user.id, passwordHash, {
+      passwordChangeRequired: false,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const revokedSessions = auth.session
+      ? await this.sessionRepository.revokeAllForUser(auth.user.id, { exceptSessionId: auth.session.id })
+      : 0;
+
+    await this.auditLogRepository.create({
+      action: AuditAction.AuthPasswordChanged,
+      actorId: auth.user.id,
+      entityId: auth.user.id,
+      entityType: 'user',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: {
+        email: currentUser.email,
+        name: currentUser.name,
+        passwordChangeRequiredCleared: true,
         revokedSessions,
       } satisfies Record<string, JsonValue>,
       organizationId: user.organizations[0]?.id ?? null,

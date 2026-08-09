@@ -10,7 +10,7 @@ export const requireAuthenticated: MiddlewareFunction = async (_, next) => {
     const user = await queryClient.ensureQueryData(authQueries.me());
 
     if (user.passwordChangeRequired) {
-      throw redirect(routes.changePassword.to());
+      throw redirect(routes.login.to());
     }
   } catch (error) {
     if (error instanceof TabliodbApiError && error.status === 401) {

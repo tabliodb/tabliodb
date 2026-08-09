@@ -57,6 +57,12 @@ const CurrentUserPasswordUpdateSchema = z
   })
   .meta({ id: 'CurrentUserPasswordUpdateDto' });
 
+const CurrentUserTemporaryPasswordUpdateSchema = z
+  .object({
+    password: z.string().min(8),
+  })
+  .meta({ id: 'CurrentUserTemporaryPasswordUpdateDto' });
+
 const LoginResponseSchema = z
   .object({
     accessToken: z.string(),
@@ -112,6 +118,7 @@ export class LoginResponseDto extends createZodDto(LoginResponseSchema) {}
 export class CurrentUserResponseDto extends createZodDto(CurrentUserResponseSchema) {}
 export class CurrentUserProfileUpdateDto extends createZodDto(CurrentUserProfileUpdateSchema) {}
 export class CurrentUserPasswordUpdateDto extends createZodDto(CurrentUserPasswordUpdateSchema) {}
+export class CurrentUserTemporaryPasswordUpdateDto extends createZodDto(CurrentUserTemporaryPasswordUpdateSchema) {}
 export class ApiKeyCreateDto extends createZodDto(ApiKeyCreateSchema) {}
 export class ApiKeyCreateResponseDto extends createZodDto(ApiKeyCreateResponseSchema) {}
 export class LogoutResponseDto extends createZodDto(LogoutResponseSchema) {}

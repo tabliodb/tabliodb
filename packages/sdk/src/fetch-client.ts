@@ -46,6 +46,9 @@ export type CurrentUserPasswordUpdateDto = {
   currentPassword: string;
   password: string;
 };
+export type CurrentUserTemporaryPasswordUpdateDto = {
+  password: string;
+};
 export type SignUpDto = {
   email: string;
   password: string;
@@ -1299,6 +1302,28 @@ export function updateCurrentUserPassword(
         ...opts,
         method: 'PATCH',
         body: currentUserPasswordUpdateDto,
+      }),
+    ),
+  );
+}
+export function updateCurrentUserTemporaryPassword(
+  {
+    currentUserTemporaryPasswordUpdateDto,
+  }: {
+    currentUserTemporaryPasswordUpdateDto: CurrentUserTemporaryPasswordUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: AuthUserDtoOutput;
+    }>(
+      '/auth/me/temporary-password',
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: currentUserTemporaryPasswordUpdateDto,
       }),
     ),
   );

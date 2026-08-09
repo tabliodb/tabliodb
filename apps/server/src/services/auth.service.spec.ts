@@ -267,12 +267,12 @@ describe(AuthService.name, () => {
     });
   });
 
-  it('changes the current user password, clears temporary-password state, and keeps the current session', async () => {
+  it('changes the current user password with the current password and keeps the current session', async () => {
     userRepository.getPasswordAuthUserById.mockResolvedValue({
       email: 'automation@tabliodb.local',
       id: 'user-id',
       name: 'Automation User',
-      passwordHash: 'temporary-password-hash',
+      passwordHash: 'current-password-hash',
     });
     cryptoRepository.compareBcrypt.mockReturnValueOnce(true).mockReturnValueOnce(false);
     cryptoRepository.hashBcrypt.mockResolvedValueOnce('new-password-hash');
@@ -300,11 +300,11 @@ describe(AuthService.name, () => {
         },
         user: {
           ...authWithLimitedApiKey.user,
-          passwordChangeRequired: true,
+          passwordChangeRequired: false,
         },
       },
       {
-        currentPassword: 'temporary-password',
+        currentPassword: 'current-password',
         password: 'new-user-password',
       },
     );
@@ -318,5 +318,67 @@ describe(AuthService.name, () => {
     expect(response).toMatchObject({
       passwordChangeRequired: false,
     });
+  });
+
+  it('replaces a temporary password without asking for the temporary password again', async () => {
+    userRepository.getPasswordAuthUserById.mockResolvedValue({
+      email: 'automation@tabliodb.local',
+      id: 'user-id',
+      name: 'Automation User',
+      passwordHash: 'temporary-password-hash',
+    });
+    cryptoRepository.compareBcrypt.mockReturnValueOnce(false);
+    cryptoRepository.hashBcrypt.mockResolvedValueOnce('new-password-hash');
+    userRepository.updatePasswordHash.mockResolvedValueOnce({
+      id: 'user-id',
+      email: 'automation@tabliodb.local',
+      name: 'Automation User',
+      organizations: [{ id: 'organization-id' }],
+    });
+    userRepository.getAuthUserById.mockResolvedValueOnce({
+      avatarUrl: null,
+      cursorColor: '#58cc02',
+      email: 'automation@tabliodb.local',
+      id: 'user-id',
+      name: 'Automation User',
+      passwordChangeRequired: false,
+    });
+
+    const response = await service.updateTemporaryPassword(
+      {
+        ...authWithLimitedApiKey,
+        session: {
+          id: 'current-session-id',
+          source: 'cookie',
+        },
+        user: {
+          ...authWithLimitedApiKey.user,
+          passwordChangeRequired: true,
+        },
+      },
+      {
+        password: 'new-user-password',
+      },
+    );
+
+    expect(userRepository.updatePasswordHash).toHaveBeenCalledWith('user-id', 'new-password-hash', {
+      passwordChangeRequired: false,
+    });
+    expect(sessionRepository.revokeAllForUser).toHaveBeenCalledWith('user-id', {
+      exceptSessionId: 'current-session-id',
+    });
+    expect(response).toMatchObject({
+      passwordChangeRequired: false,
+    });
+  });
+
+  it('rejects temporary password completion for a regular account', async () => {
+    await expect(
+      service.updateTemporaryPassword(authWithLimitedApiKey, {
+        password: 'new-user-password',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(userRepository.updatePasswordHash).not.toHaveBeenCalled();
   });
 });

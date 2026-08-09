@@ -22,6 +22,7 @@ import {
   CurrentUserPasswordUpdateDto,
   CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
+  CurrentUserTemporaryPasswordUpdateDto,
   LoginCredentialDto,
   LoginResponseDto,
   LogoutResponseDto,
@@ -71,7 +72,7 @@ export class AuthController {
   }
 
   @Patch('me/password')
-  @Authenticated({ allowTemporaryPassword: true })
+  @Authenticated()
   @ApiBody({ type: CurrentUserPasswordUpdateDto })
   @ApiOperation({ operationId: 'updateCurrentUserPassword' })
   @ZodResponse({ status: HttpStatus.OK, type: CurrentUserResponseDto })
@@ -80,6 +81,18 @@ export class AuthController {
     @Body() dto: CurrentUserPasswordUpdateDto,
   ): Promise<CurrentUserResponseDto> {
     return this.service.updatePassword(auth, dto);
+  }
+
+  @Patch('me/temporary-password')
+  @Authenticated({ allowTemporaryPassword: true })
+  @ApiBody({ type: CurrentUserTemporaryPasswordUpdateDto })
+  @ApiOperation({ operationId: 'updateCurrentUserTemporaryPassword' })
+  @ZodResponse({ status: HttpStatus.OK, type: CurrentUserResponseDto })
+  updateCurrentUserTemporaryPassword(
+    @Auth() auth: AuthContext,
+    @Body() dto: CurrentUserTemporaryPasswordUpdateDto,
+  ): Promise<CurrentUserResponseDto> {
+    return this.service.updateTemporaryPassword(auth, dto);
   }
 
   @Post('me/avatar')
