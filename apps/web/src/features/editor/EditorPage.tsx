@@ -539,6 +539,11 @@ const idleCollaborationStatus: DiagramCollaborationStatus = {
 const selectClassName =
   'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50';
 
+const editorMobileBreakpointPx = 640;
+const editorTabletBreakpointPx = 900;
+const editorCollapsedSidebarWidthPx = 44;
+const editorDesktopSidebarWidthPx = 320;
+
 export function EditorPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -563,7 +568,9 @@ export function EditorPage() {
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedCommentTarget, setSelectedCommentTarget] = useState<EditorCommentTarget | null>(null);
   const [commentThreadOpenRequest, setCommentThreadOpenRequest] = useState<CommentThreadOpenRequest | null>(null);
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const [editorViewportWidth, setEditorViewportWidth] = useState(getEditorViewportWidth);
+  const editorResizeFrameRef = useRef<number | null>(null);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(() => !isCompactEditorViewport(getEditorViewportWidth()));
   // Inspector starts collapsed so the editor opens with more canvas room while keeping the right rail discoverable.
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [remoteAwarenessStates, setRemoteAwarenessStates] = useState<RemoteAwarenessState[]>([]);
@@ -847,6 +854,34 @@ export function EditorPage() {
       // Selecting a table promotes the left sidebar into structure-edit mode, even if the user hid it earlier.
       setLeftSidebarOpen(true);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleViewportResize = () => {
+      if (editorResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(editorResizeFrameRef.current);
+      }
+
+      editorResizeFrameRef.current = window.requestAnimationFrame(() => {
+        // Canvas overlay offsets depend on the real viewport because CSS sidebar width uses responsive min() rules.
+        setEditorViewportWidth(getEditorViewportWidth());
+        editorResizeFrameRef.current = null;
+      });
+    };
+
+    window.addEventListener('resize', handleViewportResize);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportResize);
+
+      if (editorResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(editorResizeFrameRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -1582,23 +1617,33 @@ export function EditorPage() {
   // Expanded sidebars share one comfortable width so table controls do not collapse into cramped rows.
   const expandedSidebarWidth = 'var(--tabliodb-sidebar-width)';
   const collapsedSidebarWidth = '44px';
-  const expandedSidebarWidthPx = 320;
-  const collapsedSidebarWidthPx = 44;
+  const expandedSidebarWidthPx = getResponsiveEditorSidebarWidthPx(editorViewportWidth);
+  const collapsedSidebarWidthPx = editorCollapsedSidebarWidthPx;
   const leftSidebarWidth = leftSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
   const rightSidebarWidth = rightSidebarOpen ? expandedSidebarWidth : collapsedSidebarWidth;
   // Floating canvas controls menghormati rail/sidebar yang sedang terlihat agar toolbar dan minimap tidak tertutup panel.
-  const canvasToolbarOffsetLeft = leftSidebarOpen
-    ? `min(calc(${expandedSidebarWidth} + 16px), calc(100vw - 11rem))`
-    : `calc(${collapsedSidebarWidth} + 12px)`;
-  const canvasMinimapOffsetRight = rightSidebarOpen
-    ? `min(calc(${expandedSidebarWidth} + 16px), calc(100vw - 10rem))`
-    : `calc(${collapsedSidebarWidth} + 12px)`;
+  const canvasToolbarOffsetLeftPx = getEditorOverlayOffsetPx({
+    expanded: leftSidebarOpen,
+    expandedWidthPx: expandedSidebarWidthPx,
+    minVisibleSpacePx: 176,
+    viewportWidth: editorViewportWidth,
+  });
+  const canvasMinimapOffsetRightPx = getEditorOverlayOffsetPx({
+    expanded: rightSidebarOpen,
+    expandedWidthPx: expandedSidebarWidthPx,
+    minVisibleSpacePx: 160,
+    viewportWidth: editorViewportWidth,
+  });
+  const canvasToolbarOffsetLeft = `${canvasToolbarOffsetLeftPx}px`;
+  const canvasMinimapOffsetRight = `${canvasMinimapOffsetRightPx}px`;
   const canvasFloatingInsetLeft = (leftSidebarOpen ? expandedSidebarWidthPx : collapsedSidebarWidthPx) + 16;
   const canvasFloatingInsetRight = (rightSidebarOpen ? expandedSidebarWidthPx : collapsedSidebarWidthPx) + 16;
   const canvasToolbar = canEditDiagram ? (
     <div
       className="tabliodb-editor-chrome tabliodb-scrollbar flex items-center gap-2 overflow-x-auto rounded-[var(--tabliodb-radius-lg)] p-1.5"
-      style={{ maxWidth: `max(9rem, calc(100vw - ${canvasToolbarOffsetLeft} - ${canvasMinimapOffsetRight} - 12px))` }}
+      style={{
+        maxWidth: `max(9rem, calc(100vw - ${canvasToolbarOffsetLeftPx}px - ${canvasMinimapOffsetRightPx}px - 12px))`,
+      }}
     >
       <AddTableDialog disabled={!canEditDiagram} onCreate={handleAddTable} triggerSize="sm" />
       <Button className="gap-2" disabled={!canEditDiagram} onClick={handleAddNote} size="sm" variant="secondary">
@@ -2106,6 +2151,53 @@ export function EditorPage() {
   );
 }
 
+function getEditorViewportWidth(): number {
+  if (typeof window === 'undefined') {
+    return editorDesktopSidebarWidthPx * 4;
+  }
+
+  return window.innerWidth;
+}
+
+function isCompactEditorViewport(viewportWidth: number): boolean {
+  return viewportWidth <= editorMobileBreakpointPx;
+}
+
+function getResponsiveEditorSidebarWidthPx(viewportWidth: number): number {
+  if (viewportWidth <= editorMobileBreakpointPx) {
+    // Keep the same math as --tabliodb-sidebar-width in CSS so React safe-area numbers match the visual panel width.
+    return Math.min(300, Math.max(editorCollapsedSidebarWidthPx, viewportWidth - 54));
+  }
+
+  if (viewportWidth <= editorTabletBreakpointPx) {
+    return Math.min(editorDesktopSidebarWidthPx, Math.max(editorCollapsedSidebarWidthPx, viewportWidth - 64));
+  }
+
+  return editorDesktopSidebarWidthPx;
+}
+
+function getEditorOverlayOffsetPx({
+  expanded,
+  expandedWidthPx,
+  minVisibleSpacePx,
+  viewportWidth,
+}: {
+  expanded: boolean;
+  expandedWidthPx: number;
+  minVisibleSpacePx: number;
+  viewportWidth: number;
+}): number {
+  if (!expanded) {
+    return editorCollapsedSidebarWidthPx + 12;
+  }
+
+  // Floating controls should clear an open sidebar, but on narrow screens they still need enough visible area to remain usable.
+  return Math.min(
+    expandedWidthPx + 16,
+    Math.max(editorCollapsedSidebarWidthPx + 12, viewportWidth - minVisibleSpacePx),
+  );
+}
+
 function getWorkspaceSlug(project: ProjectResponseDto): string {
   return project.organizationSlug || project.organizationId;
 }
@@ -2391,7 +2483,7 @@ function SnapshotHistoryDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="h-[min(86dvh,760px)] w-[min(96vw,1120px)] max-w-none">
+      <DialogContent className="h-[min(86dvh,760px)] w-[min(96vw,1120px)] max-w-none max-[640px]:h-[100dvh] max-[640px]:max-h-screen max-[640px]:w-screen max-[640px]:rounded-none max-[640px]:border-0">
         <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -2407,7 +2499,7 @@ function SnapshotHistoryDialog({
           </div>
         </DialogHeader>
 
-        <DialogBody className="grid min-h-0 flex-1 gap-4 overflow-hidden px-4 py-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <DialogBody className="grid min-h-0 flex-1 grid-rows-[minmax(160px,0.32fr)_minmax(0,1fr)] gap-3 overflow-hidden px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:grid-rows-none">
           <aside className="flex min-h-0 flex-col overflow-hidden rounded-[18px] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))]">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[rgb(var(--tabliodb-border))] px-4 py-3">
               <div>
@@ -3375,7 +3467,7 @@ function CommentsDialog({
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogContent className="h-[calc(100dvh-32px)] w-[min(96vw,1440px)] max-w-none">
+      <DialogContent className="h-[calc(100dvh-32px)] w-[min(96vw,1440px)] max-w-none max-[640px]:h-[100dvh] max-[640px]:max-h-screen max-[640px]:w-screen max-[640px]:rounded-none max-[640px]:border-0">
         <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-3">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -3440,7 +3532,7 @@ function CommentsDialog({
           </div>
         </DialogHeader>
 
-        <DialogBody className="grid min-h-0 flex-1 grid-rows-[minmax(190px,0.72fr)_minmax(420px,1.28fr)] gap-3 overflow-hidden px-3 py-3 lg:grid-cols-[300px_minmax(0,1fr)] lg:grid-rows-none">
+        <DialogBody className="grid min-h-0 flex-1 grid-rows-[minmax(150px,0.38fr)_minmax(0,1fr)] gap-3 overflow-hidden px-2.5 py-2.5 sm:grid-rows-[minmax(180px,0.42fr)_minmax(0,1fr)] sm:px-3 sm:py-3 lg:grid-cols-[300px_minmax(0,1fr)] lg:grid-rows-none">
           <section className="flex min-h-0 flex-col gap-3 overflow-hidden">
             <form
               className="shrink-0 rounded-(--tabliodb-radius-lg) border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-2.5"
