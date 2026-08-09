@@ -189,6 +189,7 @@ import {
   defaultDiagramName,
   diagramsQueries,
   type DiagramExportQuery,
+  useCreateDiagramMutation,
   useCreateDiagramReviewActionMutation,
   useExportDiagramMutation,
   useImportDiagramMutation,
@@ -196,12 +197,12 @@ import {
 } from '@/resources/diagrams';
 import {
   organizationsQueries,
+  useCreateOrganizationMutation,
   useRemoveOrganizationMemberMutation,
   useUpdateOrganizationMemberMutation,
   useUpdateOrganizationSettingsMutation,
 } from '@/resources/organizations';
 import {
-  defaultProjectName,
   projectsQueries,
   useAddProjectMemberMutation,
   useArchiveProjectMutation,
@@ -464,6 +465,19 @@ const projectFormSchema = z.object({
 
 type ProjectFormState = z.infer<typeof projectFormSchema>;
 
+const workspaceCreateFormSchema = z.object({
+  name: z.string().trim().min(1, 'Workspace name is required.').max(80, 'Keep the workspace name under 80 characters.'),
+});
+
+type WorkspaceCreateFormState = z.infer<typeof workspaceCreateFormSchema>;
+
+const diagramCreateFormSchema = z.object({
+  dialect: z.enum(diagramDialectOptions),
+  name: z.string().trim().min(1, 'Diagram name is required.').max(80, 'Keep the name under 80 characters.'),
+});
+
+type DiagramCreateFormState = z.infer<typeof diagramCreateFormSchema>;
+
 const diagramSettingsFormSchema = z.object({
   dialect: z.enum(diagramDialectOptions),
   disabledRuleKeys: z.array(z.enum(diagramReviewSignalCodes)),
@@ -588,7 +602,9 @@ export function EditorPage() {
   const [importJsonOpen, setImportJsonOpen] = useState(false);
   const [importSqlOpen, setImportSqlOpen] = useState(false);
   const [shareLinksOpen, setShareLinksOpen] = useState(false);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [createDiagramOpen, setCreateDiagramOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [minimapToggleSignal, setMinimapToggleSignal] = useState(0);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
@@ -630,7 +646,7 @@ export function EditorPage() {
     );
   }, [organizations, routeWorkspaceSlug]);
 
-  const projectsQuery = useQuery(projectsQueries.listOrCreateStarter(activeOrganization));
+  const projectsQuery = useQuery(projectsQueries.listByOrganization(activeOrganization));
 
   const projects = projectsQuery.data ?? [];
   const filteredProjects = useMemo(() => {
@@ -646,7 +662,7 @@ export function EditorPage() {
   const routeDiagramId = params.diagramId ?? null;
   const activeProject = projects.find((project) => project.id === routeProjectId) ?? projects[0] ?? null;
 
-  const diagramsQuery = useQuery(diagramsQueries.listOrCreateStarter(activeProject));
+  const diagramsQuery = useQuery(diagramsQueries.listForProject(activeProject));
 
   const diagrams = diagramsQuery.data ?? [];
   const activeDiagram = diagrams.find((diagram) => diagram.id === routeDiagramId) ?? diagrams[0] ?? null;
@@ -665,6 +681,9 @@ export function EditorPage() {
     : false;
   const canCreateProject = activeOrganization
     ? hasOrganizationPermission(activeOrganization.role, Permission.ProjectCreate)
+    : false;
+  const canCreateDiagram = activeProject
+    ? hasProjectPermission(activeProject.projectRole, Permission.DiagramCreate)
     : false;
   const canManageProject = activeProject
     ? hasProjectPermission(activeProject.projectRole, Permission.ProjectUpdate)
@@ -1627,8 +1646,31 @@ export function EditorPage() {
     return <ErrorState error={blockingError} onRetry={() => queryClient.invalidateQueries()} />;
   }
 
-  if (!organizationsQuery.isPending && organizations.length === 0) {
-    return <ErrorState error={new Error('No workspace found')} onRetry={() => queryClient.invalidateQueries()} />;
+  if (!currentUserQuery.isPending && !organizationsQuery.isPending && organizations.length === 0) {
+    return (
+      <EditorEmptyAccessState
+        action={
+          <CreateWorkspaceDialog
+            onCreated={(organization) => {
+              setCreateWorkspaceOpen(false);
+              navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+            }}
+            onOpenChange={setCreateWorkspaceOpen}
+            open={createWorkspaceOpen}
+            trigger={
+              <Button className="gap-2">
+                <Building2 className="size-4" />
+                Create workspace
+              </Button>
+            }
+          />
+        }
+        description="Create a workspace first, then add projects and diagrams inside it. Invited users will only see workspaces assigned by an owner or admin."
+        icon={Building2}
+        onRetry={() => void queryClient.invalidateQueries()}
+        title="No workspace yet"
+      />
+    );
   }
 
   const isLoadingWorkspace =
@@ -1646,9 +1688,25 @@ export function EditorPage() {
   if (!projectsQuery.isPending && activeOrganization && projects.length === 0) {
     return (
       <EditorEmptyAccessState
+        action={
+          canCreateProject ? (
+            <CreateProjectDialog
+              onCreated={(project) => {
+                navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+              }}
+              organizationId={activeOrganization.id}
+              trigger={
+                <Button className="gap-2">
+                  <FolderPlus className="size-4" />
+                  Create project
+                </Button>
+              }
+            />
+          ) : undefined
+        }
         description={
           canCreateProject
-            ? 'This workspace is ready, but it does not have a project yet. Refresh after a project is created to start designing.'
+            ? 'This workspace is ready. Create a project for a product, service, or bounded schema area to start designing.'
             : 'Your account is in this workspace, but an owner or admin has not connected you to a project or team yet.'
         }
         icon={canCreateProject ? FolderPlus : UsersRound}
@@ -1661,14 +1719,40 @@ export function EditorPage() {
   if (!diagramsQuery.isPending && activeProject && diagrams.length === 0) {
     return (
       <EditorEmptyAccessState
+        action={
+          canCreateDiagram ? (
+            <CreateDiagramDialog
+              defaultDialect="postgresql"
+              onCreated={(diagram) => {
+                modelRef.current = null;
+                persistedDraftSignatureRef.current = null;
+                setModel(null);
+                navigate(
+                  routes.diagram.to({
+                    diagramId: diagram.id,
+                    projectId: activeProject.id,
+                    workspaceSlug: getWorkspaceSlug(activeProject),
+                  }),
+                );
+              }}
+              projectId={activeProject.id}
+              trigger={
+                <Button className="gap-2">
+                  <FileText className="size-4" />
+                  Create diagram
+                </Button>
+              }
+            />
+          ) : undefined
+        }
         description={
-          canEditDiagram
-            ? 'This project is ready, but it does not have a diagram yet. Refresh after a diagram is created to continue.'
+          canCreateDiagram
+            ? 'This project is ready. Create the first diagram and choose the database dialect before drawing tables.'
             : 'Your project role can view assigned diagrams, but there is no diagram available for this project yet.'
         }
         icon={FileText}
         onRetry={() => void queryClient.invalidateQueries()}
-        title={canEditDiagram ? 'No diagrams yet' : 'No diagram access yet'}
+        title={canCreateDiagram ? 'No diagrams yet' : 'No diagram access yet'}
       />
     );
   }
@@ -1730,9 +1814,12 @@ export function EditorPage() {
             activeDiagram={activeDiagram}
             activeOrganization={activeOrganization}
             activeProject={activeProject}
+            canCreateDiagram={canCreateDiagram}
             canCreateProject={canCreateProject}
             diagrams={diagrams}
+            onCreateDiagram={() => setCreateDiagramOpen(true)}
             onCreateProject={() => setCreateProjectOpen(true)}
+            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
             onDiagramSelect={(diagram) => {
               modelRef.current = null;
               persistedDraftSignatureRef.current = null;
@@ -2173,6 +2260,22 @@ export function EditorPage() {
         selectedTableId={selectedTable?.id ?? null}
       />
 
+      <CreateWorkspaceDialog
+        onCreated={(organization) => {
+          modelRef.current = null;
+          persistedDraftSignatureRef.current = null;
+          setModel(null);
+          setSelectedTableId(null);
+          setSelectedCommentTarget(null);
+          setProjectSearchTerm('');
+          setCreateWorkspaceOpen(false);
+          navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+        }}
+        onOpenChange={setCreateWorkspaceOpen}
+        open={createWorkspaceOpen}
+        trigger={null}
+      />
+
       {canCreateProject ? (
         <CreateProjectDialog
           onCreated={(project) => {
@@ -2187,6 +2290,31 @@ export function EditorPage() {
           onOpenChange={setCreateProjectOpen}
           open={createProjectOpen}
           organizationId={activeOrganization.id}
+          trigger={null}
+        />
+      ) : null}
+
+      {canCreateDiagram ? (
+        <CreateDiagramDialog
+          defaultDialect={model.dialect}
+          onCreated={(diagram) => {
+            modelRef.current = null;
+            persistedDraftSignatureRef.current = null;
+            setModel(null);
+            setSelectedTableId(null);
+            setSelectedCommentTarget(null);
+            setCreateDiagramOpen(false);
+            navigate(
+              routes.diagram.to({
+                diagramId: diagram.id,
+                projectId: activeProject.id,
+                workspaceSlug: getWorkspaceSlug(activeProject),
+              }),
+            );
+          }}
+          onOpenChange={setCreateDiagramOpen}
+          open={createDiagramOpen}
+          projectId={activeProject.id}
           trigger={null}
         />
       ) : null}
@@ -4951,9 +5079,12 @@ function WorkspaceProjectMenu({
   activeDiagram,
   activeOrganization,
   activeProject,
+  canCreateDiagram,
   canCreateProject,
   diagrams,
+  onCreateDiagram,
   onCreateProject,
+  onCreateWorkspace,
   onDiagramSelect,
   onOrganizationSelect,
   onProjectSearchChange,
@@ -4965,9 +5096,12 @@ function WorkspaceProjectMenu({
   activeDiagram: DiagramResponseDto;
   activeOrganization: OrganizationDto;
   activeProject: ProjectResponseDto;
+  canCreateDiagram: boolean;
   canCreateProject: boolean;
   diagrams: DiagramResponseDto[];
+  onCreateDiagram: () => void;
   onCreateProject: () => void;
+  onCreateWorkspace: () => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
   onProjectSearchChange: (value: string) => void;
@@ -4996,8 +5130,23 @@ function WorkspaceProjectMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[min(92vw,380px)] p-2">
         <div className="px-2 py-1">
-          <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-            Workspace
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+              Workspace
+            </div>
+            <Button
+              onClick={(event) => {
+                event.preventDefault();
+                setOpen(false);
+                // Create workspace dipasang di luar dropdown supaya Radix focus management tetap satu modal pada satu waktu.
+                onCreateWorkspace();
+              }}
+              size="sm"
+              variant="soft"
+            >
+              <Building2 className="size-3.5" />
+              Workspace
+            </Button>
           </div>
           <div className="tabliodb-scrollbar mt-1 grid max-h-36 gap-1 overflow-y-auto pr-1">
             {organizations.map((organization) => {
@@ -5101,38 +5250,61 @@ function WorkspaceProjectMenu({
           )}
         </div>
 
-        {diagrams.length > 1 ? (
+        {diagrams.length > 0 || canCreateDiagram ? (
           <>
             <DropdownMenuSeparatorItem />
             <div className="px-2 py-1.5">
-              <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Diagrams
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Diagrams
+                </div>
+                {canCreateDiagram ? (
+                  <Button
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setOpen(false);
+                      // Diagram creation is explicit so switching projects never writes data by accident.
+                      onCreateDiagram();
+                    }}
+                    size="sm"
+                    variant="soft"
+                  >
+                    <FileText className="size-3.5" />
+                    Diagram
+                  </Button>
+                ) : null}
               </div>
-              <div className="tabliodb-scrollbar grid max-h-40 gap-1 overflow-y-auto pr-1">
-                {diagrams.map((diagram) => {
-                  const isActive = diagram.id === activeDiagram.id;
+              {diagrams.length === 0 ? (
+                <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                  No diagrams yet
+                </div>
+              ) : (
+                <div className="tabliodb-scrollbar grid max-h-40 gap-1 overflow-y-auto pr-1">
+                  {diagrams.map((diagram) => {
+                    const isActive = diagram.id === activeDiagram.id;
 
-                  return (
-                    <DropdownMenuItem
-                      className="justify-between"
-                      key={diagram.id}
-                      onSelect={() => {
-                        if (!isActive) {
-                          onDiagramSelect(diagram);
-                        }
+                    return (
+                      <DropdownMenuItem
+                        className="justify-between"
+                        key={diagram.id}
+                        onSelect={() => {
+                          if (!isActive) {
+                            onDiagramSelect(diagram);
+                          }
 
-                        setOpen(false);
-                      }}
-                    >
-                      <span className="min-w-0 truncate text-[13px] font-extrabold">{diagram.name}</span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <Badge variant="green">{diagram.dialect}</Badge>
-                        {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
-                      </span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </div>
+                          setOpen(false);
+                        }}
+                      >
+                        <span className="min-w-0 truncate text-[13px] font-extrabold">{diagram.name}</span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <Badge variant="green">{diagram.dialect}</Badge>
+                          {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </>
         ) : null}
@@ -5916,6 +6088,121 @@ function ImportSqlPreview({ preview }: { preview: ImportSqlDraftPreview }) {
   );
 }
 
+function CreateWorkspaceDialog({
+  onCreated,
+  onOpenChange,
+  open,
+  trigger,
+}: {
+  onCreated: (organization: OrganizationDto) => void;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  trigger?: ReactNode | null;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = open ?? internalOpen;
+  const form = useForm<WorkspaceCreateFormState>({
+    defaultValues: {
+      name: '',
+    },
+    mode: 'onBlur',
+    resolver: zodResolver(workspaceCreateFormSchema),
+  });
+  const { errors } = form.formState;
+
+  const createWorkspaceMutation = useCreateOrganizationMutation({
+    mutationConfig: {
+      onSuccess: (organization) => {
+        // Workspace creation switches context immediately so the next expected action is creating a project inside it.
+        form.reset({ name: '' });
+        handleOpenChange(false);
+        onCreated(organization);
+      },
+    },
+  });
+
+  function handleOpenChange(nextOpen: boolean) {
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+
+    if (!nextOpen && !createWorkspaceMutation.isPending) {
+      form.reset({ name: '' });
+      createWorkspaceMutation.reset();
+    }
+  }
+
+  function handleSubmit(values: WorkspaceCreateFormState) {
+    createWorkspaceMutation.mutate({
+      name: values.name,
+    });
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
+      {trigger !== null ? (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm" variant="secondary">
+              <Building2 className="size-4" />
+              Workspace
+            </Button>
+          )}
+        </DialogTrigger>
+      ) : null}
+      <DialogContent className="w-[min(94vw,520px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>New workspace</DialogTitle>
+            <DialogDescription>Create a place for teams, projects, members, and governance settings.</DialogDescription>
+          </DialogHeader>
+
+          <DialogBody>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Workspace name
+              </span>
+              <ControlledInput
+                autoFocus
+                aria-invalid={Boolean(errors.name)}
+                control={form.control}
+                disabled={createWorkspaceMutation.isPending}
+                name="name"
+                placeholder="Data Platform"
+              />
+              <FieldError>{errors.name?.message}</FieldError>
+            </label>
+
+            {createWorkspaceMutation.error ? (
+              <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                {getErrorMessage(createWorkspaceMutation.error)}
+              </div>
+            ) : null}
+          </DialogBody>
+
+          <DialogFooter>
+            <Button
+              disabled={createWorkspaceMutation.isPending}
+              onClick={() => handleOpenChange(false)}
+              type="button"
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button disabled={createWorkspaceMutation.isPending} type="submit">
+              {createWorkspaceMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Building2 className="size-4" />
+              )}
+              Create workspace
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CreateProjectDialog({
   onCreated,
   onOpenChange,
@@ -5963,10 +6250,14 @@ function CreateProjectDialog({
   }
 
   function handleSubmit(values: ProjectFormState) {
+    if (!organizationId) {
+      return;
+    }
+
     createProjectMutation.mutate({
       description: toOptionalDescription(values.description),
       name: values.name,
-      organizationId: organizationId ?? undefined,
+      organizationId,
     });
   }
 
@@ -6045,6 +6336,158 @@ function CreateProjectDialog({
                 <FolderPlus className="size-4" />
               )}
               Create project
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateDiagramDialog({
+  defaultDialect,
+  onCreated,
+  onOpenChange,
+  open,
+  projectId,
+  trigger,
+}: {
+  defaultDialect: DatabaseDialect;
+  onCreated: (diagram: DiagramResponseDto) => void;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  projectId: string | null;
+  trigger?: ReactNode | null;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = open ?? internalOpen;
+  const form = useForm<DiagramCreateFormState>({
+    defaultValues: {
+      dialect: defaultDialect,
+      name: '',
+    },
+    mode: 'onBlur',
+    resolver: zodResolver(diagramCreateFormSchema),
+  });
+  const { errors } = form.formState;
+
+  useEffect(() => {
+    if (dialogOpen) {
+      // Opening the dialog should respect the current diagram dialect but keep the name intentionally blank.
+      form.reset({ dialect: defaultDialect, name: '' });
+    }
+  }, [defaultDialect, dialogOpen, form]);
+
+  const createDiagramMutation = useCreateDiagramMutation({
+    mutationConfig: {
+      onSuccess: (diagram) => {
+        // New diagram becomes the active route; the editor will create its first snapshot through the existing snapshot flow.
+        form.reset({ dialect: defaultDialect, name: '' });
+        handleOpenChange(false);
+        onCreated(diagram);
+      },
+    },
+  });
+
+  function handleOpenChange(nextOpen: boolean) {
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+
+    if (!nextOpen && !createDiagramMutation.isPending) {
+      form.reset({ dialect: defaultDialect, name: '' });
+      createDiagramMutation.reset();
+    }
+  }
+
+  function handleSubmit(values: DiagramCreateFormState) {
+    if (!projectId) {
+      return;
+    }
+
+    createDiagramMutation.mutate({
+      dialect: sdkDialectByValue[values.dialect],
+      name: values.name,
+      projectId,
+    });
+  }
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
+      {trigger !== null ? (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button disabled={!projectId} size="sm" variant="secondary">
+              <FileText className="size-4" />
+              Diagram
+            </Button>
+          )}
+        </DialogTrigger>
+      ) : null}
+      <DialogContent className="w-[min(94vw,520px)]">
+        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
+          <DialogHeader>
+            <DialogTitle>New diagram</DialogTitle>
+            <DialogDescription>Create a schema diagram inside the active project.</DialogDescription>
+          </DialogHeader>
+
+          <DialogBody>
+            <div className="grid gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Diagram name
+                </span>
+                <ControlledInput
+                  autoFocus
+                  aria-invalid={Boolean(errors.name)}
+                  control={form.control}
+                  disabled={!projectId || createDiagramMutation.isPending}
+                  name="name"
+                  placeholder={defaultDiagramName}
+                />
+                <FieldError>{errors.name?.message}</FieldError>
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Database dialect
+                </span>
+                <ControlledSelect
+                  aria-invalid={Boolean(errors.dialect)}
+                  control={form.control}
+                  disabled={!projectId || createDiagramMutation.isPending}
+                  name="dialect"
+                  options={diagramDialectOptions.map((dialect) => ({
+                    label: formatDiagramDialect(dialect),
+                    value: dialect,
+                  }))}
+                />
+                <FieldError>{errors.dialect?.message}</FieldError>
+              </label>
+
+              {createDiagramMutation.error ? (
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                  {getErrorMessage(createDiagramMutation.error)}
+                </div>
+              ) : null}
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
+            <Button
+              disabled={createDiagramMutation.isPending}
+              onClick={() => handleOpenChange(false)}
+              type="button"
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button disabled={!projectId || createDiagramMutation.isPending} type="submit">
+              {createDiagramMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileText className="size-4" />
+              )}
+              Create diagram
             </Button>
           </DialogFooter>
         </form>
@@ -7930,11 +8373,13 @@ function formatOrganizationRole(role: OrganizationRoleValue): string {
 }
 
 function EditorEmptyAccessState({
+  action,
   description,
   icon,
   onRetry,
   title,
 }: {
+  action?: ReactNode;
   description: string;
   icon: ComponentType<{ className?: string }>;
   onRetry: () => void;
@@ -7945,10 +8390,12 @@ function EditorEmptyAccessState({
       <Surface className="w-full max-w-lg p-5" depth="md">
         <EmptyState
           action={
-            <Button className="gap-2" onClick={onRetry} variant="secondary">
-              <RotateCcw className="size-4" />
-              Refresh access
-            </Button>
+            action ?? (
+              <Button className="gap-2" onClick={onRetry} variant="secondary">
+                <RotateCcw className="size-4" />
+                Refresh access
+              </Button>
+            )
           }
           description={description}
           icon={icon}

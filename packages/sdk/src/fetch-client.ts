@@ -693,6 +693,9 @@ export type NotificationSummaryDtoOutput = {
   unreadCount: number;
   updatedAt: string | null;
 };
+export type OrganizationCreateDto = {
+  name: string;
+};
 export type OrganizationDtoOutput = {
   id: string;
   name: string;
@@ -788,7 +791,7 @@ export type ProjectListResponseDtoOutput = {
   totalCount: number;
 };
 export type ProjectCreateDto = {
-  organizationId?: string;
+  organizationId: string;
   name: string;
   description?: string;
 };
@@ -2524,6 +2527,28 @@ export function getNotificationSummary(opts?: Oazapfts.RequestOpts) {
     }>('/notifications/summary', {
       ...opts,
     }),
+  );
+}
+export function createOrganization(
+  {
+    organizationCreateDto,
+  }: {
+    organizationCreateDto: OrganizationCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: OrganizationDtoOutput;
+    }>(
+      '/organizations',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: organizationCreateDto,
+      }),
+    ),
   );
 }
 export function getOrganizations(

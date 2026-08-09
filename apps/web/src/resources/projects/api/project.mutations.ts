@@ -26,7 +26,7 @@ const updateProjectMemberMutationFn = (input: { body: ProjectMemberUpdateDto; pr
   updateProjectMember({ projectId: input.projectId, projectMemberUpdateDto: input.body, userId: input.userId });
 const removeProjectMemberMutationFn = (input: { projectId: string; userId: string }) =>
   removeProjectMember({ projectId: input.projectId, userId: input.userId });
-const getStarterProjectsKey = (organizationId: string) => projectsKeys.list({ limit: 50, organizationId });
+const getOrganizationProjectItemsKey = (organizationId: string) => projectsKeys.listItemsByOrganization(organizationId);
 
 type UseCreateProjectMutationParams = {
   mutationConfig?: MutationConfig<typeof createProjectMutationFn>;
@@ -38,10 +38,10 @@ export function useCreateProjectMutation(params: UseCreateProjectMutationParams 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Project list menjadi sumber navigasi editor, jadi setiap CRUD project selalu refresh daftar sidebar.
-      queryClient.setQueryData<ProjectResponseDtoOutput[]>(getStarterProjectsKey(data.organizationId), (current) => [
-        data,
-        ...(current ?? []).filter((project) => project.id !== data.id),
-      ]);
+      queryClient.setQueryData<ProjectResponseDtoOutput[]>(
+        getOrganizationProjectItemsKey(data.organizationId),
+        (current) => [data, ...(current ?? []).filter((project) => project.id !== data.id)],
+      );
       queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
@@ -58,8 +58,9 @@ export function useUpdateProjectMutation(params: UseUpdateProjectMutationParams 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Rename project bisa mengubah slug dan header/sidebar, jadi cache list harus di-refresh setelah server menerima update.
-      queryClient.setQueryData<ProjectResponseDtoOutput[]>(getStarterProjectsKey(data.organizationId), (current) =>
-        (current ?? []).map((project) => (project.id === data.id ? data : project)),
+      queryClient.setQueryData<ProjectResponseDtoOutput[]>(
+        getOrganizationProjectItemsKey(data.organizationId),
+        (current) => (current ?? []).map((project) => (project.id === data.id ? data : project)),
       );
       queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
@@ -77,8 +78,9 @@ export function useArchiveProjectMutation(params: UseArchiveProjectMutationParam
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Archive mengeluarkan project dari list aktif karena server list hanya mengembalikan project non-archived.
-      queryClient.setQueryData<ProjectResponseDtoOutput[]>(getStarterProjectsKey(variables.organizationId), (current) =>
-        (current ?? []).filter((project) => project.id !== variables.projectId),
+      queryClient.setQueryData<ProjectResponseDtoOutput[]>(
+        getOrganizationProjectItemsKey(variables.organizationId),
+        (current) => (current ?? []).filter((project) => project.id !== variables.projectId),
       );
       queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);

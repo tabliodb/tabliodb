@@ -40,6 +40,12 @@ const OrganizationListResponseSchema = z
   })
   .meta({ id: 'OrganizationListResponseDto' });
 
+const OrganizationCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+  })
+  .meta({ id: 'OrganizationCreateDto' });
+
 const OrganizationMemberSchema = z
   .object({
     avatarUrl: z.string().nullable(),
@@ -103,6 +109,7 @@ const OrganizationSettingsUpdateSchema = z
   .meta({ id: 'OrganizationSettingsUpdateDto' });
 
 export class OrganizationDto extends createZodDto(OrganizationSchema) {}
+export class OrganizationCreateDto extends createZodDto(OrganizationCreateSchema) {}
 export class OrganizationListQueryDto extends createZodDto(OrganizationListQuerySchema) {}
 export class OrganizationListResponseDto extends createZodDto(OrganizationListResponseSchema) {}
 export class OrganizationMemberDto extends createZodDto(OrganizationMemberSchema) {}

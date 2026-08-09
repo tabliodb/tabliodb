@@ -1,9 +1,7 @@
 import type { PaginationQuery } from '@tabliodb/shared';
 import {
-  createProject,
   getProjectMembers,
   getProjects,
-  Role as GeneratedOrganizationRole,
   type OrganizationDtoOutput,
   type ProjectListResponseDtoOutput,
   type ProjectMemberListResponseDtoOutput,
@@ -15,10 +13,12 @@ import { projectsKeys, type ProjectListQuery } from './project.keys';
 export const defaultProjectName = 'Library System';
 
 type ProjectsQueries = {
-  list: (query?: ProjectListQuery) => AppQueryOptions<ProjectListResponseDtoOutput, ReturnType<typeof projectsKeys.list>>;
-  listOrCreateStarter: (
+  list: (
+    query?: ProjectListQuery,
+  ) => AppQueryOptions<ProjectListResponseDtoOutput, ReturnType<typeof projectsKeys.list>>;
+  listByOrganization: (
     organization: OrganizationDtoOutput | null,
-  ) => AppQueryOptions<ProjectResponseDtoOutput[], ReturnType<typeof projectsKeys.list>>;
+  ) => AppQueryOptions<ProjectResponseDtoOutput[], ReturnType<typeof projectsKeys.listItemsByOrganization>>;
   members: (
     projectId: string,
     query?: PaginationQuery,
@@ -32,11 +32,11 @@ export const projectsQueries: ProjectsQueries = {
       queryKey: projectsKeys.list(query),
     }),
 
-  listOrCreateStarter: (organization: OrganizationDtoOutput | null) =>
+  listByOrganization: (organization: OrganizationDtoOutput | null) =>
     appQueryOptions({
       enabled: Boolean(organization?.id),
-      queryFn: () => listOrCreateStarterProjects(organization),
-      queryKey: projectsKeys.list({ limit: 50, organizationId: organization?.id ?? undefined }),
+      queryFn: () => listProjectsByOrganization(organization),
+      queryKey: projectsKeys.listItemsByOrganization(organization?.id ?? 'missing-organization'),
     }),
 
   members: (projectId: string, query: PaginationQuery = {}) =>
@@ -47,34 +47,15 @@ export const projectsQueries: ProjectsQueries = {
     }),
 };
 
-async function listOrCreateStarterProjects(organization: OrganizationDtoOutput | null): Promise<ProjectResponseDtoOutput[]> {
+async function listProjectsByOrganization(
+  organization: OrganizationDtoOutput | null,
+): Promise<ProjectResponseDtoOutput[]> {
   if (!organization) {
     return [];
   }
 
   const projects = await getProjects({ limit: 50, organizationId: organization.id });
 
-  if (projects.items.length > 0) {
-    return projects.items;
-  }
-
-  if (!canCreateAutomaticStarterProject(organization)) {
-    // Workspace members may have no direct project access yet; the app should show an empty state instead of creating a duplicate starter project.
-    return [];
-  }
-
-  // Presentable build tetap membuat starter workspace agar instalasi kosong langsung punya diagram yang bisa dipakai demo.
-  const project = await createProject({
-    projectCreateDto: {
-      description: 'Starter schema workspace',
-      name: defaultProjectName,
-      organizationId: organization.id,
-    },
-  });
-
-  return [project];
-}
-
-export function canCreateAutomaticStarterProject(organization: OrganizationDtoOutput): boolean {
-  return organization.role === GeneratedOrganizationRole.Owner || organization.role === GeneratedOrganizationRole.Admin;
+  // Query layer harus read-only; create project dilakukan lewat intent eksplisit di dialog/empty state.
+  return projects.items;
 }

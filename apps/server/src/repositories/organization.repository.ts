@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { OrganizationRole, type ProjectRole } from '@tabliodb/shared';
 import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
+import { randomUUID } from 'node:crypto';
 import type { DB } from '../schema/index.js';
 import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
 import { slugify } from '../utils/slug.js';
@@ -302,18 +303,12 @@ export class OrganizationRepository {
   }
 
   createPersonalOrganization(options: { userId: string; name: string }) {
-    const slug = slugify(options.name);
+    return this.createOwnedOrganization(options);
+  }
 
+  createOwnedOrganization(options: { userId: string; name: string }) {
     return this.db.transaction().execute(async (tx) => {
-      const organization = await tx
-        .insertInto('organizations')
-        .values({
-          name: options.name,
-          slug,
-          createdById: options.userId,
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
+      const organization = await this.insertOrganizationWithUniqueSlug(tx, options);
 
       await tx
         .insertInto('organization_members')
@@ -324,8 +319,53 @@ export class OrganizationRepository {
         })
         .execute();
 
-      return organization;
+      return {
+        allowMemberProjectCreate: organization.allowMemberProjectCreate,
+        createdAt: organization.createdAt,
+        defaultProjectRole: organization.defaultProjectRole,
+        id: organization.id,
+        name: organization.name,
+        role: OrganizationRole.Owner,
+        slug: organization.slug,
+        status: 'active',
+        updatedAt: organization.updatedAt,
+      };
     });
+  }
+
+  private async insertOrganizationWithUniqueSlug(tx: Kysely<DB>, options: { userId: string; name: string }) {
+    const baseSlug = slugify(options.name);
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+
+      try {
+        return await tx
+          .insertInto('organizations')
+          .values({
+            createdById: options.userId,
+            name: options.name,
+            slug,
+          })
+          .returning(['allowMemberProjectCreate', 'createdAt', 'defaultProjectRole', 'id', 'name', 'slug', 'updatedAt'])
+          .executeTakeFirstOrThrow();
+      } catch (error) {
+        if (!isOrganizationSlugConflict(error)) {
+          throw error;
+        }
+      }
+    }
+
+    // Rare concurrent-create collisions still resolve to a URL-safe deterministic prefix plus a short random suffix.
+    return tx
+      .insertInto('organizations')
+      .values({
+        createdById: options.userId,
+        name: options.name,
+        slug: `${baseSlug}-${randomUUID().slice(0, 8)}`,
+      })
+      .returning(['allowMemberProjectCreate', 'createdAt', 'defaultProjectRole', 'id', 'name', 'slug', 'updatedAt'])
+      .executeTakeFirstOrThrow();
   }
 
   private getSettingsById(organizationId: string) {
@@ -336,4 +376,14 @@ export class OrganizationRepository {
       .where('archivedAt', 'is', null)
       .executeTakeFirst();
   }
+}
+
+function isOrganizationSlugConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const record = error as { code?: unknown; constraint?: unknown };
+
+  return record.code === '23505' && record.constraint === 'organizations_slug_key';
 }

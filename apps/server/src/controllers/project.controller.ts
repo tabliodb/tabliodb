@@ -44,7 +44,7 @@ export class ProjectController {
   }
 
   @Post()
-  @RequirePermission(Permission.ProjectCreate)
+  @RequirePermission(Permission.ProjectCreate, { key: 'organizationId', source: 'body', type: 'organization' })
   @ApiBody({ type: ProjectCreateDto })
   @ApiOperation({ operationId: 'createProject' })
   @ZodResponse({ status: HttpStatus.CREATED, type: ProjectResponseDto })

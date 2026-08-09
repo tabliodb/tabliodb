@@ -1,11 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import {
+  createDiagram,
   createDiagramReviewAction,
   exportDiagram,
   importDiagram,
   updateDiagram,
+  type DiagramCreateDto,
   type DiagramImportDto,
-  type DiagramListResponseDtoOutput,
   type DiagramReviewActionCreateDto,
   type DiagramReviewSummaryDtoOutput,
   type DiagramResponseDtoOutput,
@@ -15,6 +16,7 @@ import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { commentKeys } from '@/resources/comments';
 import { diagramsKeys, type DiagramExportQuery } from './diagram.keys';
 
+const createDiagramMutationFn = (body: DiagramCreateDto) => createDiagram({ diagramCreateDto: body });
 const updateDiagramMutationFn = (input: { body: DiagramUpdateDto; diagramId: string }) =>
   updateDiagram({ diagramId: input.diagramId, diagramUpdateDto: input.body });
 const importDiagramMutationFn = (input: { body: DiagramImportDto; diagramId: string }) =>
@@ -31,14 +33,34 @@ type UseUpdateDiagramMutationParams = {
   mutationConfig?: MutationConfig<typeof updateDiagramMutationFn>;
 };
 
+type UseCreateDiagramMutationParams = {
+  mutationConfig?: MutationConfig<typeof createDiagramMutationFn>;
+};
+
+export function useCreateDiagramMutation(params: UseCreateDiagramMutationParams = {}) {
+  return useMutation({
+    mutationFn: createDiagramMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Diagram selector dan editor route bergantung pada list per project, jadi creation langsung terlihat tanpa menunggu reload.
+      queryClient.setQueryData<DiagramResponseDtoOutput[]>(
+        diagramsKeys.listItemsByProject(data.projectId),
+        (current) => [data, ...(current ?? []).filter((diagram) => diagram.id !== data.id)],
+      );
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
 export function useUpdateDiagramMutation(params: UseUpdateDiagramMutationParams = {}) {
   return useMutation({
     mutationFn: updateDiagramMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Diagram list feeds the active editor header, so successful metadata changes are patched into every cached page.
-      queryClient.setQueriesData<DiagramListResponseDtoOutput>({ queryKey: diagramsKeys.lists() }, (current) =>
-        current ? replaceDiagramInList(current, data) : current,
+      queryClient.setQueryData<DiagramResponseDtoOutput[]>(diagramsKeys.listItemsByProject(data.projectId), (current) =>
+        (current ?? []).map((diagram) => (diagram.id === data.id ? data : diagram)),
       );
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
@@ -67,8 +89,9 @@ export function useImportDiagramMutation(params: UseImportDiagramMutationParams 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Import replace mutates the draft document and diagram metadata, so related list/export caches must be refreshed.
-      queryClient.setQueriesData<DiagramListResponseDtoOutput>({ queryKey: diagramsKeys.lists() }, (current) =>
-        current ? replaceDiagramInList(current, data.diagram) : current,
+      queryClient.setQueryData<DiagramResponseDtoOutput[]>(
+        diagramsKeys.listItemsByProject(data.diagram.projectId),
+        (current) => (current ?? []).map((diagram) => (diagram.id === data.diagram.id ? data.diagram : diagram)),
       );
       queryClient.invalidateQueries({ queryKey: diagramsKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
@@ -93,14 +116,4 @@ export function useCreateDiagramReviewActionMutation(params: UseCreateDiagramRev
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
-}
-
-function replaceDiagramInList(
-  current: DiagramListResponseDtoOutput,
-  diagram: DiagramResponseDtoOutput,
-): DiagramListResponseDtoOutput {
-  return {
-    ...current,
-    items: current.items.map((item) => (item.id === diagram.id ? diagram : item)),
-  };
 }

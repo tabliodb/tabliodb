@@ -36,6 +36,7 @@ export enum AuditAction {
   InstanceAuthSettingsUpdated = 'instance.auth_settings_updated',
   InstanceOidcSettingsUpdated = 'instance.oidc_settings_updated',
   InstanceSmtpSettingsUpdated = 'instance.smtp_settings_updated',
+  OrganizationCreated = 'organization.created',
   OrganizationMemberRemoved = 'organization.member_removed',
   OrganizationMemberRoleUpdated = 'organization.member_role_updated',
   OrganizationSettingsUpdated = 'organization.settings_updated',

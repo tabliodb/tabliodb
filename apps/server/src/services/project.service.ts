@@ -55,22 +55,13 @@ export class ProjectService {
   }
 
   async create(auth: AuthContext, dto: ProjectCreateDto) {
-    // Sign-up already creates a personal organization, so project creation reuses it instead of creating a duplicate slug.
-    const existingOrganization = dto.organizationId
-      ? await this.organizationRepository.getByIdForUser(auth.user.id, dto.organizationId)
-      : await this.organizationRepository.getFirstForUser(auth.user.id);
+    const organization = await this.organizationRepository.getByIdForUser(auth.user.id, dto.organizationId);
 
-    if (dto.organizationId && !existingOrganization) {
+    if (!organization) {
       throw new NotFoundException('Organization not found');
     }
 
-    const organization =
-      existingOrganization ??
-      (await this.organizationRepository.createPersonalOrganization({
-        userId: auth.user.id,
-        name: `${auth.user.name}'s Workspace`,
-      }));
-
+    // Project creation is intentionally workspace-explicit so self-hosted/internal accounts do not get surprise personal workspaces.
     await this.assertCanCreateProject(auth, organization.id, organization.allowMemberProjectCreate);
 
     const project = await this.createProjectOrThrowConflict({

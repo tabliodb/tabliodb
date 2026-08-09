@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import { AuditLogListQueryDto, AuditLogListResponseDto } from '../dtos/audit-log.dto.js';
 import {
+  OrganizationCreateDto,
   OrganizationDto,
   OrganizationListQueryDto,
   OrganizationListResponseDto,
@@ -27,6 +28,35 @@ export class OrganizationService {
     private readonly auditLogRepository: AuditLogRepository,
     private readonly organizationRepository: OrganizationRepository,
   ) {}
+
+  async create(auth: AuthContext, dto: OrganizationCreateDto): Promise<OrganizationDto> {
+    if (auth.apiKey) {
+      throw new ForbiddenException('User session is required to create workspaces');
+    }
+
+    const name = dto.name.trim();
+    if (!name) {
+      throw new BadRequestException('Workspace name is required');
+    }
+
+    const organization = await this.organizationRepository.createOwnedOrganization({
+      name,
+      userId: auth.user.id,
+    });
+
+    await this.recordOrganizationAudit(auth, {
+      action: AuditAction.OrganizationCreated,
+      entityId: organization.id,
+      entityType: 'organization',
+      metadata: {
+        name: organization.name,
+        slug: organization.slug,
+      },
+      organizationId: organization.id,
+    });
+
+    return this.serializeOrganization(organization);
+  }
 
   async getAll(auth: AuthContext, query: OrganizationListQueryDto): Promise<OrganizationListResponseDto> {
     const organizations = await this.organizationRepository.listForUser(auth.user.id, {

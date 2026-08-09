@@ -1903,6 +1903,45 @@
       }
     },
     "/organizations": {
+      "post": {
+        "operationId": "createOrganization",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": ["organizations"]
+      },
       "get": {
         "operationId": "getOrganizations",
         "parameters": [
@@ -7166,6 +7205,17 @@
         "required": ["totalCount", "unreadCount", "updatedAt"],
         "additionalProperties": false
       },
+      "OrganizationCreateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": ["name"]
+      },
       "OrganizationDto_Output": {
         "type": "object",
         "properties": {
@@ -7609,7 +7659,7 @@
             "type": "string"
           }
         },
-        "required": ["name"]
+        "required": ["organizationId", "name"]
       },
       "ProjectUpdateDto": {
         "type": "object",

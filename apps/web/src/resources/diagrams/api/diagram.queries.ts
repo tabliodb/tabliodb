@@ -1,7 +1,4 @@
-import { Permission, ProjectRole, isGranted, permissionsForProjectRole, type PaginationQuery } from '@tabliodb/shared';
 import {
-  Dialect,
-  createDiagram,
   exportDiagram,
   getDiagramReviewEvents,
   getDiagramReviewSummary,
@@ -13,6 +10,7 @@ import {
   type DiagramResponseDtoOutput,
   type ProjectResponseDtoOutput,
 } from '@tabliodb/sdk';
+import type { PaginationQuery } from '@tabliodb/shared';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { diagramsKeys, type DiagramExportQuery } from './diagram.keys';
 
@@ -27,9 +25,9 @@ type DiagramsQueries = {
     projectId: string,
     query?: PaginationQuery,
   ) => AppQueryOptions<DiagramListResponseDtoOutput, ReturnType<typeof diagramsKeys.listByProject>>;
-  listOrCreateStarter: (
+  listForProject: (
     project: ProjectResponseDtoOutput | null,
-  ) => AppQueryOptions<DiagramResponseDtoOutput[], ReturnType<typeof diagramsKeys.listByProject>>;
+  ) => AppQueryOptions<DiagramResponseDtoOutput[], ReturnType<typeof diagramsKeys.listItemsByProject>>;
   reviewEvents: (
     diagramId: string,
     query?: PaginationQuery,
@@ -54,11 +52,11 @@ export const diagramsQueries: DiagramsQueries = {
       queryKey: diagramsKeys.listByProject(projectId, query),
     }),
 
-  listOrCreateStarter: (project: ProjectResponseDtoOutput | null) =>
+  listForProject: (project: ProjectResponseDtoOutput | null) =>
     appQueryOptions({
       enabled: Boolean(project?.id),
-      queryFn: () => listOrCreateStarterDiagrams(project),
-      queryKey: diagramsKeys.listByProject(project?.id ?? 'missing-project', { limit: 50 }),
+      queryFn: () => listDiagramsForProject(project),
+      queryKey: diagramsKeys.listItemsByProject(project?.id ?? 'missing-project'),
     }),
 
   reviewEvents: (diagramId: string, query: PaginationQuery = {}) =>
@@ -76,34 +74,13 @@ export const diagramsQueries: DiagramsQueries = {
     }),
 };
 
-async function listOrCreateStarterDiagrams(project: ProjectResponseDtoOutput | null): Promise<DiagramResponseDtoOutput[]> {
+async function listDiagramsForProject(project: ProjectResponseDtoOutput | null): Promise<DiagramResponseDtoOutput[]> {
   if (!project) {
     return [];
   }
 
   const diagrams = await getProjectDiagrams({ limit: 50, projectId: project.id });
 
-  if (diagrams.items.length > 0) {
-    return diagrams.items;
-  }
-
-  if (
-    !isGranted({
-      current: permissionsForProjectRole(project.projectRole as unknown as ProjectRole),
-      requested: [Permission.DiagramCreate],
-    })
-  ) {
-    // Read-only project members should see an empty state instead of triggering a forbidden starter-write.
-    return [];
-  }
-
-  const diagram = await createDiagram({
-    diagramCreateDto: {
-      dialect: Dialect.Postgresql,
-      name: defaultDiagramName,
-      projectId: project.id,
-    },
-  });
-
-  return [diagram];
+  // Diagram creation is an editor action, not a fetch side effect; empty projects render a CTA instead.
+  return diagrams.items;
 }

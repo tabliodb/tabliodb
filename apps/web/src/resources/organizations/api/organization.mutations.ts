@@ -1,8 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import {
+  createOrganization,
   removeOrganizationMember,
   updateOrganizationMember,
   updateOrganizationSettings,
+  type OrganizationCreateDto,
+  type OrganizationDtoOutput,
+  type OrganizationListResponseDtoOutput,
   type OrganizationMemberUpdateDto,
   type OrganizationSettingsUpdateDto,
 } from '@tabliodb/sdk';
@@ -10,6 +14,8 @@ import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { projectsKeys } from '@/resources/projects';
 import { organizationsKeys } from './organization.keys';
 
+const createOrganizationMutationFn = (body: OrganizationCreateDto) =>
+  createOrganization({ organizationCreateDto: body });
 const updateOrganizationSettingsMutationFn = (input: { body: OrganizationSettingsUpdateDto; organizationId: string }) =>
   updateOrganizationSettings({ organizationId: input.organizationId, organizationSettingsUpdateDto: input.body });
 const updateOrganizationMemberMutationFn = (input: {
@@ -29,6 +35,26 @@ type UseUpdateOrganizationSettingsMutationParams = {
   mutationConfig?: MutationConfig<typeof updateOrganizationSettingsMutationFn>;
 };
 
+type UseCreateOrganizationMutationParams = {
+  mutationConfig?: MutationConfig<typeof createOrganizationMutationFn>;
+};
+
+export function useCreateOrganizationMutation(params: UseCreateOrganizationMutationParams = {}) {
+  return useMutation({
+    mutationFn: createOrganizationMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Workspace switcher membaca query list paginated, jadi item baru dipatch optimistic-friendly lalu list tetap di-refresh.
+      queryClient.setQueriesData<OrganizationListResponseDtoOutput>(
+        { queryKey: organizationsKeys.lists() },
+        (current) => (current ? prependOrganizationToList(current, data) : current),
+      );
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
 export function useUpdateOrganizationSettingsMutation(params: UseUpdateOrganizationSettingsMutationParams = {}) {
   return useMutation({
     mutationFn: updateOrganizationSettingsMutationFn,
@@ -41,6 +67,19 @@ export function useUpdateOrganizationSettingsMutation(params: UseUpdateOrganizat
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
+}
+
+function prependOrganizationToList(
+  current: OrganizationListResponseDtoOutput,
+  organization: OrganizationDtoOutput,
+): OrganizationListResponseDtoOutput {
+  const existingItems = current.items.filter((item) => item.id !== organization.id);
+
+  return {
+    ...current,
+    items: [organization, ...existingItems],
+    totalCount: existingItems.length === current.items.length ? current.totalCount + 1 : current.totalCount,
+  };
 }
 
 type UseUpdateOrganizationMemberMutationParams = {

@@ -1,10 +1,12 @@
-import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import { AuditLogListQueryDto, AuditLogListResponseDto } from '../dtos/audit-log.dto.js';
 import {
+  OrganizationCreateDto,
+  OrganizationDto,
   OrganizationListQueryDto,
   OrganizationListResponseDto,
   OrganizationMemberDto,
@@ -25,6 +27,14 @@ import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 @Authenticated()
 export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
+
+  @Post()
+  @ApiBody({ type: OrganizationCreateDto })
+  @ApiOperation({ operationId: 'createOrganization' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: OrganizationDto })
+  createOrganization(@Auth() auth: AuthContext, @Body() dto: OrganizationCreateDto): Promise<OrganizationDto> {
+    return this.organizationService.create(auth, dto);
+  }
 
   @Get()
   @RequirePermission(Permission.OrganizationRead)
