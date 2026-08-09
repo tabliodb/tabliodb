@@ -262,7 +262,7 @@ import {
   type EditorModelHistory,
 } from './model-history';
 import { CommentBody } from './components/CommentBody';
-import { SchemaCanvas, type RemoteCanvasCursor } from './components/SchemaCanvas';
+import { SchemaCanvas, type CanvasViewportRect, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
 import { getDisplayTableColor } from './table-colors';
@@ -441,6 +441,17 @@ type CommentThreadOpenRequest = {
   target: EditorCommentTarget;
 };
 
+type EditorConfirmAction =
+  | {
+      tableId: string;
+      tableName: string;
+      type: 'table-delete';
+    }
+  | {
+      snapshotId: string;
+      type: 'snapshot-restore';
+    };
+
 const commentFormSchema = z.object({
   body: z.string().trim().min(1, 'Write a comment first.').max(4000, 'Keep the comment under 4000 characters.'),
   bodyJson: z.custom<CommentLexicalDocumentDto>(),
@@ -612,11 +623,14 @@ export function EditorPage() {
   const modelRef = useRef<DiagramModel | null>(null);
   const modelHistoryRef = useRef<EditorModelHistory>(createEmptyEditorModelHistory());
   const persistedDraftSignatureRef = useRef<string | null>(null);
+  const loadedSnapshotIdRef = useRef<string | null>(null);
+  const canvasViewportRef = useRef<CanvasViewportRect | null>(null);
   const [modelHistoryRevision, setModelHistoryRevision] = useState(0);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedCommentTarget, setSelectedCommentTarget] = useState<EditorCommentTarget | null>(null);
   const [commentThreadOpenRequest, setCommentThreadOpenRequest] = useState<CommentThreadOpenRequest | null>(null);
+  const [editorConfirmAction, setEditorConfirmAction] = useState<EditorConfirmAction | null>(null);
   const [editorViewportWidth, setEditorViewportWidth] = useState(getEditorViewportWidth);
   const editorResizeFrameRef = useRef<number | null>(null);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() => !isCompactEditorViewport(getEditorViewportWidth()));
@@ -823,6 +837,7 @@ export function EditorPage() {
     mutationConfig: {
       onSuccess: (snapshot) => {
         // Snapshot creation returns the canonical versioned model while live editing remains a separate persistence concern.
+        loadedSnapshotIdRef.current = snapshot.id;
         modelRef.current = snapshot.snapshot;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshot.snapshot);
         setModel(snapshot.snapshot);
@@ -835,6 +850,7 @@ export function EditorPage() {
     mutationConfig: {
       onSuccess: (snapshot) => {
         // Restore membuat snapshot baru dari versi lama; local draft langsung mengikuti checkpoint baru itu.
+        loadedSnapshotIdRef.current = snapshot.id;
         modelRef.current = snapshot.snapshot;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshot.snapshot);
         setModel(snapshot.snapshot);
@@ -857,6 +873,7 @@ export function EditorPage() {
         const importedModel = parseDiagramModel(response.model);
 
         // Server import writes the same model into diagram_documents, so this signature marks the local draft as persisted.
+        loadedSnapshotIdRef.current = latestSnapshot?.id ?? loadedSnapshotIdRef.current;
         modelRef.current = importedModel;
         persistedDraftSignatureRef.current = createDiagramModelSignature(importedModel);
         setModel(importedModel);
@@ -931,6 +948,11 @@ export function EditorPage() {
     [canEditDiagram, syncModelToCollaboration],
   );
 
+  const handleCanvasViewportChange = useCallback((viewport: CanvasViewportRect) => {
+    // Disimpan di ref supaya tombol Add Table/Note bisa membaca viewport terbaru tanpa membuat editor re-render tiap pan/zoom.
+    canvasViewportRef.current = viewport;
+  }, []);
+
   const handleSelectedTableChange = useCallback((tableId: string | null) => {
     setSelectedTableId(tableId);
     setSelectedCommentTarget(tableId ? { targetId: tableId, targetType: 'table' } : null);
@@ -968,6 +990,11 @@ export function EditorPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    loadedSnapshotIdRef.current = null;
+    canvasViewportRef.current = null;
+  }, [activeDiagram?.id]);
 
   useEffect(() => {
     const handleEditorKeyboardShortcut = (event: KeyboardEvent) => {
@@ -1051,22 +1078,11 @@ export function EditorPage() {
 
         event.preventDefault();
 
-        if (
-          !window.confirm(
-            `Delete table "${tableToDelete.name}"? Relationships and dependent diagram metadata will be removed too.`,
-          )
-        ) {
-          return;
-        }
-
-        handleModelChange(
-          applyDiagramCommand(currentModel, {
-            type: 'table.delete',
-            tableId: selectedTableId,
-          }),
-        );
-        setSelectedTableId(null);
-        setSelectedCommentTarget(null);
+        setEditorConfirmAction({
+          tableId: selectedTableId,
+          tableName: tableToDelete.name,
+          type: 'table-delete',
+        });
       }
     };
 
@@ -1079,7 +1095,6 @@ export function EditorPage() {
     canCommentDiagram,
     canCreateSnapshot,
     canEditDiagram,
-    handleModelChange,
     handleRedoModelChange,
     handleSaveSnapshot,
     handleUndoModelChange,
@@ -1336,6 +1351,20 @@ export function EditorPage() {
       return;
     }
 
+    if (loadedSnapshotIdRef.current === latestSnapshot.id) {
+      return;
+    }
+
+    const currentModel = modelRef.current;
+    const currentDraftIsDirty =
+      currentModel && persistedDraftSignatureRef.current !== createDiagramModelSignature(currentModel);
+
+    if (loadedSnapshotIdRef.current && currentDraftIsDirty) {
+      // Snapshot list refetches after saves/restores; never let that background response stomp an in-progress canvas draft.
+      return;
+    }
+
+    loadedSnapshotIdRef.current = latestSnapshot.id;
     modelRef.current = latestSnapshot.snapshot;
     persistedDraftSignatureRef.current = createDiagramModelSignature(latestSnapshot.snapshot);
     setModel(latestSnapshot.snapshot);
@@ -1351,6 +1380,7 @@ export function EditorPage() {
 
     // Empty read-only diagrams cannot create an initial snapshot, so the editor renders an unsaved empty model instead of spinning forever.
     const seedModel = createSeedDiagramModel(activeDiagram.name);
+    loadedSnapshotIdRef.current = null;
     modelRef.current = seedModel;
     persistedDraftSignatureRef.current = null;
     setModel(seedModel);
@@ -1546,7 +1576,12 @@ export function EditorPage() {
       return;
     }
 
-    const nextModel = addTableToDiagramModel(model, tableName);
+    const tablePosition = createCanvasInsertionPosition(canvasViewportRef.current, {
+      existingCount: Object.keys(model.tables).length,
+      height: 96,
+      width: 288,
+    });
+    const nextModel = addTableToDiagramModel(model, tableName, tablePosition);
     const nextTableId = Object.keys(nextModel.tables).find((tableId) => !model.tables[tableId]) ?? null;
 
     handleModelChange(nextModel);
@@ -1561,7 +1596,12 @@ export function EditorPage() {
     }
 
     const noteId = createDiagramEntityId('note');
-    const notePosition = createNextNotePosition(model, selectedTableId);
+    const notePosition =
+      createCanvasInsertionPosition(canvasViewportRef.current, {
+        existingCount: Object.keys(model.notes).length,
+        height: 120,
+        width: 260,
+      }) ?? createNextNotePosition(model, selectedTableId);
 
     handleModelChange(
       applyDiagramCommand(model, {
@@ -1612,15 +1652,53 @@ export function EditorPage() {
       return;
     }
 
-    if (
-      currentModel &&
-      !isCurrentDraftPersisted(currentModel) &&
-      !window.confirm('Current draft has unsaved changes. Restore this snapshot and replace the draft?')
-    ) {
+    if (currentModel && !isCurrentDraftPersisted(currentModel)) {
+      setEditorConfirmAction({
+        snapshotId,
+        type: 'snapshot-restore',
+      });
       return;
     }
 
     restoreSnapshotMutation.mutate(snapshotId);
+  }
+
+  function handleEditorConfirmAction() {
+    const action = editorConfirmAction;
+
+    if (!action) {
+      return;
+    }
+
+    if (action.type === 'table-delete') {
+      const currentModel = modelRef.current;
+
+      if (canEditDiagram && currentModel?.tables[action.tableId]) {
+        // Dialog confirmation menggantikan window.confirm supaya destructive keyboard shortcut tetap terasa native di design system Tabliodb.
+        handleModelChange(
+          applyDiagramCommand(currentModel, {
+            tableId: action.tableId,
+            type: 'table.delete',
+          }),
+        );
+
+        if (selectedTableId === action.tableId) {
+          setSelectedTableId(null);
+          setSelectedCommentTarget(null);
+        }
+      }
+
+      setEditorConfirmAction(null);
+      return;
+    }
+
+    if (action.type === 'snapshot-restore') {
+      if (canCreateSnapshot && !restoreSnapshotMutation.isPending) {
+        restoreSnapshotMutation.mutate(action.snapshotId);
+      }
+
+      setEditorConfirmAction(null);
+    }
   }
 
   if (isUnauthorized(projectsQuery.error)) {
@@ -2151,6 +2229,13 @@ export function EditorPage() {
         open={keyboardShortcutsOpen}
       />
 
+      <EditorConfirmDialog
+        action={editorConfirmAction}
+        disabled={restoreSnapshotMutation.isPending}
+        onCancel={() => setEditorConfirmAction(null)}
+        onConfirm={handleEditorConfirmAction}
+      />
+
       <ShareLinksDialog
         createError={createShareLinkMutation.error}
         disabled={!canEditDiagram}
@@ -2335,6 +2420,7 @@ export function EditorPage() {
             onLocalCursorChange={handleCanvasCursorChange}
             onModelChange={handleModelChange}
             onSelectedTableChange={handleSelectedTableChange}
+            onViewportChange={handleCanvasViewportChange}
             readOnly={!canEditDiagram}
             remoteCursors={remoteCanvasCursors}
             selectedColumnId={selectedColumnId}
@@ -2461,6 +2547,27 @@ function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: str
   return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
 }
 
+function createCanvasInsertionPosition(
+  viewport: CanvasViewportRect | null,
+  options: { existingCount: number; height: number; width: number },
+): { x: number; y: number } | undefined {
+  if (!viewport) {
+    return undefined;
+  }
+
+  const stagger = (options.existingCount % 6) * 24;
+
+  return {
+    // Newly created items land near the center of the currently visible canvas and stay aligned to the 12px dot grid.
+    x: snapEditorCanvasCoordinate(viewport.x + viewport.width / 2 - options.width / 2 + stagger),
+    y: snapEditorCanvasCoordinate(viewport.y + viewport.height / 2 - options.height / 2 + stagger),
+  };
+}
+
+function snapEditorCanvasCoordinate(value: number): number {
+  return Math.round(value / 12) * 12;
+}
+
 function createNextNotePosition(model: DiagramModel, selectedTableId: string | null): { x: number; y: number } {
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
 
@@ -2473,7 +2580,7 @@ function createNextNotePosition(model: DiagramModel, selectedTableId: string | n
 
   const positionedEntities = [
     ...Object.values(model.tables).map((table) => ({
-      height: 38 + table.columnIds.length * 26 + 6,
+      height: 36 + table.columnIds.length * 24 + 12,
       width: Math.max(table.width, 288),
       x: table.position.x,
       y: table.position.y,
@@ -2617,6 +2724,51 @@ function getPrimaryModifierKey(): string {
   return 'Ctrl';
 }
 
+function EditorConfirmDialog({
+  action,
+  disabled,
+  onCancel,
+  onConfirm,
+}: {
+  action: EditorConfirmAction | null;
+  disabled: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const isTableDelete = action?.type === 'table-delete';
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          onCancel();
+        }
+      }}
+      open={Boolean(action)}
+    >
+      <DialogContent className="w-[min(92vw,420px)]">
+        <DialogHeader>
+          <DialogTitle>{isTableDelete ? 'Delete table?' : 'Restore snapshot?'}</DialogTitle>
+          <DialogDescription>
+            {isTableDelete
+              ? `Table "${action.tableName}" and its relationships will be removed from this draft.`
+              : 'Your current unsaved draft will be replaced by the selected snapshot.'}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button disabled={disabled} onClick={onCancel} type="button" variant="secondary">
+            Cancel
+          </Button>
+          <Button className="gap-2" disabled={disabled} onClick={onConfirm} type="button" variant="danger">
+            {isTableDelete ? <Trash2 className="size-4" /> : <RotateCcw className="size-4" />}
+            {isTableDelete ? 'Delete table' : 'Restore'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ShareLinksDialog({
   createError,
   disabled,
@@ -2651,6 +2803,7 @@ function ShareLinksDialog({
   shareLinks: DiagramShareLinkDto[];
 }) {
   const [lastCreatedUrl, setLastCreatedUrl] = useState<string | null>(null);
+  const [shareLinkToRevoke, setShareLinkToRevoke] = useState<DiagramShareLinkDto | null>(null);
   const form = useForm<ShareLinkFormState>({
     defaultValues: {
       expiresInDays: 'never',
@@ -2672,6 +2825,7 @@ function ShareLinksDialog({
       targetType: 'diagram',
     });
     setLastCreatedUrl(null);
+    setShareLinkToRevoke(null);
   }, [form, open]);
 
   async function handleSubmit(values: ShareLinkFormState) {
@@ -2690,153 +2844,205 @@ function ShareLinksDialog({
     setLastCreatedUrl(response.url);
   }
 
-  async function handleRevoke(shareLink: DiagramShareLinkDto) {
-    if (isRevoking || !window.confirm('Revoke this public share link?')) {
+  function handleRevoke(shareLink: DiagramShareLinkDto) {
+    if (isRevoking) {
       return;
     }
 
-    await onRevoke(shareLink.id);
+    setShareLinkToRevoke(shareLink);
+  }
+
+  async function handleConfirmRevoke() {
+    if (!shareLinkToRevoke || isRevoking) {
+      return;
+    }
+
+    try {
+      // Revoke tetap lewat mutation parent agar list invalidation, toast, dan error panel existing tidak berubah perilakunya.
+      await onRevoke(shareLinkToRevoke.id);
+      setShareLinkToRevoke(null);
+    } catch {
+      // Error mutation sudah dirender melalui revokeError, jadi dialog tetap terbuka tanpa throw yang membuat promise rejection bocor ke console.
+    }
   }
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="h-[min(86dvh,720px)] w-[min(94vw,980px)] max-w-none">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Share2 className="size-5 text-[rgb(var(--tabliodb-primary-text))]" />
-            Share read-only link
-          </DialogTitle>
-          <DialogDescription>
-            Create public links for stakeholders who only need to inspect this diagram.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="grid min-h-0 gap-4 lg:grid-cols-[minmax(260px,360px)_1fr]">
-          <form className="grid content-start gap-4" onSubmit={(event) => void form.handleSubmit(handleSubmit)(event)}>
-            <Surface className="grid gap-3 p-4">
-              <div>
-                <p className="text-sm font-black text-[rgb(var(--tabliodb-ink))]">New public link</p>
-                <p className="mt-1 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  Anyone with the URL can view the diagram without signing in.
-                </p>
-              </div>
-
-              <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
-                Label
-                <ControlledInput
-                  autoComplete="off"
-                  control={form.control}
-                  name="label"
-                  placeholder="Stakeholder review"
-                />
-                <FieldError>{form.formState.errors.label?.message}</FieldError>
-              </label>
-
-              <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
-                Target
-                <ControlledSelect
-                  control={form.control}
-                  name="targetType"
-                  options={[
-                    { label: 'Live diagram', value: 'diagram' },
-                    {
-                      disabled: !latestSnapshot,
-                      label: latestSnapshot ? `Snapshot v${latestSnapshot.version}` : 'Snapshot unavailable',
-                      value: 'snapshot',
-                    },
-                  ]}
-                />
-                <FieldError>{form.formState.errors.targetType?.message}</FieldError>
-              </label>
-
-              <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
-                Expiry
-                <ControlledSelect
-                  control={form.control}
-                  name="expiresInDays"
-                  options={[
-                    { label: 'Never expires', value: 'never' },
-                    { label: '7 days', value: '7' },
-                    { label: '30 days', value: '30' },
-                  ]}
-                />
-                <FieldError>{form.formState.errors.expiresInDays?.message}</FieldError>
-              </label>
-
-              {createError ? <InlineErrorState error={createError} title="Could not create share link" /> : null}
-
-              <Button className="gap-2" disabled={disabled || isCreating} type="submit">
-                {isCreating ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
-                Create link
-              </Button>
-            </Surface>
-
-            {lastCreatedUrl ? (
-              <Surface className="grid gap-3 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-4">
+    <>
+      <Dialog onOpenChange={onOpenChange} open={open}>
+        <DialogContent className="h-[min(86dvh,720px)] w-[min(94vw,980px)] max-w-none">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="size-5 text-[rgb(var(--tabliodb-primary-text))]" />
+              Share read-only link
+            </DialogTitle>
+            <DialogDescription>
+              Create public links for stakeholders who only need to inspect this diagram.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="grid min-h-0 gap-4 lg:grid-cols-[minmax(260px,360px)_1fr]">
+            <form
+              className="grid content-start gap-4"
+              onSubmit={(event) => void form.handleSubmit(handleSubmit)(event)}
+            >
+              <Surface className="grid gap-3 p-4">
                 <div>
-                  <p className="text-sm font-black text-[rgb(var(--tabliodb-primary-text))]">Link copied</p>
+                  <p className="text-sm font-black text-[rgb(var(--tabliodb-ink))]">New public link</p>
                   <p className="mt-1 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                    This URL is shown only now because Tabliodb stores the token as a hash.
+                    Anyone with the URL can view the diagram without signing in.
                   </p>
                 </div>
-                <div className="min-w-0 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-primary-border))] bg-white px-3 py-2 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  <span className="block truncate">{lastCreatedUrl}</span>
-                </div>
-                <Button className="gap-2" onClick={() => onCopy(lastCreatedUrl)} type="button" variant="secondary">
-                  <Copy className="size-4" />
-                  Copy again
+
+                <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                  Label
+                  <ControlledInput
+                    autoComplete="off"
+                    control={form.control}
+                    name="label"
+                    placeholder="Stakeholder review"
+                  />
+                  <FieldError>{form.formState.errors.label?.message}</FieldError>
+                </label>
+
+                <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                  Target
+                  <ControlledSelect
+                    control={form.control}
+                    name="targetType"
+                    options={[
+                      { label: 'Live diagram', value: 'diagram' },
+                      {
+                        disabled: !latestSnapshot,
+                        label: latestSnapshot ? `Snapshot v${latestSnapshot.version}` : 'Snapshot unavailable',
+                        value: 'snapshot',
+                      },
+                    ]}
+                  />
+                  <FieldError>{form.formState.errors.targetType?.message}</FieldError>
+                </label>
+
+                <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                  Expiry
+                  <ControlledSelect
+                    control={form.control}
+                    name="expiresInDays"
+                    options={[
+                      { label: 'Never expires', value: 'never' },
+                      { label: '7 days', value: '7' },
+                      { label: '30 days', value: '30' },
+                    ]}
+                  />
+                  <FieldError>{form.formState.errors.expiresInDays?.message}</FieldError>
+                </label>
+
+                {createError ? <InlineErrorState error={createError} title="Could not create share link" /> : null}
+
+                <Button className="gap-2" disabled={disabled || isCreating} type="submit">
+                  {isCreating ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
+                  Create link
                 </Button>
               </Surface>
-            ) : null}
-          </form>
 
-          <Surface className="flex min-h-0 flex-col overflow-hidden p-0">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4 py-3">
-              <div>
-                <p className="text-sm font-black text-[rgb(var(--tabliodb-ink))]">Existing links</p>
-                <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  {shareLinks.length} link{shareLinks.length === 1 ? '' : 's'} for this diagram
-                </p>
-              </div>
-              <Badge variant="green">Read-only</Badge>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {isLoading ? (
-                <InlineLoadingState message="Loading share links" />
-              ) : listError ? (
-                <InlineErrorState error={listError} onRetry={onRetry} title="Could not load share links" />
-              ) : shareLinks.length === 0 ? (
-                <EmptyState
-                  description="Create a public link when stakeholders need to review a schema without joining the workspace."
-                  icon={Share2}
-                  title="No share links yet"
-                />
-              ) : (
-                <div className="grid gap-3">
-                  {shareLinks.map((shareLink) => (
-                    <ShareLinkListItem
-                      isRevoking={isRevoking}
-                      key={shareLink.id}
-                      onRevoke={handleRevoke}
-                      shareLink={shareLink}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {revokeError ? (
-                <InlineErrorState className="mt-4" error={revokeError} title="Could not revoke link" />
+              {lastCreatedUrl ? (
+                <Surface className="grid gap-3 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-4">
+                  <div>
+                    <p className="text-sm font-black text-[rgb(var(--tabliodb-primary-text))]">Link copied</p>
+                    <p className="mt-1 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      This URL is shown only now because Tabliodb stores the token as a hash.
+                    </p>
+                  </div>
+                  <div className="min-w-0 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-primary-border))] bg-white px-3 py-2 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    <span className="block truncate">{lastCreatedUrl}</span>
+                  </div>
+                  <Button className="gap-2" onClick={() => onCopy(lastCreatedUrl)} type="button" variant="secondary">
+                    <Copy className="size-4" />
+                    Copy again
+                  </Button>
+                </Surface>
               ) : null}
-            </div>
-          </Surface>
-        </DialogBody>
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            </form>
+
+            <Surface className="flex min-h-0 flex-col overflow-hidden p-0">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4 py-3">
+                <div>
+                  <p className="text-sm font-black text-[rgb(var(--tabliodb-ink))]">Existing links</p>
+                  <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {shareLinks.length} link{shareLinks.length === 1 ? '' : 's'} for this diagram
+                  </p>
+                </div>
+                <Badge variant="green">Read-only</Badge>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                {isLoading ? (
+                  <InlineLoadingState message="Loading share links" />
+                ) : listError ? (
+                  <InlineErrorState error={listError} onRetry={onRetry} title="Could not load share links" />
+                ) : shareLinks.length === 0 ? (
+                  <EmptyState
+                    description="Create a public link when stakeholders need to review a schema without joining the workspace."
+                    icon={Share2}
+                    title="No share links yet"
+                  />
+                ) : (
+                  <div className="grid gap-3">
+                    {shareLinks.map((shareLink) => (
+                      <ShareLinkListItem
+                        isRevoking={isRevoking}
+                        key={shareLink.id}
+                        onRevoke={handleRevoke}
+                        shareLink={shareLink}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {revokeError ? (
+                  <InlineErrorState className="mt-4" error={revokeError} title="Could not revoke link" />
+                ) : null}
+              </div>
+            </Surface>
+          </DialogBody>
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setShareLinkToRevoke(null);
+          }
+        }}
+        open={Boolean(shareLinkToRevoke)}
+      >
+        <DialogContent className="w-[min(92vw,420px)]">
+          <DialogHeader>
+            <DialogTitle>Revoke share link?</DialogTitle>
+            <DialogDescription>
+              This read-only URL will stop working immediately. People who already have the link will lose access.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button disabled={isRevoking} onClick={() => setShareLinkToRevoke(null)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button
+              className="gap-2"
+              disabled={isRevoking}
+              onClick={() => void handleConfirmRevoke()}
+              type="button"
+              variant="danger"
+            >
+              {isRevoking ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Revoke link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

@@ -2235,7 +2235,7 @@ function getDefaultTableColumns(): CreateTableColumnInput[] {
       nullable: false,
     },
     {
-      name: 'name',
+      name: 'new_column',
       type: { family: 'varchar', length: 160 },
       nullable: false,
     },

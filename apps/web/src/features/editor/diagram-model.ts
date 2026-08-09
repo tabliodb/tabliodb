@@ -26,14 +26,19 @@ export function createSeedDiagramModel(name = 'Library System'): DiagramModel {
   return createStarterDiagramModel(name);
 }
 
-export function addTableToDiagramModel(model: DiagramModel, tableName?: string): DiagramModel {
+export function addTableToDiagramModel(
+  model: DiagramModel,
+  tableName?: string,
+  position?: { x: number; y: number },
+): DiagramModel {
   const nextIndex = Object.keys(model.tables).length + 1;
   const normalizedName = normalizeTableName(tableName) || `new_table_${nextIndex}`;
 
   return applyDiagramCommand(model, {
     type: 'table.create',
     name: normalizedName,
-    position: { x: 160 + nextIndex * 36, y: 120 + nextIndex * 28 },
+    // Canvas actions can pass the current viewport center; fallback keeps non-canvas callers deterministic.
+    position: position ?? { x: 160 + nextIndex * 36, y: 120 + nextIndex * 28 },
     width: 288,
     color: '#1cb0f6',
   });

@@ -20,7 +20,16 @@ import {
   type DiagramNote,
   type TableDisplayMode,
 } from '@tabliodb/schema-core';
-import { cn } from '@tabliodb/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  cn,
+} from '@tabliodb/ui';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@/resources/comments';
 import type { AwarenessState } from '@tabliodb/shared';
 import {
@@ -50,16 +59,16 @@ const noteNodeShape = 'tabliodb-note';
 const groupNodeIdPrefix = 'tabliodb-group:';
 
 const tableNodeWidth = 288; // Default width saat table baru dibuat, bukan batas terkecil saat user resize.
-const tableHeaderHeight = 36; // Disarankan ubah 38 -> 36 (36 / 12 = 3 units)
-const tableColumnHeight = 24; // Disarankan ubah 26 -> 24 (24 / 12 = 2 units)
-const tablePaddingBottom = 12; // Disarankan ubah 6 -> 12 (1 unit)
-const groupPaddingX = 36; // 36 / 12 = 3 units (Pas!)
-const groupPaddingBottom = 24; // Disarankan ubah 28 -> 24 (2 units)
-const groupHeaderOffset = 48; // Disarankan ubah 42 -> 48 (4 units)
-const noteNodeDefaultWidth = 264; // Disarankan ubah 260 -> 264 (22 units)
-const noteNodeMinHeight = 120; // Disarankan ubah 118 -> 120 (10 units)
-const noteNodeMaxHeight = 216; // Disarankan ubah 220 -> 216 (18 units)
-const tableResizeMaxWidth = 720; // 720 / 12 = 60 units (Pas!)
+const tableHeaderHeight = 36; // Header dan CSS sama-sama 3 grid unit agar node HTML tidak terpotong di X6.
+const tableColumnHeight = 24; // Port dihitung dari tinggi row ini, jadi konektor jatuh tepat di tengah baris kolom.
+const tablePaddingBottom = 12; // Padding bawah 1 grid unit menjaga row terakhir tidak mepet radius kartu saat kolom bertambah.
+const groupPaddingX = 36; // Group mengikuti grid 12px supaya outline module tetap sejajar dengan table di canvas.
+const groupPaddingBottom = 24; // Ruang bawah module dibuat dua grid unit agar table terakhir tidak terasa menempel.
+const groupHeaderOffset = 48; // Header module memakai offset empat grid unit agar judul tidak bertabrakan dengan table pertama.
+const noteNodeDefaultWidth = 264; // Width note juga grid-aligned sehingga add-note di viewport terasa presisi.
+const noteNodeMinHeight = 120; // Min-height note stabil untuk textarea kosong dan tetap mudah di-drag.
+const noteNodeMaxHeight = 216; // Max-height mencegah note panjang mendominasi canvas saat belum ada fitur rich note penuh.
+const tableResizeMaxWidth = 720; // Max width tetap grid-aligned agar relasi tidak perlu koreksi sub-pixel saat resize.
 const tableResizeMinWidth = defaultTableMinWidth; // Mengikuti schema-core agar preview canvas dan model tidak berbeda saat resize mentok.
 
 const diagramVisualGridSize = 12;
@@ -87,6 +96,7 @@ export type SchemaCanvasProps = {
   minimapToggleSignal?: number;
   model: DiagramModel;
   onLocalCursorChange?: (cursor: AwarenessState['cursor']) => void;
+  onViewportChange?: (viewport: CanvasViewportRect) => void;
   onCommentTargetOpen?: (target: { targetId: string; targetType: CommentTargetType }) => void;
   onColumnSelect?: (columnId: string) => void;
   selectedTableId: string | null;
@@ -98,6 +108,13 @@ export type SchemaCanvasProps = {
   toolbar?: ReactNode;
   toolbarOffsetLeft?: string;
   minimapOffsetRight?: string;
+};
+
+export type CanvasViewportRect = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
 };
 
 export type RemoteCanvasCursor = {
@@ -177,18 +194,25 @@ type RelationshipMenuState = {
   top: number;
 };
 
+type CanvasConfirmAction =
+  | {
+      id: string;
+      name: string;
+      type: 'note';
+    }
+  | {
+      id: string;
+      name: string;
+      type: 'relationship';
+    };
+
 type ParsedColumnPortId = {
   columnId: string;
   side: PortSide;
   tableId: string;
 };
 
-type CanvasRect = {
-  height: number;
-  width: number;
-  x: number;
-  y: number;
-};
+type CanvasRect = CanvasViewportRect;
 
 type CanvasMinimapTable = CanvasRect & {
   color: string;
@@ -225,6 +249,7 @@ export function SchemaCanvas({
   onLocalCursorChange,
   onModelChange,
   onSelectedTableChange,
+  onViewportChange,
   readOnly = false,
   remoteCursors = [],
   selectedColumnId = null,
@@ -251,8 +276,10 @@ export function SchemaCanvas({
   const onColumnSelectRef = useRef(onColumnSelect);
   const onModelChangeRef = useRef(onModelChange);
   const onSelectedTableChangeRef = useRef(onSelectedTableChange);
+  const onViewportChangeRef = useRef(onViewportChange);
   const remoteCursorsRef = useRef(remoteCursors);
   const [relationshipMenu, setRelationshipMenu] = useState<RelationshipMenuState | null>(null);
+  const [confirmAction, setConfirmAction] = useState<CanvasConfirmAction | null>(null);
   const [remoteCursorPositions, setRemoteCursorPositions] = useState<RemoteCanvasCursorPosition[]>([]);
   // Minimap dimulai dalam keadaan minimized agar editor pertama kali terbuka dengan fokus penuh ke canvas.
   const [minimapOpen, setMinimapOpen] = useState(false);
@@ -300,6 +327,10 @@ export function SchemaCanvas({
   useEffect(() => {
     onSelectedTableChangeRef.current = onSelectedTableChange;
   }, [onSelectedTableChange]);
+
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange;
+  }, [onViewportChange]);
 
   useEffect(() => {
     remoteCursorsRef.current = remoteCursors;
@@ -546,11 +577,15 @@ export function SchemaCanvas({
       if (actionButton.dataset.noteAction === 'delete' && !readOnly) {
         const note = modelRef.current.notes[noteId];
 
-        if (!note || !window.confirm('Delete this note?')) {
+        if (!note) {
           return;
         }
 
-        onModelChangeRef.current(applyDiagramCommand(modelRef.current, { noteId, type: 'note.delete' }));
+        setConfirmAction({
+          id: noteId,
+          name: note.text.slice(0, 48) || 'Untitled note',
+          type: 'note',
+        });
       }
     };
 
@@ -941,6 +976,47 @@ export function SchemaCanvas({
   }, [fitSignal]);
 
   useEffect(() => {
+    const graph = graphRef.current;
+    const container = containerRef.current;
+
+    if (!graph || !container) {
+      return;
+    }
+
+    let animationFrameId = 0;
+    let disposed = false;
+    let lastViewport: CanvasViewportRect | null = null;
+
+    const syncViewport = () => {
+      if (disposed) {
+        return;
+      }
+
+      const nextViewport = roundCanvasRect(
+        getSafeCanvasViewportRect(graph, container, {
+          left: floatingInsetLeftRef.current,
+          right: floatingInsetRightRef.current,
+        }),
+      );
+
+      if (!lastViewport || !areCanvasRectsEqual(lastViewport, nextViewport)) {
+        lastViewport = nextViewport;
+        // Parent editor stores this in a ref, so reporting viewport changes does not cause canvas re-renders.
+        onViewportChangeRef.current?.(nextViewport);
+      }
+
+      animationFrameId = window.requestAnimationFrame(syncViewport);
+    };
+
+    syncViewport();
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  useEffect(() => {
     if (minimapToggleSignal > 0) {
       // Parent editor hanya mengirim sinyal; canvas tetap memiliki state minimap lokal agar tombol Map di dalam canvas bekerja mandiri.
       setMinimapOpen((open) => !open);
@@ -1037,17 +1113,47 @@ export function SchemaCanvas({
   }
 
   function handleRelationshipDelete() {
-    if (!activeRelationship || readOnly || !window.confirm('Delete this relationship?')) {
+    if (!activeRelationship || readOnly) {
       return;
     }
 
-    onModelChange(
-      applyDiagramCommand(model, {
-        relationshipId: activeRelationship.id,
-        type: 'relationship.delete',
-      }),
-    );
-    setRelationshipMenu(null);
+    setConfirmAction({
+      id: activeRelationship.id,
+      name: getRelationshipEndpointLabel(model, activeRelationship, 'target'),
+      type: 'relationship',
+    });
+  }
+
+  function handleConfirmActionClose(open: boolean) {
+    if (!open) {
+      setConfirmAction(null);
+    }
+  }
+
+  function handleConfirmAction() {
+    if (!confirmAction || readOnly) {
+      return;
+    }
+
+    const currentModel = modelRef.current;
+
+    if (confirmAction.type === 'note' && currentModel.notes[confirmAction.id]) {
+      // Note deletion mutates the canonical model, so snapshot/save/history paths observe the same operation.
+      onModelChangeRef.current(applyDiagramCommand(currentModel, { noteId: confirmAction.id, type: 'note.delete' }));
+      setConfirmAction(null);
+      return;
+    }
+
+    if (confirmAction.type === 'relationship' && currentModel.relationships[confirmAction.id]) {
+      onModelChangeRef.current(
+        applyDiagramCommand(currentModel, {
+          relationshipId: confirmAction.id,
+          type: 'relationship.delete',
+        }),
+      );
+      setRelationshipMenu(null);
+      setConfirmAction(null);
+    }
   }
 
   return (
@@ -1088,6 +1194,11 @@ export function SchemaCanvas({
           top={relationshipMenu.top}
         />
       ) : null}
+      <CanvasConfirmDialog
+        action={confirmAction}
+        onConfirm={handleConfirmAction}
+        onOpenChange={handleConfirmActionClose}
+      />
       {remoteCursorPositions.length > 0 ? (
         <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
           {remoteCursorPositions.map((cursor) => (
@@ -1387,6 +1498,41 @@ function RelationshipEndpointPill({ label, tone }: { label: string; tone: 'sourc
   );
 }
 
+function CanvasConfirmDialog({
+  action,
+  onConfirm,
+  onOpenChange,
+}: {
+  action: CanvasConfirmAction | null;
+  onConfirm: () => void;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const isNote = action?.type === 'note';
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={Boolean(action)}>
+      <DialogContent className="w-[min(92vw,420px)]">
+        <DialogHeader>
+          <DialogTitle>{isNote ? 'Delete note?' : 'Delete relationship?'}</DialogTitle>
+          <DialogDescription>
+            {isNote
+              ? `Remove "${action?.name ?? 'this note'}" from the diagram draft.`
+              : `Remove the relationship connected to "${action?.name ?? 'this column'}".`}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
+            Cancel
+          </Button>
+          <Button onClick={onConfirm} type="button" variant="danger">
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function createCanvasMinimapStaticState(
   model: DiagramModel,
   selectedTableId: string | null,
@@ -1455,6 +1601,27 @@ function getCanvasViewportRect(graph: Graph, container: HTMLElement): CanvasRect
   const containerRect = container.getBoundingClientRect();
   const topLeft = graph.clientToLocal(containerRect.left, containerRect.top);
   const bottomRight = graph.clientToLocal(containerRect.right, containerRect.bottom);
+  const x = Math.min(topLeft.x, bottomRight.x);
+  const y = Math.min(topLeft.y, bottomRight.y);
+
+  return {
+    height: Math.max(1, Math.abs(bottomRight.y - topLeft.y)),
+    width: Math.max(1, Math.abs(bottomRight.x - topLeft.x)),
+    x,
+    y,
+  };
+}
+
+function getSafeCanvasViewportRect(
+  graph: Graph,
+  container: HTMLElement,
+  inset: { left: number; right: number },
+): CanvasRect {
+  const containerRect = container.getBoundingClientRect();
+  const visibleLeft = Math.min(containerRect.right, containerRect.left + inset.left);
+  const visibleRight = Math.max(visibleLeft + 1, containerRect.right - inset.right);
+  const topLeft = graph.clientToLocal(visibleLeft, containerRect.top);
+  const bottomRight = graph.clientToLocal(visibleRight, containerRect.bottom);
   const x = Math.min(topLeft.x, bottomRight.x);
   const y = Math.min(topLeft.y, bottomRight.y);
 
@@ -2065,7 +2232,8 @@ function buildRelationshipMarkers(
     case 'many_to_many':
       return { sourceMarker: manyMarker, targetMarker: manyMarker };
     case 'one_to_one':
-      return { sourceMarker: oneMarker, targetMarker: oneMarker };
+      // 1:1 keeps the line plain at both ends; the row-level port already explains the exact column anchor.
+      return {};
     case 'one_to_many':
     default:
       return { sourceMarker: oneMarker, targetMarker: manyMarker };
@@ -2089,18 +2257,21 @@ function createRelationshipEdgeMetadata(
     const stroke = terminals.source.active ? relationshipActiveColor : relationshipNeutralColor;
     const strokeWidth = terminals.source.active ? 1.7 : 1.5;
     const { sourceMarker, targetMarker } = buildRelationshipMarkers(relationship.cardinality, stroke, strokeWidth);
+    const markerAttrs = {
+      ...(sourceMarker ? { sourceMarker } : {}),
+      ...(targetMarker ? { targetMarker } : {}),
+    };
 
     return [
       {
         id: relationship.id,
         attrs: {
           line: {
-            sourceMarker,
+            ...markerAttrs,
             stroke,
             strokeLinecap: 'round',
             strokeLinejoin: 'round',
             strokeWidth,
-            targetMarker,
           },
         },
         connector: {
@@ -2783,7 +2954,17 @@ function renderCommentMarker(
 }
 
 function isCanvasCommentTargetType(value: string | undefined): value is CommentTargetType {
-  return value === 'table' || value === 'column';
+  return (
+    value === 'diagram' ||
+    value === 'table' ||
+    value === 'column' ||
+    value === 'relationship' ||
+    value === 'index' ||
+    value === 'enum' ||
+    value === 'check' ||
+    value === 'note' ||
+    value === 'group'
+  );
 }
 
 function escapeHtml(value: string): string {
