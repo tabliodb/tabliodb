@@ -78,10 +78,10 @@ const canvasBackgroundColor = '#F6F6F6';
 const canvasGridColor = '#AAAAAA';
 const relationshipActiveColor = '#58cc02';
 const relationshipConnectorRadius = 10;
-const relationshipNeutralColor = '#A0A0A0';
+const relationshipNeutralColor = '#8F9AA8';
 const relationshipPortRadius = 4;
 
-const relationshipObstaclePadding = 12;
+const relationshipObstaclePadding = 24;
 const minimapAspectRatio = 192 / 124;
 
 let noteShapeRegistered = false;
@@ -366,7 +366,7 @@ export function SchemaCanvas({
         allowMulti: true,
         allowNode: true,
         connector: { name: 'rounded', args: { radius: relationshipConnectorRadius } },
-        connectionPoint: 'boundary',
+        connectionPoint: 'anchor',
         highlight: true,
         router: { name: 'manhattan', args: buildManhattanRouterArgs() },
         snap: { radius: 24 },
@@ -393,12 +393,11 @@ export function SchemaCanvas({
         factor: 1.08,
         maxScale: 1.8,
         minScale: 0.45,
-        modifiers: ['ctrl', 'meta'],
         zoomAtMousePosition: true,
       },
       panning: {
         enabled: true,
-        eventTypes: ['leftMouseDown', 'mouseWheel'],
+        eventTypes: ['leftMouseDown'],
       },
     });
 
@@ -545,8 +544,39 @@ export function SchemaCanvas({
         return;
       }
 
-      if (target.closest('.tabliodb-note-node__textarea, .tabliodb-note-node__action')) {
-        // Text editing and note actions live inside an X6 HTML node; stopping mousedown keeps the graph from starting a drag.
+      const actionButton = target.closest<HTMLButtonElement>('[data-note-action]');
+      const noteElement = actionButton?.closest<HTMLElement>('[data-tabliodb-note-id]');
+      const noteId = noteElement?.dataset.tabliodbNoteId;
+
+      if (actionButton && noteId) {
+        // Action note diproses saat mousedown agar blur textarea tidak sempat merender ulang HTML node dan "memakan" click.
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (actionButton.dataset.noteAction === 'comment') {
+          onCommentTargetOpenRef.current?.({ targetId: noteId, targetType: 'note' });
+          return;
+        }
+
+        if (actionButton.dataset.noteAction === 'delete' && !readOnly) {
+          const note = modelRef.current.notes[noteId];
+
+          if (!note) {
+            return;
+          }
+
+          setConfirmAction({
+            id: noteId,
+            name: note.text.slice(0, 48) || 'Untitled note',
+            type: 'note',
+          });
+        }
+
+        return;
+      }
+
+      if (target.closest('.tabliodb-note-node__textarea')) {
+        // Text editing lives inside an X6 HTML node; stopping mousedown keeps the graph from starting a drag.
         event.stopPropagation();
       }
     };
@@ -789,6 +819,17 @@ export function SchemaCanvas({
     container.addEventListener('pointerleave', handleCursorPointerLeave);
     container.addEventListener('pointermove', handleCursorPointerMove);
 
+    const handleCanvasWheel = (event: WheelEvent) => {
+      if (event.target instanceof HTMLElement && event.target.closest('.tabliodb-note-node__textarea')) {
+        return;
+      }
+
+      // Wheel di canvas mengikuti DrawSQL: zoom at pointer, bukan pan vertikal yang membuat user merasa halaman sedang scroll.
+      event.preventDefault();
+    };
+
+    container.addEventListener('wheel', handleCanvasWheel, { passive: false });
+
     graph.on('node:moved', ({ node }) => {
       if (readOnly) {
         return;
@@ -919,6 +960,7 @@ export function SchemaCanvas({
       container.removeEventListener('mousedown', handleResizeMouseDown, true);
       container.removeEventListener('pointerleave', handleCursorPointerLeave);
       container.removeEventListener('pointermove', handleCursorPointerMove);
+      container.removeEventListener('wheel', handleCanvasWheel);
       if (localCursorFrameRef.current) {
         window.cancelAnimationFrame(localCursorFrameRef.current);
         localCursorFrameRef.current = 0;
@@ -2119,7 +2161,8 @@ function syncRelationshipEdge(graph: Graph, metadata: EdgeMetadata): void {
   existing.setLabels(metadata.labels ?? []);
   existing.setRouter(metadata.router!);
   existing.setConnector(metadata.connector!);
-  existing.attr(metadata.attrs ?? {});
+  // Attr edge dioverwrite penuh agar marker lama dari cardinality sebelumnya tidak tetap menempel setelah user mengganti tipe relasi.
+  existing.setAttrs(metadata.attrs ?? {}, { overwrite: true });
   existing.setVertices(metadata.vertices ?? []);
   existing.setZIndex(metadata.zIndex ?? 0);
 }
@@ -2190,7 +2233,7 @@ function createTableNodeMetadata(
   };
 }
 
-// excludeShapes: ['rect'] itu kunci — tanpa ini, kotak group yang murni dekoratif
+// excludeShapes: ['rect'] menjaga group dekoratif tidak ikut dianggap penghalang.
 // (pointerEvents: 'none', cuma background) ikut dianggap penghalang. startDirections/
 // endDirections dikunci ke sisi port fisiknya (kiri/kanan) supaya garis tetap keluar
 // dari baris kolom yang benar, bukan cari jalan pintas lewat sisi lain tabel.
@@ -2209,16 +2252,7 @@ function buildRelationshipMarkers(
   stroke: string,
   strokeWidth: number,
 ) {
-  const oneMarker = {
-    d: 'M 0 -7 L 0 7',
-    fill: 'none',
-    name: 'path' as const,
-    offsetX: 0,
-    stroke,
-    strokeWidth,
-  };
-
-  // Crow's foot besar — shaft 10px + kaki terbuka 9px (mirip DrawSQL asli)
+  // Crow's foot besar: shaft 10px dan kaki terbuka 9px agar terbaca jelas saat zoom kecil.
   const manyMarker = {
     d: 'M -12 -7 L 0 0 L -12 7 M -12 0 L 0 0',
     fill: 'none',
@@ -2236,7 +2270,8 @@ function buildRelationshipMarkers(
       return {};
     case 'one_to_many':
     default:
-      return { sourceMarker: oneMarker, targetMarker: manyMarker };
+      // Sisi "one" sengaja plain line; hanya sisi "many" yang memakai crow's foot agar tidak muncul tick/arrow palsu.
+      return { targetMarker: manyMarker };
   }
 }
 
@@ -2269,6 +2304,7 @@ function createRelationshipEdgeMetadata(
           line: {
             ...markerAttrs,
             stroke,
+            strokeOpacity: terminals.source.active ? 1 : 0.72,
             strokeLinecap: 'round',
             strokeLinejoin: 'round',
             strokeWidth,
@@ -2283,8 +2319,8 @@ function createRelationshipEdgeMetadata(
           name: 'manhattan',
           args: buildManhattanRouterArgs(terminals.source.side, terminals.target.side),
         },
-        source: { cell: relationship.sourceTableId, port: terminals.source.portId },
-        target: { cell: relationship.targetTableId, port: terminals.target.portId },
+        source: { cell: relationship.sourceTableId, connectionPoint: 'anchor', port: terminals.source.portId },
+        target: { cell: relationship.targetTableId, connectionPoint: 'anchor', port: terminals.target.portId },
         zIndex: terminals.source.active ? 1 : 0,
       },
     ];
@@ -2312,27 +2348,9 @@ function createRelationshipPlan(
       continue;
     }
 
-    const dx = Math.abs(targetGeometry.centerX - sourceGeometry.centerX);
-    const dy = Math.abs(targetGeometry.centerY - sourceGeometry.centerY);
-
-    let sourceSide: PortSide;
-    let targetSide: PortSide;
-
-    if (dy > dx * 1.5) {
-      // Vertikal dominance: pakai sisi yang sama — prioritas kiri untuk alignment rapi
-      if (sourceGeometry.centerX <= targetGeometry.centerX) {
-        sourceSide = 'left';
-        targetSide = 'left';
-      } else {
-        sourceSide = 'right';
-        targetSide = 'right';
-      }
-    } else {
-      // Horizontal dominance: logika asli (berhadapan)
-      const sourceIsLeft = sourceGeometry.centerX <= targetGeometry.centerX;
-      sourceSide = sourceIsLeft ? 'right' : 'left';
-      targetSide = sourceIsLeft ? 'left' : 'right';
-    }
+    const sourceIsLeft = sourceGeometry.centerX <= targetGeometry.centerX;
+    const sourceSide = sourceIsLeft ? 'right' : 'left';
+    const targetSide = sourceIsLeft ? 'left' : 'right';
 
     const active =
       selectedRelationshipId === relationship.id ||
