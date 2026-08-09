@@ -1075,6 +1075,31 @@ export type OidcProviderSettingsUpdateDto = {
   issuerUrl: string | null;
   scopes: string[];
 };
+export type SmtpSettingsDtoOutput = {
+  enabled: boolean;
+  fromEmail: string | null;
+  fromName: string | null;
+  host: string | null;
+  passwordConfigured: boolean;
+  passwordKeyId: string | null;
+  passwordUpdatedAt: string | null;
+  port: number | null;
+  replyToEmail: string | null;
+  security: SmtpSecurity_Output;
+  username: string | null;
+};
+export type SmtpSettingsUpdateDto = {
+  clearPassword?: boolean;
+  enabled: boolean;
+  fromEmail: string | null;
+  fromName: string | null;
+  host: string | null;
+  password?: string;
+  port: number | null;
+  replyToEmail: string | null;
+  security: SmtpSecurity;
+  username: string | null;
+};
 export type SnapshotCreateDto = {
   diagramId: string;
   message?: string;
@@ -3158,6 +3183,38 @@ export function updateOidcProviderSettings(
     ),
   );
 }
+export function getSmtpSettings(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: SmtpSettingsDtoOutput;
+    }>('/setup/smtp-settings', {
+      ...opts,
+    }),
+  );
+}
+export function updateSmtpSettings(
+  {
+    smtpSettingsUpdateDto,
+  }: {
+    smtpSettingsUpdateDto: SmtpSettingsUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: SmtpSettingsDtoOutput;
+    }>(
+      '/setup/smtp-settings',
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: smtpSettingsUpdateDto,
+      }),
+    ),
+  );
+}
 export function createSnapshot(
   {
     snapshotCreateDto,
@@ -3874,6 +3931,16 @@ export enum SignupPolicy {
 export enum AutoJoinOrganizationRole {
   Member = 'member',
   Guest = 'guest',
+}
+export enum SmtpSecurity_Output {
+  None = 'none',
+  Starttls = 'starttls',
+  Tls = 'tls',
+}
+export enum SmtpSecurity {
+  None = 'none',
+  Starttls = 'starttls',
+  Tls = 'tls',
 }
 export enum Type3 {
   Check = 'check',

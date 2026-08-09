@@ -10,12 +10,14 @@ import {
   SetupCreateDto,
   SetupCreateResponseDto,
   SetupStatusResponseDto,
+  SmtpSettingsDto,
+  SmtpSettingsUpdateDto,
 } from '../dtos/setup.dto.js';
 import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { CryptoRepository } from '../repositories/crypto.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
-import { SetupRepository } from '../repositories/setup.repository.js';
+import { SetupRepository, type SmtpPublicSettings } from '../repositories/setup.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
 import { AuthService } from './auth.service.js';
@@ -184,6 +186,91 @@ export class SetupService {
     return after;
   }
 
+  async getSmtpSettings(auth: AuthContext): Promise<SmtpSettingsDto> {
+    await this.requireInstanceManager(auth);
+
+    return this.setupRepository.getSmtpSettings();
+  }
+
+  async updateSmtpSettings(auth: AuthContext, dto: SmtpSettingsUpdateDto): Promise<SmtpSettingsDto> {
+    await this.requireInstanceManager(auth);
+
+    const before = await this.setupRepository.getSmtpSettings();
+    const smtpPassword = dto.password;
+    const willClearPassword = dto.clearPassword === true && !smtpPassword;
+    const passwordConfigured = Boolean(smtpPassword || (before.passwordConfigured && !willClearPassword));
+    const publicSettings = this.normalizeSmtpPublicSettings(dto);
+
+    if (publicSettings.enabled) {
+      this.assertSmtpSettingsAreComplete(publicSettings, passwordConfigured);
+    }
+
+    if (smtpPassword) {
+      // Password SMTP tetap write-only dan disimpan sebagai encrypted system setting, bukan ikut payload public mail.smtp.
+      await this.setupRepository.upsertSecretSetting('mail.smtp.password', { password: smtpPassword }, auth.user.id);
+    } else if (willClearPassword) {
+      await this.setupRepository.deleteSecretSetting('mail.smtp.password');
+    }
+
+    const after = await this.setupRepository.updateSmtpPublicSettings({
+      ...publicSettings,
+      updatedById: auth.user.id,
+    });
+
+    await this.auditLogRepository.create({
+      action: AuditAction.InstanceSmtpSettingsUpdated,
+      actorId: auth.user.id,
+      entityId: 'mail.smtp',
+      entityType: 'system_setting',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: {
+        enabled: {
+          after: after.enabled,
+          before: before.enabled,
+        },
+        fromEmail: {
+          after: after.fromEmail,
+          before: before.fromEmail,
+        },
+        fromName: {
+          after: after.fromName,
+          before: before.fromName,
+        },
+        host: {
+          after: after.host,
+          before: before.host,
+        },
+        passwordConfigured: {
+          after: after.passwordConfigured,
+          before: before.passwordConfigured,
+        },
+        passwordUpdated: Boolean(smtpPassword || willClearPassword),
+        port: {
+          after: after.port,
+          before: before.port,
+        },
+        replyToEmail: {
+          after: after.replyToEmail,
+          before: before.replyToEmail,
+        },
+        security: {
+          after: after.security,
+          before: before.security,
+        },
+        username: {
+          after: after.username,
+          before: before.username,
+        },
+      } satisfies Record<string, JsonValue>,
+      organizationId: null,
+      projectId: null,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
+
+    return after;
+  }
+
   async complete(dto: SetupCreateDto): Promise<SetupCreateResponseDto> {
     const passwordHash = await this.cryptoRepository.hashBcrypt(dto.ownerPassword, SALT_ROUNDS);
     const result = await this.setupRepository.createInitialSetup({
@@ -298,6 +385,37 @@ export class SetupService {
 
     if (!organization) {
       throw new BadRequestException('OIDC auto-join workspace does not exist or has been archived');
+    }
+  }
+
+  private normalizeSmtpPublicSettings(dto: SmtpSettingsUpdateDto): SmtpPublicSettings {
+    return {
+      enabled: dto.enabled,
+      fromEmail: dto.fromEmail?.trim().toLowerCase() || null,
+      fromName: dto.fromName?.trim() || null,
+      host: dto.host?.trim() || null,
+      port: dto.port,
+      replyToEmail: dto.replyToEmail?.trim().toLowerCase() || null,
+      security: dto.security,
+      username: dto.username?.trim() || null,
+    };
+  }
+
+  private assertSmtpSettingsAreComplete(settings: SmtpPublicSettings, passwordConfigured: boolean): void {
+    if (!settings.host) {
+      throw new BadRequestException('SMTP host is required when SMTP is enabled');
+    }
+
+    if (!settings.port) {
+      throw new BadRequestException('SMTP port is required when SMTP is enabled');
+    }
+
+    if (!settings.fromEmail) {
+      throw new BadRequestException('SMTP from email is required when SMTP is enabled');
+    }
+
+    if (settings.username && !passwordConfigured) {
+      throw new BadRequestException('SMTP password is required when SMTP username is configured');
     }
   }
 }

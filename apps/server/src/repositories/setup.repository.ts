@@ -64,6 +64,27 @@ export type OidcProviderPublicSettings = Pick<
   | 'scopes'
 >;
 
+export type SmtpSecurity = 'none' | 'starttls' | 'tls';
+
+export type SmtpSettings = {
+  enabled: boolean;
+  fromEmail: string | null;
+  fromName: string | null;
+  host: string | null;
+  passwordConfigured: boolean;
+  passwordKeyId: string | null;
+  passwordUpdatedAt: string | null;
+  port: number | null;
+  replyToEmail: string | null;
+  security: SmtpSecurity;
+  username: string | null;
+};
+
+export type SmtpPublicSettings = Pick<
+  SmtpSettings,
+  'enabled' | 'fromEmail' | 'fromName' | 'host' | 'port' | 'replyToEmail' | 'security' | 'username'
+>;
+
 const defaultOidcProviderSettings: OidcProviderPublicSettings = {
   autoCreateUsers: false,
   autoJoinOrganizationId: null,
@@ -73,6 +94,17 @@ const defaultOidcProviderSettings: OidcProviderPublicSettings = {
   enabled: false,
   issuerUrl: null,
   scopes: ['openid', 'email', 'profile'],
+};
+
+const defaultSmtpSettings: SmtpPublicSettings = {
+  enabled: false,
+  fromEmail: null,
+  fromName: 'Tabliodb',
+  host: null,
+  port: 587,
+  replyToEmail: null,
+  security: 'starttls',
+  username: null,
 };
 
 @Injectable()
@@ -151,6 +183,42 @@ export class SetupRepository {
     ]);
 
     return this.getOidcProviderSettings();
+  }
+
+  async getSmtpSettings(): Promise<SmtpSettings> {
+    const [publicSetting, secretState] = await Promise.all([
+      this.getSettingValue('mail.smtp'),
+      this.getSecretSettingState('mail.smtp.password'),
+    ]);
+    const publicSettings = this.readSmtpPublicSettings(publicSetting);
+
+    return {
+      ...publicSettings,
+      passwordConfigured: secretState.isConfigured,
+      passwordKeyId: secretState.keyId,
+      passwordUpdatedAt: secretState.updatedAt,
+    };
+  }
+
+  async updateSmtpPublicSettings(settings: SmtpPublicSettings & { updatedById: string }): Promise<SmtpSettings> {
+    await this.upsertSettings([
+      {
+        key: 'mail.smtp',
+        updatedById: settings.updatedById,
+        value: {
+          enabled: settings.enabled,
+          fromEmail: settings.fromEmail,
+          fromName: settings.fromName,
+          host: settings.host,
+          port: settings.port,
+          replyToEmail: settings.replyToEmail,
+          security: settings.security,
+          username: settings.username,
+        },
+      },
+    ]);
+
+    return this.getSmtpSettings();
   }
 
   async getSecretSettingState(key: SecretSettingKey): Promise<SecretSettingState> {
@@ -453,6 +521,38 @@ export class SetupRepository {
     }
 
     return null;
+  }
+
+  private readSmtpPublicSettings(value: JsonValue): SmtpPublicSettings {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return defaultSmtpSettings;
+    }
+
+    const setting = value as Record<string, JsonValue>;
+
+    return {
+      enabled: typeof setting.enabled === 'boolean' ? setting.enabled : defaultSmtpSettings.enabled,
+      fromEmail: typeof setting.fromEmail === 'string' && setting.fromEmail.trim() ? setting.fromEmail : null,
+      fromName:
+        typeof setting.fromName === 'string' && setting.fromName.trim()
+          ? setting.fromName
+          : defaultSmtpSettings.fromName,
+      host: typeof setting.host === 'string' && setting.host.trim() ? setting.host : null,
+      port:
+        typeof setting.port === 'number' && Number.isInteger(setting.port) ? setting.port : defaultSmtpSettings.port,
+      replyToEmail:
+        typeof setting.replyToEmail === 'string' && setting.replyToEmail.trim() ? setting.replyToEmail : null,
+      security: this.readSmtpSecurity(setting.security),
+      username: typeof setting.username === 'string' && setting.username.trim() ? setting.username : null,
+    };
+  }
+
+  private readSmtpSecurity(value: JsonValue): SmtpSecurity {
+    if (value === 'none' || value === 'starttls' || value === 'tls') {
+      return value;
+    }
+
+    return defaultSmtpSettings.security;
   }
 }
 

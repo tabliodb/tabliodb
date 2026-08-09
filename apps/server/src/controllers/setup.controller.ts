@@ -13,6 +13,8 @@ import {
   SetupCreateDto,
   SetupCreateResponseDto,
   SetupStatusResponseDto,
+  SmtpSettingsDto,
+  SmtpSettingsUpdateDto,
 } from '../dtos/setup.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
@@ -75,6 +77,26 @@ export class SetupController {
     @Body() dto: OidcProviderSettingsUpdateDto,
   ): Promise<OidcProviderSettingsDto> {
     return this.service.updateOidcProviderSettings(auth, dto);
+  }
+
+  @Get('smtp-settings')
+  @Authenticated()
+  @RequirePermission(Permission.OrganizationManage)
+  @ApiOperation({ operationId: 'getSmtpSettings' })
+  @ZodResponse({ status: HttpStatus.OK, type: SmtpSettingsDto })
+  getSmtpSettings(@Auth() auth: AuthContext): Promise<SmtpSettingsDto> {
+    return this.service.getSmtpSettings(auth);
+  }
+
+  @Post('smtp-settings')
+  @Authenticated()
+  @RequirePermission(Permission.OrganizationManage)
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: SmtpSettingsUpdateDto })
+  @ApiOperation({ operationId: 'updateSmtpSettings' })
+  @ZodResponse({ status: HttpStatus.OK, type: SmtpSettingsDto })
+  updateSmtpSettings(@Auth() auth: AuthContext, @Body() dto: SmtpSettingsUpdateDto): Promise<SmtpSettingsDto> {
+    return this.service.updateSmtpSettings(auth, dto);
   }
 
   @Post()

@@ -11,6 +11,7 @@ export async function adminSettingsLoader() {
     await Promise.all([
       queryClient.ensureQueryData(setupQueries.authSettings()),
       queryClient.ensureQueryData(setupQueries.oidcProvider()),
+      queryClient.ensureQueryData(setupQueries.smtpSettings()),
       queryClient.ensureQueryData(organizationsQueries.list({ limit: 100 })),
     ]);
   } catch (error) {

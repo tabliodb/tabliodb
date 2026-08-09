@@ -26,9 +26,11 @@ describe(SetupService.name, () => {
     deleteSecretSetting: vi.fn(),
     getAuthSettings: vi.fn(),
     getOidcProviderSettings: vi.fn(),
+    getSmtpSettings: vi.fn(),
     getStatus: vi.fn(),
     updateAuthSettings: vi.fn(),
     updateOidcProviderPublicSettings: vi.fn(),
+    updateSmtpPublicSettings: vi.fn(),
     upsertSecretSetting: vi.fn(),
   };
   const userRepository = {
@@ -63,6 +65,32 @@ describe(SetupService.name, () => {
       enabled: settings.enabled,
       issuerUrl: settings.issuerUrl,
       scopes: settings.scopes,
+    }));
+    setupRepository.getSmtpSettings.mockResolvedValue({
+      enabled: false,
+      fromEmail: null,
+      fromName: 'Tabliodb',
+      host: null,
+      passwordConfigured: false,
+      passwordKeyId: null,
+      passwordUpdatedAt: null,
+      port: 587,
+      replyToEmail: null,
+      security: 'starttls',
+      username: null,
+    });
+    setupRepository.updateSmtpPublicSettings.mockImplementation(async (settings) => ({
+      enabled: settings.enabled,
+      fromEmail: settings.fromEmail,
+      fromName: settings.fromName,
+      host: settings.host,
+      passwordConfigured: Boolean(setupRepository.upsertSecretSetting.mock.calls.length),
+      passwordKeyId: 'key-id',
+      passwordUpdatedAt: '2026-08-09T03:00:00.000Z',
+      port: settings.port,
+      replyToEmail: settings.replyToEmail,
+      security: settings.security,
+      username: settings.username,
     }));
 
     return new SetupService(
@@ -156,6 +184,65 @@ describe(SetupService.name, () => {
       expect.objectContaining({
         autoJoinOrganizationId: '11111111-1111-4111-8111-111111111111',
         autoJoinOrganizationRole: 'member',
+      }),
+    );
+  });
+
+  it('requires a stored SMTP password before enabling authenticated SMTP', async () => {
+    const service = createService();
+
+    await expect(
+      service.updateSmtpSettings(createAuthContext(), {
+        enabled: true,
+        fromEmail: 'noreply@company.test',
+        fromName: 'Tabliodb',
+        host: 'smtp.company.test',
+        port: 587,
+        replyToEmail: null,
+        security: 'starttls',
+        username: 'mailer',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(setupRepository.updateSmtpPublicSettings).not.toHaveBeenCalled();
+  });
+
+  it('stores the SMTP password through the encrypted secret boundary and keeps it out of audit metadata', async () => {
+    const service = createService();
+
+    await service.updateSmtpSettings(createAuthContext(), {
+      enabled: true,
+      fromEmail: 'NoReply@Company.test',
+      fromName: ' Tabliodb Mail ',
+      host: ' smtp.company.test ',
+      password: 'smtp-raw-secret',
+      port: 587,
+      replyToEmail: 'Help@Company.test',
+      security: 'starttls',
+      username: ' mailer ',
+    });
+
+    expect(setupRepository.upsertSecretSetting).toHaveBeenCalledWith(
+      'mail.smtp.password',
+      { password: 'smtp-raw-secret' },
+      'actor-id',
+    );
+    expect(setupRepository.updateSmtpPublicSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        fromEmail: 'noreply@company.test',
+        fromName: 'Tabliodb Mail',
+        host: 'smtp.company.test',
+        port: 587,
+        replyToEmail: 'help@company.test',
+        security: 'starttls',
+        username: 'mailer',
+      }),
+    );
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.InstanceSmtpSettingsUpdated,
+        metadata: expect.not.stringContaining('smtp-raw-secret'),
       }),
     );
   });

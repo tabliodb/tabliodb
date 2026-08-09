@@ -5,9 +5,11 @@ import {
   prepareSessionBinding,
   updateInstanceAuthSettings,
   updateOidcProviderSettings,
+  updateSmtpSettings,
   type InstanceAuthSettingsUpdateDto,
   type OidcProviderSettingsUpdateDto,
   type SetupCreateDto,
+  type SmtpSettingsUpdateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { projectsKeys } from '@/resources/projects';
@@ -30,6 +32,8 @@ const updateAuthSettingsMutationFn = (body: InstanceAuthSettingsUpdateDto) =>
   updateInstanceAuthSettings({ instanceAuthSettingsUpdateDto: body });
 const updateOidcProviderMutationFn = (body: OidcProviderSettingsUpdateDto) =>
   updateOidcProviderSettings({ oidcProviderSettingsUpdateDto: body });
+const updateSmtpSettingsMutationFn = (body: SmtpSettingsUpdateDto) =>
+  updateSmtpSettings({ smtpSettingsUpdateDto: body });
 
 type UseCompleteSetupMutationParams = {
   mutationConfig?: MutationConfig<typeof completeSetupMutationFn>;
@@ -39,6 +43,9 @@ type UseUpdateAuthSettingsMutationParams = {
 };
 type UseUpdateOidcProviderMutationParams = {
   mutationConfig?: MutationConfig<typeof updateOidcProviderMutationFn>;
+};
+type UseUpdateSmtpSettingsMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateSmtpSettingsMutationFn>;
 };
 
 export function useCompleteSetupMutation(params: UseCompleteSetupMutationParams = {}) {
@@ -81,6 +88,18 @@ export function useUpdateOidcProviderMutation(params: UseUpdateOidcProviderMutat
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       queryClient.setQueryData(setupKeys.oidcProvider(), data);
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useUpdateSmtpSettingsMutation(params: UseUpdateSmtpSettingsMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateSmtpSettingsMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // SMTP password bersifat write-only; response server menjadi satu-satunya sumber status configured yang aman di cache.
+      queryClient.setQueryData(setupKeys.smtpSettings(), data);
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

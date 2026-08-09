@@ -6,6 +6,7 @@ import { SessionBindingSchema } from './auth.dto.js';
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const SignupPolicySchema = z.enum(['signup_disabled', 'invite_only', 'allowed_domains', 'sso_only', 'public_signup']);
 const OidcAutoJoinOrganizationRoleSchema = z.enum([OrganizationRole.Member, OrganizationRole.Guest]);
+const SmtpSecuritySchema = z.enum(['none', 'starttls', 'tls']).meta({ id: 'SmtpSecurity' });
 
 const SetupStatusResponseSchema = z
   .object({
@@ -62,6 +63,37 @@ const OidcProviderSettingsUpdateSchema = z
   })
   .meta({ id: 'OidcProviderSettingsUpdateDto' });
 
+const SmtpSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    fromEmail: z.string().email().nullable(),
+    fromName: z.string().nullable(),
+    host: z.string().nullable(),
+    passwordConfigured: z.boolean(),
+    passwordKeyId: z.string().nullable(),
+    passwordUpdatedAt: DateTimeSchema.nullable(),
+    port: z.number().int().min(1).max(65_535).nullable(),
+    replyToEmail: z.string().email().nullable(),
+    security: SmtpSecuritySchema,
+    username: z.string().nullable(),
+  })
+  .meta({ id: 'SmtpSettingsDto' });
+
+const SmtpSettingsUpdateSchema = z
+  .object({
+    clearPassword: z.boolean().optional(),
+    enabled: z.boolean(),
+    fromEmail: z.string().email().nullable(),
+    fromName: z.string().min(1).max(120).nullable(),
+    host: z.string().min(1).max(255).nullable(),
+    password: z.string().min(1).max(4096).optional(),
+    port: z.number().int().min(1).max(65_535).nullable(),
+    replyToEmail: z.string().email().nullable(),
+    security: SmtpSecuritySchema,
+    username: z.string().min(1).max(255).nullable(),
+  })
+  .meta({ id: 'SmtpSettingsUpdateDto' });
+
 const SetupCreateSchema = z
   .object({
     ownerEmail: z.string().email(),
@@ -92,5 +124,7 @@ export class InstanceAuthSettingsDto extends createZodDto(InstanceAuthSettingsSc
 export class InstanceAuthSettingsUpdateDto extends createZodDto(InstanceAuthSettingsUpdateSchema) {}
 export class OidcProviderSettingsDto extends createZodDto(OidcProviderSettingsSchema) {}
 export class OidcProviderSettingsUpdateDto extends createZodDto(OidcProviderSettingsUpdateSchema) {}
+export class SmtpSettingsDto extends createZodDto(SmtpSettingsSchema) {}
+export class SmtpSettingsUpdateDto extends createZodDto(SmtpSettingsUpdateSchema) {}
 export class SetupCreateDto extends createZodDto(SetupCreateSchema) {}
 export class SetupCreateResponseDto extends createZodDto(SetupCreateResponseSchema) {}

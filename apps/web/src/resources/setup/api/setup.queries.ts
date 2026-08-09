@@ -2,9 +2,11 @@ import {
   getInstanceAuthSettings,
   getOidcProviderSettings,
   getSetupStatus,
+  getSmtpSettings,
   type InstanceAuthSettingsDtoOutput,
   type OidcProviderSettingsDtoOutput,
   type SetupStatusResponseDtoOutput,
+  type SmtpSettingsDtoOutput,
 } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { setupKeys } from './setup.keys';
@@ -12,6 +14,7 @@ import { setupKeys } from './setup.keys';
 type SetupQueries = {
   authSettings: () => AppQueryOptions<InstanceAuthSettingsDtoOutput, ReturnType<typeof setupKeys.authSettings>>;
   oidcProvider: () => AppQueryOptions<OidcProviderSettingsDtoOutput, ReturnType<typeof setupKeys.oidcProvider>>;
+  smtpSettings: () => AppQueryOptions<SmtpSettingsDtoOutput, ReturnType<typeof setupKeys.smtpSettings>>;
   status: () => AppQueryOptions<SetupStatusResponseDtoOutput, ReturnType<typeof setupKeys.status>>;
 };
 
@@ -27,6 +30,12 @@ export const setupQueries: SetupQueries = {
       // The response deliberately exposes only whether the secret exists; the raw client secret is never hydrated into React state.
       queryFn: () => getOidcProviderSettings(),
       queryKey: setupKeys.oidcProvider(),
+    }),
+  smtpSettings: () =>
+    appQueryOptions({
+      // Password SMTP mengikuti boundary secret server; query hanya mendapat status configured dan timestamp rotasi.
+      queryFn: () => getSmtpSettings(),
+      queryKey: setupKeys.smtpSettings(),
     }),
   status: () =>
     appQueryOptions({

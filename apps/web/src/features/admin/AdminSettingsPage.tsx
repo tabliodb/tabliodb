@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { AutoJoinOrganizationRole, SignupPolicy, type OrganizationDtoOutput } from '@tabliodb/sdk';
+import { AutoJoinOrganizationRole, SignupPolicy, SmtpSecurity, type OrganizationDtoOutput } from '@tabliodb/sdk';
 import { Badge, Button, FieldError, Surface, cn } from '@tabliodb/ui';
 import {
   Building2,
@@ -10,6 +10,8 @@ import {
   LockKeyhole,
   MailCheck,
   Save,
+  Send,
+  ServerCog,
   ShieldCheck,
   UserPlus,
 } from 'lucide-react';
@@ -19,7 +21,12 @@ import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { ErrorState, InlineErrorState, LoadingState } from '@/features/app/RouteStates';
 import { organizationsQueries } from '@/resources/organizations';
-import { setupQueries, useUpdateAuthSettingsMutation, useUpdateOidcProviderMutation } from '@/resources/setup';
+import {
+  setupQueries,
+  useUpdateAuthSettingsMutation,
+  useUpdateOidcProviderMutation,
+  useUpdateSmtpSettingsMutation,
+} from '@/resources/setup';
 
 const signupPolicyOptions = [
   SignupPolicy.InviteOnly,
@@ -30,6 +37,7 @@ const signupPolicyOptions = [
 ] as const satisfies readonly SignupPolicy[];
 const oidcAutoJoinRoleOptions = [AutoJoinOrganizationRole.Member, AutoJoinOrganizationRole.Guest] as const;
 const oidcAutoJoinNoneValue = '__none__';
+const smtpSecurityOptions = [SmtpSecurity.Starttls, SmtpSecurity.Tls, SmtpSecurity.None] as const;
 
 const authSettingsFormSchema = z
   .object({
@@ -97,8 +105,77 @@ const oidcProviderFormSchema = z
     }
   });
 
+const smtpSettingsFormSchema = z
+  .object({
+    clearPassword: z.boolean(),
+    enabled: z.boolean(),
+    fromEmail: z.string().max(255, 'From email is too long.'),
+    fromName: z.string().max(120, 'From name is too long.'),
+    host: z.string().max(255, 'SMTP host is too long.'),
+    password: z.string().max(4096, 'SMTP password is too long.'),
+    portText: z.string().max(5, 'SMTP port is too long.'),
+    replyToEmail: z.string().max(255, 'Reply-to email is too long.'),
+    security: z.enum(smtpSecurityOptions),
+    username: z.string().max(255, 'SMTP username is too long.'),
+  })
+  .superRefine((value, context) => {
+    const fromEmail = value.fromEmail.trim();
+    const host = value.host.trim();
+    const port = parsePortText(value.portText);
+    const replyToEmail = value.replyToEmail.trim();
+
+    if (value.enabled && !host) {
+      context.addIssue({
+        code: 'custom',
+        message: 'SMTP host is required when mail is enabled.',
+        path: ['host'],
+      });
+    }
+
+    if (value.enabled && !port) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Use a port between 1 and 65535.',
+        path: ['portText'],
+      });
+    }
+
+    if (value.portText.trim() && !port) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Use a port between 1 and 65535.',
+        path: ['portText'],
+      });
+    }
+
+    if (value.enabled && !fromEmail) {
+      context.addIssue({
+        code: 'custom',
+        message: 'From email is required when mail is enabled.',
+        path: ['fromEmail'],
+      });
+    }
+
+    if (fromEmail && !isEmailAddress(fromEmail)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Use a valid from email address.',
+        path: ['fromEmail'],
+      });
+    }
+
+    if (replyToEmail && !isEmailAddress(replyToEmail)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Use a valid reply-to email address.',
+        path: ['replyToEmail'],
+      });
+    }
+  });
+
 type AuthSettingsFormState = z.infer<typeof authSettingsFormSchema>;
 type OidcProviderFormState = z.infer<typeof oidcProviderFormSchema>;
+type SmtpSettingsFormState = z.infer<typeof smtpSettingsFormSchema>;
 
 const selectClassName =
   'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50';
@@ -106,9 +183,11 @@ const selectClassName =
 export function AdminSettingsPage() {
   const authSettingsQuery = useQuery(setupQueries.authSettings());
   const oidcProviderQuery = useQuery(setupQueries.oidcProvider());
+  const smtpSettingsQuery = useQuery(setupQueries.smtpSettings());
   const organizationsQuery = useQuery(organizationsQueries.list({ limit: 100 }));
   const updateAuthSettingsMutation = useUpdateAuthSettingsMutation();
   const updateOidcProviderMutation = useUpdateOidcProviderMutation();
+  const updateSmtpSettingsMutation = useUpdateSmtpSettingsMutation();
   const authForm = useForm<AuthSettingsFormState>({
     defaultValues: {
       allowedDomainsText: '',
@@ -133,13 +212,31 @@ export function AdminSettingsPage() {
     mode: 'onBlur',
     resolver: zodResolver(oidcProviderFormSchema) as Resolver<OidcProviderFormState>,
   });
+  const smtpForm = useForm<SmtpSettingsFormState>({
+    defaultValues: {
+      clearPassword: false,
+      enabled: false,
+      fromEmail: '',
+      fromName: 'Tabliodb',
+      host: '',
+      password: '',
+      portText: '587',
+      replyToEmail: '',
+      security: SmtpSecurity.Starttls,
+      username: '',
+    },
+    mode: 'onBlur',
+    resolver: zodResolver(smtpSettingsFormSchema) as Resolver<SmtpSettingsFormState>,
+  });
   const authErrors = authForm.formState.errors;
   const oidcErrors = oidcForm.formState.errors;
+  const smtpErrors = smtpForm.formState.errors;
   const selectedPolicy = authForm.watch('signupPolicy');
   const parsedDomains = parseAllowedDomainsText(authForm.watch('allowedDomainsText'));
   const autoJoinOrganizationId = oidcForm.watch('autoJoinOrganizationId');
   const oidcEnabled = oidcForm.watch('enabled');
   const oidcScopes = parseScopesText(oidcForm.watch('scopesText'));
+  const smtpEnabled = smtpForm.watch('enabled');
 
   useEffect(() => {
     if (!authSettingsQuery.data) {
@@ -170,6 +267,25 @@ export function AdminSettingsPage() {
       scopesText: oidcProviderQuery.data.scopes.join(' '),
     });
   }, [oidcProviderQuery.data, oidcForm]);
+
+  useEffect(() => {
+    if (!smtpSettingsQuery.data) {
+      return;
+    }
+
+    smtpForm.reset({
+      clearPassword: false,
+      enabled: smtpSettingsQuery.data.enabled,
+      fromEmail: smtpSettingsQuery.data.fromEmail ?? '',
+      fromName: smtpSettingsQuery.data.fromName ?? 'Tabliodb',
+      host: smtpSettingsQuery.data.host ?? '',
+      password: '',
+      portText: smtpSettingsQuery.data.port?.toString() ?? '587',
+      replyToEmail: smtpSettingsQuery.data.replyToEmail ?? '',
+      security: toSmtpSecurity(smtpSettingsQuery.data.security),
+      username: smtpSettingsQuery.data.username ?? '',
+    });
+  }, [smtpSettingsQuery.data, smtpForm]);
 
   function handleAuthSubmit(values: AuthSettingsFormState) {
     updateAuthSettingsMutation.mutate(
@@ -227,7 +343,48 @@ export function AdminSettingsPage() {
     );
   }
 
-  if (authSettingsQuery.isPending || oidcProviderQuery.isPending || organizationsQuery.isPending) {
+  function handleSmtpSubmit(values: SmtpSettingsFormState) {
+    const password = values.password;
+
+    updateSmtpSettingsMutation.mutate(
+      {
+        clearPassword: values.clearPassword,
+        enabled: values.enabled,
+        fromEmail: values.fromEmail.trim().toLowerCase() || null,
+        fromName: values.fromName.trim() || null,
+        host: values.host.trim() || null,
+        ...(password ? { password } : {}),
+        port: parsePortText(values.portText),
+        replyToEmail: values.replyToEmail.trim().toLowerCase() || null,
+        security: values.security,
+        username: values.username.trim() || null,
+      },
+      {
+        onSuccess: (settings) => {
+          // Password SMTP juga write-only; reset dari response hanya mempertahankan status configured yang aman ditampilkan.
+          smtpForm.reset({
+            clearPassword: false,
+            enabled: settings.enabled,
+            fromEmail: settings.fromEmail ?? '',
+            fromName: settings.fromName ?? 'Tabliodb',
+            host: settings.host ?? '',
+            password: '',
+            portText: settings.port?.toString() ?? '587',
+            replyToEmail: settings.replyToEmail ?? '',
+            security: toSmtpSecurity(settings.security),
+            username: settings.username ?? '',
+          });
+        },
+      },
+    );
+  }
+
+  if (
+    authSettingsQuery.isPending ||
+    oidcProviderQuery.isPending ||
+    smtpSettingsQuery.isPending ||
+    organizationsQuery.isPending
+  ) {
     return <LoadingState message="Loading admin settings" />;
   }
 
@@ -237,6 +394,10 @@ export function AdminSettingsPage() {
 
   if (oidcProviderQuery.error) {
     return <ErrorState error={oidcProviderQuery.error} onRetry={() => void oidcProviderQuery.refetch()} />;
+  }
+
+  if (smtpSettingsQuery.error) {
+    return <ErrorState error={smtpSettingsQuery.error} onRetry={() => void smtpSettingsQuery.refetch()} />;
   }
 
   if (organizationsQuery.error) {
@@ -542,6 +703,221 @@ export function AdminSettingsPage() {
           </Button>
         </div>
       </form>
+
+      <SettingsHeader
+        description="Prepare the mail server used by invitations, password recovery, and collaboration notifications."
+        title="SMTP mail"
+      />
+
+      <form className="grid gap-5" onSubmit={smtpForm.handleSubmit(handleSmtpSubmit)}>
+        <Surface className="grid gap-4 p-4" depth="md">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <label className="flex cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
+              <ControlledCheckbox
+                aria-label="Enable SMTP mail delivery"
+                control={smtpForm.control}
+                disabled={updateSmtpSettingsMutation.isPending}
+                name="enabled"
+              />
+              <span>
+                <span className="block text-sm font-extrabold">Enable SMTP mail</span>
+                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                  Keep disabled until host, sender, and optional credentials are verified.
+                </span>
+              </span>
+            </label>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={smtpEnabled ? 'green' : 'neutral'}>{smtpEnabled ? 'Enabled' : 'Disabled'}</Badge>
+              <SecretStatus
+                configured={smtpSettingsQuery.data.passwordConfigured}
+                updatedAt={smtpSettingsQuery.data.passwordUpdatedAt}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+            <div className="mb-3 flex items-start gap-2">
+              <div className="grid size-9 shrink-0 place-items-center rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
+                <ServerCog className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-extrabold">SMTP server</h3>
+                <p className="mt-0.5 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                  StartTLS on port 587 is the safest default for most company mail relays.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_180px]">
+              <label className="block text-sm">
+                <FieldLabel>Host</FieldLabel>
+                <ControlledInput
+                  aria-invalid={Boolean(smtpErrors.host)}
+                  control={smtpForm.control}
+                  disabled={updateSmtpSettingsMutation.isPending}
+                  name="host"
+                  placeholder="smtp.company.com"
+                />
+                <FieldError>{smtpErrors.host?.message}</FieldError>
+              </label>
+
+              <label className="block text-sm">
+                <FieldLabel>Port</FieldLabel>
+                <ControlledInput
+                  aria-invalid={Boolean(smtpErrors.portText)}
+                  control={smtpForm.control}
+                  disabled={updateSmtpSettingsMutation.isPending}
+                  inputMode="numeric"
+                  name="portText"
+                  placeholder="587"
+                />
+                <FieldError>{smtpErrors.portText?.message}</FieldError>
+              </label>
+
+              <label className="block text-sm">
+                <FieldLabel>Security</FieldLabel>
+                <ControlledSelect
+                  className={selectClassName}
+                  control={smtpForm.control}
+                  disabled={updateSmtpSettingsMutation.isPending}
+                  name="security"
+                  options={smtpSecurityOptions.map((security) => ({
+                    label: formatSmtpSecurity(security),
+                    value: security,
+                  }))}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block text-sm">
+              <FieldLabel>From email</FieldLabel>
+              <ControlledInput
+                aria-invalid={Boolean(smtpErrors.fromEmail)}
+                autoComplete="email"
+                control={smtpForm.control}
+                disabled={updateSmtpSettingsMutation.isPending}
+                name="fromEmail"
+                placeholder="noreply@company.com"
+                type="email"
+              />
+              <FieldError>{smtpErrors.fromEmail?.message}</FieldError>
+            </label>
+
+            <label className="block text-sm">
+              <FieldLabel>From name</FieldLabel>
+              <ControlledInput
+                aria-invalid={Boolean(smtpErrors.fromName)}
+                control={smtpForm.control}
+                disabled={updateSmtpSettingsMutation.isPending}
+                name="fromName"
+                placeholder="Tabliodb"
+              />
+              <FieldError>{smtpErrors.fromName?.message}</FieldError>
+            </label>
+
+            <label className="block text-sm md:col-span-2">
+              <FieldLabel>Reply-to email</FieldLabel>
+              <ControlledInput
+                aria-invalid={Boolean(smtpErrors.replyToEmail)}
+                autoComplete="email"
+                control={smtpForm.control}
+                disabled={updateSmtpSettingsMutation.isPending}
+                name="replyToEmail"
+                placeholder="support@company.com"
+                type="email"
+              />
+              <FieldError>{smtpErrors.replyToEmail?.message}</FieldError>
+            </label>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block text-sm">
+              <FieldLabel>Username</FieldLabel>
+              <ControlledInput
+                aria-invalid={Boolean(smtpErrors.username)}
+                autoComplete="username"
+                control={smtpForm.control}
+                disabled={updateSmtpSettingsMutation.isPending}
+                name="username"
+                placeholder="mailer"
+              />
+              <FieldError>{smtpErrors.username?.message}</FieldError>
+            </label>
+
+            <label className="block text-sm">
+              <FieldLabel>Password</FieldLabel>
+              <ControlledInput
+                aria-invalid={Boolean(smtpErrors.password)}
+                autoComplete="new-password"
+                control={smtpForm.control}
+                disabled={updateSmtpSettingsMutation.isPending}
+                name="password"
+                placeholder={
+                  smtpSettingsQuery.data.passwordConfigured
+                    ? 'Leave blank to keep the current password'
+                    : 'Paste SMTP password'
+                }
+                type="password"
+              />
+              <FieldError>{smtpErrors.password?.message}</FieldError>
+            </label>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label
+              className={cn(
+                'flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] border p-3',
+                smtpSettingsQuery.data.passwordConfigured
+                  ? 'cursor-pointer border-[rgb(var(--tabliodb-border))] bg-white'
+                  : 'cursor-not-allowed border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] opacity-70',
+              )}
+            >
+              <ControlledCheckbox
+                aria-label="Clear existing SMTP password"
+                control={smtpForm.control}
+                disabled={!smtpSettingsQuery.data.passwordConfigured || updateSmtpSettingsMutation.isPending}
+                name="clearPassword"
+              />
+              <span>
+                <span className="block text-sm font-extrabold">Clear stored password</span>
+                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                  Use this when rotating away from an old mail credential.
+                </span>
+              </span>
+            </label>
+
+            <div className="flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
+              <div className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+                <Send className="size-3.5" />
+              </div>
+              <div>
+                <span className="block text-sm font-extrabold">Delivery boundary ready</span>
+                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                  Mail sending can consume this config later without exposing secrets to the browser.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {updateSmtpSettingsMutation.error ? (
+            <InlineErrorState error={updateSmtpSettingsMutation.error} title="Could not save SMTP settings" />
+          ) : null}
+        </Surface>
+
+        <div className="flex justify-end">
+          <Button disabled={updateSmtpSettingsMutation.isPending || !smtpForm.formState.isDirty} type="submit">
+            {updateSmtpSettingsMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
+            Save SMTP settings
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -606,11 +982,43 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+function isEmailAddress(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function parsePortText(value: string): number | null {
+  const trimmed = value.trim();
+
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+
+  const port = Number(trimmed);
+
+  return Number.isInteger(port) && port >= 1 && port <= 65_535 ? port : null;
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     day: '2-digit',
     month: 'short',
   }).format(new Date(value));
+}
+
+function formatSmtpSecurity(security: SmtpSecurity): string {
+  return {
+    none: 'None',
+    starttls: 'StartTLS',
+    tls: 'TLS',
+  }[security];
+}
+
+function toSmtpSecurity(value: string): SmtpSecurity {
+  if (value === SmtpSecurity.None || value === SmtpSecurity.Tls) {
+    return value;
+  }
+
+  return SmtpSecurity.Starttls;
 }
 
 function createAutoJoinWorkspaceOptions(
