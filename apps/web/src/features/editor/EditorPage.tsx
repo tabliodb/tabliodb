@@ -91,6 +91,9 @@ import {
   Input,
   Select,
   Surface,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   WithTooltip,
   cn,
   toast,
@@ -1737,16 +1740,22 @@ export function EditorPage() {
             </div>
           ) : null}
           <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-            <DropdownMenuTrigger asChild>
-              <div className="relative">
-                <IconButton icon={Bell} label="Notifications" />
-                {unreadNotificationCount > 0 ? (
-                  <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
-                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
-                  </span>
-                ) : null}
-              </div>
-            </DropdownMenuTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button aria-label="Notifications" className="relative" size="icon" type="button" variant="ghost">
+                    {/* Dropdown trigger dibuat sebagai button langsung agar Radix bisa mengelola focus, keyboard open, dan aria-expanded tanpa melewati wrapper non-interaktif. */}
+                    <Bell aria-hidden="true" className="size-4" />
+                    {unreadNotificationCount > 0 ? (
+                      <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
+                        {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                      </span>
+                    ) : null}
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Notifications</TooltipContent>
+            </Tooltip>
             <DropdownMenuContent align="end" className="w-[min(92vw,380px)] p-2">
               <div className="flex items-start justify-between gap-3 px-2 py-1.5">
                 <div className="min-w-0">
@@ -1870,9 +1879,17 @@ export function EditorPage() {
             <span className="hidden xl:inline">SQL</span>
           </Button>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <IconButton icon={MoreHorizontal} label="More actions" variant="secondary" />
-            </DropdownMenuTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button aria-label="More actions" size="icon" type="button" variant="secondary">
+                    {/* Trigger menu sekunder juga dibuat direct button supaya tidak ada wrapper non-interaktif yang mengambil focus dari DropdownMenu. */}
+                    <MoreHorizontal aria-hidden="true" className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>More actions</TooltipContent>
+            </Tooltip>
             <DropdownMenuContent align="end">
               {canEditDiagram ? (
                 <>

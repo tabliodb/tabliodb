@@ -23,7 +23,14 @@ import {
 import { cn } from '@tabliodb/ui';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@/resources/comments';
 import type { AwarenessState } from '@tabliodb/shared';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import {
   createCommentMarkerSummary,
   formatCommentMarkerCount,
@@ -1149,6 +1156,41 @@ function CanvasMinimap({
     centerFromPointer(event);
   }
 
+  function handleKeyDown(event: ReactKeyboardEvent<SVGSVGElement>) {
+    const centerX = state.viewport.x + state.viewport.width / 2;
+    const centerY = state.viewport.y + state.viewport.height / 2;
+    const stepX = Math.max(state.viewport.width * 0.35, 80);
+    const stepY = Math.max(state.viewport.height * 0.35, 80);
+    let nextX = centerX;
+    let nextY = centerY;
+
+    if (event.key === 'ArrowLeft') {
+      nextX -= stepX;
+    } else if (event.key === 'ArrowRight') {
+      nextX += stepX;
+    } else if (event.key === 'ArrowUp') {
+      nextY -= stepY;
+    } else if (event.key === 'ArrowDown') {
+      nextY += stepY;
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      // Enter/Space tetap dikonsumsi agar minimap terasa seperti control keyboard yang stabil, bukan SVG pasif yang menggulir halaman.
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+
+    const halfWidth = state.viewport.width / 2;
+    const halfHeight = state.viewport.height / 2;
+    const minX = Math.min(state.viewBox.x + halfWidth, state.viewBox.x + state.viewBox.width - halfWidth);
+    const maxX = Math.max(state.viewBox.x + halfWidth, state.viewBox.x + state.viewBox.width - halfWidth);
+    const minY = Math.min(state.viewBox.y + halfHeight, state.viewBox.y + state.viewBox.height - halfHeight);
+    const maxY = Math.max(state.viewBox.y + halfHeight, state.viewBox.y + state.viewBox.height - halfHeight);
+
+    // Clamp menjaga keyboard panning tidak membawa viewport keluar dari bounding box diagram yang dihitung minimap.
+    onCenter(clamp(nextX, minX, maxX), clamp(nextY, minY, maxY));
+  }
+
   return (
     <section
       className="tabliodb-editor-chrome absolute bottom-4 z-20 w-[clamp(144px,16vw,192px)] rounded-(--tabliodb-radius-lg) p-2 transition-[right] duration-200"
@@ -1168,12 +1210,15 @@ function CanvasMinimap({
         </button>
       </div>
       <svg
-        aria-label="Diagram minimap"
-        className="block aspect-192/124 w-full cursor-crosshair rounded-[10px] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-canvas))]"
+        aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
+        aria-label="Diagram minimap. Drag or use arrow keys to move the viewport."
+        className="block aspect-192/124 w-full cursor-crosshair rounded-[10px] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-canvas))] outline-none focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
+        onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         preserveAspectRatio="none"
-        role="img"
+        role="button"
+        tabIndex={0}
         viewBox={`${state.viewBox.x} ${state.viewBox.y} ${state.viewBox.width} ${state.viewBox.height}`}
       >
         <rect
@@ -1281,8 +1326,10 @@ function RelationshipQuickEditor({
 
   return (
     <section
+      aria-label="Relationship actions"
       className="absolute z-40 w-[330px] rounded-[18px] border border-slate-700 bg-slate-900 p-3 text-white shadow-[0_5px_0_rgb(15_23_42),0_18px_36px_rgb(15_23_42/0.24)]"
       onMouseDown={(event) => event.stopPropagation()}
+      role="group"
       style={{ left, top }}
     >
       <div className="grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)_24px] items-center gap-2">
@@ -1291,7 +1338,7 @@ function RelationshipQuickEditor({
         <RelationshipEndpointPill label={targetLabel} tone="target" />
         <button
           aria-label="Close relationship actions"
-          className="grid size-6 cursor-pointer place-items-center rounded-full text-sm font-black text-slate-400 transition hover:bg-slate-800 hover:text-white"
+          className="grid size-6 cursor-pointer place-items-center rounded-full text-sm font-black text-slate-400 outline-none transition hover:bg-slate-800 hover:text-white focus-visible:ring-[3px] focus-visible:ring-cyan-300"
           onClick={onClose}
           type="button"
         >
@@ -1302,8 +1349,9 @@ function RelationshipQuickEditor({
         <div className="inline-flex rounded-[12px] bg-slate-800 p-1">
           {cardinalityOptions.map((option) => (
             <button
+              aria-pressed={relationship.cardinality === option.value}
               className={cn(
-                'h-8 min-w-12 cursor-pointer rounded-[9px] px-3 text-xs font-black transition',
+                'h-8 min-w-12 cursor-pointer rounded-[9px] px-3 text-xs font-black outline-none transition focus-visible:ring-[3px] focus-visible:ring-cyan-300',
                 relationship.cardinality === option.value
                   ? 'bg-teal-500 text-white shadow-[0_2px_0_rgb(13_148_136)]'
                   : 'text-slate-300 hover:bg-slate-700 hover:text-white',
@@ -1318,7 +1366,7 @@ function RelationshipQuickEditor({
           ))}
         </div>
         <button
-          className="h-8 cursor-pointer rounded-[10px] px-3 text-xs font-black text-slate-400 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-8 cursor-pointer rounded-[10px] px-3 text-xs font-black text-slate-400 outline-none transition hover:bg-red-500 hover:text-white focus-visible:ring-[3px] focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={readOnly}
           onClick={onDelete}
           type="button"
