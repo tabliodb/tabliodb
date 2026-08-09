@@ -9,7 +9,7 @@
 :root {
   /* Palette dasar sengaja dipisah per peran agar warna kuat tidak dipakai mentah sebagai background area besar. */
   --tabliodb-primary: 88 204 2;
-  --tabliodb-primary-hover: 73 184 0;
+  --tabliodb-primary-hover: 97 224 2;
   --tabliodb-primary-shadow: 61 154 0;
   --tabliodb-primary-border: 154 226 93;
   --tabliodb-primary-soft: 242 252 233;
