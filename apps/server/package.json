@@ -43,6 +43,7 @@
     "kysely-postgres-js": "^3.0.0",
     "nestjs-kysely": "^3.1.2",
     "nestjs-zod": "^5.5.0",
+    "nodemailer": "^9.0.5",
     "openid-client": "^5.7.1",
     "postgres": "^3.4.9",
     "reflect-metadata": "^0.2.2",
@@ -58,6 +59,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
+    "@types/nodemailer": "^8.0.1",
     "tsx": "^4.23.1",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^4.1.10"

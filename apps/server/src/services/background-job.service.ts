@@ -8,8 +8,13 @@ import {
   BackgroundJobRepository,
   type BackgroundJobEnqueueOptions,
 } from '../repositories/background-job.repository.js';
-import { NotificationRepository } from '../repositories/notification.repository.js';
+import {
+  NotificationRepository,
+  type CommentNotificationDeliveryContext,
+  type CommentNotificationDeliveryRecipient,
+} from '../repositories/notification.repository.js';
 import type { JsonValue } from '../schema/index.js';
+import { MailService, type MailDeliveryResult } from './mail.service.js';
 
 type CommentNotificationDeliveryPayload = {
   actorId: string;
@@ -28,6 +33,7 @@ export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly backgroundJobRepository: BackgroundJobRepository,
     private readonly configRepository: ConfigRepository,
+    private readonly mailService: MailService,
     private readonly notificationRepository: NotificationRepository,
   ) {}
 
@@ -122,23 +128,95 @@ export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
 
   private async processCommentNotificationDelivery(payload: JsonValue): Promise<JsonValue> {
     const parsedPayload = parseCommentNotificationDeliveryPayload(payload);
-    const recipients = await this.notificationRepository.getCommentDeliveryRecipients({
-      actorId: parsedPayload.actorId,
-      commentId: parsedPayload.commentId,
-    });
-    const recipientIds = new Set([
-      ...recipients.mentionUserIds,
-      ...(recipients.replyUserId ? [recipients.replyUserId] : []),
+    const [recipientSummary, delivery] = await Promise.all([
+      this.notificationRepository.getCommentDeliveryRecipients({
+        actorId: parsedPayload.actorId,
+        commentId: parsedPayload.commentId,
+      }),
+      this.notificationRepository.getCommentNotificationDelivery({
+        actorId: parsedPayload.actorId,
+        commentId: parsedPayload.commentId,
+      }),
     ]);
+    const recipientIds = new Set([
+      ...recipientSummary.mentionUserIds,
+      ...(recipientSummary.replyUserId ? [recipientSummary.replyUserId] : []),
+    ]);
+
+    if (!delivery || delivery.recipients.length === 0) {
+      return {
+        commentId: parsedPayload.commentId,
+        emailSentCount: 0,
+        emailSkippedCount: 0,
+        mentionRecipientCount: recipientSummary.mentionUserIds.length,
+        recipientCount: recipientIds.size,
+        replyRecipientCount: recipientSummary.replyUserId ? 1 : 0,
+        source: parsedPayload.source,
+        status: 'skipped',
+        threadId: parsedPayload.threadId,
+      };
+    }
+
+    const mailResults = await this.sendCommentNotificationEmails(delivery, parsedPayload.source);
 
     return {
       commentId: parsedPayload.commentId,
-      mentionRecipientCount: recipients.mentionUserIds.length,
+      emailSentCount: mailResults.filter((result) => result.status === 'sent').length,
+      emailSkippedCount: mailResults.filter((result) => result.status === 'skipped').length,
+      mentionRecipientCount: recipientSummary.mentionUserIds.length,
       recipientCount: recipientIds.size,
-      replyRecipientCount: recipients.replyUserId ? 1 : 0,
+      replyRecipientCount: recipientSummary.replyUserId ? 1 : 0,
       source: parsedPayload.source,
+      status: 'delivered',
       threadId: parsedPayload.threadId,
     };
+  }
+
+  private async sendCommentNotificationEmails(
+    delivery: CommentNotificationDeliveryContext,
+    source: CommentNotificationDeliveryPayload['source'],
+  ): Promise<MailDeliveryResult[]> {
+    const results: MailDeliveryResult[] = [];
+
+    for (const recipient of delivery.recipients) {
+      const url = this.createCommentNotificationUrl(delivery);
+
+      // Send one message per recipient so private email addresses are not exposed to other project members.
+      results.push(
+        await this.mailService.sendTransactionalMail({
+          html: createCommentNotificationHtml(delivery, recipient, source, url),
+          subject: createCommentNotificationSubject(delivery, recipient),
+          text: createCommentNotificationText(delivery, recipient, source, url),
+          to: [
+            {
+              email: recipient.email,
+              name: recipient.name,
+            },
+          ],
+        }),
+      );
+    }
+
+    return results;
+  }
+
+  private createCommentNotificationUrl(delivery: CommentNotificationDeliveryContext): string {
+    const baseUrl = this.configRepository.getEnv().server.webPublicUrl;
+    const path = [
+      'workspaces',
+      delivery.organizationSlug,
+      'projects',
+      delivery.projectId,
+      'diagrams',
+      delivery.diagramId,
+    ]
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    const url = new URL(`/${path}`, baseUrl);
+
+    url.searchParams.set('commentThreadId', delivery.threadId);
+
+    return url.toString();
   }
 
   private getRetryDelayMs(attempts: number): number {
@@ -168,6 +246,73 @@ function parseCommentNotificationDeliveryPayload(payload: JsonValue): CommentNot
     source: record.source,
     threadId: record.threadId,
   };
+}
+
+function createCommentNotificationSubject(
+  delivery: CommentNotificationDeliveryContext,
+  recipient: CommentNotificationDeliveryRecipient,
+): string {
+  return `${delivery.actorName} ${createCommentNotificationReason(recipient)} in ${delivery.diagramName}`;
+}
+
+function createCommentNotificationText(
+  delivery: CommentNotificationDeliveryContext,
+  recipient: CommentNotificationDeliveryRecipient,
+  source: CommentNotificationDeliveryPayload['source'],
+  url: string,
+): string {
+  const action = source === 'comment.updated' ? 'updated a comment' : 'left a comment';
+
+  return [
+    `Hi ${recipient.name},`,
+    '',
+    `${delivery.actorName} ${createCommentNotificationReason(recipient)} and ${action} in ${delivery.projectName} / ${delivery.diagramName}.`,
+    '',
+    truncateCommentBody(delivery.commentBodyText),
+    '',
+    `Open comment: ${url}`,
+  ].join('\n');
+}
+
+function createCommentNotificationHtml(
+  delivery: CommentNotificationDeliveryContext,
+  recipient: CommentNotificationDeliveryRecipient,
+  source: CommentNotificationDeliveryPayload['source'],
+  url: string,
+): string {
+  const action = source === 'comment.updated' ? 'updated a comment' : 'left a comment';
+
+  return [
+    '<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#2f3542">',
+    `<p>Hi ${escapeHtml(recipient.name)},</p>`,
+    `<p><strong>${escapeHtml(delivery.actorName)}</strong> ${escapeHtml(createCommentNotificationReason(recipient))} and ${escapeHtml(action)} in <strong>${escapeHtml(delivery.projectName)} / ${escapeHtml(delivery.diagramName)}</strong>.</p>`,
+    `<blockquote style="border-left:4px solid #58cc02;margin:16px 0;padding:8px 12px;color:#4b5563;background:#f7fee7">${escapeHtml(truncateCommentBody(delivery.commentBodyText))}</blockquote>`,
+    `<p><a href="${escapeHtml(url)}" style="display:inline-block;background:#58cc02;color:#ffffff;text-decoration:none;font-weight:700;padding:10px 16px;border-radius:10px">Open comment</a></p>`,
+    '</div>',
+  ].join('');
+}
+
+function createCommentNotificationReason(recipient: CommentNotificationDeliveryRecipient): string {
+  if (recipient.reasons.includes('mention')) {
+    return 'mentioned you';
+  }
+
+  return 'replied to you';
+}
+
+function truncateCommentBody(value: string): string {
+  const compact = value.replace(/\s+/g, ' ').trim();
+
+  return compact.length > 320 ? `${compact.slice(0, 317)}...` : compact;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function serializeJobError(error: unknown): JsonValue {

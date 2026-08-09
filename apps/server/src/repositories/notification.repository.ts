@@ -69,6 +69,38 @@ export type CommentNotificationDeliveryRecipients = {
   replyUserId: string | null;
 };
 
+export type CommentNotificationDeliveryRecipient = {
+  email: string;
+  name: string;
+  reasons: NotificationInboxItemKind[];
+  userId: string;
+};
+
+export type CommentNotificationDeliveryContext = {
+  actorEmail: string;
+  actorName: string;
+  commentBodyText: string;
+  commentCreatedAt: Date;
+  commentId: string;
+  diagramId: string;
+  diagramName: string;
+  organizationName: string;
+  organizationSlug: string;
+  projectId: string;
+  projectName: string;
+  threadId: string;
+  recipients: CommentNotificationDeliveryRecipient[];
+};
+
+type CommentNotificationDeliveryContextRow = Omit<CommentNotificationDeliveryContext, 'recipients'>;
+
+type CommentNotificationDeliveryRecipientRow = {
+  email: string;
+  name: string;
+  reason: NotificationInboxItemKind;
+  userId: string;
+};
+
 @Injectable()
 export class NotificationRepository {
   constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
@@ -142,7 +174,7 @@ export class NotificationRepository {
       INNER JOIN projects ON projects.id = diagrams.project_id
       INNER JOIN users ON users.id = parent_comments.created_by_id
       WHERE comments.id = ${options.commentId}
-        AND comments.created_by_id <> ${options.actorId}
+        AND comments.created_by_id = ${options.actorId}
         AND parent_comments.created_by_id <> ${options.actorId}
         AND comments.deleted_at IS NULL
         AND parent_comments.deleted_at IS NULL
@@ -156,6 +188,101 @@ export class NotificationRepository {
       // Mentions and direct-reply recipient are separated so future email/websocket templates can explain why a user was notified.
       mentionUserIds: [...new Set(mentionRows.rows.map((row) => row.mentionedUserId))],
       replyUserId: replyRow.rows[0]?.replyUserId ?? null,
+    };
+  }
+
+  async getCommentNotificationDelivery(options: {
+    actorId: string;
+    commentId: string;
+  }): Promise<CommentNotificationDeliveryContext | null> {
+    const contextResult = await sql<CommentNotificationDeliveryContextRow>`
+      SELECT
+        comments.id AS "commentId",
+        comments.body_text AS "commentBodyText",
+        comments.created_at AS "commentCreatedAt",
+        comment_threads.id AS "threadId",
+        diagrams.id AS "diagramId",
+        diagrams.name AS "diagramName",
+        projects.id AS "projectId",
+        projects.name AS "projectName",
+        organizations.name AS "organizationName",
+        organizations.slug AS "organizationSlug",
+        users.email AS "actorEmail",
+        users.name AS "actorName"
+      FROM comments
+      INNER JOIN users ON users.id = comments.created_by_id
+      INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
+      INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
+      INNER JOIN projects ON projects.id = diagrams.project_id
+      INNER JOIN organizations ON organizations.id = projects.organization_id
+      WHERE comments.id = ${options.commentId}
+        AND comments.created_by_id = ${options.actorId}
+        AND comments.deleted_at IS NULL
+        AND diagrams.archived_at IS NULL
+        AND projects.archived_at IS NULL
+        AND users.deleted_at IS NULL
+    `.execute(this.db);
+    const context = contextResult.rows[0] ?? null;
+
+    if (!context) {
+      return null;
+    }
+
+    const recipientResult = await sql<CommentNotificationDeliveryRecipientRow>`
+      SELECT *
+      FROM (
+        SELECT DISTINCT
+          comment_mentions.mentioned_user_id AS "userId",
+          recipient_users.email AS "email",
+          recipient_users.name AS "name",
+          'mention'::text AS "reason"
+        FROM comment_mentions
+        INNER JOIN comments ON comments.id = comment_mentions.comment_id
+        INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
+        INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
+        INNER JOIN projects ON projects.id = diagrams.project_id
+        INNER JOIN users recipient_users ON recipient_users.id = comment_mentions.mentioned_user_id
+        WHERE comment_mentions.comment_id = ${options.commentId}
+          AND comment_mentions.mentioned_user_id <> ${options.actorId}
+          AND comments.deleted_at IS NULL
+          AND diagrams.archived_at IS NULL
+          AND projects.archived_at IS NULL
+          AND recipient_users.deleted_at IS NULL
+          AND ${this.createProjectAccessExistsSql(sql.ref('comment_mentions.mentioned_user_id'))}
+        UNION ALL
+        SELECT
+          parent_comments.created_by_id AS "userId",
+          parent_users.email AS "email",
+          parent_users.name AS "name",
+          'reply'::text AS "reason"
+        FROM comments
+        INNER JOIN comments parent_comments ON parent_comments.id = comments.parent_comment_id
+        INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
+        INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
+        INNER JOIN projects ON projects.id = diagrams.project_id
+        INNER JOIN users parent_users ON parent_users.id = parent_comments.created_by_id
+        WHERE comments.id = ${options.commentId}
+          AND comments.created_by_id = ${options.actorId}
+          AND parent_comments.created_by_id <> ${options.actorId}
+          AND comments.deleted_at IS NULL
+          AND parent_comments.deleted_at IS NULL
+          AND diagrams.archived_at IS NULL
+          AND projects.archived_at IS NULL
+          AND parent_users.deleted_at IS NULL
+          AND ${this.createProjectAccessExistsSql(sql.ref('parent_comments.created_by_id'))}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM comment_mentions mention_dedupe
+            WHERE mention_dedupe.comment_id = comments.id
+              AND mention_dedupe.mentioned_user_id = parent_comments.created_by_id
+          )
+      ) recipients
+      ORDER BY "email" ASC
+    `.execute(this.db);
+
+    return {
+      ...context,
+      recipients: mergeNotificationRecipients(recipientResult.rows),
     };
   }
 
@@ -307,4 +434,30 @@ export class NotificationRepository {
       )
     `;
   }
+}
+
+function mergeNotificationRecipients(
+  rows: CommentNotificationDeliveryRecipientRow[],
+): CommentNotificationDeliveryRecipient[] {
+  const recipients = new Map<string, CommentNotificationDeliveryRecipient>();
+
+  for (const row of rows) {
+    const recipient = recipients.get(row.userId);
+
+    if (recipient) {
+      if (!recipient.reasons.includes(row.reason)) {
+        recipient.reasons.push(row.reason);
+      }
+      continue;
+    }
+
+    recipients.set(row.userId, {
+      email: row.email,
+      name: row.name,
+      reasons: [row.reason],
+      userId: row.userId,
+    });
+  }
+
+  return [...recipients.values()];
 }

@@ -18,10 +18,17 @@ describe(BackgroundJobService.name, () => {
         lockTtlMs: 120_000,
         pollIntervalMs: 2_500,
       },
+      server: {
+        webPublicUrl: 'https://app.tabliodb.test',
+      },
     })),
+  };
+  const mailService = {
+    sendTransactionalMail: vi.fn(),
   };
   const notificationRepository = {
     getCommentDeliveryRecipients: vi.fn(),
+    getCommentNotificationDelivery: vi.fn(),
   };
 
   function createService() {
@@ -33,11 +40,15 @@ describe(BackgroundJobService.name, () => {
         lockTtlMs: 120_000,
         pollIntervalMs: 2_500,
       },
+      server: {
+        webPublicUrl: 'https://app.tabliodb.test',
+      },
     });
 
     return new BackgroundJobService(
       backgroundJobRepository as never,
       configRepository as never,
+      mailService as never,
       notificationRepository as never,
     );
   }
@@ -74,6 +85,39 @@ describe(BackgroundJobService.name, () => {
       mentionUserIds: ['owner-id', 'teammate-id'],
       replyUserId: 'owner-id',
     });
+    notificationRepository.getCommentNotificationDelivery.mockResolvedValue({
+      actorEmail: 'actor@tabliodb.local',
+      actorName: 'Comment Author',
+      commentBodyText: 'Please review this column.',
+      commentCreatedAt: new Date('2026-08-09T03:00:00.000Z'),
+      commentId: 'comment-id',
+      diagramId: 'diagram-id',
+      diagramName: 'Library schema',
+      organizationName: 'Library Workspace',
+      organizationSlug: 'library-workspace',
+      projectId: 'project-id',
+      projectName: 'Library System',
+      recipients: [
+        {
+          email: 'owner@tabliodb.local',
+          name: 'Owner',
+          reasons: ['mention', 'reply'],
+          userId: 'owner-id',
+        },
+        {
+          email: 'teammate@tabliodb.local',
+          name: 'Teammate',
+          reasons: ['mention'],
+          userId: 'teammate-id',
+        },
+      ],
+      threadId: 'thread-id',
+    });
+    mailService.sendTransactionalMail.mockResolvedValue({
+      messageId: 'smtp-message-id',
+      recipientCount: 1,
+      status: 'sent',
+    });
 
     await expect(
       service['processCommentNotificationDelivery']({
@@ -84,15 +128,30 @@ describe(BackgroundJobService.name, () => {
       }),
     ).resolves.toEqual({
       commentId: 'comment-id',
+      emailSentCount: 2,
+      emailSkippedCount: 0,
       mentionRecipientCount: 2,
       recipientCount: 2,
       replyRecipientCount: 1,
       source: 'comment.created',
+      status: 'delivered',
       threadId: 'thread-id',
     });
     expect(notificationRepository.getCommentDeliveryRecipients).toHaveBeenCalledWith({
       actorId: 'actor-id',
       commentId: 'comment-id',
     });
+    expect(mailService.sendTransactionalMail).toHaveBeenCalledTimes(2);
+    expect(mailService.sendTransactionalMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'Comment Author mentioned you in Library schema',
+        to: [
+          {
+            email: 'owner@tabliodb.local',
+            name: 'Owner',
+          },
+        ],
+      }),
+    );
   });
 });

@@ -7,6 +7,7 @@ import { DiagramService } from './diagram.service.js';
 import { DiagramReviewService } from './diagram-review.service.js';
 import { FileService } from './file.service.js';
 import { InvitationService } from './invitation.service.js';
+import { MailService } from './mail.service.js';
 import { MetricsService } from './metrics.service.js';
 import { NotificationService } from './notification.service.js';
 import { OrganizationService } from './organization.service.js';
@@ -30,6 +31,7 @@ export const services = [
   DiagramReviewService,
   FileService,
   InvitationService,
+  MailService,
   MetricsService,
   NotificationService,
   OrganizationService,
