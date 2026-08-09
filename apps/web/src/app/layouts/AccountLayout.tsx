@@ -64,15 +64,8 @@ export function AccountLayout() {
 function AccountAvatar({ avatarUrl, cursorColor }: { avatarUrl: string | null; cursorColor?: string }) {
   return (
     <span
-      className="grid size-8 place-items-center overflow-hidden rounded-[13px] border-2 border-white bg-[rgb(var(--tabliodb-primary-soft))] text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
-      style={
-        cursorColor
-          ? {
-              // Cursor color tetap terlihat sebagai ring presence, sementara isi avatar memakai warna soft yang kontrasnya stabil.
-              boxShadow: `0 0 0 2px ${cursorColor}, 0 2px 0 rgb(var(--tabliodb-border-strong))`,
-            }
-          : undefined
-      }
+      className="grid size-8 place-items-center overflow-hidden rounded-[13px] border-2 border-white bg-[rgb(var(--tabliodb-primary))] text-xs font-extrabold text-white shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]"
+      style={cursorColor ? { backgroundColor: cursorColor } : undefined}
     >
       {avatarUrl ? <img alt="" className="size-full object-cover" src={avatarUrl} /> : <UserRound className="size-4" />}
     </span>
