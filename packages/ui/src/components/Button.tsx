@@ -20,15 +20,15 @@ export const buttonVariants = cva(
       },
       variant: {
         danger:
-          'border border-[rgb(var(--tabliodb-danger))] bg-[rgb(var(--tabliodb-danger))] text-white shadow-[0_3px_0_rgb(var(--tabliodb-danger-shadow))] hover:bg-[rgb(var(--tabliodb-danger-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-danger-shadow))]',
+          'border border-[rgb(var(--tabliodb-danger))] bg-[rgb(var(--tabliodb-danger))] text-white [text-shadow:var(--tabliodb-solid-text-shadow)] shadow-[0_3px_0_rgb(var(--tabliodb-danger-shadow))] hover:bg-[rgb(var(--tabliodb-danger-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-danger-shadow))]',
         ghost: 'bg-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
         primary:
-          'border border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_3px_0_rgb(var(--tabliodb-primary-shadow))] hover:bg-[rgb(var(--tabliodb-primary-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-primary-shadow))]',
+          'border border-[rgb(var(--tabliodb-primary))] bg-[rgb(var(--tabliodb-primary))] text-white [text-shadow:var(--tabliodb-solid-text-shadow)] shadow-[0_3px_0_rgb(var(--tabliodb-primary-shadow))] hover:bg-[rgb(var(--tabliodb-primary-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-primary-shadow))]',
         purple:
-          'border border-[rgb(var(--tabliodb-lavender))] bg-[rgb(var(--tabliodb-lavender))] text-white shadow-[0_3px_0_rgb(var(--tabliodb-lavender-shadow))] hover:bg-[rgb(var(--tabliodb-lavender-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-lavender-shadow))]',
+          'border border-[rgb(var(--tabliodb-lavender))] bg-[rgb(var(--tabliodb-lavender))] text-white [text-shadow:var(--tabliodb-solid-text-shadow)] shadow-[0_3px_0_rgb(var(--tabliodb-lavender-shadow))] hover:bg-[rgb(var(--tabliodb-lavender-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-lavender-shadow))]',
         secondary:
           'border border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] hover:bg-[rgb(var(--tabliodb-surface-raised))] active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]',
-        sky: 'border border-[rgb(var(--tabliodb-sky))] bg-[rgb(var(--tabliodb-sky))] text-white shadow-[0_3px_0_rgb(var(--tabliodb-sky-shadow))] hover:bg-[rgb(var(--tabliodb-sky-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-sky-shadow))]',
+        sky: 'border border-[rgb(var(--tabliodb-sky))] bg-[rgb(var(--tabliodb-sky))] text-white [text-shadow:var(--tabliodb-solid-text-shadow)] shadow-[0_3px_0_rgb(var(--tabliodb-sky-shadow))] hover:bg-[rgb(var(--tabliodb-sky-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-sky-shadow))]',
         soft: 'border border-transparent bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] hover:bg-[rgb(var(--tabliodb-primary-soft-hover))]',
       },
     },

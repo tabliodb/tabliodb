@@ -1733,7 +1733,7 @@ export function EditorPage() {
             <div className="relative">
               <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
               {openCommentThreadCount > 0 ? (
-                <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
+                <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white [text-shadow:var(--tabliodb-solid-text-shadow)]">
                   {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
                 </span>
               ) : null}
@@ -1747,7 +1747,7 @@ export function EditorPage() {
                     {/* Dropdown trigger dibuat sebagai button langsung agar Radix bisa mengelola focus, keyboard open, dan aria-expanded tanpa melewati wrapper non-interaktif. */}
                     <Bell aria-hidden="true" className="size-4" />
                     {unreadNotificationCount > 0 ? (
-                      <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white">
+                      <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white [text-shadow:var(--tabliodb-solid-text-shadow)]">
                         {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
                       </span>
                     ) : null}
@@ -3665,7 +3665,7 @@ function CommentsDialog({
                               ) : null}
                               <Badge
                                 className={cn(
-                                  'flex items-center gap-1 text-white',
+                                  'flex items-center gap-1 text-white [text-shadow:var(--tabliodb-solid-text-shadow)]',
                                   thread.status === 'resolved'
                                     ? 'bg-[rgb(var(--tabliodb-lavender))]'
                                     : 'bg-[rgb(var(--tabliodb-primary))]',
@@ -4003,7 +4003,7 @@ function ThreadCommentItem({
                         Cancel
                       </button>
                       <button
-                        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[rgb(var(--tabliodb-danger))] px-2 py-1 text-xs font-extrabold text-white transition hover:bg-[rgb(var(--tabliodb-danger-hover))] disabled:cursor-wait disabled:opacity-70"
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[rgb(var(--tabliodb-danger))] px-2 py-1 text-xs font-extrabold text-white [text-shadow:var(--tabliodb-solid-text-shadow)] transition hover:bg-[rgb(var(--tabliodb-danger-hover))] disabled:cursor-wait disabled:opacity-70"
                         disabled={isDeleting}
                         onClick={() => onDeleteConfirm(comment)}
                         type="button"
