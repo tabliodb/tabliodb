@@ -78,10 +78,10 @@ const canvasBackgroundColor = '#F6F6F6';
 const canvasGridColor = '#AAAAAA';
 const relationshipActiveColor = '#58cc02';
 const relationshipConnectorRadius = 10;
-const relationshipNeutralColor = '#8F9AA8';
+const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
 
-const relationshipObstaclePadding = 24;
+const relationshipObstaclePadding = 12;
 const minimapAspectRatio = 192 / 124;
 
 let noteShapeRegistered = false;
@@ -366,7 +366,7 @@ export function SchemaCanvas({
         allowMulti: true,
         allowNode: true,
         connector: { name: 'rounded', args: { radius: relationshipConnectorRadius } },
-        connectionPoint: 'anchor',
+        connectionPoint: 'boundary',
         highlight: true,
         router: { name: 'manhattan', args: buildManhattanRouterArgs() },
         snap: { radius: 24 },
@@ -2319,8 +2319,8 @@ function createRelationshipEdgeMetadata(
           name: 'manhattan',
           args: buildManhattanRouterArgs(terminals.source.side, terminals.target.side),
         },
-        source: { cell: relationship.sourceTableId, connectionPoint: 'anchor', port: terminals.source.portId },
-        target: { cell: relationship.targetTableId, connectionPoint: 'anchor', port: terminals.target.portId },
+        source: { cell: relationship.sourceTableId, port: terminals.source.portId },
+        target: { cell: relationship.targetTableId, port: terminals.target.portId },
         zIndex: terminals.source.active ? 1 : 0,
       },
     ];
@@ -2348,9 +2348,20 @@ function createRelationshipPlan(
       continue;
     }
 
+    const dx = Math.abs(targetGeometry.centerX - sourceGeometry.centerX);
+    const dy = Math.abs(targetGeometry.centerY - sourceGeometry.centerY);
     const sourceIsLeft = sourceGeometry.centerX <= targetGeometry.centerX;
-    const sourceSide = sourceIsLeft ? 'right' : 'left';
-    const targetSide = sourceIsLeft ? 'left' : 'right';
+    let sourceSide: PortSide;
+    let targetSide: PortSide;
+
+    if (dy > dx * 1.5) {
+      // Untuk table yang stacked vertikal, side yang sama mencegah garis dipaksa muter ke sisi berlawanan.
+      sourceSide = sourceIsLeft ? 'left' : 'right';
+      targetSide = sourceSide;
+    } else {
+      sourceSide = sourceIsLeft ? 'right' : 'left';
+      targetSide = sourceIsLeft ? 'left' : 'right';
+    }
 
     const active =
       selectedRelationshipId === relationship.id ||
