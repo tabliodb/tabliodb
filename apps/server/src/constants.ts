@@ -55,6 +55,8 @@ export enum AuditAction {
   DiagramReviewApproved = 'diagram_review.approved',
   DiagramReviewChangesRequested = 'diagram_review.changes_requested',
   DiagramReviewCommented = 'diagram_review.commented',
+  DiagramShareLinkCreated = 'diagram_share_link.created',
+  DiagramShareLinkRevoked = 'diagram_share_link.revoked',
   UserDisabled = 'user.disabled',
   UserEnabled = 'user.enabled',
   UserPasswordReset = 'user.password_reset',

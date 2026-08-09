@@ -6,6 +6,7 @@ export * from './organizations';
 export * from './projects';
 export * from './review-signals';
 export * from './setup';
+export * from './share-links';
 export * from './snapshots';
 export * from './teams';
 export * from './users';

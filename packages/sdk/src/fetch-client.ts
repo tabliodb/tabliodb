@@ -249,6 +249,41 @@ export type CommentThreadStatusResponseDtoOutput = {
   unreadCount: number;
   updatedAt: string;
 };
+export type DiagramShareLinkDtoOutput = {
+  id: string;
+  diagramId: string;
+  snapshotId: string | null;
+  targetType: TargetType2;
+  label: string | null;
+  status: Status3;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdById: string;
+  createdByName: string;
+  accessCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+export type DiagramShareLinkListResponseDtoOutput = {
+  items: DiagramShareLinkDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type DiagramShareLinkCreateDto = {
+  expiresAt?: string | null;
+  label?: string;
+  snapshotId?: string;
+  targetType?: TargetType2;
+};
+export type DiagramShareLinkCreateResponseDtoOutput = {
+  shareLink: DiagramShareLinkDtoOutput;
+  token: string;
+  url: string;
+};
+export type DiagramShareLinkRevokeResponseDtoOutput = {
+  successful: boolean;
+};
 export type DiagramCreateDto = {
   projectId: string;
   name: string;
@@ -259,7 +294,7 @@ export type DiagramResponseDtoOutput = {
   projectId: string;
   name: string;
   dialect: Dialect;
-  status: Status3;
+  status: Status4;
   createdAt: string;
   updatedAt: string;
 };
@@ -501,7 +536,7 @@ export type InvitationDtoOutput = {
   revokedAt: string | null;
   expiresAt: string;
   createdAt: string;
-  status: Status4;
+  status: Status5;
 };
 export type InvitationCreateResponseDtoOutput = {
   invitation: InvitationDtoOutput;
@@ -516,7 +551,7 @@ export type InvitationPublicDtoOutput = {
   projectRole: ProjectRole | null;
   message: string | null;
   expiresAt: string;
-  status: Status4;
+  status: Status5;
 };
 export type InvitationAcceptDto = {
   token: string;
@@ -582,9 +617,9 @@ export type NotificationInboxItemDtoOutput = {
   };
   thread: {
     id: string;
-    status: Status5;
+    status: Status6;
     targetId: string | null;
-    targetType: TargetType;
+    targetType: TargetType3;
     updatedAt: string;
   };
   type: Type2;
@@ -637,7 +672,7 @@ export type OrganizationMemberDtoOutput = {
   joinedAt: string | null;
   name: string;
   role: Role;
-  status: Status6;
+  status: Status7;
   updatedAt: string;
   userId: string;
 };
@@ -734,6 +769,163 @@ export type DiagramListResponseDtoOutput = {
   items: DiagramResponseDtoOutput[];
   nextCursor: string | null;
   totalCount: number;
+};
+export type PublicDiagramShareSnapshotDtoOutput = {
+  id: string;
+  version: number;
+  message: string | null;
+  createdAt: string;
+};
+export type PublicDiagramShareResponseDtoOutput = {
+  diagram: {
+    id: string;
+    dialect: Dialect;
+    name: string;
+    organizationName: string;
+    projectName: string;
+  };
+  model: {
+    schemaVersion: number;
+    dialect: Dialect;
+    tables: {
+      [key: string]: {
+        id: string;
+        name: string;
+        schema?: string;
+        position: {
+          x: number;
+          y: number;
+        };
+        width: number;
+        color?: string;
+        collapsed?: boolean;
+        displayMode?: DisplayMode;
+        columnIds: string[];
+        indexIds: string[];
+        groupId?: string;
+        comment?: string;
+      };
+    };
+    columns: {
+      [key: string]: {
+        id: string;
+        tableId: string;
+        name: string;
+        type: {
+          family: Family;
+          length?: number;
+          precision?: number;
+          scale?: number;
+          enumId?: string;
+          raw?: string;
+        };
+        primaryKey: boolean;
+        nullable: boolean;
+        unique: boolean;
+        autoIncrement: boolean;
+        unsigned?: boolean;
+        defaultValue?: string;
+        generatedExpression?: string;
+        collation?: string;
+        comment?: string;
+      };
+    };
+    indexes: {
+      [key: string]: {
+        id: string;
+        tableId: string;
+        name: string;
+        columns: {
+          columnId: string;
+          order?: Order;
+          nulls?: Nulls;
+        }[];
+        unique: boolean;
+        method?: Method;
+        where?: string;
+        includeColumnIds?: string[];
+        comment?: string;
+      };
+    };
+    relationships: {
+      [key: string]: {
+        id: string;
+        sourceTableId: string;
+        sourceColumnIds: string[];
+        targetTableId: string;
+        targetColumnIds: string[];
+        cardinality: Cardinality;
+        onDelete?: OnDelete;
+        onUpdate?: OnUpdate;
+        name?: string;
+        deferrable?: boolean;
+        matchType?: MatchType;
+        comment?: string;
+      };
+    };
+    enums: {
+      [key: string]: {
+        id: string;
+        name: string;
+        schema?: string;
+        values: string[];
+        comment?: string;
+      };
+    };
+    checks: {
+      [key: string]: {
+        id: string;
+        tableId: string;
+        columnId?: string;
+        name: string;
+        expression: string;
+        comment?: string;
+      };
+    };
+    notes: {
+      [key: string]: {
+        id: string;
+        text: string;
+        position: {
+          x: number;
+          y: number;
+        };
+        width?: number;
+        color?: string;
+      };
+    };
+    groups: {
+      [key: string]: {
+        id: string;
+        name: string;
+        position: {
+          x: number;
+          y: number;
+        };
+        width: number;
+        height: number;
+        color?: string;
+        tableIds: string[];
+      };
+    };
+    metadata: {
+      name: string;
+      updatedAt?: string;
+      viewport?: {
+        x: number;
+        y: number;
+        zoom: number;
+      };
+      gridSize?: number;
+      tableMinWidth?: number;
+      relationshipRouting?: RelationshipRouting;
+    };
+  };
+  share: {
+    expiresAt: string | null;
+    targetType: TargetType4;
+  };
+  snapshot: PublicDiagramShareSnapshotDtoOutput | null;
 };
 export type ReviewSignalResponseDtoOutput = {
   code: string;
@@ -1819,6 +2011,79 @@ export function unresolveCommentThread(
     }),
   );
 }
+export function getDiagramShareLinks(
+  {
+    cursor,
+    limit,
+    diagramId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramShareLinkListResponseDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/share-links${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function createDiagramShareLink(
+  {
+    diagramId,
+    diagramShareLinkCreateDto,
+  }: {
+    diagramId: string;
+    diagramShareLinkCreateDto: DiagramShareLinkCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: DiagramShareLinkCreateResponseDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/share-links`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: diagramShareLinkCreateDto,
+      }),
+    ),
+  );
+}
+export function revokeDiagramShareLink(
+  {
+    shareLinkId,
+    diagramId,
+  }: {
+    shareLinkId: string;
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramShareLinkRevokeResponseDtoOutput;
+    }>(`/diagrams/${encodeURIComponent(diagramId)}/share-links/${encodeURIComponent(shareLinkId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
 export function createDiagram(
   {
     diagramCreateDto,
@@ -2495,6 +2760,23 @@ export function getProjectDiagrams(
         ...opts,
       },
     ),
+  );
+}
+export function getPublicDiagramShare(
+  {
+    token,
+  }: {
+    token: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: PublicDiagramShareResponseDtoOutput;
+    }>(`/public/share-links/${encodeURIComponent(token)}`, {
+      ...opts,
+    }),
   );
 }
 export function getDiagramReviewSignals(
@@ -3213,6 +3495,15 @@ export enum Status2 {
 export enum BodyFormat {
   Lexical = 'lexical',
 }
+export enum TargetType2 {
+  Diagram = 'diagram',
+  Snapshot = 'snapshot',
+}
+export enum Status3 {
+  Active = 'active',
+  Expired = 'expired',
+  Revoked = 'revoked',
+}
 export enum Dialect {
   Postgresql = 'postgresql',
   Mysql = 'mysql',
@@ -3220,7 +3511,7 @@ export enum Dialect {
   Mariadb = 'mariadb',
   Sqlserver = 'sqlserver',
 }
-export enum Status3 {
+export enum Status4 {
   Draft = 'draft',
   Reviewed = 'reviewed',
   Approved = 'approved',
@@ -3335,15 +3626,26 @@ export enum ProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status4 {
+export enum Status5 {
   Pending = 'pending',
   Accepted = 'accepted',
   Revoked = 'revoked',
   Expired = 'expired',
 }
-export enum Status5 {
+export enum Status6 {
   Open = 'open',
   Resolved = 'resolved',
+}
+export enum TargetType3 {
+  Diagram = 'diagram',
+  Table = 'table',
+  Column = 'column',
+  Relationship = 'relationship',
+  Index = 'index',
+  Enum = 'enum',
+  Check = 'check',
+  Note = 'note',
+  Group = 'group',
 }
 export enum Type2 {
   Mention = 'mention',
@@ -3360,7 +3662,7 @@ export enum DefaultProjectRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status6 {
+export enum Status7 {
   Pending = 'pending',
   Active = 'active',
   Suspended = 'suspended',
@@ -3376,6 +3678,10 @@ export enum Role2 {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
+}
+export enum TargetType4 {
+  Diagram = 'diagram',
+  Snapshot = 'snapshot',
 }
 export enum Severity {
   Info = 'info',

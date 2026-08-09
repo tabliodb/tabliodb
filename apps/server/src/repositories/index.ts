@@ -6,6 +6,7 @@ import { CommentRepository } from './comment.repository.js';
 import { ConfigRepository } from './config.repository.js';
 import { CryptoRepository } from './crypto.repository.js';
 import { DatabaseRepository } from './database.repository.js';
+import { DiagramShareLinkRepository } from './diagram-share-link.repository.js';
 import { DiagramRepository } from './diagram.repository.js';
 import { DiagramReviewRepository } from './diagram-review.repository.js';
 import { FileRepository } from './file.repository.js';
@@ -30,6 +31,7 @@ export const repositories = [
   ConfigRepository,
   CryptoRepository,
   DatabaseRepository,
+  DiagramShareLinkRepository,
   DiagramRepository,
   DiagramReviewRepository,
   FileRepository,

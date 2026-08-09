@@ -283,6 +283,22 @@ export interface DiagramSnapshotTable {
   createdAt: Timestamp;
 }
 
+export interface DiagramShareLinkTable {
+  id: Generated<string>;
+  diagramId: string;
+  snapshotId: NullableColumn<string>;
+  tokenHash: BinaryColumn;
+  targetType: Defaulted<'diagram' | 'snapshot'>;
+  label: NullableColumn<string>;
+  expiresAt: NullableTimestamp;
+  revokedAt: NullableTimestamp;
+  createdById: string;
+  accessCount: Defaulted<number>;
+  lastUsedAt: NullableTimestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface DiagramEntityIndexTable {
   id: Generated<string>;
   diagramId: string;
@@ -421,6 +437,7 @@ export interface DB {
   diagram_review_events: DiagramReviewEventTable;
   diagram_documents: DiagramDocumentTable;
   diagram_snapshots: DiagramSnapshotTable;
+  diagram_share_links: DiagramShareLinkTable;
   diagram_entity_index: DiagramEntityIndexTable;
   diagram_review_signals: DiagramReviewSignalTable;
   comment_threads: CommentThreadTable;

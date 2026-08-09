@@ -44,6 +44,9 @@ const SetupPage = lazy(() => import('@/features/setup/SetupPage').then((module) 
 const ProfilePage = lazy(() =>
   import('@/features/profile/ProfilePage').then((module) => ({ default: module.ProfilePage })),
 );
+const PublicSharePage = lazy(() =>
+  import('@/features/share/PublicSharePage').then((module) => ({ default: module.PublicSharePage })),
+);
 
 export const router = createBrowserRouter([
   {
@@ -86,6 +89,10 @@ export const router = createBrowserRouter([
                 path: routes.invitation.path,
               },
             ],
+          },
+          {
+            element: <PublicSharePage />,
+            path: routes.share.path,
           },
           {
             element: <AdminLayout />,

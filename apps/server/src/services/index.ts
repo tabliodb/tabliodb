@@ -2,6 +2,7 @@ import { AuthService } from './auth.service.js';
 import { BackgroundJobService } from './background-job.service.js';
 import { CollaborationService } from './collaboration.service.js';
 import { CommentService } from './comment.service.js';
+import { DiagramShareLinkService } from './diagram-share-link.service.js';
 import { DiagramService } from './diagram.service.js';
 import { DiagramReviewService } from './diagram-review.service.js';
 import { FileService } from './file.service.js';
@@ -23,6 +24,7 @@ export const services = [
   BackgroundJobService,
   CollaborationService,
   CommentService,
+  DiagramShareLinkService,
   DiagramService,
   DiagramReviewService,
   FileService,

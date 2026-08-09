@@ -18,6 +18,10 @@ type PasswordResetParams = {
   token: string;
 };
 
+type ShareParams = {
+  token: string;
+};
+
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
 }
@@ -46,6 +50,10 @@ export const routes = {
   invitation: {
     path: '/invite/:token',
     to: ({ token }: InvitationParams) => `/invite/${encodePathSegment(token)}`,
+  },
+  share: {
+    path: '/share/:token',
+    to: ({ token }: ShareParams) => `/share/${encodePathSegment(token)}`,
   },
   admin: {
     path: '/admin',

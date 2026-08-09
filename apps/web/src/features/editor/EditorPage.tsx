@@ -44,8 +44,12 @@ import {
   Role3 as SdkTeamProjectRole,
   Source as SdkImportSource,
   TabliodbApiError,
+  TargetType2 as SdkShareLinkTargetType,
   type AuditLogDtoOutput,
+  type DiagramShareLinkCreateDto,
+  type DiagramShareLinkCreateResponseDtoOutput,
   type DiagramExportResponseDtoOutput,
+  type DiagramShareLinkDtoOutput,
   type DiagramResponseDtoOutput,
   type NotificationInboxItemDtoOutput,
   type OrganizationDtoOutput,
@@ -122,6 +126,7 @@ import {
   ImageDown,
   Loader2,
   LocateFixed,
+  Link2,
   LogOut,
   Keyboard,
   Map as MapIcon,
@@ -132,6 +137,7 @@ import {
   Save,
   Search,
   Settings,
+  Share2,
   ShieldCheck,
   SlidersHorizontal,
   StickyNote,
@@ -239,6 +245,11 @@ import {
   useUpdateDiagramReviewSignalSettingsMutation,
   useUpdateProjectReviewSignalSettingsMutation,
 } from '@/resources/review-signals';
+import {
+  shareLinkQueries,
+  useCreateDiagramShareLinkMutation,
+  useRevokeDiagramShareLinkMutation,
+} from '@/resources/share-links';
 import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
 import { createEmptyCommentFormBody } from './comment-body';
 import {
@@ -272,6 +283,7 @@ type ReviewSignalEffectiveSettingsDto = ReviewSignalEffectiveSettingsDtoOutput;
 type ReviewSignalResponseDto = ReviewSignalResponseDtoOutput;
 type SnapshotDiffResponseDto = SnapshotDiffResponseDtoOutput;
 type SnapshotResponseDto = SnapshotResponseDtoOutput;
+type DiagramShareLinkDto = DiagramShareLinkDtoOutput;
 type TeamMemberDto = TeamMemberDtoOutput;
 type TeamProjectAccessDto = TeamProjectAccessDtoOutput;
 type TeamProjectRole = `${SdkTeamProjectRole}`;
@@ -337,6 +349,13 @@ const sdkExportFormatByValue: Record<DiagramExportFormat, SdkExportFormat> = {
   tabliodb_json: SdkExportFormat.TabliodbJson,
 };
 
+type ShareLinkTarget = 'diagram' | 'snapshot';
+
+const sdkShareLinkTargetTypeByValue: Record<ShareLinkTarget, SdkShareLinkTargetType> = {
+  diagram: SdkShareLinkTargetType.Diagram,
+  snapshot: SdkShareLinkTargetType.Snapshot,
+};
+
 const sdkDiagramReviewActionByValue: Record<DiagramReviewAction, SdkDiagramReviewAction> = {
   approved: SdkDiagramReviewAction.Approved,
   changes_requested: SdkDiagramReviewAction.ChangesRequested,
@@ -389,6 +408,16 @@ const importSqlFormSchema = z.object({
 });
 
 type ImportSqlFormState = z.infer<typeof importSqlFormSchema>;
+
+const shareLinkExpiryOptions = ['never', '7', '30'] as const;
+
+const shareLinkFormSchema = z.object({
+  expiresInDays: z.enum(shareLinkExpiryOptions),
+  label: z.string().trim().max(80, 'Keep the label under 80 characters.'),
+  targetType: z.enum(['diagram', 'snapshot']),
+});
+
+type ShareLinkFormState = z.infer<typeof shareLinkFormSchema>;
 
 type EditorImportRequest = {
   content: string;
@@ -558,6 +587,7 @@ export function EditorPage() {
   const [snapshotHistoryOpen, setSnapshotHistoryOpen] = useState(false);
   const [importJsonOpen, setImportJsonOpen] = useState(false);
   const [importSqlOpen, setImportSqlOpen] = useState(false);
+  const [shareLinksOpen, setShareLinksOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [minimapToggleSignal, setMinimapToggleSignal] = useState(0);
@@ -667,9 +697,16 @@ export function EditorPage() {
     // Inbox detail baru dimuat ketika menu dibuka agar editor canvas tidak membawa payload diskusi global saat initial render.
     enabled: Boolean(currentUser) && notificationsOpen && notificationInboxQueryOptions.enabled !== false,
   });
+  const shareLinksQueryOptions = shareLinkQueries.listByDiagram(activeDiagram?.id ?? '', { limit: 50 });
+  const shareLinksQuery = useQuery({
+    ...shareLinksQueryOptions,
+    // Share links hanya dibutuhkan ketika dialog dibuka; public sharing tidak ikut memperlambat editor utama.
+    enabled: Boolean(activeDiagram) && shareLinksOpen && shareLinksQueryOptions.enabled !== false,
+  });
 
   const snapshots = snapshotsQuery.data ?? emptySnapshots;
   const latestSnapshot = snapshots[0] ?? null;
+  const shareLinks = shareLinksQuery.data?.items ?? [];
   const commentTargetSummaries = commentSummaryQuery.data?.targets ?? [];
   const openCommentThreadCount = commentSummaryQuery.data?.openCount ?? 0;
   const inboxNotifications = notificationInboxQuery.data?.items ?? emptyNotifications;
@@ -809,6 +846,32 @@ export function EditorPage() {
         setSelectedCommentTarget(null);
         resetModelHistory();
         queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
+      },
+    },
+  });
+  const createShareLinkMutation = useCreateDiagramShareLinkMutation({
+    mutationConfig: {
+      onSuccess: (response) => {
+        void copyTextToClipboard(response.url).catch(() => {
+          toast.warning({
+            description: 'The link was created, but the browser did not allow clipboard access.',
+            title: 'Copy share link manually',
+          });
+        });
+        toast.success({
+          description: 'The public read-only URL was copied to your clipboard.',
+          title: 'Share link created',
+        });
+      },
+    },
+  });
+  const revokeShareLinkMutation = useRevokeDiagramShareLinkMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        toast.success({
+          description: 'The public URL can no longer open this diagram.',
+          title: 'Share link revoked',
+        });
       },
     },
   });
@@ -1918,6 +1981,10 @@ export function EditorPage() {
               </DropdownMenuItem>
               {canEditDiagram ? (
                 <>
+                  <DropdownMenuItem onSelect={() => setShareLinksOpen(true)}>
+                    <Share2 className="size-4" />
+                    Share read-only link
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={importDiagramMutation.isPending}
                     onSelect={() => {
@@ -1995,6 +2062,45 @@ export function EditorPage() {
         canSnapshot={canCreateSnapshot}
         onOpenChange={setKeyboardShortcutsOpen}
         open={keyboardShortcutsOpen}
+      />
+
+      <ShareLinksDialog
+        createError={createShareLinkMutation.error}
+        disabled={!canEditDiagram}
+        isCreating={createShareLinkMutation.isPending}
+        isLoading={shareLinksQuery.isPending}
+        isRevoking={revokeShareLinkMutation.isPending}
+        latestSnapshot={latestSnapshot}
+        listError={shareLinksQuery.error}
+        onCopy={(url) =>
+          copyTextToClipboard(url)
+            .then(() => {
+              toast.success({
+                description: 'The public read-only URL is now on your clipboard.',
+                title: 'Share link copied',
+              });
+            })
+            .catch(() => {
+              toast.warning({
+                description: 'Your browser blocked clipboard access.',
+                title: 'Copy manually',
+              });
+            })
+        }
+        onCreate={(input) => createShareLinkMutation.mutateAsync({ body: input, diagramId: activeDiagram.id })}
+        onOpenChange={(open) => {
+          if (open) {
+            createShareLinkMutation.reset();
+            revokeShareLinkMutation.reset();
+          }
+
+          setShareLinksOpen(open);
+        }}
+        onRetry={() => void shareLinksQuery.refetch()}
+        onRevoke={(shareLinkId) => revokeShareLinkMutation.mutateAsync({ diagramId: activeDiagram.id, shareLinkId })}
+        open={shareLinksOpen}
+        revokeError={revokeShareLinkMutation.error}
+        shareLinks={shareLinks}
       />
 
       <ImportJsonDialog
@@ -2381,6 +2487,305 @@ function getPrimaryModifierKey(): string {
   }
 
   return 'Ctrl';
+}
+
+function ShareLinksDialog({
+  createError,
+  disabled,
+  isCreating,
+  isLoading,
+  isRevoking,
+  latestSnapshot,
+  listError,
+  onCopy,
+  onCreate,
+  onOpenChange,
+  onRetry,
+  onRevoke,
+  open,
+  revokeError,
+  shareLinks,
+}: {
+  createError: Error | null;
+  disabled: boolean;
+  isCreating: boolean;
+  isLoading: boolean;
+  isRevoking: boolean;
+  latestSnapshot: SnapshotResponseDto | null;
+  listError: Error | null;
+  onCopy: (url: string) => void;
+  onCreate: (input: DiagramShareLinkCreateDto) => Promise<DiagramShareLinkCreateResponseDtoOutput>;
+  onOpenChange: (open: boolean) => void;
+  onRetry: () => void;
+  onRevoke: (shareLinkId: string) => Promise<unknown>;
+  open: boolean;
+  revokeError: Error | null;
+  shareLinks: DiagramShareLinkDto[];
+}) {
+  const [lastCreatedUrl, setLastCreatedUrl] = useState<string | null>(null);
+  const form = useForm<ShareLinkFormState>({
+    defaultValues: {
+      expiresInDays: 'never',
+      label: '',
+      targetType: 'diagram',
+    },
+    resolver: zodResolver(shareLinkFormSchema),
+  });
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    form.reset({
+      expiresInDays: 'never',
+      label: '',
+      // Snapshot option hanya dipilih otomatis jika ada snapshot dan user memilihnya sendiri setelah dialog terbuka.
+      targetType: 'diagram',
+    });
+    setLastCreatedUrl(null);
+  }, [form, open]);
+
+  async function handleSubmit(values: ShareLinkFormState) {
+    if (disabled) {
+      return;
+    }
+
+    const expiresAt = values.expiresInDays === 'never' ? null : createExpiryIsoDate(Number(values.expiresInDays));
+    const response = await onCreate({
+      expiresAt,
+      label: values.label.trim() || undefined,
+      snapshotId: values.targetType === 'snapshot' ? latestSnapshot?.id : undefined,
+      targetType: sdkShareLinkTargetTypeByValue[values.targetType],
+    });
+
+    setLastCreatedUrl(response.url);
+  }
+
+  async function handleRevoke(shareLink: DiagramShareLinkDto) {
+    if (isRevoking || !window.confirm('Revoke this public share link?')) {
+      return;
+    }
+
+    await onRevoke(shareLink.id);
+  }
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="h-[min(86dvh,720px)] w-[min(94vw,980px)] max-w-none">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Share2 className="size-5 text-[rgb(var(--tabliodb-primary-text))]" />
+            Share read-only link
+          </DialogTitle>
+          <DialogDescription>
+            Create public links for stakeholders who only need to inspect this diagram.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="grid min-h-0 gap-4 lg:grid-cols-[minmax(260px,360px)_1fr]">
+          <form className="grid content-start gap-4" onSubmit={(event) => void form.handleSubmit(handleSubmit)(event)}>
+            <Surface className="grid gap-3 p-4">
+              <div>
+                <p className="text-sm font-black text-[rgb(var(--tabliodb-ink))]">New public link</p>
+                <p className="mt-1 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                  Anyone with the URL can view the diagram without signing in.
+                </p>
+              </div>
+
+              <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                Label
+                <ControlledInput
+                  autoComplete="off"
+                  control={form.control}
+                  name="label"
+                  placeholder="Stakeholder review"
+                />
+                <FieldError>{form.formState.errors.label?.message}</FieldError>
+              </label>
+
+              <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                Target
+                <ControlledSelect
+                  control={form.control}
+                  name="targetType"
+                  options={[
+                    { label: 'Live diagram', value: 'diagram' },
+                    {
+                      disabled: !latestSnapshot,
+                      label: latestSnapshot ? `Snapshot v${latestSnapshot.version}` : 'Snapshot unavailable',
+                      value: 'snapshot',
+                    },
+                  ]}
+                />
+                <FieldError>{form.formState.errors.targetType?.message}</FieldError>
+              </label>
+
+              <label className="grid gap-1.5 text-xs font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">
+                Expiry
+                <ControlledSelect
+                  control={form.control}
+                  name="expiresInDays"
+                  options={[
+                    { label: 'Never expires', value: 'never' },
+                    { label: '7 days', value: '7' },
+                    { label: '30 days', value: '30' },
+                  ]}
+                />
+                <FieldError>{form.formState.errors.expiresInDays?.message}</FieldError>
+              </label>
+
+              {createError ? <InlineErrorState error={createError} title="Could not create share link" /> : null}
+
+              <Button className="gap-2" disabled={disabled || isCreating} type="submit">
+                {isCreating ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
+                Create link
+              </Button>
+            </Surface>
+
+            {lastCreatedUrl ? (
+              <Surface className="grid gap-3 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-4">
+                <div>
+                  <p className="text-sm font-black text-[rgb(var(--tabliodb-primary-text))]">Link copied</p>
+                  <p className="mt-1 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                    This URL is shown only now because Tabliodb stores the token as a hash.
+                  </p>
+                </div>
+                <div className="min-w-0 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-primary-border))] bg-white px-3 py-2 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  <span className="block truncate">{lastCreatedUrl}</span>
+                </div>
+                <Button className="gap-2" onClick={() => onCopy(lastCreatedUrl)} type="button" variant="secondary">
+                  <Copy className="size-4" />
+                  Copy again
+                </Button>
+              </Surface>
+            ) : null}
+          </form>
+
+          <Surface className="flex min-h-0 flex-col overflow-hidden p-0">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4 py-3">
+              <div>
+                <p className="text-sm font-black text-[rgb(var(--tabliodb-ink))]">Existing links</p>
+                <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {shareLinks.length} link{shareLinks.length === 1 ? '' : 's'} for this diagram
+                </p>
+              </div>
+              <Badge variant="green">Read-only</Badge>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {isLoading ? (
+                <InlineLoadingState message="Loading share links" />
+              ) : listError ? (
+                <InlineErrorState error={listError} onRetry={onRetry} title="Could not load share links" />
+              ) : shareLinks.length === 0 ? (
+                <EmptyState
+                  description="Create a public link when stakeholders need to review a schema without joining the workspace."
+                  icon={Share2}
+                  title="No share links yet"
+                />
+              ) : (
+                <div className="grid gap-3">
+                  {shareLinks.map((shareLink) => (
+                    <ShareLinkListItem
+                      isRevoking={isRevoking}
+                      key={shareLink.id}
+                      onRevoke={handleRevoke}
+                      shareLink={shareLink}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {revokeError ? (
+                <InlineErrorState className="mt-4" error={revokeError} title="Could not revoke link" />
+              ) : null}
+            </div>
+          </Surface>
+        </DialogBody>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ShareLinkListItem({
+  isRevoking,
+  onRevoke,
+  shareLink,
+}: {
+  isRevoking: boolean;
+  onRevoke: (shareLink: DiagramShareLinkDto) => void;
+  shareLink: DiagramShareLinkDto;
+}) {
+  const isActive = shareLink.status === 'active';
+
+  return (
+    <article className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white p-3 shadow-[0_2px_0_rgb(var(--tabliodb-border))]">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-sm font-black text-[rgb(var(--tabliodb-ink))]">
+              {shareLink.label || formatShareLinkTarget(shareLink)}
+            </p>
+            <ShareLinkStatusBadge status={shareLink.status} />
+          </div>
+          <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+            {formatShareLinkTarget(shareLink)} / created by {shareLink.createdByName}
+          </p>
+        </div>
+        <Button
+          className="shrink-0 gap-2"
+          disabled={!isActive || isRevoking}
+          onClick={() => onRevoke(shareLink)}
+          size="sm"
+          type="button"
+          variant="secondary"
+        >
+          {isRevoking ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+          Revoke
+        </Button>
+      </div>
+      <dl className="mt-3 grid gap-2 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))] sm:grid-cols-3">
+        <div>
+          <dt className="font-extrabold uppercase text-[rgb(var(--tabliodb-ink-subtle))]">Created</dt>
+          <dd>{formatDateTime(shareLink.createdAt)}</dd>
+        </div>
+        <div>
+          <dt className="font-extrabold uppercase text-[rgb(var(--tabliodb-ink-subtle))]">Expires</dt>
+          <dd>{shareLink.expiresAt ? formatDateTime(shareLink.expiresAt) : 'Never'}</dd>
+        </div>
+        <div>
+          <dt className="font-extrabold uppercase text-[rgb(var(--tabliodb-ink-subtle))]">Opens</dt>
+          <dd>{shareLink.accessCount}</dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
+function ShareLinkStatusBadge({ status }: { status: DiagramShareLinkDto['status'] }) {
+  if (status === 'active') {
+    return <Badge variant="green">Active</Badge>;
+  }
+
+  if (status === 'expired') {
+    return <Badge variant="yellow">Expired</Badge>;
+  }
+
+  return <Badge variant="neutral">Revoked</Badge>;
+}
+
+function formatShareLinkTarget(shareLink: DiagramShareLinkDto): string {
+  return shareLink.targetType === 'snapshot' ? 'Snapshot link' : 'Live diagram link';
+}
+
+function createExpiryIsoDate(days: number): string {
+  // Expiry dihitung di client untuk preview cepat; backend tetap memvalidasi bahwa tanggalnya berada di masa depan.
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 function updateLiveModelFromDiagram(
@@ -8443,6 +8848,11 @@ function isReviewSignalTargetType(value: string): value is DiagramEntityKind {
 
 function isReviewSignalSeverity(value: string): value is DiagramReviewSignal['severity'] {
   return (reviewSignalSeverities as readonly string[]).includes(value);
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+  // Clipboard API sengaja dibungkus supaya dialog share dan export bisa memakai perilaku browser yang sama.
+  await navigator.clipboard.writeText(value);
 }
 
 function downloadTextFile(fileName: string, content: string, mimeType: string) {
