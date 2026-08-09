@@ -4,8 +4,40 @@ import { forwardRef } from 'react';
 import { cn } from '../lib/utils.js';
 
 export const Dialog = DialogPrimitive.Root;
-export const DialogClose = DialogPrimitive.Close;
-export const DialogTrigger = DialogPrimitive.Trigger;
+
+export const DialogClose = forwardRef<
+  ElementRef<typeof DialogPrimitive.Close>,
+  ComponentPropsWithoutRef<typeof DialogPrimitive.Close>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Close
+    className={cn(
+      // Raw Radix close buttons otherwise look neutral; this keeps direct usage clickable while preserving asChild composition.
+      !props.asChild &&
+        'cursor-pointer rounded-[var(--tabliodb-radius-sm)] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50',
+      className,
+    )}
+    ref={ref}
+    {...props}
+  />
+));
+DialogClose.displayName = DialogPrimitive.Close.displayName;
+
+export const DialogTrigger = forwardRef<
+  ElementRef<typeof DialogPrimitive.Trigger>,
+  ComponentPropsWithoutRef<typeof DialogPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Trigger
+    className={cn(
+      // Dialog triggers may be used without Button in compact UI; pointer and focus affordance still need to be present.
+      !props.asChild &&
+        'cursor-pointer rounded-[var(--tabliodb-radius-sm)] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50',
+      className,
+    )}
+    ref={ref}
+    {...props}
+  />
+));
+DialogTrigger.displayName = DialogPrimitive.Trigger.displayName;
 
 export const DialogPortal = DialogPrimitive.Portal;
 

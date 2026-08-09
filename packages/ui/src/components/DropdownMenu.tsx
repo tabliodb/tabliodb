@@ -13,7 +13,23 @@ export const DropdownMenuRadioItem = DropdownMenuPrimitive.RadioItem;
 export const DropdownMenuSeparator = DropdownMenuPrimitive.Separator;
 export const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 export const DropdownMenuSubTrigger = DropdownMenuPrimitive.SubTrigger;
-export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+
+export const DropdownMenuTrigger = forwardRef<
+  ElementRef<typeof DropdownMenuPrimitive.Trigger>,
+  ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.Trigger
+    className={cn(
+      // Menu triggers are commonly used as icon-only controls; direct usage should still expose pointer and keyboard focus styling.
+      !props.asChild &&
+        'cursor-pointer rounded-[var(--tabliodb-radius-sm)] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50',
+      className,
+    )}
+    ref={ref}
+    {...props}
+  />
+));
+DropdownMenuTrigger.displayName = DropdownMenuPrimitive.Trigger.displayName;
 
 export const DropdownMenuContent = forwardRef<
   ElementRef<typeof DropdownMenuPrimitive.Content>,

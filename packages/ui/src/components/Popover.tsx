@@ -5,8 +5,40 @@ import { cn } from '../lib/utils.js';
 
 export const Popover = PopoverPrimitive.Root;
 export const PopoverAnchor = PopoverPrimitive.Anchor;
-export const PopoverClose = PopoverPrimitive.Close;
-export const PopoverTrigger = PopoverPrimitive.Trigger;
+
+export const PopoverClose = forwardRef<
+  ElementRef<typeof PopoverPrimitive.Close>,
+  ComponentPropsWithoutRef<typeof PopoverPrimitive.Close>
+>(({ className, ...props }, ref) => (
+  <PopoverPrimitive.Close
+    className={cn(
+      // Popover close controls are often tiny icon surfaces, so direct primitive usage still needs a visible pointer/focus contract.
+      !props.asChild &&
+        'cursor-pointer rounded-[var(--tabliodb-radius-sm)] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50',
+      className,
+    )}
+    ref={ref}
+    {...props}
+  />
+));
+PopoverClose.displayName = PopoverPrimitive.Close.displayName;
+
+export const PopoverTrigger = forwardRef<
+  ElementRef<typeof PopoverPrimitive.Trigger>,
+  ComponentPropsWithoutRef<typeof PopoverPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <PopoverPrimitive.Trigger
+    className={cn(
+      // Direct popover triggers should read as clickable even before callers decide whether to wrap them in Button/IconButton.
+      !props.asChild &&
+        'cursor-pointer rounded-[var(--tabliodb-radius-sm)] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50',
+      className,
+    )}
+    ref={ref}
+    {...props}
+  />
+));
+PopoverTrigger.displayName = PopoverPrimitive.Trigger.displayName;
 
 export const PopoverContent = forwardRef<
   ElementRef<typeof PopoverPrimitive.Content>,
