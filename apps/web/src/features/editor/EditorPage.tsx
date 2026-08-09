@@ -2424,8 +2424,8 @@ function NotificationInboxMenuItem({
         className={cn(
           'mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl border text-white shadow-[0_2px_0_rgb(var(--tabliodb-border-strong))]',
           notification.type === 'mention'
-            ? 'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky))]'
-            : 'border-[rgb(var(--tabliodb-lavender-border))] bg-[rgb(var(--tabliodb-lavender))]',
+            ? 'border-[rgb(var(--tabliodb-sky-action))] bg-[rgb(var(--tabliodb-sky-action))]'
+            : 'border-[rgb(var(--tabliodb-lavender-action))] bg-[rgb(var(--tabliodb-lavender-action))]',
         )}
       >
         <Icon className="size-4" />
@@ -3667,8 +3667,8 @@ function CommentsDialog({
                                 className={cn(
                                   'flex items-center gap-1 text-white',
                                   thread.status === 'resolved'
-                                    ? 'bg-[rgb(var(--tabliodb-lavender))]'
-                                    : 'bg-[rgb(var(--tabliodb-primary))]',
+                                    ? 'bg-[rgb(var(--tabliodb-lavender-action))]'
+                                    : 'bg-[rgb(var(--tabliodb-primary-action))]',
                                 )}
                               >
                                 {thread.status === 'resolved' ? (
@@ -4003,7 +4003,7 @@ function ThreadCommentItem({
                         Cancel
                       </button>
                       <button
-                        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[rgb(var(--tabliodb-danger))] px-2 py-1 text-xs font-extrabold text-white transition hover:bg-[rgb(var(--tabliodb-danger-hover))] disabled:cursor-wait disabled:opacity-70"
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[rgb(var(--tabliodb-danger-action))] px-2 py-1 text-xs font-extrabold text-white transition hover:bg-[rgb(var(--tabliodb-danger-action-hover))] disabled:cursor-wait disabled:opacity-70"
                         disabled={isDeleting}
                         onClick={() => onDeleteConfirm(comment)}
                         type="button"
