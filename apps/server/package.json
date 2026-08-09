@@ -6,6 +6,9 @@
   "type": "module",
   "main": "./dist/main.js",
   "scripts": {
+    "build:deps": "npm run build -w @tabliodb/shared && npm run build -w @tabliodb/schema-core && npm run build -w @tabliodb/sql",
+    "prebuild": "npm run build:deps",
+    "predev": "npm run build:deps",
     "build": "nest build",
     "check": "tsc --noEmit -p tsconfig.json",
     "dev": "nest start --watch",
