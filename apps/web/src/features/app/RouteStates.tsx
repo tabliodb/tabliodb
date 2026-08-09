@@ -1,4 +1,4 @@
-import { TabliodbApiError } from '@tabliodb/sdk';
+import { TabliodbApiError, getTabliodbApiErrorMessage, getTabliodbApiErrorRequestId } from '@tabliodb/sdk';
 import { Button, Surface, cn } from '@tabliodb/ui';
 import { AlertCircle, Inbox, Loader2, RefreshCw } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
@@ -42,13 +42,7 @@ export function ErrorState({
   );
 }
 
-export function InlineLoadingState({
-  className,
-  message = 'Loading data',
-}: {
-  className?: string;
-  message?: string;
-}) {
+export function InlineLoadingState({ className, message = 'Loading data' }: { className?: string; message?: string }) {
   return (
     <div
       className={cn(
@@ -117,9 +111,7 @@ export function EmptyState({
       </div>
       <p className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">{title}</p>
       {description ? (
-        <p className="mt-1 max-w-sm text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-          {description}
-        </p>
+        <p className="mt-1 max-w-sm text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">{description}</p>
       ) : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
@@ -128,13 +120,16 @@ export function EmptyState({
 
 export function getErrorMessage(error: unknown): string {
   if (error instanceof TabliodbApiError) {
-    const apiMessage = getApiErrorDataMessage(error.data);
+    const apiMessage = getTabliodbApiErrorMessage(error);
+    const message = apiMessage ?? getHttpStatusFallbackMessage(error.status);
+    const requestId = getTabliodbApiErrorRequestId(error);
 
-    if (apiMessage) {
-      return apiMessage;
+    if (requestId && error.status >= 500) {
+      // Request id is most useful on server-side failures, where the user cannot fix the issue from the current form.
+      return `${message} Request id: ${requestId}.`;
     }
 
-    return getHttpStatusFallbackMessage(error.status);
+    return message;
   }
 
   if (error instanceof Error) {
@@ -156,39 +151,6 @@ function extractHttpStatusFromMessage(message: string): number | null {
 
   // Some client adapters surface only "Error: 404"; the UI should still show a useful product message.
   return statusMatch ? Number(statusMatch[1]) : null;
-}
-
-function getApiErrorDataMessage(data: unknown): string | null {
-  if (typeof data === 'string') {
-    return data.trim() || null;
-  }
-
-  if (!data || typeof data !== 'object') {
-    return null;
-  }
-
-  const response = data as { error?: unknown; message?: unknown };
-  const message = normalizeErrorMessage(response.message);
-
-  if (message) {
-    return message;
-  }
-
-  return normalizeErrorMessage(response.error);
-}
-
-function normalizeErrorMessage(value: unknown): string | null {
-  if (typeof value === 'string') {
-    return value.trim() || null;
-  }
-
-  if (Array.isArray(value)) {
-    const messages = value.map((item) => normalizeErrorMessage(item)).filter((item): item is string => Boolean(item));
-
-    return messages.length > 0 ? messages.join(' ') : null;
-  }
-
-  return null;
 }
 
 function getHttpStatusFallbackMessage(status: number): string {
