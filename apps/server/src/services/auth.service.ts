@@ -13,6 +13,7 @@ import { AuthContext } from '../database.js';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
+  CurrentUserPasswordUpdateDto,
   CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
   LoginCredentialDto,
@@ -144,6 +145,55 @@ export class AuthService {
     return user;
   }
 
+  async updatePassword(auth: AuthContext, dto: CurrentUserPasswordUpdateDto): Promise<CurrentUserResponseDto> {
+    const currentUser = await this.userRepository.getPasswordAuthUserById(auth.user.id);
+
+    if (!currentUser?.passwordHash) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    if (!this.cryptoRepository.compareBcrypt(dto.currentPassword, currentUser.passwordHash)) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    if (this.cryptoRepository.compareBcrypt(dto.password, currentUser.passwordHash)) {
+      throw new BadRequestException('Choose a password that is different from your current password');
+    }
+
+    const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
+    const user = await this.userRepository.updatePasswordHash(auth.user.id, passwordHash, {
+      passwordChangeRequired: false,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const revokedSessions = auth.session
+      ? await this.sessionRepository.revokeAllForUser(auth.user.id, { exceptSessionId: auth.session.id })
+      : 0;
+
+    await this.auditLogRepository.create({
+      action: AuditAction.AuthPasswordChanged,
+      actorId: auth.user.id,
+      entityId: auth.user.id,
+      entityType: 'user',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: {
+        email: currentUser.email,
+        name: currentUser.name,
+        passwordChangeRequiredCleared: auth.user.passwordChangeRequired,
+        revokedSessions,
+      } satisfies Record<string, JsonValue>,
+      organizationId: user.organizations[0]?.id ?? null,
+      projectId: null,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
+
+    return this.getFreshAuthUser(auth.user.id);
+  }
+
   async requestPasswordReset(dto: PasswordResetRequestDto): Promise<PasswordResetRequestResponseDto> {
     const email = dto.email.trim().toLowerCase();
     const neutralResponse = this.createNeutralPasswordResetRequestResponse();
@@ -199,7 +249,9 @@ export class AuthService {
       throw new BadRequestException('Password reset token is invalid or expired');
     }
 
-    const user = await this.userRepository.updatePasswordHash(reset.userId, passwordHash);
+    const user = await this.userRepository.updatePasswordHash(reset.userId, passwordHash, {
+      passwordChangeRequired: false,
+    });
     if (!user) {
       throw new BadRequestException('Password reset token is invalid or expired');
     }
@@ -300,6 +352,7 @@ export class AuthService {
     email: string;
     id: string;
     name: string;
+    passwordChangeRequired?: boolean;
   }) {
     const accessToken = this.cryptoRepository.randomBytesAsText(32);
     const token = this.cryptoRepository.hashSha256(accessToken);
@@ -322,6 +375,7 @@ export class AuthService {
         name: user.name,
         avatarUrl: user.avatarUrl ?? null,
         cursorColor: user.cursorColor,
+        passwordChangeRequired: user.passwordChangeRequired ?? false,
       },
     };
   }

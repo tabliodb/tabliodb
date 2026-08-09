@@ -12,6 +12,7 @@ const auth: AuthContext = {
     email: 'snapshot@tabliodb.local',
     id: 'user-id',
     name: 'Snapshot User',
+    passwordChangeRequired: false,
   },
 };
 

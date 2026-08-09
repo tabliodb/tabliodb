@@ -7,7 +7,11 @@ import { authQueries } from '@/resources/auth';
 export const requireAuthenticated: MiddlewareFunction = async (_, next) => {
   try {
     // Auth guard memakai /auth/me sebagai source of truth session, bukan localStorage atau query project sampingan.
-    await queryClient.ensureQueryData(authQueries.me());
+    const user = await queryClient.ensureQueryData(authQueries.me());
+
+    if (user.passwordChangeRequired) {
+      throw redirect(routes.changePassword.to());
+    }
   } catch (error) {
     if (error instanceof TabliodbApiError && error.status === 401) {
       throw redirect(routes.login.to());

@@ -15,6 +15,7 @@ const authWithLimitedApiKey: AuthContext = {
     email: 'automation@tabliodb.local',
     id: 'user-id',
     name: 'Automation User',
+    passwordChangeRequired: false,
   },
 };
 
@@ -61,6 +62,7 @@ describe(AuthService.name, () => {
     getAnyByEmail: vi.fn(),
     getAuthUserById: vi.fn(),
     getByEmail: vi.fn(),
+    getPasswordAuthUserById: vi.fn(),
     updatePasswordHash: vi.fn(),
     updateProfile: vi.fn(),
   };
@@ -255,11 +257,66 @@ describe(AuthService.name, () => {
       token: 'raw-reset-token',
     });
 
-    expect(userRepository.updatePasswordHash).toHaveBeenCalledWith('reset-user-id', 'new-password-hash');
+    expect(userRepository.updatePasswordHash).toHaveBeenCalledWith('reset-user-id', 'new-password-hash', {
+      passwordChangeRequired: false,
+    });
     expect(sessionRepository.revokeAllForUser).toHaveBeenCalledWith('reset-user-id');
     expect(response).toEqual({
       revokedSessions: 2,
       successful: true,
+    });
+  });
+
+  it('changes the current user password, clears temporary-password state, and keeps the current session', async () => {
+    userRepository.getPasswordAuthUserById.mockResolvedValue({
+      email: 'automation@tabliodb.local',
+      id: 'user-id',
+      name: 'Automation User',
+      passwordHash: 'temporary-password-hash',
+    });
+    cryptoRepository.compareBcrypt.mockReturnValueOnce(true).mockReturnValueOnce(false);
+    cryptoRepository.hashBcrypt.mockResolvedValueOnce('new-password-hash');
+    userRepository.updatePasswordHash.mockResolvedValueOnce({
+      id: 'user-id',
+      email: 'automation@tabliodb.local',
+      name: 'Automation User',
+      organizations: [{ id: 'organization-id' }],
+    });
+    userRepository.getAuthUserById.mockResolvedValueOnce({
+      avatarUrl: null,
+      cursorColor: '#58cc02',
+      email: 'automation@tabliodb.local',
+      id: 'user-id',
+      name: 'Automation User',
+      passwordChangeRequired: false,
+    });
+
+    const response = await service.updatePassword(
+      {
+        ...authWithLimitedApiKey,
+        session: {
+          id: 'current-session-id',
+          source: 'cookie',
+        },
+        user: {
+          ...authWithLimitedApiKey.user,
+          passwordChangeRequired: true,
+        },
+      },
+      {
+        currentPassword: 'temporary-password',
+        password: 'new-user-password',
+      },
+    );
+
+    expect(userRepository.updatePasswordHash).toHaveBeenCalledWith('user-id', 'new-password-hash', {
+      passwordChangeRequired: false,
+    });
+    expect(sessionRepository.revokeAllForUser).toHaveBeenCalledWith('user-id', {
+      exceptSessionId: 'current-session-id',
+    });
+    expect(response).toMatchObject({
+      passwordChangeRequired: false,
     });
   });
 });

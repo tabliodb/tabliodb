@@ -78,7 +78,13 @@ async function upsertSeedOwner(tx: Transaction<DB>) {
       // Password overwrite is opt-in for existing users so running seed does not unexpectedly change local credentials.
       await tx
         .updateTable('users')
-        .set({ isDisabled: false, passwordHash, updatedAt: new Date() })
+        .set({
+          isDisabled: false,
+          passwordChangeRequired: false,
+          passwordChangedAt: new Date(),
+          passwordHash,
+          updatedAt: new Date(),
+        })
         .where('id', '=', existingOwner.id)
         .execute();
     }
@@ -100,6 +106,7 @@ async function upsertSeedOwner(tx: Transaction<DB>) {
       cursorColor: '#58cc02',
       email,
       name: seedOwnerName,
+      passwordChangeRequired: false,
       passwordHash,
     })
     .returning(['id', 'email', 'name'])

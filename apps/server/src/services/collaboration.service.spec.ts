@@ -136,6 +136,7 @@ function createAuthContext(overrides: Partial<AuthContext> = {}): AuthContext {
       email: 'user@tabliodb.local',
       id: 'user-id',
       name: 'Tabliodb User',
+      passwordChangeRequired: false,
     },
     ...overrides,
   };

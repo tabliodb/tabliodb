@@ -19,6 +19,7 @@ import { ZodResponse } from 'nestjs-zod';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
+  CurrentUserPasswordUpdateDto,
   CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
   LoginCredentialDto,
@@ -45,7 +46,7 @@ export class AuthController {
   constructor(private readonly service: AuthService) {}
 
   @Get('me')
-  @Authenticated()
+  @Authenticated({ allowTemporaryPassword: true })
   @ApiOperation({ operationId: 'getCurrentUser' })
   @ZodResponse({ status: HttpStatus.OK, type: CurrentUserResponseDto })
   getCurrentUser(@Res({ passthrough: true }) res: Response, @Auth() auth: AuthContext): CurrentUserResponseDto {
@@ -67,6 +68,18 @@ export class AuthController {
     @Body() dto: CurrentUserProfileUpdateDto,
   ): Promise<CurrentUserResponseDto> {
     return this.service.updateProfile(auth, dto);
+  }
+
+  @Patch('me/password')
+  @Authenticated({ allowTemporaryPassword: true })
+  @ApiBody({ type: CurrentUserPasswordUpdateDto })
+  @ApiOperation({ operationId: 'updateCurrentUserPassword' })
+  @ZodResponse({ status: HttpStatus.OK, type: CurrentUserResponseDto })
+  updateCurrentUserPassword(
+    @Auth() auth: AuthContext,
+    @Body() dto: CurrentUserPasswordUpdateDto,
+  ): Promise<CurrentUserResponseDto> {
+    return this.service.updatePassword(auth, dto);
   }
 
   @Post('me/avatar')
@@ -134,7 +147,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  @Authenticated()
+  @Authenticated({ allowTemporaryPassword: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ operationId: 'logout' })
   @ZodResponse({ status: HttpStatus.OK, type: LogoutResponseDto })

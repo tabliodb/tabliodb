@@ -25,6 +25,10 @@ export type ManagedUserListOptions = {
   search?: string;
 };
 
+export type PasswordHashUpdateOptions = {
+  passwordChangeRequired?: boolean;
+};
+
 @Injectable()
 export class UserRepository {
   constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
@@ -55,11 +59,22 @@ export class UserRepository {
         'email',
         'name',
         'cursorColor',
+        'passwordChangeRequired',
         sql<string | null>`case
           when avatar_file_id is null then null
           else concat('/api/files/', avatar_file_id::text)
         end`.as('avatarUrl'),
       ])
+      .where('id', '=', id)
+      .where('isDisabled', '=', false)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  getPasswordAuthUserById(id: string) {
+    return this.db
+      .selectFrom('users')
+      .select(['id', 'email', 'name', 'passwordHash'])
       .where('id', '=', id)
       .where('isDisabled', '=', false)
       .where('deletedAt', 'is', null)
@@ -99,6 +114,7 @@ export class UserRepository {
           cursorColor: options.cursorColor,
           email: options.email,
           name: options.name,
+          passwordChangeRequired: true,
           passwordHash: options.passwordHash,
         })
         .returning('id')
@@ -168,12 +184,14 @@ export class UserRepository {
     return updated ? this.getManagedUserById(updated.id) : undefined;
   }
 
-  async updatePasswordHash(userId: string, passwordHash: string) {
+  async updatePasswordHash(userId: string, passwordHash: string, options: PasswordHashUpdateOptions = {}) {
     const now = new Date();
+    const passwordChangeRequired = options.passwordChangeRequired ?? false;
     const updated = await this.db
       .updateTable('users')
       .set({
-        passwordChangedAt: now,
+        passwordChangedAt: passwordChangeRequired ? null : now,
+        passwordChangeRequired,
         passwordHash,
         updatedAt: now,
       })
@@ -274,6 +292,7 @@ export class UserRepository {
           else concat('/api/files/', users.avatar_file_id::text)
         end`.as('avatarUrl'),
         'users.cursorColor',
+        'users.passwordChangeRequired',
         'users.isDisabled',
         'users.createdAt',
         'users.updatedAt',

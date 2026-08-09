@@ -5,7 +5,7 @@ import { queryClient } from '@/lib/react-query';
 import { authQueries } from '@/resources/auth';
 import { setupQueries } from '@/resources/setup';
 
-export async function loginLoader() {
+export async function changePasswordLoader() {
   const setupStatus = await queryClient.fetchQuery(setupQueries.status());
 
   if (!setupStatus.isSetupComplete) {
@@ -13,12 +13,14 @@ export async function loginLoader() {
   }
 
   try {
-    // Guest login route tidak perlu render form kalau session cookie masih valid.
     const user = await queryClient.fetchQuery(authQueries.me());
-    throw redirect(user.passwordChangeRequired ? routes.changePassword.to() : routes.home.to());
+
+    if (!user.passwordChangeRequired) {
+      throw redirect(routes.home.to());
+    }
   } catch (error) {
     if (error instanceof TabliodbApiError && error.status === 401) {
-      return null;
+      throw redirect(routes.login.to());
     }
 
     throw error;

@@ -18,6 +18,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       disabled_at timestamptz,
       last_login_at timestamptz,
       password_changed_at timestamptz,
+      password_change_required boolean NOT NULL DEFAULT false,
       metadata jsonb NOT NULL DEFAULT '{}',
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now(),

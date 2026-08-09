@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   SetMetadata,
   applyDecorators,
@@ -16,6 +17,7 @@ import { AuthService } from '../services/auth.service.js';
 const authMetadataKey = 'tabliodb:auth';
 
 export type AuthenticatedOptions = {
+  allowTemporaryPassword?: boolean;
   permission?: string | false;
 };
 
@@ -71,6 +73,10 @@ export class AuthGuard implements CanActivate {
         userAgent: readHeader(request.headers['user-agent']),
       },
     };
+
+    if (request.user.user.passwordChangeRequired && !options.allowTemporaryPassword) {
+      throw new ForbiddenException('Change your temporary password before continuing');
+    }
 
     return true;
   }

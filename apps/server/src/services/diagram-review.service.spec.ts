@@ -17,6 +17,7 @@ const auth: AuthContext = {
     email: 'reviewer@tabliodb.local',
     id: 'reviewer-id',
     name: 'Reviewer User',
+    passwordChangeRequired: false,
   },
 };
 

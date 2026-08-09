@@ -13,6 +13,7 @@ const auth: AuthContext = {
     email: 'commenter@tabliodb.local',
     id: 'user-id',
     name: 'Commenter User',
+    passwordChangeRequired: false,
   },
 };
 

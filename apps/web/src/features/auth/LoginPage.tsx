@@ -32,9 +32,9 @@ export function LoginPage() {
 
   const loginMutation = useLoginMutation({
     mutationConfig: {
-      onSuccess: () => {
+      onSuccess: (data) => {
         // Redirect login diputuskan di mutation success karena user sudah eksplisit menyelesaikan submit form.
-        navigate(routes.home.to(), { replace: true });
+        navigate(data.user.passwordChangeRequired ? routes.changePassword.to() : routes.home.to(), { replace: true });
       },
     },
   });

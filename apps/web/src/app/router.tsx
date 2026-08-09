@@ -10,6 +10,7 @@ import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
 import { adminSettingsLoader } from '@/features/admin/loaders/adminSettingsLoader';
 import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
 import { LoadingState } from '@/features/app/RouteStates';
+import { changePasswordLoader } from '@/features/auth/loaders/changePasswordLoader';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
 import { passwordRecoveryLoader } from '@/features/auth/loaders/passwordRecoveryLoader';
 import { requireAuthenticated } from '@/features/auth/middleware/requireAuthenticated';
@@ -27,6 +28,9 @@ const AdminSettingsPage = lazy(() =>
   import('@/features/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })),
 );
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
+const ChangePasswordPage = lazy(() =>
+  import('@/features/auth/ChangePasswordPage').then((module) => ({ default: module.ChangePasswordPage })),
+);
 const ForgotPasswordPage = lazy(() =>
   import('@/features/auth/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })),
 );
@@ -69,6 +73,11 @@ export const router = createBrowserRouter([
                 element: <LoginPage />,
                 loader: loginLoader,
                 path: routes.login.path,
+              },
+              {
+                element: <ChangePasswordPage />,
+                loader: changePasswordLoader,
+                path: routes.changePassword.path,
               },
               {
                 element: <ForgotPasswordPage />,

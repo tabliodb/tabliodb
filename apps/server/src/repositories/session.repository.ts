@@ -26,6 +26,7 @@ export class SessionRepository {
               'users.email',
               'users.name',
               'users.cursorColor',
+              'users.passwordChangeRequired',
               sql<string | null>`case
                 when users.avatar_file_id is null then null
                 else concat('/api/files/', users.avatar_file_id::text)

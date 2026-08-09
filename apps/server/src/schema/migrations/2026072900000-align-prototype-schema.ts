@@ -110,6 +110,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ADD COLUMN IF NOT EXISTS disabled_at timestamptz,
       ADD COLUMN IF NOT EXISTS last_login_at timestamptz,
       ADD COLUMN IF NOT EXISTS password_changed_at timestamptz,
+      ADD COLUMN IF NOT EXISTS password_change_required boolean NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}';
 
     UPDATE users

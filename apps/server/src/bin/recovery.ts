@@ -95,6 +95,7 @@ async function createOrRepairOwner(
         cursorColor: '#58cc02',
         email: options.email,
         name: options.name,
+        passwordChangeRequired: false,
         passwordHash,
       })
       .returning(['id', 'email', 'name'])
@@ -107,6 +108,7 @@ async function createOrRepairOwner(
         disabledAt: null,
         isDisabled: false,
         name: options.name || existingUser.name,
+        passwordChangeRequired: false,
         passwordChangedAt: now,
         passwordHash,
         updatedAt: now,
@@ -184,6 +186,7 @@ async function resetPassword(email: string, password: string) {
       .set({
         disabledAt: null,
         isDisabled: false,
+        passwordChangeRequired: false,
         passwordChangedAt: now,
         passwordHash,
         updatedAt: now,

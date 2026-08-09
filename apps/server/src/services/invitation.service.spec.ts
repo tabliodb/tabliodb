@@ -12,6 +12,7 @@ const auth: AuthContext = {
     email: 'owner@tabliodb.local',
     id: 'owner-id',
     name: 'Tabliodb Owner',
+    passwordChangeRequired: false,
   },
 };
 

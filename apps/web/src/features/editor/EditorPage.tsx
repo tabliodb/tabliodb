@@ -90,6 +90,7 @@ import {
   IconButton,
   Input,
   Select,
+  Surface,
   WithTooltip,
   cn,
 } from '@tabliodb/ui';
@@ -1536,27 +1537,30 @@ export function EditorPage() {
 
   if (!projectsQuery.isPending && activeOrganization && projects.length === 0) {
     return (
-      <ErrorState
-        error={
-          new Error(
-            canCreateProject
-              ? 'No project found. Create a project from this workspace to start designing.'
-              : 'No project is available for your account yet. Ask a workspace owner to grant you project or team access.',
-          )
+      <EditorEmptyAccessState
+        description={
+          canCreateProject
+            ? 'This workspace is ready, but it does not have a project yet. Refresh after a project is created to start designing.'
+            : 'Your account is in this workspace, but an owner or admin has not connected you to a project or team yet.'
         }
-        onRetry={() => queryClient.invalidateQueries()}
-        title="No project access"
+        icon={canCreateProject ? FolderPlus : UsersRound}
+        onRetry={() => void queryClient.invalidateQueries()}
+        title={canCreateProject ? 'No projects yet' : 'Waiting for project access'}
       />
     );
   }
 
   if (!diagramsQuery.isPending && activeProject && diagrams.length === 0) {
     return (
-      <ErrorState
-        error={
-          new Error(canEditDiagram ? 'No diagram found' : 'No diagram is available for your current project role yet')
+      <EditorEmptyAccessState
+        description={
+          canEditDiagram
+            ? 'This project is ready, but it does not have a diagram yet. Refresh after a diagram is created to continue.'
+            : 'Your project role can view assigned diagrams, but there is no diagram available for this project yet.'
         }
-        onRetry={() => queryClient.invalidateQueries()}
+        icon={FileText}
+        onRetry={() => void queryClient.invalidateQueries()}
+        title={canEditDiagram ? 'No diagrams yet' : 'No diagram access yet'}
       />
     );
   }
@@ -2042,11 +2046,7 @@ export function EditorPage() {
           style={{ width: leftSidebarWidth }}
         >
           {!leftSidebarOpen ? (
-            <SidebarRail
-              icon={PanelLeft}
-              label="Show left sidebar"
-              onClick={() => setLeftSidebarOpen(true)}
-            />
+            <SidebarRail icon={PanelLeft} label="Show left sidebar" onClick={() => setLeftSidebarOpen(true)} />
           ) : (
             <DiagramTablesSidebar
               model={model}
@@ -2091,11 +2091,7 @@ export function EditorPage() {
             className="tabliodb-editor-chrome-soft absolute inset-y-0 right-0 z-30 min-w-0 overflow-hidden border-l border-[rgb(var(--tabliodb-border))] transition-[width] duration-200"
             style={{ width: rightSidebarWidth }}
           >
-            <SidebarRail
-              icon={PanelRight}
-              label="Show inspector"
-              onClick={() => setRightSidebarOpen(true)}
-            />
+            <SidebarRail icon={PanelRight} label="Show inspector" onClick={() => setRightSidebarOpen(true)} />
           </aside>
         )}
       </div>
@@ -7406,6 +7402,36 @@ function formatOrganizationRole(role: OrganizationRoleValue): string {
     [OrganizationRole.Member]: 'Member',
     [OrganizationRole.Owner]: 'Owner',
   }[role];
+}
+
+function EditorEmptyAccessState({
+  description,
+  icon,
+  onRetry,
+  title,
+}: {
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  onRetry: () => void;
+  title: string;
+}) {
+  return (
+    <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-6 text-[rgb(var(--tabliodb-ink))]">
+      <Surface className="w-full max-w-lg p-5" depth="md">
+        <EmptyState
+          action={
+            <Button className="gap-2" onClick={onRetry} variant="secondary">
+              <RotateCcw className="size-4" />
+              Refresh access
+            </Button>
+          }
+          description={description}
+          icon={icon}
+          title={title}
+        />
+      </Surface>
+    </main>
+  );
 }
 
 function isOrganizationManager(organization: OrganizationDto): boolean {

@@ -36,6 +36,7 @@ const AuthUserSchema = z
     name: z.string(),
     avatarUrl: z.string().nullable(),
     cursorColor: z.string(),
+    passwordChangeRequired: z.boolean(),
   })
   .meta({ id: 'AuthUserDto' });
 
@@ -48,6 +49,13 @@ const CurrentUserProfileUpdateSchema = z
     name: z.string().trim().min(1).max(120).optional(),
   })
   .meta({ id: 'CurrentUserProfileUpdateDto' });
+
+const CurrentUserPasswordUpdateSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    password: z.string().min(8),
+  })
+  .meta({ id: 'CurrentUserPasswordUpdateDto' });
 
 const LoginResponseSchema = z
   .object({
@@ -103,6 +111,7 @@ export class SignUpDto extends createZodDto(SignUpSchema) {}
 export class LoginResponseDto extends createZodDto(LoginResponseSchema) {}
 export class CurrentUserResponseDto extends createZodDto(CurrentUserResponseSchema) {}
 export class CurrentUserProfileUpdateDto extends createZodDto(CurrentUserProfileUpdateSchema) {}
+export class CurrentUserPasswordUpdateDto extends createZodDto(CurrentUserPasswordUpdateSchema) {}
 export class ApiKeyCreateDto extends createZodDto(ApiKeyCreateSchema) {}
 export class ApiKeyCreateResponseDto extends createZodDto(ApiKeyCreateResponseSchema) {}
 export class LogoutResponseDto extends createZodDto(LogoutResponseSchema) {}

@@ -148,7 +148,9 @@ export class UserService {
     }
 
     const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
-    const user = await this.userRepository.updatePasswordHash(userId, passwordHash);
+    const user = await this.userRepository.updatePasswordHash(userId, passwordHash, {
+      passwordChangeRequired: true,
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }

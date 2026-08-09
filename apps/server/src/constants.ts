@@ -24,6 +24,7 @@ export enum AuthType {
 }
 
 export enum AuditAction {
+  AuthPasswordChanged = 'auth.password_changed',
   AuthPasswordResetCompleted = 'auth.password_reset_completed',
   AuthPasswordResetRequested = 'auth.password_reset_requested',
   InstanceAuthSettingsUpdated = 'instance.auth_settings_updated',

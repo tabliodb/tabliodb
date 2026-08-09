@@ -99,6 +99,49 @@
         ]
       }
     },
+    "/auth/me/password": {
+      "patch": {
+        "operationId": "updateCurrentUserPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurrentUserPasswordUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/me/avatar": {
       "post": {
         "operationId": "uploadCurrentUserAvatar",
@@ -4050,6 +4093,9 @@
           },
           "cursorColor": {
             "type": "string"
+          },
+          "passwordChangeRequired": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -4057,7 +4103,8 @@
           "email",
           "name",
           "avatarUrl",
-          "cursorColor"
+          "cursorColor",
+          "passwordChangeRequired"
         ],
         "additionalProperties": false
       },
@@ -4077,6 +4124,23 @@
             "maxLength": 120
           }
         }
+      },
+      "CurrentUserPasswordUpdateDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8
+          }
+        },
+        "required": [
+          "currentPassword",
+          "password"
+        ]
       },
       "SignUpDto": {
         "type": "object",
@@ -9834,6 +9898,9 @@
           "isDisabled": {
             "type": "boolean"
           },
+          "passwordChangeRequired": {
+            "type": "boolean"
+          },
           "instanceRole": {
             "type": "string",
             "enum": [
@@ -9893,6 +9960,7 @@
           "avatarUrl",
           "cursorColor",
           "isDisabled",
+          "passwordChangeRequired",
           "instanceRole",
           "organizations",
           "createdAt",

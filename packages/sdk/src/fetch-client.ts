@@ -36,10 +36,15 @@ export type AuthUserDtoOutput = {
   name: string;
   avatarUrl: string | null;
   cursorColor: string;
+  passwordChangeRequired: boolean;
 };
 export type CurrentUserProfileUpdateDto = {
   cursorColor?: string;
   name?: string;
+};
+export type CurrentUserPasswordUpdateDto = {
+  currentPassword: string;
+  password: string;
 };
 export type SignUpDto = {
   email: string;
@@ -1194,6 +1199,7 @@ export type UserResponseDtoOutput = {
   avatarUrl: string | null;
   cursorColor: string;
   isDisabled: boolean;
+  passwordChangeRequired: boolean;
   instanceRole: InstanceRole | null;
   organizations: {
     id: string;
@@ -1271,6 +1277,28 @@ export function updateCurrentUserProfile(
         ...opts,
         method: 'PATCH',
         body: currentUserProfileUpdateDto,
+      }),
+    ),
+  );
+}
+export function updateCurrentUserPassword(
+  {
+    currentUserPasswordUpdateDto,
+  }: {
+    currentUserPasswordUpdateDto: CurrentUserPasswordUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: AuthUserDtoOutput;
+    }>(
+      '/auth/me/password',
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: currentUserPasswordUpdateDto,
       }),
     ),
   );

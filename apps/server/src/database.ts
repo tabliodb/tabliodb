@@ -6,6 +6,7 @@ export type AuthUser = {
   name: string;
   avatarUrl: string | null;
   cursorColor: string;
+  passwordChangeRequired: boolean;
 };
 
 export type AuthSession = {

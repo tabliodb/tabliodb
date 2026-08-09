@@ -35,6 +35,7 @@ export interface UserTable {
   disabledAt: NullableTimestamp;
   lastLoginAt: NullableTimestamp;
   passwordChangedAt: NullableTimestamp;
+  passwordChangeRequired: Defaulted<boolean>;
   metadata: JsonColumn;
   createdAt: Timestamp;
   updatedAt: Timestamp;

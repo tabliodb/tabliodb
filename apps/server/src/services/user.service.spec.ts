@@ -11,6 +11,7 @@ const auth: AuthContext = {
     email: 'owner@tabliodb.local',
     id: 'owner-id',
     name: 'Tabliodb Owner',
+    passwordChangeRequired: false,
   },
 };
 
@@ -197,7 +198,9 @@ describe(UserService.name, () => {
     ).resolves.toEqual({ revokedSessions: 3, successful: true });
 
     expect(cryptoRepository.hashBcrypt).toHaveBeenCalledWith('password-baru', 12);
-    expect(userRepository.updatePasswordHash).toHaveBeenCalledWith('target-user-id', 'hashed-password');
+    expect(userRepository.updatePasswordHash).toHaveBeenCalledWith('target-user-id', 'hashed-password', {
+      passwordChangeRequired: true,
+    });
     expect(sessionRepository.revokeAllForUser).toHaveBeenCalledWith('target-user-id');
   });
 
@@ -222,6 +225,7 @@ function createManagedUserRow(
     instanceRole: 'admin' | 'owner' | null;
     isDisabled: boolean;
     name: string;
+    passwordChangeRequired: boolean;
     updatedAt: Date;
   }> = {},
 ) {
@@ -234,6 +238,7 @@ function createManagedUserRow(
     instanceRole: overrides.instanceRole ?? null,
     isDisabled: overrides.isDisabled ?? false,
     name: overrides.name ?? 'Target User',
+    passwordChangeRequired: overrides.passwordChangeRequired ?? false,
     organizations: [
       {
         id: 'organization-id',

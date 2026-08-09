@@ -35,6 +35,10 @@ export const routes = {
     path: '/login',
     to: () => '/login',
   },
+  changePassword: {
+    path: '/change-password',
+    to: () => '/change-password',
+  },
   forgotPassword: {
     path: '/forgot-password',
     to: () => '/forgot-password',

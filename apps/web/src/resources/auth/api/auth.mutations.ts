@@ -5,8 +5,10 @@ import {
   login,
   logout,
   requestPasswordReset,
+  updateCurrentUserPassword,
   updateCurrentUserProfile,
   uploadCurrentUserAvatar,
+  type CurrentUserPasswordUpdateDto,
   type CurrentUserProfileUpdateDto,
   type LoginCredentialDto,
   type PasswordResetConfirmDto,
@@ -21,6 +23,8 @@ const uploadAvatarMutationFn = (file: Blob) => uploadCurrentUserAvatar({ body: {
 const deleteAvatarMutationFn = () => deleteCurrentUserAvatar();
 const updateProfileMutationFn = (body: CurrentUserProfileUpdateDto) =>
   updateCurrentUserProfile({ currentUserProfileUpdateDto: body });
+const updatePasswordMutationFn = (body: CurrentUserPasswordUpdateDto) =>
+  updateCurrentUserPassword({ currentUserPasswordUpdateDto: body });
 const loginMutationFn = (body: LoginCredentialDto) => login({ loginCredentialDto: body });
 const logoutMutationFn = () => logout();
 const passwordResetRequestMutationFn = (body: PasswordResetRequestDto) =>
@@ -36,6 +40,9 @@ type UseDeleteAvatarMutationParams = {
 };
 type UseUpdateProfileMutationParams = {
   mutationConfig?: MutationConfig<typeof updateProfileMutationFn>;
+};
+type UseUpdatePasswordMutationParams = {
+  mutationConfig?: MutationConfig<typeof updatePasswordMutationFn>;
 };
 type UseLoginMutationParams = {
   mutationConfig?: MutationConfig<typeof loginMutationFn>;
@@ -119,6 +126,18 @@ export function useUpdateProfileMutation(params: UseUpdateProfileMutationParams 
       // Profile identity tampil di header, mention, dan directory admin; response /auth/me langsung menjadi cache source of truth.
       queryClient.setQueryData(authKeys.me(), data);
       queryClient.invalidateQueries({ queryKey: usersKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useUpdateCurrentUserPasswordMutation(params: UseUpdatePasswordMutationParams = {}) {
+  return useMutation({
+    mutationFn: updatePasswordMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Password change clears the temporary-password gate, so the auth cache must update before protected routes continue.
+      queryClient.setQueryData(authKeys.me(), data);
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

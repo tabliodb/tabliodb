@@ -38,6 +38,7 @@ const UserResponseSchema = z
     avatarUrl: z.string().nullable(),
     cursorColor: z.string(),
     isDisabled: z.boolean(),
+    passwordChangeRequired: z.boolean(),
     instanceRole: InstanceRoleSchema.nullable(),
     organizations: z.array(
       z.object({
