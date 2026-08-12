@@ -309,7 +309,14 @@ function sanitizeCommentLinkUrl(value: string): string | null {
 }
 
 function assertJsonPayloadSize(input: unknown) {
-  const json = JSON.stringify(input);
+  let json: string | undefined;
+
+  try {
+    // Keep malformed internal payloads inside Nest's validation/error envelope instead of leaking a raw TypeError.
+    json = JSON.stringify(input);
+  } catch {
+    throw new BadRequestException('Comment body must be valid JSON.');
+  }
 
   if (!json) {
     throw new BadRequestException('Comment body must be valid JSON.');
