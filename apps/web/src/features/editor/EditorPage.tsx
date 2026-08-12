@@ -259,6 +259,7 @@ import {
   createRealtimeNotePatch,
   createRealtimeRelationshipPatch,
   createRealtimeTablePatch,
+  createRemoteSelectionConflict,
   createSeedDiagramModel,
   createSnapshotSaveModel,
   formatColumnType,
@@ -655,6 +656,8 @@ export function EditorPage() {
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedCommentTarget, setSelectedCommentTarget] = useState<EditorCommentTarget | null>(null);
+  const selectedTableIdRef = useRef<string | null>(null);
+  const selectedCommentTargetRef = useRef<EditorCommentTarget | null>(null);
   const [commentThreadOpenRequest, setCommentThreadOpenRequest] = useState<CommentThreadOpenRequest | null>(null);
   const [editorConfirmAction, setEditorConfirmAction] = useState<EditorConfirmAction | null>(null);
   const [editorViewportWidth, setEditorViewportWidth] = useState(getEditorViewportWidth);
@@ -796,6 +799,14 @@ export function EditorPage() {
     [modelHistoryRevision],
   );
 
+  useEffect(() => {
+    selectedTableIdRef.current = selectedTableId;
+  }, [selectedTableId]);
+
+  useEffect(() => {
+    selectedCommentTargetRef.current = selectedCommentTarget;
+  }, [selectedCommentTarget]);
+
   const syncModelToCollaboration = useCallback(
     (nextModel: DiagramModel, previousModel: DiagramModel | null = null) => {
       if (!canEditDiagram) {
@@ -844,13 +855,48 @@ export function EditorPage() {
   }, []);
 
   const reconcileModelSelection = useCallback((nextModel: DiagramModel) => {
-    setSelectedTableId((currentTableId) =>
-      currentTableId && nextModel.tables[currentTableId] ? currentTableId : null,
-    );
-    setSelectedCommentTarget((currentTarget) =>
-      currentTarget && isCommentTargetAvailable(nextModel, currentTarget) ? currentTarget : null,
-    );
+    setSelectedTableId((currentTableId) => {
+      const nextTableId = currentTableId && nextModel.tables[currentTableId] ? currentTableId : null;
+
+      // Realtime callbacks read refs instead of render-time closure values, so reconciliation keeps both state layers aligned.
+      selectedTableIdRef.current = nextTableId;
+
+      return nextTableId;
+    });
+    setSelectedCommentTarget((currentTarget) => {
+      const nextTarget = currentTarget && isCommentTargetAvailable(nextModel, currentTarget) ? currentTarget : null;
+
+      selectedCommentTargetRef.current = nextTarget;
+
+      return nextTarget;
+    });
   }, []);
+
+  const applyRemoteSelectionConflict = useCallback(
+    (conflict: NonNullable<ReturnType<typeof createRemoteSelectionConflict>>) => {
+      const fallbackTarget = conflict.fallbackTarget;
+
+      if (fallbackTarget?.targetType === 'table' && fallbackTarget.targetId) {
+        const nextTarget = { targetId: fallbackTarget.targetId, targetType: 'table' } satisfies EditorCommentTarget;
+
+        selectedTableIdRef.current = fallbackTarget.targetId;
+        selectedCommentTargetRef.current = nextTarget;
+        setSelectedTableId(fallbackTarget.targetId);
+        setSelectedCommentTarget(nextTarget);
+      } else {
+        selectedTableIdRef.current = null;
+        selectedCommentTargetRef.current = null;
+        setSelectedTableId(null);
+        setSelectedCommentTarget(null);
+      }
+
+      toast.warning({
+        description: conflict.description,
+        title: conflict.title,
+      });
+    },
+    [],
+  );
 
   const handleUndoModelChange = useCallback(() => {
     if (!canEditDiagram) {
@@ -1345,12 +1391,23 @@ export function EditorPage() {
           return;
         }
 
+        const remoteSelectionConflict = currentModel
+          ? createRemoteSelectionConflict(currentModel, safeNextModel, {
+              selectedTableId: selectedTableIdRef.current,
+              selectedTarget: selectedCommentTargetRef.current,
+            })
+          : null;
+
         // Remote Yjs updates become the visible editor model, but they do not enter this user's local undo stack.
         modelRef.current = safeNextModel;
         snapshotRecoveryModelRef.current = safeNextModel;
         persistedDraftSignatureRef.current = null;
         setModel(safeNextModel);
-        reconcileModelSelection(safeNextModel);
+        if (remoteSelectionConflict) {
+          applyRemoteSelectionConflict(remoteSelectionConflict);
+        } else {
+          reconcileModelSelection(safeNextModel);
+        }
         if (rawNextSignature !== nextSignature) {
           // Old realtime drafts can contain table.columnIds without column entities; write the repaired model back once.
           syncModelToCollaboration(safeNextModel);
@@ -1393,6 +1450,7 @@ export function EditorPage() {
     };
   }, [
     activeDiagram?.id,
+    applyRemoteSelectionConflict,
     currentUser?.avatarUrl,
     currentUser?.cursorColor,
     currentUser?.id,

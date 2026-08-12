@@ -7,6 +7,7 @@ import {
   createRealtimeNotePatch,
   createRealtimeRelationshipPatch,
   createRealtimeTablePatch,
+  createRemoteSelectionConflict,
   createSeedDiagramModel,
   createSnapshotSaveModel,
   normalizeEditorDiagramModel,
@@ -132,7 +133,11 @@ describe('editor diagram model helpers', () => {
       metadata: healthyDraftModel.metadata,
     };
 
-    const modelToSave = createSnapshotSaveModel(staleModelWithoutNewTable, staleModelWithoutNewTable, healthyDraftModel);
+    const modelToSave = createSnapshotSaveModel(
+      staleModelWithoutNewTable,
+      staleModelWithoutNewTable,
+      healthyDraftModel,
+    );
 
     expect(modelToSave).not.toBeNull();
     expect(modelToSave!.tables[newTableId]?.name).toBe('sessions');
@@ -230,6 +235,63 @@ describe('editor diagram model helpers', () => {
     };
 
     expect(shouldKeepLocalDiagramModelOverRealtime(localModel, realtimeModel)).toBe(false);
+  });
+
+  it('detects a remote delete for the selected column and falls back to its table', () => {
+    const baseModel = createSeedDiagramModel('Remote column conflict test');
+    const nextModel = applyDiagramCommand(baseModel, {
+      columnId: 'users-name',
+      type: 'column.delete',
+    });
+
+    const conflict = createRemoteSelectionConflict(baseModel, nextModel, {
+      selectedTableId: 'users',
+      selectedTarget: { targetId: 'users-name', targetType: 'column' },
+    });
+
+    expect(conflict).toMatchObject({
+      fallbackTarget: { targetId: 'users', targetType: 'table' },
+      title: 'Selection updated',
+    });
+    expect(conflict?.description).toContain('Column "users.name"');
+  });
+
+  it('detects a remote delete for the selected relationship and falls back to a surviving table', () => {
+    const baseModel = createSeedDiagramModel('Remote relationship conflict test');
+    const nextModel = applyDiagramCommand(baseModel, {
+      relationshipId: 'users-borrowings',
+      type: 'relationship.delete',
+    });
+
+    const conflict = createRemoteSelectionConflict(baseModel, nextModel, {
+      selectedTableId: 'borrowings',
+      selectedTarget: { targetId: 'users-borrowings', targetType: 'relationship' },
+    });
+
+    expect(conflict).toMatchObject({
+      fallbackTarget: { targetId: 'users', targetType: 'table' },
+      title: 'Selection updated',
+    });
+    expect(conflict?.description).toContain('borrowings_user_id_fkey');
+  });
+
+  it('detects a remote delete for the selected table and falls back to diagram', () => {
+    const baseModel = createSeedDiagramModel('Remote table conflict test');
+    const nextModel = applyDiagramCommand(baseModel, {
+      tableId: 'users',
+      type: 'table.delete',
+    });
+
+    const conflict = createRemoteSelectionConflict(baseModel, nextModel, {
+      selectedTableId: 'users',
+      selectedTarget: { targetId: 'users', targetType: 'table' },
+    });
+
+    expect(conflict).toMatchObject({
+      fallbackTarget: { targetId: null, targetType: 'diagram' },
+      title: 'Selection updated',
+    });
+    expect(conflict?.description).toContain('Table "users"');
   });
 
   it('creates a small realtime patch for table move and resize only', () => {

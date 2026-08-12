@@ -13,6 +13,7 @@ import {
   type DiagramModel,
   type DiagramNote,
 } from '@tabliodb/schema-core';
+import type { CommentTargetType } from '@/resources/comments';
 
 export type RealtimeColumnPatch = {
   changes: Partial<DatabaseColumn>;
@@ -83,6 +84,17 @@ export type RealtimeNotePatch =
       metadataUpdatedAt?: string;
       noteId: string;
     };
+
+export type EditorSelectionTarget = {
+  targetId: string | null;
+  targetType: CommentTargetType;
+};
+
+export type RemoteSelectionConflict = {
+  description: string;
+  fallbackTarget: EditorSelectionTarget | null;
+  title: string;
+};
 
 export function formatColumnType(type: ColumnTypeSpec): string {
   if (type.raw) {
@@ -177,7 +189,43 @@ export function shouldKeepLocalDiagramModelOverRealtime(
   }
 
   // Development Yjs documents can lag behind a repaired local draft; never downgrade a real table into an empty shell or remove a table the user just created.
-  return hasRealtimeModelLostLocalTables(localModel, realtimeModel) || hasRealtimeModelLostLocalColumns(localModel, realtimeModel);
+  return (
+    hasRealtimeModelLostLocalTables(localModel, realtimeModel) ||
+    hasRealtimeModelLostLocalColumns(localModel, realtimeModel)
+  );
+}
+
+export function createRemoteSelectionConflict(
+  previousModel: DiagramModel,
+  nextModel: DiagramModel,
+  selection: {
+    selectedTableId: string | null;
+    selectedTarget: EditorSelectionTarget | null;
+  },
+): RemoteSelectionConflict | null {
+  const removedTableTarget = findRemovedSelectedTableTarget(previousModel, nextModel, selection.selectedTableId);
+  const removedEntityTarget = findRemovedSelectedEntityTarget(previousModel, nextModel, selection.selectedTarget);
+  const removedTarget = removedEntityTarget ?? removedTableTarget;
+
+  if (!removedTarget) {
+    return null;
+  }
+
+  const fallbackTarget = findSelectionFallbackTarget(previousModel, nextModel, selection, removedTarget);
+  const targetTypeLabel = formatSelectionTargetType(removedTarget.targetType);
+  const targetLabel =
+    formatSelectionTargetLabel(previousModel, removedTarget) ?? removedTarget.targetId ?? 'the selected item';
+  const fallbackDescription = fallbackTarget
+    ? `Selection moved to ${formatSelectionTargetType(fallbackTarget.targetType).toLowerCase()} "${
+        formatSelectionTargetLabel(nextModel, fallbackTarget) ?? fallbackTarget.targetId ?? 'diagram'
+      }".`
+    : 'Selection was cleared so the editor does not keep editing a stale item.';
+
+  return {
+    description: `${targetTypeLabel} "${targetLabel}" was removed or invalidated by another collaborator. ${fallbackDescription}`,
+    fallbackTarget,
+    title: 'Selection updated',
+  };
 }
 
 export function createRealtimeTablePatch(
@@ -203,8 +251,9 @@ export function createRealtimeTablePatch(
     return null;
   }
 
-  const changedTableIds = Array.from(new Set([...Object.keys(previousModel.tables), ...Object.keys(nextModel.tables)]))
-    .filter((tableId) => !areJsonValuesEqual(previousModel.tables[tableId], nextModel.tables[tableId]));
+  const changedTableIds = Array.from(
+    new Set([...Object.keys(previousModel.tables), ...Object.keys(nextModel.tables)]),
+  ).filter((tableId) => !areJsonValuesEqual(previousModel.tables[tableId], nextModel.tables[tableId]));
 
   if (changedTableIds.length !== 1) {
     return null;
@@ -255,7 +304,13 @@ export function createRealtimeTablePatch(
     patch.width = nextWidth;
   }
 
-  if (!patch.clearColor && patch.color === undefined && patch.name === undefined && !patch.position && patch.width === undefined) {
+  if (
+    !patch.clearColor &&
+    patch.color === undefined &&
+    patch.name === undefined &&
+    !patch.position &&
+    patch.width === undefined
+  ) {
     return null;
   }
 
@@ -289,8 +344,9 @@ export function createRealtimeColumnPatch(
     return null;
   }
 
-  const changedColumnIds = Array.from(new Set([...Object.keys(previousModel.columns), ...Object.keys(nextModel.columns)]))
-    .filter((columnId) => !areJsonValuesEqual(previousModel.columns[columnId], nextModel.columns[columnId]));
+  const changedColumnIds = Array.from(
+    new Set([...Object.keys(previousModel.columns), ...Object.keys(nextModel.columns)]),
+  ).filter((columnId) => !areJsonValuesEqual(previousModel.columns[columnId], nextModel.columns[columnId]));
 
   if (changedColumnIds.length !== 1) {
     return null;
@@ -306,9 +362,9 @@ export function createRealtimeColumnPatch(
 
   const changes: Partial<DatabaseColumn> = {};
   const clearedKeys: Array<keyof DatabaseColumn> = [];
-  const columnKeys = Array.from(
-    new Set([...Object.keys(previousColumn), ...Object.keys(nextColumn)]),
-  ) as Array<keyof DatabaseColumn>;
+  const columnKeys = Array.from(new Set([...Object.keys(previousColumn), ...Object.keys(nextColumn)])) as Array<
+    keyof DatabaseColumn
+  >;
 
   for (const key of columnKeys) {
     const previousValue = previousColumn[key];
@@ -378,7 +434,9 @@ export function createRealtimeColumnStructuralPatch(
   }
 
   const changedColumnIds = findChangedRecordKeys(previousModel.columns, nextModel.columns);
-  const addedColumnIds = changedColumnIds.filter((columnId) => !previousModel.columns[columnId] && nextModel.columns[columnId]);
+  const addedColumnIds = changedColumnIds.filter(
+    (columnId) => !previousModel.columns[columnId] && nextModel.columns[columnId],
+  );
   const deletedColumnIds = changedColumnIds.filter(
     (columnId) => previousModel.columns[columnId] && !nextModel.columns[columnId],
   );
@@ -461,7 +519,9 @@ export function createRealtimeColumnStructuralPatch(
     return null;
   }
 
-  const indexesToDelete = changedIndexIds.filter((indexId) => previousModel.indexes[indexId] && !nextModel.indexes[indexId]);
+  const indexesToDelete = changedIndexIds.filter(
+    (indexId) => previousModel.indexes[indexId] && !nextModel.indexes[indexId],
+  );
   const indexesToUpsert = changedIndexIds.flatMap((indexId) => {
     const nextIndex = nextModel.indexes[indexId];
 
@@ -470,7 +530,9 @@ export function createRealtimeColumnStructuralPatch(
   const relationshipsToDelete = changedRelationshipIds.filter(
     (relationshipId) => previousModel.relationships[relationshipId] && !nextModel.relationships[relationshipId],
   );
-  const checksToDelete = changedCheckIds.filter((checkId) => previousModel.checks[checkId] && !nextModel.checks[checkId]);
+  const checksToDelete = changedCheckIds.filter(
+    (checkId) => previousModel.checks[checkId] && !nextModel.checks[checkId],
+  );
 
   if (
     indexesToDelete.length + indexesToUpsert.length !== changedIndexIds.length ||
@@ -623,8 +685,9 @@ export function createRealtimeNotePatch(
     return null;
   }
 
-  const changedNoteIds = Array.from(new Set([...Object.keys(previousModel.notes), ...Object.keys(nextModel.notes)]))
-    .filter((noteId) => !areJsonValuesEqual(previousModel.notes[noteId], nextModel.notes[noteId]));
+  const changedNoteIds = Array.from(
+    new Set([...Object.keys(previousModel.notes), ...Object.keys(nextModel.notes)]),
+  ).filter((noteId) => !areJsonValuesEqual(previousModel.notes[noteId], nextModel.notes[noteId]));
 
   if (changedNoteIds.length !== 1) {
     return null;
@@ -695,6 +758,208 @@ export function createRealtimeNotePatch(
     metadataUpdatedAt,
     noteId,
   };
+}
+
+function findRemovedSelectedTableTarget(
+  previousModel: DiagramModel,
+  nextModel: DiagramModel,
+  selectedTableId: string | null,
+): EditorSelectionTarget | null {
+  if (!selectedTableId || !previousModel.tables[selectedTableId] || nextModel.tables[selectedTableId]) {
+    return null;
+  }
+
+  return {
+    targetId: selectedTableId,
+    targetType: 'table',
+  };
+}
+
+function findRemovedSelectedEntityTarget(
+  previousModel: DiagramModel,
+  nextModel: DiagramModel,
+  selectedTarget: EditorSelectionTarget | null,
+): EditorSelectionTarget | null {
+  if (
+    !selectedTarget ||
+    selectedTarget.targetType === 'diagram' ||
+    !isSelectionTargetAvailable(previousModel, selectedTarget) ||
+    isSelectionTargetAvailable(nextModel, selectedTarget)
+  ) {
+    return null;
+  }
+
+  return selectedTarget;
+}
+
+function findSelectionFallbackTarget(
+  previousModel: DiagramModel,
+  nextModel: DiagramModel,
+  selection: {
+    selectedTableId: string | null;
+    selectedTarget: EditorSelectionTarget | null;
+  },
+  removedTarget: EditorSelectionTarget,
+): EditorSelectionTarget | null {
+  const ownerTableId = getSelectionTargetOwnerTableId(previousModel, removedTarget);
+  const fallbackTableId =
+    (ownerTableId && nextModel.tables[ownerTableId] ? ownerTableId : null) ??
+    (selection.selectedTableId && nextModel.tables[selection.selectedTableId] ? selection.selectedTableId : null);
+
+  if (fallbackTableId) {
+    return {
+      targetId: fallbackTableId,
+      targetType: 'table',
+    };
+  }
+
+  return {
+    targetId: null,
+    targetType: 'diagram',
+  };
+}
+
+function isSelectionTargetAvailable(model: DiagramModel, target: EditorSelectionTarget): boolean {
+  if (target.targetType === 'diagram') {
+    return true;
+  }
+
+  if (!target.targetId) {
+    return false;
+  }
+
+  switch (target.targetType) {
+    case 'check':
+      return Boolean(model.checks[target.targetId]);
+    case 'column':
+      return Boolean(model.columns[target.targetId]);
+    case 'enum':
+      return Boolean(model.enums[target.targetId]);
+    case 'group':
+      return Boolean(model.groups[target.targetId]);
+    case 'index':
+      return Boolean(model.indexes[target.targetId]);
+    case 'note':
+      return Boolean(model.notes[target.targetId]);
+    case 'relationship':
+      return isRelationshipTargetAvailable(model, target.targetId);
+    case 'table':
+      return Boolean(model.tables[target.targetId]);
+    default:
+      return false;
+  }
+}
+
+function isRelationshipTargetAvailable(model: DiagramModel, relationshipId: string): boolean {
+  const relationship = model.relationships[relationshipId];
+
+  if (!relationship) {
+    return false;
+  }
+
+  return (
+    Boolean(model.tables[relationship.sourceTableId]) &&
+    Boolean(model.tables[relationship.targetTableId]) &&
+    relationship.sourceColumnIds.every((columnId) => Boolean(model.columns[columnId])) &&
+    relationship.targetColumnIds.every((columnId) => Boolean(model.columns[columnId]))
+  );
+}
+
+function getSelectionTargetOwnerTableId(model: DiagramModel, target: EditorSelectionTarget): string | null {
+  if (!target.targetId) {
+    return null;
+  }
+
+  if (target.targetType === 'table') {
+    return target.targetId;
+  }
+
+  if (target.targetType === 'column') {
+    return model.columns[target.targetId]?.tableId ?? null;
+  }
+
+  if (target.targetType === 'index') {
+    return model.indexes[target.targetId]?.tableId ?? null;
+  }
+
+  if (target.targetType === 'check') {
+    return model.checks[target.targetId]?.tableId ?? null;
+  }
+
+  if (target.targetType === 'relationship') {
+    const relationship = model.relationships[target.targetId];
+
+    return relationship?.sourceTableId ?? relationship?.targetTableId ?? null;
+  }
+
+  if (target.targetType === 'group') {
+    return model.groups[target.targetId]?.tableIds[0] ?? null;
+  }
+
+  return null;
+}
+
+function formatSelectionTargetLabel(model: DiagramModel, target: EditorSelectionTarget): string | null {
+  if (target.targetType === 'diagram') {
+    return model.metadata.name;
+  }
+
+  if (!target.targetId) {
+    return null;
+  }
+
+  if (target.targetType === 'table') {
+    return model.tables[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'column') {
+    const column = model.columns[target.targetId];
+    const table = column ? model.tables[column.tableId] : null;
+
+    return column ? `${table?.name ?? 'table'}.${column.name}` : null;
+  }
+
+  if (target.targetType === 'relationship') {
+    const relationship = model.relationships[target.targetId];
+
+    if (!relationship) {
+      return null;
+    }
+
+    const sourceTableName = model.tables[relationship.sourceTableId]?.name ?? relationship.sourceTableId;
+    const targetTableName = model.tables[relationship.targetTableId]?.name ?? relationship.targetTableId;
+
+    return relationship.name ?? `${sourceTableName} -> ${targetTableName}`;
+  }
+
+  if (target.targetType === 'index') {
+    return model.indexes[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'check') {
+    return model.checks[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'enum') {
+    return model.enums[target.targetId]?.name ?? null;
+  }
+
+  if (target.targetType === 'note') {
+    return model.notes[target.targetId]?.text.slice(0, 32) ?? null;
+  }
+
+  if (target.targetType === 'group') {
+    return model.groups[target.targetId]?.name ?? null;
+  }
+
+  return null;
+}
+
+function formatSelectionTargetType(targetType: EditorSelectionTarget['targetType']): string {
+  return targetType
+    .split('_')
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
 }
 
 function createEditorDefaultTableColumns(): CreateTableColumnInput[] {
@@ -834,7 +1099,7 @@ function areDeletedColumnRelationshipRemovalsValid(
 
     return Boolean(
       relationship &&
-        (relationship.sourceColumnIds.includes(columnId) || relationship.targetColumnIds.includes(columnId)),
+      (relationship.sourceColumnIds.includes(columnId) || relationship.targetColumnIds.includes(columnId)),
     );
   });
 }
@@ -878,10 +1143,7 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-function areMetadataEqualExceptUpdatedAt(
-  left: DiagramModel['metadata'],
-  right: DiagramModel['metadata'],
-): boolean {
+function areMetadataEqualExceptUpdatedAt(left: DiagramModel['metadata'], right: DiagramModel['metadata']): boolean {
   const { updatedAt: _leftUpdatedAt, ...leftRest } = left;
   const { updatedAt: _rightUpdatedAt, ...rightRest } = right;
 
