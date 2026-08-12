@@ -739,6 +739,7 @@ export function EditorPage() {
 
   const snapshots = snapshotsQuery.data ?? emptySnapshots;
   const latestSnapshot = snapshots[0] ?? null;
+  const currentDraftPersisted = model ? isCurrentDraftPersisted(model) : false;
   const shareLinks = shareLinksQuery.data?.items ?? [];
   const commentTargetSummaries = commentSummaryQuery.data?.targets ?? [];
   const openCommentThreadCount = commentSummaryQuery.data?.openCount ?? 0;
@@ -1956,7 +1957,13 @@ export function EditorPage() {
               />
             </div>
           ) : null}
-          <CollaborationPresence collaborators={collaborators} status={collaborationStatus} />
+          <CollaborationPresence
+            collaborators={collaborators}
+            draftPersisted={currentDraftPersisted}
+            latestSnapshot={latestSnapshot}
+            snapshotSavePending={saveSnapshotMutation.isPending}
+            status={collaborationStatus}
+          />
           {canCommentDiagram ? (
             <div className="relative">
               <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
@@ -8889,6 +8896,26 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+function formatRelativeDateTime(value: string): string {
+  const date = new Date(value);
+  const diffMs = date.getTime() - Date.now();
+  const absoluteDiffMs = Math.abs(diffMs);
+  const units = [
+    { max: 60_000, name: 'second', size: 1000 },
+    { max: 3_600_000, name: 'minute', size: 60_000 },
+    { max: 86_400_000, name: 'hour', size: 3_600_000 },
+    { max: 2_592_000_000, name: 'day', size: 86_400_000 },
+  ] as const;
+  const unit = units.find((candidate) => absoluteDiffMs < candidate.max) ?? {
+    name: 'month',
+    size: 2_592_000_000,
+  };
+  const valueForUnit = Math.round(diffMs / unit.size);
+
+  // RelativeTimeFormat keeps the saved-status tooltip compact and familiar: "2 minutes ago", "yesterday", etc.
+  return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(valueForUnit, unit.name);
+}
+
 type AvatarIdentity = {
   avatarUrl?: string | null;
   cursorColor?: string | null;
@@ -8921,17 +8948,39 @@ type CommentTypingPresence = {
 
 function CollaborationPresence({
   collaborators,
+  draftPersisted,
+  latestSnapshot,
+  snapshotSavePending,
   status,
 }: {
   collaborators: CollaboratorPresence[];
+  draftPersisted: boolean;
+  latestSnapshot: SnapshotResponseDto | null;
+  snapshotSavePending: boolean;
   status: DiagramCollaborationStatus;
 }) {
   const visibleCollaborators = collaborators.slice(0, 4);
   const overflowCount = Math.max(0, collaborators.length - visibleCollaborators.length);
-  const statusMeta = getCollaborationStatusMeta(status, collaborators.length);
+  const statusMeta = getCollaborationStatusMeta(status, collaborators.length, {
+    draftPersisted,
+    latestSnapshot,
+    snapshotSavePending,
+  });
 
   return (
-    <WithTooltip content={statusMeta.tooltip}>
+    <WithTooltip
+      content={
+        <div className="grid gap-1.5">
+          <div>{statusMeta.tooltipTitle}</div>
+          <div className="text-[10px] font-bold leading-4 text-white/75">{statusMeta.tooltipDescription}</div>
+          <div className="mt-1 grid gap-0.5 border-t border-white/15 pt-1 text-[10px] font-bold leading-4 text-white/75">
+            <span>{statusMeta.snapshotLine}</span>
+            <span>{statusMeta.autosaveLine}</span>
+          </div>
+        </div>
+      }
+      side="bottom"
+    >
       <div
         className={cn(
           'hidden h-8 items-center gap-2 rounded-full border px-2 py-1 transition sm:flex',
@@ -8971,9 +9020,19 @@ function CollaborationPresence({
   );
 }
 
-function getCollaborationStatusMeta(status: DiagramCollaborationStatus, collaboratorCount: number) {
+function getCollaborationStatusMeta(
+  status: DiagramCollaborationStatus,
+  collaboratorCount: number,
+  saveState: {
+    draftPersisted: boolean;
+    latestSnapshot: SnapshotResponseDto | null;
+    snapshotSavePending: boolean;
+  },
+) {
   const collaboratorLabel =
     collaboratorCount === 0 ? 'No other users are viewing this diagram.' : `${collaboratorCount} other user(s) live.`;
+  const snapshotLine = formatSnapshotStatusLine(saveState.latestSnapshot, saveState.draftPersisted);
+  const autosaveLine = formatLiveAutosaveStatusLine(status);
 
   if (status.connection === 'authentication_failed') {
     return {
@@ -8982,7 +9041,24 @@ function getCollaborationStatusMeta(status: DiagramCollaborationStatus, collabor
       dotClassName: 'bg-[rgb(var(--tabliodb-danger))]',
       label: 'Auth failed',
       pulse: false,
-      tooltip: status.message ?? 'Realtime authentication failed. Refresh after signing in again.',
+      autosaveLine,
+      snapshotLine,
+      tooltipDescription: status.message ?? 'Refresh after signing in again.',
+      tooltipTitle: 'Realtime authentication failed',
+    };
+  }
+
+  if (saveState.snapshotSavePending) {
+    return {
+      containerClassName:
+        'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+      dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
+      label: 'Saving',
+      pulse: true,
+      autosaveLine,
+      snapshotLine,
+      tooltipDescription: `Creating a new manual snapshot. ${collaboratorLabel}`,
+      tooltipTitle: 'Saving snapshot',
     };
   }
 
@@ -8993,7 +9069,10 @@ function getCollaborationStatusMeta(status: DiagramCollaborationStatus, collabor
       dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
       label: 'Connecting',
       pulse: true,
-      tooltip: 'Connecting to the realtime collaboration room.',
+      autosaveLine,
+      snapshotLine,
+      tooltipDescription: 'Connecting to the realtime collaboration room.',
+      tooltipTitle: 'Preparing realtime',
     };
   }
 
@@ -9004,7 +9083,10 @@ function getCollaborationStatusMeta(status: DiagramCollaborationStatus, collabor
       dotClassName: 'bg-[rgb(var(--tabliodb-gold))]',
       label: 'Reconnecting',
       pulse: true,
-      tooltip: 'Realtime is disconnected and will reconnect automatically.',
+      autosaveLine,
+      snapshotLine,
+      tooltipDescription: 'Realtime is disconnected and will reconnect automatically.',
+      tooltipTitle: 'Live draft not currently synced',
     };
   }
 
@@ -9015,7 +9097,10 @@ function getCollaborationStatusMeta(status: DiagramCollaborationStatus, collabor
       dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
       label: 'Syncing',
       pulse: true,
-      tooltip: `Realtime is connected and syncing ${status.unsyncedChanges} pending change(s). ${collaboratorLabel}`,
+      autosaveLine,
+      snapshotLine,
+      tooltipDescription: `Realtime is connected and syncing ${status.unsyncedChanges} pending change(s). ${collaboratorLabel}`,
+      tooltipTitle: 'Syncing live changes',
     };
   }
 
@@ -9024,9 +9109,12 @@ function getCollaborationStatusMeta(status: DiagramCollaborationStatus, collabor
       containerClassName:
         'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-primary))]',
-      label: collaboratorCount > 0 ? `${collaboratorCount} live` : 'Live',
+      label: saveState.draftPersisted ? 'Saved' : 'Live saved',
       pulse: collaboratorCount > 0,
-      tooltip: `Realtime is connected and synced. ${collaboratorLabel}`,
+      autosaveLine,
+      snapshotLine,
+      tooltipDescription: `Realtime is connected and synced. ${collaboratorLabel}`,
+      tooltipTitle: 'All live changes synced',
     };
   }
 
@@ -9036,8 +9124,37 @@ function getCollaborationStatusMeta(status: DiagramCollaborationStatus, collabor
     dotClassName: 'bg-[rgb(var(--tabliodb-ink-subtle))]',
     label: 'Realtime',
     pulse: false,
-    tooltip: 'Realtime collaboration is preparing.',
+    autosaveLine,
+    snapshotLine,
+    tooltipDescription: 'Realtime collaboration is preparing.',
+    tooltipTitle: 'Realtime preparing',
   };
+}
+
+function formatSnapshotStatusLine(snapshot: SnapshotResponseDto | null, draftPersisted: boolean): string {
+  if (!snapshot) {
+    return 'No snapshot yet';
+  }
+
+  const snapshotLabel = `Last snapshot ${formatRelativeDateTime(snapshot.createdAt)} (v${snapshot.version})`;
+
+  return draftPersisted ? snapshotLabel : `${snapshotLabel}; current draft not checkpointed`;
+}
+
+function formatLiveAutosaveStatusLine(status: DiagramCollaborationStatus): string {
+  if (status.connection === 'authentication_failed') {
+    return 'Live draft autosave: Paused';
+  }
+
+  if (status.connection === 'disconnected') {
+    return 'Live draft autosave: Waiting to reconnect';
+  }
+
+  if (status.connection === 'connected' && (!status.synced || status.unsyncedChanges > 0)) {
+    return 'Live draft autosave: Syncing';
+  }
+
+  return 'Live draft autosave: On';
 }
 
 function UserAvatar({ className, user }: { className?: string; user: AvatarIdentity }) {
