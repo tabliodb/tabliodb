@@ -58,6 +58,7 @@ const tableNodeShape = 'tabliodb-table';
 const noteNodeShape = 'tabliodb-note';
 const groupNodeIdPrefix = 'tabliodb-group:';
 
+const diagramRouterStepSize = 6; // Setengah dari visual grid agar garis bisa di "antar dot"
 const tableNodeWidth = 288; // Default width saat table baru dibuat, bukan batas terkecil saat user resize.
 const tableHeaderHeight = 36; // Header dan CSS sama-sama 3 grid unit agar node HTML tidak terpotong di X6.
 const tableColumnHeight = 24; // Port dihitung dari tinggi row ini, jadi konektor jatuh tepat di tengah baris kolom.
@@ -404,9 +405,82 @@ export function SchemaCanvas({
     // X6 couples node movement snapping to the visible grid size; keeping the visual grid at 24px while snapping at 1px makes drag placement precise.
     graph.getGridSize = () => diagramDragGridSize;
 
-    graph.on('node:click', ({ node }) => {
-      const data = node.getData<TableNodeData>();
+    const getCommentMarkerFromEvent = (event: MouseEvent) => {
+      const target = getElementFromEventTarget(event.target);
+      return target?.closest<HTMLElement>('.tabliodb-table-node__comment-marker') ?? null;
+    };
+
+    const getColumnRowFromEvent = (event: MouseEvent) => {
+      const target = getElementFromEventTarget(event.target);
+
+      if (!target || target.closest('.tabliodb-table-node__comment-marker')) {
+        return null;
+      }
+
+      return target.closest<HTMLElement>('.tabliodb-table-node__column');
+    };
+
+    const getNoteActionFromEvent = (event: Event, fallbackNoteId?: string) => {
+      const target = getElementFromEventTarget(event.target);
+      const actionButton = target?.closest<HTMLButtonElement>('[data-note-action]');
+
+      if (!actionButton) {
+        return null;
+      }
+
+      const noteElement = actionButton.closest<HTMLElement>('[data-tabliodb-note-id]');
+      const noteId = noteElement?.dataset.tabliodbNoteId ?? fallbackNoteId;
+      const action = actionButton.dataset.noteAction;
+
+      if (!noteId || (action !== 'comment' && action !== 'delete')) {
+        return null;
+      }
+
+      return { action, noteId };
+    };
+
+    const handleNoteActionEvent = (event: Event, fallbackNoteId?: string) => {
+      const noteAction = getNoteActionFromEvent(event, fallbackNoteId);
+
+      if (!noteAction) {
+        return false;
+      }
+
+      // Button note berada di HTML node milik X6; action diproses sebelum X6 mengubah selection/drag state.
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (noteAction.action === 'comment') {
+        onCommentTargetOpenRef.current?.({ targetId: noteAction.noteId, targetType: 'note' });
+        return true;
+      }
+
+      if (readOnly) {
+        return true;
+      }
+
+      const note = modelRef.current.notes[noteAction.noteId];
+
+      if (!note) {
+        return true;
+      }
+
+      setConfirmAction({
+        id: noteAction.noteId,
+        name: note.text.slice(0, 48) || 'Untitled note',
+        type: 'note',
+      });
+
+      return true;
+    };
+
+    graph.on('node:click', ({ e, node }) => {
+      const data = node.getData<TableNodeData | NoteNodeData>();
       setRelationshipMenu(null);
+
+      if (isNoteNodeData(data) && handleNoteActionEvent(e as unknown as MouseEvent, data.noteId)) {
+        return;
+      }
 
       if (isTableNodeData(data)) {
         onSelectedTableChangeRef.current(data.tableId);
@@ -473,26 +547,6 @@ export function SchemaCanvas({
       onColumnSelectRef.current?.(nextRelationshipCommand.targetColumnIds[0]);
     });
 
-    const getCommentMarkerFromEvent = (event: MouseEvent) => {
-      const target = event.target;
-
-      if (!(target instanceof HTMLElement)) {
-        return null;
-      }
-
-      return target.closest<HTMLElement>('.tabliodb-table-node__comment-marker');
-    };
-
-    const getColumnRowFromEvent = (event: MouseEvent) => {
-      const target = event.target;
-
-      if (!(target instanceof HTMLElement) || target.closest('.tabliodb-table-node__comment-marker')) {
-        return null;
-      }
-
-      return target.closest<HTMLElement>('.tabliodb-table-node__column');
-    };
-
     const handleCommentMarkerMouseDown = (event: MouseEvent) => {
       if (!getCommentMarkerFromEvent(event)) {
         return;
@@ -538,85 +592,20 @@ export function SchemaCanvas({
     };
 
     const handleNoteInteractiveMouseDown = (event: MouseEvent) => {
-      const target = event.target;
-
-      if (!(target instanceof HTMLElement)) {
+      if (handleNoteActionEvent(event)) {
         return;
       }
 
-      const actionButton = target.closest<HTMLButtonElement>('[data-note-action]');
-      const noteElement = actionButton?.closest<HTMLElement>('[data-tabliodb-note-id]');
-      const noteId = noteElement?.dataset.tabliodbNoteId;
+      const target = getElementFromEventTarget(event.target);
 
-      if (actionButton && noteId) {
-        // Action note diproses saat mousedown agar blur textarea tidak sempat merender ulang HTML node dan "memakan" click.
-        event.preventDefault();
-        event.stopPropagation();
-
-        if (actionButton.dataset.noteAction === 'comment') {
-          onCommentTargetOpenRef.current?.({ targetId: noteId, targetType: 'note' });
-          return;
-        }
-
-        if (actionButton.dataset.noteAction === 'delete' && !readOnly) {
-          const note = modelRef.current.notes[noteId];
-
-          if (!note) {
-            return;
-          }
-
-          setConfirmAction({
-            id: noteId,
-            name: note.text.slice(0, 48) || 'Untitled note',
-            type: 'note',
-          });
-        }
-
-        return;
-      }
-
-      if (target.closest('.tabliodb-note-node__textarea')) {
+      if (target?.closest('.tabliodb-note-node__textarea')) {
         // Text editing lives inside an X6 HTML node; stopping mousedown keeps the graph from starting a drag.
         event.stopPropagation();
       }
     };
 
     const handleNoteActionClick = (event: MouseEvent) => {
-      const target = event.target;
-
-      if (!(target instanceof HTMLElement)) {
-        return;
-      }
-
-      const actionButton = target.closest<HTMLButtonElement>('[data-note-action]');
-      const noteElement = actionButton?.closest<HTMLElement>('[data-tabliodb-note-id]');
-      const noteId = noteElement?.dataset.tabliodbNoteId;
-
-      if (!actionButton || !noteId) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (actionButton.dataset.noteAction === 'comment') {
-        onCommentTargetOpenRef.current?.({ targetId: noteId, targetType: 'note' });
-        return;
-      }
-
-      if (actionButton.dataset.noteAction === 'delete' && !readOnly) {
-        const note = modelRef.current.notes[noteId];
-
-        if (!note) {
-          return;
-        }
-
-        setConfirmAction({
-          id: noteId,
-          name: note.text.slice(0, 48) || 'Untitled note',
-          type: 'note',
-        });
-      }
+      handleNoteActionEvent(event);
     };
 
     const handleNoteFocusOut = (event: FocusEvent) => {
@@ -2240,9 +2229,9 @@ function buildManhattanRouterArgs(sourceSide?: PortSide, targetSide?: PortSide) 
   return {
     endDirections: targetSide ? [targetSide] : ['left', 'right'],
     excludeShapes: ['rect'],
-    padding: relationshipObstaclePadding,
+    padding: relationshipObstaclePadding, // tetap 12, karena 12 adalah kelipatan 6
     startDirections: sourceSide ? [sourceSide] : ['left', 'right'],
-    step: diagramVisualGridSize,
+    step: diagramRouterStepSize, // <-- ubah dari diagramVisualGridSize (12) jadi 6
   };
 }
 
@@ -2472,7 +2461,20 @@ function createColumnPorts(
     },
     items: visibleColumns.flatMap((column, columnIndex) =>
       portSides.map((side) => {
-        const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2;
+        // Hitung urutan terminal di side ini untuk kasih index
+        const sideTerminals = terminals
+          .filter((t) => t.side === side)
+          .sort((a, b) => {
+            const aIdx = visibleColumns.findIndex((c) => c.id === a.columnId);
+            const bIdx = visibleColumns.findIndex((c) => c.id === b.columnId);
+            return aIdx - bIdx;
+          });
+        const laneIndex = sideTerminals.findIndex((t) => t.columnId === column.id);
+        const offset =
+          sideTerminals.length > 1
+            ? (laneIndex - (sideTerminals.length - 1) / 2) * 6 // 6px = setengah grid
+            : 0;
+        const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2 + offset;
         const terminalSlot = terminalSlots.get(createRelationshipTerminalSlotKey(column.id, side));
 
         const isVisible = selected || Boolean(terminalSlot?.active);
@@ -2787,6 +2789,19 @@ function isNoteNodeData(data: unknown): data is NoteNodeData {
 
 function isMovableCanvasNodeData(data: unknown): data is TableNodeData | NoteNodeData {
   return isTableNodeData(data) || isNoteNodeData(data);
+}
+
+function getElementFromEventTarget(target: EventTarget | null): Element | null {
+  if (target instanceof Element) {
+    return target;
+  }
+
+  // X6 HTML nodes hidup di dalam foreignObject; kadang target click adalah text node, bukan Element.
+  if (target instanceof Node && target.parentElement instanceof Element) {
+    return target.parentElement;
+  }
+
+  return null;
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
