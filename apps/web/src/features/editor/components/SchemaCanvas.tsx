@@ -2,10 +2,12 @@ import {
   Graph,
   Shape,
   type Cell,
+  type ConnectorDefinition,
   type Edge as X6Edge,
   type EdgeMetadata,
   type Node as X6Node,
   type NodeMetadata,
+  type PointLike,
 } from '@antv/x6';
 import {
   applyDiagramCommand,
@@ -78,6 +80,7 @@ const diagramDragGridSize = 12;
 const canvasBackgroundColor = '#F6F6F6';
 const canvasGridColor = '#AAAAAA';
 const relationshipActiveColor = '#58cc02';
+const relationshipConnectorName = 'tabliodb-relationship-orthogonal-rounded';
 const relationshipConnectorRadius = 10;
 const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
@@ -90,9 +93,12 @@ const relationshipRouteUTurnGap = 48;
 const relationshipEndpointGap = 3;
 const relationshipLaneGap = 3;
 const relationshipLaneSearchRadius = 14;
+const relationshipConnectorStraightEndpointVertices = 2;
+const relationshipConnectorMinimumRoundedSegment = relationshipRouteFanLength;
 const minimapAspectRatio = 192 / 124;
 
 let noteShapeRegistered = false;
+let relationshipConnectorRegistered = false;
 let tableShapeRegistered = false;
 
 export type SchemaCanvasProps = {
@@ -218,6 +224,18 @@ type RelationshipRouteInput = {
   sourceTerminal: RelationshipTerminal;
   targetPoint: RelationshipTerminalPoint;
   targetTerminal: RelationshipTerminal;
+};
+
+type RelationshipConnectorOptions = {
+  minimumRoundedSegment?: number;
+  radius?: number;
+  raw?: boolean;
+  straightEndpointVertices?: number;
+};
+
+type RelationshipPathPoint = {
+  x: number;
+  y: number;
 };
 
 type RemoteCanvasCursorPosition = RemoteCanvasCursor & {
@@ -387,6 +405,7 @@ export function SchemaCanvas({
 
     registerTableNodeShape();
     registerNoteNodeShape();
+    registerRelationshipConnector();
     // registerRelationshipRouter();
 
     const container = containerRef.current;
@@ -402,7 +421,14 @@ export function SchemaCanvas({
         allowLoop: false,
         allowMulti: true,
         allowNode: true,
-        connector: { name: 'rounded', args: { radius: relationshipConnectorRadius } },
+        connector: {
+          name: relationshipConnectorName,
+          args: {
+            minimumRoundedSegment: relationshipConnectorMinimumRoundedSegment,
+            radius: relationshipConnectorRadius,
+            straightEndpointVertices: relationshipConnectorStraightEndpointVertices,
+          },
+        },
         connectionPoint: 'boundary',
         highlight: true,
         router: { name: 'manhattan', args: buildManhattanRouterArgs() },
@@ -1940,6 +1966,142 @@ function registerNoteNodeShape(): void {
   noteShapeRegistered = true;
 }
 
+function registerRelationshipConnector(): void {
+  if (relationshipConnectorRegistered) {
+    return;
+  }
+
+  Graph.registerConnector(relationshipConnectorName, createRelationshipConnector(), true);
+  relationshipConnectorRegistered = true;
+}
+
+function createRelationshipConnector(): ConnectorDefinition<RelationshipConnectorOptions> {
+  return (sourcePoint, targetPoint, routePoints, options = {}) => {
+    const points = [
+      normalizeRelationshipPathPoint(sourcePoint),
+      ...routePoints.map((point) => normalizeRelationshipPathPoint(point)),
+      normalizeRelationshipPathPoint(targetPoint),
+    ];
+
+    if (points.length === 0) {
+      return '';
+    }
+
+    let path = `M ${formatRelationshipPathCoordinate(points[0].x)} ${formatRelationshipPathCoordinate(points[0].y)}`;
+    const radius = options.radius ?? relationshipConnectorRadius;
+    const straightEndpointVertices = options.straightEndpointVertices ?? relationshipConnectorStraightEndpointVertices;
+    const minimumRoundedSegment = options.minimumRoundedSegment ?? relationshipConnectorMinimumRoundedSegment;
+
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const previous = points[index - 1];
+      const current = points[index];
+      const next = points[index + 1];
+
+      if (!shouldRoundRelationshipPathCorner(points, index, radius, straightEndpointVertices, minimumRoundedSegment)) {
+        path += ` L ${formatRelationshipPathCoordinate(current.x)} ${formatRelationshipPathCoordinate(current.y)}`;
+        continue;
+      }
+
+      const previousDistance = getRelationshipPathDistance(current, previous);
+      const nextDistance = getRelationshipPathDistance(current, next);
+      const cornerRadius = Math.min(radius, previousDistance / 2, nextDistance / 2);
+      const roundedStart = moveRelationshipPathPoint(current, previous, cornerRadius);
+      const roundedEnd = moveRelationshipPathPoint(current, next, cornerRadius);
+      const controlStart = {
+        x: roundedStart.x / 3 + (current.x * 2) / 3,
+        y: (current.y * 2) / 3 + roundedStart.y / 3,
+      };
+      const controlEnd = {
+        x: roundedEnd.x / 3 + (current.x * 2) / 3,
+        y: (current.y * 2) / 3 + roundedEnd.y / 3,
+      };
+
+      // Koordinat tidak dibulatkan ke integer agar garis horizontal yang jatuh di .5px tidak berubah menjadi slope halus.
+      path += ` L ${formatRelationshipPathCoordinate(roundedStart.x)} ${formatRelationshipPathCoordinate(
+        roundedStart.y,
+      )}`;
+      path += ` C ${formatRelationshipPathCoordinate(controlStart.x)} ${formatRelationshipPathCoordinate(
+        controlStart.y,
+      )} ${formatRelationshipPathCoordinate(controlEnd.x)} ${formatRelationshipPathCoordinate(
+        controlEnd.y,
+      )} ${formatRelationshipPathCoordinate(roundedEnd.x)} ${formatRelationshipPathCoordinate(roundedEnd.y)}`;
+    }
+
+    const target = points[points.length - 1];
+
+    return `${path} L ${formatRelationshipPathCoordinate(target.x)} ${formatRelationshipPathCoordinate(target.y)}`;
+  };
+}
+
+function normalizeRelationshipPathPoint(point: PointLike): RelationshipPathPoint {
+  return {
+    x: point.x,
+    y: point.y,
+  };
+}
+
+function shouldRoundRelationshipPathCorner(
+  points: RelationshipPathPoint[],
+  index: number,
+  radius: number,
+  straightEndpointVertices: number,
+  minimumRoundedSegment: number,
+): boolean {
+  if (radius <= 0 || index <= straightEndpointVertices || index >= points.length - 1 - straightEndpointVertices) {
+    return false;
+  }
+
+  const previous = points[index - 1];
+  const current = points[index];
+  const next = points[index + 1];
+  const incomingHorizontal = nearlyEqualRelationshipPathCoordinate(previous.y, current.y);
+  const incomingVertical = nearlyEqualRelationshipPathCoordinate(previous.x, current.x);
+  const outgoingHorizontal = nearlyEqualRelationshipPathCoordinate(current.y, next.y);
+  const outgoingVertical = nearlyEqualRelationshipPathCoordinate(current.x, next.x);
+  const isOrthogonalCorner = (incomingHorizontal && outgoingVertical) || (incomingVertical && outgoingHorizontal);
+
+  if (!isOrthogonalCorner) {
+    return false;
+  }
+
+  // Corner mikro di area fan-in dekat port sengaja tetap siku/lurus agar garis tidak tampak bergelombang.
+  return (
+    getRelationshipPathDistance(current, previous) >= minimumRoundedSegment &&
+    getRelationshipPathDistance(current, next) >= minimumRoundedSegment
+  );
+}
+
+function moveRelationshipPathPoint(
+  from: RelationshipPathPoint,
+  toward: RelationshipPathPoint,
+  distance: number,
+): RelationshipPathPoint {
+  const fullDistance = getRelationshipPathDistance(from, toward);
+
+  if (fullDistance === 0) {
+    return from;
+  }
+
+  const ratio = distance / fullDistance;
+
+  return {
+    x: from.x + (toward.x - from.x) * ratio,
+    y: from.y + (toward.y - from.y) * ratio,
+  };
+}
+
+function getRelationshipPathDistance(first: RelationshipPathPoint, second: RelationshipPathPoint): number {
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function nearlyEqualRelationshipPathCoordinate(first: number, second: number): boolean {
+  return Math.abs(first - second) < 0.001;
+}
+
+function formatRelationshipPathCoordinate(value: number): string {
+  return Number(value.toFixed(3)).toString();
+}
+
 function syncGraphFromModel(
   graph: Graph,
   model: DiagramModel,
@@ -2723,8 +2885,12 @@ function createRelationshipEdgeMetadata(
         },
         connector: {
           // Rounded tetap dipakai untuk belokan DrawSQL-like; endpoint Y sudah presisi sehingga tidak memaksa garis patah di dekat port.
-          name: 'rounded',
-          args: { radius: relationshipConnectorRadius },
+          name: relationshipConnectorName,
+          args: {
+            minimumRoundedSegment: relationshipConnectorMinimumRoundedSegment,
+            radius: relationshipConnectorRadius,
+            straightEndpointVertices: relationshipConnectorStraightEndpointVertices,
+          },
         },
         labels: [],
         router: {
