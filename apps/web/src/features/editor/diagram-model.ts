@@ -4,6 +4,8 @@ import {
   createStarterDiagramModel,
   type ColumnTypeSpec,
   type CreateTableColumnInput,
+  type DatabaseColumn,
+  type DatabaseTable,
   type DiagramModel,
 } from '@tabliodb/schema-core';
 
@@ -51,13 +53,42 @@ export function createSnapshotSaveModel(
   requestedModel: DiagramModel | null,
   latestModel: DiagramModel | null,
 ): DiagramModel | null {
-  const modelToSave = latestModel ?? requestedModel;
+  const requestedSafeModel = requestedModel ? normalizeEditorDiagramModel(requestedModel) : null;
+  const latestSafeModel = latestModel ? normalizeEditorDiagramModel(latestModel) : null;
+  const modelToSave = latestSafeModel ?? requestedSafeModel;
 
-  if (!requestedModel || !modelToSave) {
+  if (!requestedSafeModel || !modelToSave) {
     return modelToSave;
   }
 
-  return preserveRequestedDraftColumns(requestedModel, modelToSave);
+  return preserveRequestedDraftColumns(requestedSafeModel, modelToSave);
+}
+
+export function normalizeEditorDiagramModel(model: DiagramModel): DiagramModel {
+  let columns = model.columns;
+  let changed = false;
+
+  for (const table of Object.values(model.tables)) {
+    // Table can survive with columnIds while its column entities are missing from older realtime drafts.
+    const repairedColumns = createMissingTableColumns(table, columns);
+
+    if (repairedColumns.length === 0) {
+      continue;
+    }
+
+    columns = {
+      ...columns,
+      ...Object.fromEntries(repairedColumns.map((column) => [column.id, column])),
+    };
+    changed = true;
+  }
+
+  return changed
+    ? {
+        ...model,
+        columns,
+      }
+    : model;
 }
 
 function createEditorDefaultTableColumns(): CreateTableColumnInput[] {
@@ -76,6 +107,51 @@ function createEditorDefaultTableColumns(): CreateTableColumnInput[] {
       nullable: false,
     },
   ];
+}
+
+function createMissingTableColumns(table: DatabaseTable, columns: DiagramModel['columns']): DatabaseColumn[] {
+  const usedNames = new Set(table.columnIds.flatMap((columnId) => (columns[columnId] ? [columns[columnId].name] : [])));
+  const repairedColumns: DatabaseColumn[] = [];
+
+  table.columnIds.forEach((columnId, columnIndex) => {
+    if (columns[columnId]) {
+      return;
+    }
+
+    const baseName = columnIndex === 0 ? 'id' : columnIndex === 1 ? 'new_column' : `new_column_${columnIndex}`;
+    const name = createUniqueRecoveredColumnName(usedNames, baseName);
+    usedNames.add(name);
+
+    // Reconstructed columns keep the original IDs so relationships, comments, and table ordering remain addressable.
+    repairedColumns.push({
+      id: columnId,
+      tableId: table.id,
+      name,
+      type: columnIndex === 0 ? { family: 'uuid' } : { family: 'varchar', length: 160 },
+      primaryKey: columnIndex === 0,
+      nullable: false,
+      unique: false,
+      autoIncrement: false,
+    });
+  });
+
+  return repairedColumns;
+}
+
+function createUniqueRecoveredColumnName(usedNames: Set<string>, baseName: string): string {
+  if (!usedNames.has(baseName)) {
+    return baseName;
+  }
+
+  let suffix = 2;
+  let nextName = `${baseName}_${suffix}`;
+
+  while (usedNames.has(nextName)) {
+    suffix += 1;
+    nextName = `${baseName}_${suffix}`;
+  }
+
+  return nextName;
 }
 
 function preserveRequestedDraftColumns(requestedModel: DiagramModel, latestModel: DiagramModel): DiagramModel {

@@ -251,7 +251,12 @@ import {
   useCreateDiagramShareLinkMutation,
   useRevokeDiagramShareLinkMutation,
 } from '@/resources/share-links';
-import { addTableToDiagramModel, createSeedDiagramModel, createSnapshotSaveModel } from './diagram-model';
+import {
+  addTableToDiagramModel,
+  createSeedDiagramModel,
+  createSnapshotSaveModel,
+  normalizeEditorDiagramModel,
+} from './diagram-model';
 import { createEmptyCommentFormBody } from './comment-body';
 import {
   createDiagramModelSignature,
@@ -837,12 +842,14 @@ export function EditorPage() {
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
       onSuccess: (snapshot) => {
+        const snapshotModel = normalizeEditorDiagramModel(snapshot.snapshot);
+
         // Snapshot creation returns the canonical versioned model while live editing remains a separate persistence concern.
         loadedSnapshotIdRef.current = snapshot.id;
-        modelRef.current = snapshot.snapshot;
-        persistedDraftSignatureRef.current = createDiagramModelSignature(snapshot.snapshot);
-        setModel(snapshot.snapshot);
-        syncModelToCollaboration(snapshot.snapshot);
+        modelRef.current = snapshotModel;
+        persistedDraftSignatureRef.current = createDiagramModelSignature(snapshotModel);
+        setModel(snapshotModel);
+        syncModelToCollaboration(snapshotModel);
         queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
@@ -850,12 +857,14 @@ export function EditorPage() {
   const restoreSnapshotMutation = useRestoreSnapshotMutation({
     mutationConfig: {
       onSuccess: (snapshot) => {
+        const snapshotModel = normalizeEditorDiagramModel(snapshot.snapshot);
+
         // Restore membuat snapshot baru dari versi lama; local draft langsung mengikuti checkpoint baru itu.
         loadedSnapshotIdRef.current = snapshot.id;
-        modelRef.current = snapshot.snapshot;
-        persistedDraftSignatureRef.current = createDiagramModelSignature(snapshot.snapshot);
-        setModel(snapshot.snapshot);
-        syncModelToCollaboration(snapshot.snapshot);
+        modelRef.current = snapshotModel;
+        persistedDraftSignatureRef.current = createDiagramModelSignature(snapshotModel);
+        setModel(snapshotModel);
+        syncModelToCollaboration(snapshotModel);
         setSelectedTableId(null);
         setSelectedCommentTarget(null);
         resetModelHistory();
@@ -871,7 +880,7 @@ export function EditorPage() {
   const importDiagramMutation = useImportDiagramMutation({
     mutationConfig: {
       onSuccess: (response) => {
-        const importedModel = parseDiagramModel(response.model);
+        const importedModel = normalizeEditorDiagramModel(parseDiagramModel(response.model));
 
         // Server import writes the same model into diagram_documents, so this signature marks the local draft as persisted.
         loadedSnapshotIdRef.current = latestSnapshot?.id ?? loadedSnapshotIdRef.current;
@@ -932,9 +941,10 @@ export function EditorPage() {
         return;
       }
 
+      const safeNextModel = normalizeEditorDiagramModel(nextModel);
       const currentModel = modelRef.current;
 
-      const localHistory = recordLocalModelChange(modelHistoryRef.current, currentModel, nextModel);
+      const localHistory = recordLocalModelChange(modelHistoryRef.current, currentModel, safeNextModel);
 
       if (localHistory.changed) {
         modelHistoryRef.current = localHistory.history;
@@ -942,9 +952,9 @@ export function EditorPage() {
       }
 
       // Keep the latest draft model synchronously available for snapshot clicks that happen immediately after an input blur.
-      modelRef.current = nextModel;
-      setModel(nextModel);
-      syncModelToCollaboration(nextModel);
+      modelRef.current = safeNextModel;
+      setModel(safeNextModel);
+      syncModelToCollaboration(safeNextModel);
     },
     [canEditDiagram, syncModelToCollaboration],
   );
@@ -1238,18 +1248,24 @@ export function EditorPage() {
         setCollaborationStatus(status);
       });
       unsubscribeModel = collaboration.subscribeModel((nextModel) => {
+        const safeNextModel = normalizeEditorDiagramModel(nextModel);
         const currentSignature = modelRef.current ? createDiagramModelSignature(modelRef.current) : null;
-        const nextSignature = createDiagramModelSignature(nextModel);
+        const rawNextSignature = createDiagramModelSignature(nextModel);
+        const nextSignature = createDiagramModelSignature(safeNextModel);
 
         if (currentSignature === nextSignature) {
           return;
         }
 
         // Remote Yjs updates become the visible editor model, but they do not enter this user's local undo stack.
-        modelRef.current = nextModel;
+        modelRef.current = safeNextModel;
         persistedDraftSignatureRef.current = null;
-        setModel(nextModel);
-        reconcileModelSelection(nextModel);
+        setModel(safeNextModel);
+        reconcileModelSelection(safeNextModel);
+        if (rawNextSignature !== nextSignature) {
+          // Old realtime drafts can contain table.columnIds without column entities; write the repaired model back once.
+          syncModelToCollaboration(safeNextModel);
+        }
         resetModelHistory();
       });
       unsubscribeAwareness = collaboration.subscribeAwareness((states) => {
@@ -1294,6 +1310,7 @@ export function EditorPage() {
     currentUser?.name,
     reconcileModelSelection,
     resetModelHistory,
+    syncModelToCollaboration,
   ]);
 
   useEffect(() => {
@@ -1365,14 +1382,21 @@ export function EditorPage() {
       return;
     }
 
+    const snapshotModel = normalizeEditorDiagramModel(latestSnapshot.snapshot);
+    const snapshotSignature = createDiagramModelSignature(snapshotModel);
+
     loadedSnapshotIdRef.current = latestSnapshot.id;
-    modelRef.current = latestSnapshot.snapshot;
-    persistedDraftSignatureRef.current = createDiagramModelSignature(latestSnapshot.snapshot);
-    setModel(latestSnapshot.snapshot);
+    modelRef.current = snapshotModel;
+    persistedDraftSignatureRef.current = snapshotSignature;
+    setModel(snapshotModel);
+    if (createDiagramModelSignature(latestSnapshot.snapshot) !== snapshotSignature) {
+      // Refresh dari snapshot lama yang rusak langsung memperbaiki realtime draft supaya sidebar dan canvas membaca model yang sama.
+      syncModelToCollaboration(snapshotModel);
+    }
     setSelectedTableId(null);
     setSelectedCommentTarget(null);
     resetModelHistory();
-  }, [latestSnapshot, resetModelHistory]);
+  }, [latestSnapshot, resetModelHistory, syncModelToCollaboration]);
 
   useEffect(() => {
     if (!activeDiagram || snapshotsQuery.isPending || snapshotsQuery.data === undefined || latestSnapshot) {
@@ -1380,7 +1404,7 @@ export function EditorPage() {
     }
 
     // Empty read-only diagrams cannot create an initial snapshot, so the editor renders an unsaved empty model instead of spinning forever.
-    const seedModel = createSeedDiagramModel(activeDiagram.name);
+    const seedModel = normalizeEditorDiagramModel(createSeedDiagramModel(activeDiagram.name));
     loadedSnapshotIdRef.current = null;
     modelRef.current = seedModel;
     persistedDraftSignatureRef.current = null;
@@ -5697,7 +5721,7 @@ function DiagramTablesSidebar({
                 onClearTableSelection={onClearTableSelection}
                 onColumnSelect={onColumnSelect}
                 onModelChange={onModelChange}
-                onSelect={() => (table.id === selectedTable?.id ? onClearTableSelection() : onTableSelect(table.id))}
+                onSelect={() => onTableSelect(table.id)}
                 readOnly={readOnly}
                 selected={table.id === selectedTable?.id}
                 selectedColumnId={selectedColumnId}
