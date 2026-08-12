@@ -6,6 +6,7 @@ import {
   yjsCollections,
   type DatabaseColumn,
   type DiagramModel,
+  type DiagramNote,
 } from '@tabliodb/schema-core';
 import {
   REALTIME_SESSION_PROOF_TOKEN_TYPE,
@@ -56,6 +57,12 @@ export type DiagramCollaborationTablePatch = {
   name?: string;
   position?: { x: number; y: number };
   width?: number;
+};
+export type DiagramCollaborationNotePatch = {
+  changes: Partial<DiagramNote>;
+  clearedKeys: Array<keyof DiagramNote>;
+  metadataUpdatedAt?: string;
+  noteId: string;
 };
 
 export function createDiagramCollaboration(options: DiagramCollaborationOptions) {
@@ -159,6 +166,30 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     },
     writeModel(model: DiagramModel) {
       writeDiagramModelToYjsDocument(document, model, localModelWriteOrigin);
+    },
+    writeNotePatch(patch: DiagramCollaborationNotePatch) {
+      const noteMap = document.getMap<Y.Map<unknown>>(yjsCollections.notes).get(patch.noteId);
+
+      if (!(noteMap instanceof Y.Map)) {
+        return false;
+      }
+
+      document.transact(() => {
+        for (const key of patch.clearedKeys) {
+          noteMap.delete(key);
+        }
+
+        for (const [key, value] of Object.entries(patch.changes)) {
+          // Note updates are patched field-by-field so a text edit and a move from different clients can merge cleanly.
+          noteMap.set(key, cloneYjsSerializableValue(value));
+        }
+
+        if (patch.metadataUpdatedAt) {
+          document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
+        }
+      }, localModelWriteOrigin);
+
+      return true;
     },
     writeColumnPatch(patch: DiagramCollaborationColumnPatch) {
       const columnMap = document.getMap<Y.Map<unknown>>(yjsCollections.columns).get(patch.columnId);

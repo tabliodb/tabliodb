@@ -8,6 +8,7 @@ import {
   type CreateTableColumnInput,
   type DatabaseColumn,
   type DiagramModel,
+  type DiagramNote,
 } from '@tabliodb/schema-core';
 
 export type RealtimeColumnPatch = {
@@ -25,6 +26,13 @@ export type RealtimeTablePatch = {
   name?: string;
   position?: { x: number; y: number };
   width?: number;
+};
+
+export type RealtimeNotePatch = {
+  changes: Partial<DiagramNote>;
+  clearedKeys: Array<keyof DiagramNote>;
+  metadataUpdatedAt?: string;
+  noteId: string;
 };
 
 export function formatColumnType(type: ColumnTypeSpec): string {
@@ -284,6 +292,84 @@ export function createRealtimeColumnPatch(
     columnId,
     metadataUpdatedAt:
       previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt ? nextModel.metadata.updatedAt : undefined,
+  };
+}
+
+export function createRealtimeNotePatch(
+  previousModel: DiagramModel | null,
+  nextModel: DiagramModel,
+): RealtimeNotePatch | null {
+  if (!previousModel) {
+    return null;
+  }
+
+  if (
+    previousModel.schemaVersion !== nextModel.schemaVersion ||
+    previousModel.dialect !== nextModel.dialect ||
+    !areJsonValuesEqual(previousModel.tables, nextModel.tables) ||
+    !areJsonValuesEqual(previousModel.columns, nextModel.columns) ||
+    !areJsonValuesEqual(previousModel.indexes, nextModel.indexes) ||
+    !areJsonValuesEqual(previousModel.relationships, nextModel.relationships) ||
+    !areJsonValuesEqual(previousModel.enums, nextModel.enums) ||
+    !areJsonValuesEqual(previousModel.checks, nextModel.checks) ||
+    !areJsonValuesEqual(previousModel.groups, nextModel.groups) ||
+    !areMetadataEqualExceptUpdatedAt(previousModel.metadata, nextModel.metadata)
+  ) {
+    return null;
+  }
+
+  const changedNoteIds = Array.from(new Set([...Object.keys(previousModel.notes), ...Object.keys(nextModel.notes)]))
+    .filter((noteId) => !areJsonValuesEqual(previousModel.notes[noteId], nextModel.notes[noteId]));
+
+  if (changedNoteIds.length !== 1) {
+    return null;
+  }
+
+  const noteId = changedNoteIds[0];
+  const previousNote = previousModel.notes[noteId];
+  const nextNote = nextModel.notes[noteId];
+
+  if (!previousNote || !nextNote) {
+    return null;
+  }
+
+  const changes: Partial<DiagramNote> = {};
+  const clearedKeys: Array<keyof DiagramNote> = [];
+  const noteKeys = Array.from(new Set([...Object.keys(previousNote), ...Object.keys(nextNote)])) as Array<
+    keyof DiagramNote
+  >;
+
+  for (const key of noteKeys) {
+    const previousValue = previousNote[key];
+    const nextValue = nextNote[key];
+
+    if (areJsonValuesEqual(previousValue, nextValue)) {
+      continue;
+    }
+
+    if (key === 'id') {
+      return null;
+    }
+
+    if (nextValue === undefined) {
+      clearedKeys.push(key);
+      continue;
+    }
+
+    // Note move/edit ditulis per field supaya user lain yang sedang mengedit teks tidak mudah tertimpa oleh drag posisi.
+    (changes as Record<string, unknown>)[key] = nextValue;
+  }
+
+  if (Object.keys(changes).length === 0 && clearedKeys.length === 0) {
+    return null;
+  }
+
+  return {
+    changes,
+    clearedKeys,
+    metadataUpdatedAt:
+      previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt ? nextModel.metadata.updatedAt : undefined,
+    noteId,
   };
 }
 

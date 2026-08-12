@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addTableToDiagramModel,
   createRealtimeColumnPatch,
+  createRealtimeNotePatch,
   createRealtimeTablePatch,
   createSeedDiagramModel,
   createSnapshotSaveModel,
@@ -323,5 +324,72 @@ describe('editor diagram model helpers', () => {
 
     expect(createRealtimeColumnPatch(baseModel, addedColumnModel)).toBeNull();
     expect(createRealtimeColumnPatch(baseModel, reorderedColumnModel)).toBeNull();
+  });
+
+  it('creates a field-level realtime patch for note update and move edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime note patch test');
+    const withNote = applyDiagramCommand(
+      baseModel,
+      {
+        color: '#ffc800',
+        noteId: 'note-review',
+        position: { x: 80, y: 120 },
+        text: 'Review nullable columns',
+        type: 'note.create',
+        width: 260,
+      },
+      { now: () => '2026-08-12T01:00:00.000Z' },
+    );
+    const movedNoteModel = applyDiagramCommand(
+      withNote,
+      {
+        noteId: 'note-review',
+        position: { x: 240, y: 360 },
+        type: 'note.move',
+      },
+      { now: () => '2026-08-12T01:01:00.000Z' },
+    );
+    const updatedNoteModel = applyDiagramCommand(
+      movedNoteModel,
+      {
+        changes: {
+          color: '#1cb0f6',
+          text: 'Review nullable and unique columns',
+        },
+        noteId: 'note-review',
+        type: 'note.update',
+      },
+      { now: () => '2026-08-12T01:02:00.000Z' },
+    );
+
+    const patch = createRealtimeNotePatch(withNote, updatedNoteModel);
+
+    expect(patch).toMatchObject({
+      changes: {
+        color: '#1cb0f6',
+        position: { x: 240, y: 360 },
+        text: 'Review nullable and unique columns',
+      },
+      clearedKeys: [],
+      noteId: 'note-review',
+    });
+    expect(patch?.metadataUpdatedAt).toBe('2026-08-12T01:02:00.000Z');
+  });
+
+  it('falls back to full realtime model writes for note create and delete edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime note fallback test');
+    const withNote = applyDiagramCommand(baseModel, {
+      noteId: 'note-design',
+      position: { x: 80, y: 120 },
+      text: 'Document import decisions',
+      type: 'note.create',
+    });
+    const deletedNoteModel = applyDiagramCommand(withNote, {
+      noteId: 'note-design',
+      type: 'note.delete',
+    });
+
+    expect(createRealtimeNotePatch(baseModel, withNote)).toBeNull();
+    expect(createRealtimeNotePatch(withNote, deletedNoteModel)).toBeNull();
   });
 });
