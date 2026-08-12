@@ -540,6 +540,7 @@ describe('editor diagram model helpers', () => {
     const patch = createRealtimeNotePatch(withNote, updatedNoteModel);
 
     expect(patch).toMatchObject({
+      action: 'update',
       changes: {
         color: '#1cb0f6',
         position: { x: 240, y: 360 },
@@ -551,20 +552,62 @@ describe('editor diagram model helpers', () => {
     expect(patch?.metadataUpdatedAt).toBe('2026-08-12T01:02:00.000Z');
   });
 
-  it('falls back to full realtime model writes for note create and delete edits', () => {
-    const baseModel = createSeedDiagramModel('Realtime note fallback test');
-    const withNote = applyDiagramCommand(baseModel, {
-      noteId: 'note-design',
-      position: { x: 80, y: 120 },
-      text: 'Document import decisions',
-      type: 'note.create',
-    });
-    const deletedNoteModel = applyDiagramCommand(withNote, {
-      noteId: 'note-design',
-      type: 'note.delete',
-    });
+  it('creates a realtime patch for note create edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime note create patch test');
+    const withNote = applyDiagramCommand(
+      baseModel,
+      {
+        color: '#ffc800',
+        noteId: 'note-design',
+        position: { x: 80, y: 120 },
+        text: 'Document import decisions',
+        type: 'note.create',
+        width: 280,
+      },
+      { now: () => '2026-08-12T04:00:00.000Z' },
+    );
 
-    expect(createRealtimeNotePatch(baseModel, withNote)).toBeNull();
-    expect(createRealtimeNotePatch(withNote, deletedNoteModel)).toBeNull();
+    const patch = createRealtimeNotePatch(baseModel, withNote);
+
+    expect(patch).toMatchObject({
+      action: 'create',
+      metadataUpdatedAt: '2026-08-12T04:00:00.000Z',
+      note: {
+        color: '#ffc800',
+        id: 'note-design',
+        position: { x: 80, y: 120 },
+        text: 'Document import decisions',
+        width: 280,
+      },
+      noteId: 'note-design',
+    });
+  });
+
+  it('creates a realtime patch for note delete edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime note delete patch test');
+    const withNote = applyDiagramCommand(
+      baseModel,
+      {
+        noteId: 'note-design',
+        position: { x: 80, y: 120 },
+        text: 'Document import decisions',
+        type: 'note.create',
+      },
+      { now: () => '2026-08-12T04:01:00.000Z' },
+    );
+    const deletedNoteModel = applyDiagramCommand(
+      withNote,
+      {
+        noteId: 'note-design',
+        type: 'note.delete',
+      },
+      { now: () => '2026-08-12T04:02:00.000Z' },
+    );
+
+    expect(createRealtimeNotePatch(withNote, deletedNoteModel)).toEqual({
+      action: 'delete',
+      metadataUpdatedAt: '2026-08-12T04:02:00.000Z',
+      noteId: 'note-design',
+    });
   });
 });

@@ -92,12 +92,25 @@ export type DiagramCollaborationRelationshipPatch =
       metadataUpdatedAt?: string;
       relationshipId: string;
     };
-export type DiagramCollaborationNotePatch = {
-  changes: Partial<DiagramNote>;
-  clearedKeys: Array<keyof DiagramNote>;
-  metadataUpdatedAt?: string;
-  noteId: string;
-};
+export type DiagramCollaborationNotePatch =
+  | {
+      action: 'create';
+      metadataUpdatedAt?: string;
+      note: DiagramNote;
+      noteId: string;
+    }
+  | {
+      action: 'delete';
+      metadataUpdatedAt?: string;
+      noteId: string;
+    }
+  | {
+      action: 'update';
+      changes: Partial<DiagramNote>;
+      clearedKeys: Array<keyof DiagramNote>;
+      metadataUpdatedAt?: string;
+      noteId: string;
+    };
 
 export function createDiagramCollaboration(options: DiagramCollaborationOptions) {
   const document = new Y.Doc();
@@ -316,7 +329,41 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       return true;
     },
     writeNotePatch(patch: DiagramCollaborationNotePatch) {
-      const noteMap = document.getMap<Y.Map<unknown>>(yjsCollections.notes).get(patch.noteId);
+      const notesMap = document.getMap<Y.Map<unknown>>(yjsCollections.notes);
+
+      if (patch.action === 'delete') {
+        document.transact(() => {
+          notesMap.delete(patch.noteId);
+
+          if (patch.metadataUpdatedAt) {
+            document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
+          }
+        }, localModelWriteOrigin);
+
+        return true;
+      }
+
+      if (patch.action === 'create') {
+        const existingNoteMap = notesMap.get(patch.noteId);
+        const noteMap = existingNoteMap instanceof Y.Map ? existingNoteMap : new Y.Map<unknown>();
+
+        document.transact(() => {
+          if (noteMap !== existingNoteMap) {
+            notesMap.set(patch.noteId, noteMap);
+          }
+
+          // New notes are inserted as entity maps so subsequent note.update patches stay field-scoped.
+          syncYMapFromRecord(noteMap, patch.note as unknown as Record<string, unknown>);
+
+          if (patch.metadataUpdatedAt) {
+            document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
+          }
+        }, localModelWriteOrigin);
+
+        return true;
+      }
+
+      const noteMap = notesMap.get(patch.noteId);
 
       if (!(noteMap instanceof Y.Map)) {
         return false;

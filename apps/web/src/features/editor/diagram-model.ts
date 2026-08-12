@@ -64,12 +64,25 @@ export type RealtimeRelationshipPatch =
       relationshipId: string;
     };
 
-export type RealtimeNotePatch = {
-  changes: Partial<DiagramNote>;
-  clearedKeys: Array<keyof DiagramNote>;
-  metadataUpdatedAt?: string;
-  noteId: string;
-};
+export type RealtimeNotePatch =
+  | {
+      action: 'create';
+      metadataUpdatedAt?: string;
+      note: DiagramNote;
+      noteId: string;
+    }
+  | {
+      action: 'delete';
+      metadataUpdatedAt?: string;
+      noteId: string;
+    }
+  | {
+      action: 'update';
+      changes: Partial<DiagramNote>;
+      clearedKeys: Array<keyof DiagramNote>;
+      metadataUpdatedAt?: string;
+      noteId: string;
+    };
 
 export function formatColumnType(type: ColumnTypeSpec): string {
   if (type.raw) {
@@ -620,6 +633,25 @@ export function createRealtimeNotePatch(
   const noteId = changedNoteIds[0];
   const previousNote = previousModel.notes[noteId];
   const nextNote = nextModel.notes[noteId];
+  const metadataUpdatedAt =
+    previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt ? nextModel.metadata.updatedAt : undefined;
+
+  if (!previousNote && nextNote) {
+    return {
+      action: 'create',
+      metadataUpdatedAt,
+      note: nextNote,
+      noteId,
+    };
+  }
+
+  if (previousNote && !nextNote) {
+    return {
+      action: 'delete',
+      metadataUpdatedAt,
+      noteId,
+    };
+  }
 
   if (!previousNote || !nextNote) {
     return null;
@@ -657,10 +689,10 @@ export function createRealtimeNotePatch(
   }
 
   return {
+    action: 'update',
     changes,
     clearedKeys,
-    metadataUpdatedAt:
-      previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt ? nextModel.metadata.updatedAt : undefined,
+    metadataUpdatedAt,
     noteId,
   };
 }
