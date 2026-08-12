@@ -5,7 +5,9 @@ import {
   writeDiagramModelToYjsDocument,
   yjsCollections,
   type DatabaseColumn,
+  type DatabaseIndex,
   type DatabaseRelationship,
+  type DatabaseTable,
   type DiagramModel,
   type DiagramNote,
 } from '@tabliodb/schema-core';
@@ -49,6 +51,18 @@ export type DiagramCollaborationColumnPatch = {
   clearedKeys: Array<keyof DatabaseColumn>;
   columnId: string;
   metadataUpdatedAt?: string;
+};
+export type DiagramCollaborationColumnStructuralPatch = {
+  action: 'create' | 'delete' | 'reorder';
+  checksToDelete: string[];
+  column?: DatabaseColumn;
+  columnId: string;
+  indexesToDelete: string[];
+  indexesToUpsert: DatabaseIndex[];
+  metadataUpdatedAt?: string;
+  relationshipsToDelete: string[];
+  tableId: string;
+  tablePatch: Pick<DatabaseTable, 'columnIds' | 'indexIds'>;
 };
 export type DiagramCollaborationTablePatch = {
   clearColor?: boolean;
@@ -186,6 +200,69 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     },
     writeModel(model: DiagramModel) {
       writeDiagramModelToYjsDocument(document, model, localModelWriteOrigin);
+    },
+    writeColumnStructuralPatch(patch: DiagramCollaborationColumnStructuralPatch) {
+      const tableMap = document.getMap<Y.Map<unknown>>(yjsCollections.tables).get(patch.tableId);
+
+      if (!(tableMap instanceof Y.Map)) {
+        return false;
+      }
+
+      const columnsMap = document.getMap<Y.Map<unknown>>(yjsCollections.columns);
+      const indexesMap = document.getMap<Y.Map<unknown>>(yjsCollections.indexes);
+      const relationshipsMap = document.getMap<Y.Map<unknown>>(yjsCollections.relationships);
+      const checksMap = document.getMap<Y.Map<unknown>>(yjsCollections.checks);
+
+      document.transact(() => {
+        if (patch.action === 'create' && patch.column) {
+          const existingColumnMap = columnsMap.get(patch.columnId);
+          const columnMap = existingColumnMap instanceof Y.Map ? existingColumnMap : new Y.Map<unknown>();
+
+          if (columnMap !== existingColumnMap) {
+            columnsMap.set(patch.columnId, columnMap);
+          }
+
+          // New columns are inserted as their own Y.Map so later column.update patches can stay field-scoped.
+          syncYMapFromRecord(columnMap, patch.column as unknown as Record<string, unknown>);
+        }
+
+        if (patch.action === 'delete') {
+          columnsMap.delete(patch.columnId);
+        }
+
+        for (const indexId of patch.indexesToDelete) {
+          indexesMap.delete(indexId);
+        }
+
+        for (const index of patch.indexesToUpsert) {
+          const existingIndexMap = indexesMap.get(index.id);
+          const indexMap = existingIndexMap instanceof Y.Map ? existingIndexMap : new Y.Map<unknown>();
+
+          if (indexMap !== existingIndexMap) {
+            indexesMap.set(index.id, indexMap);
+          }
+
+          // Column delete can shrink a composite index instead of removing it entirely.
+          syncYMapFromRecord(indexMap, index as unknown as Record<string, unknown>);
+        }
+
+        for (const relationshipId of patch.relationshipsToDelete) {
+          relationshipsMap.delete(relationshipId);
+        }
+
+        for (const checkId of patch.checksToDelete) {
+          checksMap.delete(checkId);
+        }
+
+        tableMap.set('columnIds', [...patch.tablePatch.columnIds]);
+        tableMap.set('indexIds', [...patch.tablePatch.indexIds]);
+
+        if (patch.metadataUpdatedAt) {
+          document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
+        }
+      }, localModelWriteOrigin);
+
+      return true;
     },
     writeRelationshipPatch(patch: DiagramCollaborationRelationshipPatch) {
       const relationshipsMap = document.getMap<Y.Map<unknown>>(yjsCollections.relationships);

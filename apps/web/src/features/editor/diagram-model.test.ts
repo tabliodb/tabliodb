@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addTableToDiagramModel,
   createRealtimeColumnPatch,
+  createRealtimeColumnStructuralPatch,
   createRealtimeNotePatch,
   createRealtimeRelationshipPatch,
   createRealtimeTablePatch,
@@ -307,24 +308,111 @@ describe('editor diagram model helpers', () => {
     expect(patch?.metadataUpdatedAt).toBe(columnModel.metadata.updatedAt);
   });
 
-  it('falls back to full realtime model writes for column add and reorder edits', () => {
-    const baseModel = createSeedDiagramModel('Realtime column fallback test');
-    const addedColumnModel = applyDiagramCommand(baseModel, {
-      columnType: { family: 'varchar', length: 80 },
-      name: 'nickname',
-      nullable: true,
-      tableId: 'users',
-      type: 'column.create',
-    });
-    const reorderedColumnModel = applyDiagramCommand(baseModel, {
-      atIndex: 0,
-      columnId: 'users-email',
-      tableId: 'users',
-      type: 'column.reorder',
-    });
+  it('creates a structural realtime patch for column create edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime column create patch test');
+    const addedColumnModel = applyDiagramCommand(
+      baseModel,
+      {
+        columnId: 'users-nickname',
+        columnType: { family: 'varchar', length: 80 },
+        name: 'nickname',
+        nullable: true,
+        tableId: 'users',
+        type: 'column.create',
+      },
+      { now: () => '2026-08-12T03:00:00.000Z' },
+    );
+
+    const patch = createRealtimeColumnStructuralPatch(baseModel, addedColumnModel);
 
     expect(createRealtimeColumnPatch(baseModel, addedColumnModel)).toBeNull();
+    expect(patch).toMatchObject({
+      action: 'create',
+      column: {
+        id: 'users-nickname',
+        name: 'nickname',
+        nullable: true,
+        tableId: 'users',
+        type: { family: 'varchar', length: 80 },
+      },
+      columnId: 'users-nickname',
+      metadataUpdatedAt: '2026-08-12T03:00:00.000Z',
+      tableId: 'users',
+      tablePatch: {
+        columnIds: ['users-id', 'users-name', 'users-email', 'users-nickname'],
+        indexIds: ['users-email-unique'],
+      },
+    });
+  });
+
+  it('creates a structural realtime patch for column reorder edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime column reorder patch test');
+    const reorderedColumnModel = applyDiagramCommand(
+      baseModel,
+      {
+        atIndex: 0,
+        columnId: 'users-email',
+        tableId: 'users',
+        type: 'column.reorder',
+      },
+      { now: () => '2026-08-12T03:01:00.000Z' },
+    );
+
+    const patch = createRealtimeColumnStructuralPatch(baseModel, reorderedColumnModel);
+
     expect(createRealtimeColumnPatch(baseModel, reorderedColumnModel)).toBeNull();
+    expect(patch).toEqual({
+      action: 'reorder',
+      checksToDelete: [],
+      columnId: 'users-email',
+      indexesToDelete: [],
+      indexesToUpsert: [],
+      metadataUpdatedAt: '2026-08-12T03:01:00.000Z',
+      relationshipsToDelete: [],
+      tableId: 'users',
+      tablePatch: {
+        columnIds: ['users-email', 'users-id', 'users-name'],
+        indexIds: ['users-email-unique'],
+      },
+    });
+  });
+
+  it('creates a structural realtime patch for column delete cascade edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime column delete patch test');
+    const deletedColumnModel = applyDiagramCommand(
+      baseModel,
+      {
+        columnId: 'borrowings-user-id',
+        type: 'column.delete',
+      },
+      { now: () => '2026-08-12T03:02:00.000Z' },
+    );
+
+    const patch = createRealtimeColumnStructuralPatch(baseModel, deletedColumnModel);
+
+    expect(createRealtimeColumnPatch(baseModel, deletedColumnModel)).toBeNull();
+    expect(patch).toMatchObject({
+      action: 'delete',
+      checksToDelete: [],
+      columnId: 'borrowings-user-id',
+      indexesToDelete: [],
+      metadataUpdatedAt: '2026-08-12T03:02:00.000Z',
+      relationshipsToDelete: ['users-borrowings'],
+      tableId: 'borrowings',
+      tablePatch: {
+        columnIds: ['borrowings-id', 'borrowings-book-id', 'borrowings-due-at'],
+        indexIds: ['borrowings-user-book-index'],
+      },
+    });
+    expect(patch?.indexesToUpsert).toEqual([
+      {
+        columns: [{ columnId: 'borrowings-book-id' }],
+        id: 'borrowings-user-book-index',
+        name: 'borrowings_user_book_idx',
+        tableId: 'borrowings',
+        unique: false,
+      },
+    ]);
   });
 
   it('creates a realtime patch for relationship create edits', () => {

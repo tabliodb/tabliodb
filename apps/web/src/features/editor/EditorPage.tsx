@@ -255,6 +255,7 @@ import {
 import {
   addTableToDiagramModel,
   createRealtimeColumnPatch,
+  createRealtimeColumnStructuralPatch,
   createRealtimeNotePatch,
   createRealtimeRelationshipPatch,
   createRealtimeTablePatch,
@@ -803,6 +804,12 @@ export function EditorPage() {
       const tablePatch = createRealtimeTablePatch(previousModel, nextModel);
 
       if (tablePatch && collaborationRef.current?.writeTablePatch(tablePatch)) {
+        return;
+      }
+
+      const columnStructuralPatch = createRealtimeColumnStructuralPatch(previousModel, nextModel);
+
+      if (columnStructuralPatch && collaborationRef.current?.writeColumnStructuralPatch(columnStructuralPatch)) {
         return;
       }
 

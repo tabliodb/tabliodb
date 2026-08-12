@@ -7,7 +7,9 @@ import {
   type ColumnTypeSpec,
   type CreateTableColumnInput,
   type DatabaseColumn,
+  type DatabaseIndex,
   type DatabaseRelationship,
+  type DatabaseTable,
   type DiagramModel,
   type DiagramNote,
 } from '@tabliodb/schema-core';
@@ -17,6 +19,19 @@ export type RealtimeColumnPatch = {
   clearedKeys: Array<keyof DatabaseColumn>;
   columnId: string;
   metadataUpdatedAt?: string;
+};
+
+export type RealtimeColumnStructuralPatch = {
+  action: 'create' | 'delete' | 'reorder';
+  checksToDelete: string[];
+  column?: DatabaseColumn;
+  columnId: string;
+  indexesToDelete: string[];
+  indexesToUpsert: DatabaseIndex[];
+  metadataUpdatedAt?: string;
+  relationshipsToDelete: string[];
+  tableId: string;
+  tablePatch: Pick<DatabaseTable, 'columnIds' | 'indexIds'>;
 };
 
 export type RealtimeTablePatch = {
@@ -316,6 +331,161 @@ export function createRealtimeColumnPatch(
   };
 }
 
+export function createRealtimeColumnStructuralPatch(
+  previousModel: DiagramModel | null,
+  nextModel: DiagramModel,
+): RealtimeColumnStructuralPatch | null {
+  if (!previousModel) {
+    return null;
+  }
+
+  if (
+    previousModel.schemaVersion !== nextModel.schemaVersion ||
+    previousModel.dialect !== nextModel.dialect ||
+    !areJsonValuesEqual(previousModel.enums, nextModel.enums) ||
+    !areJsonValuesEqual(previousModel.notes, nextModel.notes) ||
+    !areJsonValuesEqual(previousModel.groups, nextModel.groups) ||
+    !areMetadataEqualExceptUpdatedAt(previousModel.metadata, nextModel.metadata)
+  ) {
+    return null;
+  }
+
+  const changedTableIds = findChangedRecordKeys(previousModel.tables, nextModel.tables);
+
+  if (changedTableIds.length !== 1) {
+    return null;
+  }
+
+  const tableId = changedTableIds[0];
+  const previousTable = previousModel.tables[tableId];
+  const nextTable = nextModel.tables[tableId];
+
+  if (!previousTable || !nextTable || !isSameTableExceptColumnAndIndexOrder(previousTable, nextTable)) {
+    return null;
+  }
+
+  const changedColumnIds = findChangedRecordKeys(previousModel.columns, nextModel.columns);
+  const addedColumnIds = changedColumnIds.filter((columnId) => !previousModel.columns[columnId] && nextModel.columns[columnId]);
+  const deletedColumnIds = changedColumnIds.filter(
+    (columnId) => previousModel.columns[columnId] && !nextModel.columns[columnId],
+  );
+  const changedExistingColumnIds = changedColumnIds.filter(
+    (columnId) => previousModel.columns[columnId] && nextModel.columns[columnId],
+  );
+  const changedIndexIds = findChangedRecordKeys(previousModel.indexes, nextModel.indexes);
+  const changedRelationshipIds = findChangedRecordKeys(previousModel.relationships, nextModel.relationships);
+  const changedCheckIds = findChangedRecordKeys(previousModel.checks, nextModel.checks);
+  const metadataUpdatedAt =
+    previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt ? nextModel.metadata.updatedAt : undefined;
+  const reorderedColumnId = findReorderedColumnId(previousTable.columnIds, nextTable.columnIds);
+
+  if (
+    changedColumnIds.length === 0 &&
+    changedIndexIds.length === 0 &&
+    changedRelationshipIds.length === 0 &&
+    changedCheckIds.length === 0 &&
+    areStringArraysEqual(previousTable.indexIds, nextTable.indexIds) &&
+    reorderedColumnId &&
+    !areStringArraysEqual(previousTable.columnIds, nextTable.columnIds)
+  ) {
+    return {
+      action: 'reorder',
+      checksToDelete: [],
+      columnId: reorderedColumnId,
+      indexesToDelete: [],
+      indexesToUpsert: [],
+      metadataUpdatedAt,
+      relationshipsToDelete: [],
+      tableId,
+      tablePatch: {
+        columnIds: nextTable.columnIds,
+        indexIds: nextTable.indexIds,
+      },
+    };
+  }
+
+  if (
+    addedColumnIds.length === 1 &&
+    deletedColumnIds.length === 0 &&
+    changedExistingColumnIds.length === 0 &&
+    changedIndexIds.length === 0 &&
+    changedRelationshipIds.length === 0 &&
+    changedCheckIds.length === 0 &&
+    areStringArraysEqual(previousTable.indexIds, nextTable.indexIds)
+  ) {
+    const columnId = addedColumnIds[0];
+    const column = nextModel.columns[columnId];
+
+    if (!column || column.tableId !== tableId || !nextTable.columnIds.includes(columnId)) {
+      return null;
+    }
+
+    return {
+      action: 'create',
+      checksToDelete: [],
+      column,
+      columnId,
+      indexesToDelete: [],
+      indexesToUpsert: [],
+      metadataUpdatedAt,
+      relationshipsToDelete: [],
+      tableId,
+      tablePatch: {
+        columnIds: nextTable.columnIds,
+        indexIds: nextTable.indexIds,
+      },
+    };
+  }
+
+  if (deletedColumnIds.length !== 1 || addedColumnIds.length > 0 || changedExistingColumnIds.length > 0) {
+    return null;
+  }
+
+  const columnId = deletedColumnIds[0];
+  const previousColumn = previousModel.columns[columnId];
+
+  if (!previousColumn || previousColumn.tableId !== tableId || nextModel.columns[columnId]) {
+    return null;
+  }
+
+  const indexesToDelete = changedIndexIds.filter((indexId) => previousModel.indexes[indexId] && !nextModel.indexes[indexId]);
+  const indexesToUpsert = changedIndexIds.flatMap((indexId) => {
+    const nextIndex = nextModel.indexes[indexId];
+
+    return nextIndex ? [nextIndex] : [];
+  });
+  const relationshipsToDelete = changedRelationshipIds.filter(
+    (relationshipId) => previousModel.relationships[relationshipId] && !nextModel.relationships[relationshipId],
+  );
+  const checksToDelete = changedCheckIds.filter((checkId) => previousModel.checks[checkId] && !nextModel.checks[checkId]);
+
+  if (
+    indexesToDelete.length + indexesToUpsert.length !== changedIndexIds.length ||
+    relationshipsToDelete.length !== changedRelationshipIds.length ||
+    checksToDelete.length !== changedCheckIds.length ||
+    !areDeletedColumnIndexChangesValid(columnId, indexesToUpsert) ||
+    !areDeletedColumnRelationshipRemovalsValid(columnId, previousModel, relationshipsToDelete) ||
+    !areDeletedColumnCheckRemovalsValid(columnId, previousModel, checksToDelete)
+  ) {
+    return null;
+  }
+
+  return {
+    action: 'delete',
+    checksToDelete,
+    columnId,
+    indexesToDelete,
+    indexesToUpsert,
+    metadataUpdatedAt,
+    relationshipsToDelete,
+    tableId,
+    tablePatch: {
+      columnIds: nextTable.columnIds,
+      indexIds: nextTable.indexIds,
+    },
+  };
+}
+
 export function createRealtimeRelationshipPatch(
   previousModel: DiagramModel | null,
   nextModel: DiagramModel,
@@ -587,6 +757,62 @@ function copyRequestedTableColumns(
   }
 
   return nextColumns;
+}
+
+function findChangedRecordKeys<T>(left: Record<string, T>, right: Record<string, T>): string[] {
+  return Array.from(new Set([...Object.keys(left), ...Object.keys(right)])).filter(
+    (key) => !areJsonValuesEqual(left[key], right[key]),
+  );
+}
+
+function isSameTableExceptColumnAndIndexOrder(left: DatabaseTable, right: DatabaseTable): boolean {
+  const { columnIds: _leftColumnIds, indexIds: _leftIndexIds, ...leftRest } = left;
+  const { columnIds: _rightColumnIds, indexIds: _rightIndexIds, ...rightRest } = right;
+
+  return areJsonValuesEqual(leftRest, rightRest);
+}
+
+function findReorderedColumnId(previousColumnIds: string[], nextColumnIds: string[]): string | null {
+  if (
+    previousColumnIds.length !== nextColumnIds.length ||
+    !previousColumnIds.every((columnId) => nextColumnIds.includes(columnId)) ||
+    areStringArraysEqual(previousColumnIds, nextColumnIds)
+  ) {
+    return null;
+  }
+
+  return nextColumnIds.find((columnId, index) => previousColumnIds[index] !== columnId) ?? null;
+}
+
+function areDeletedColumnIndexChangesValid(columnId: string, indexesToUpsert: DatabaseIndex[]): boolean {
+  return indexesToUpsert.every(
+    (index) =>
+      index.columns.every((indexColumn) => indexColumn.columnId !== columnId) &&
+      !(index.includeColumnIds ?? []).includes(columnId),
+  );
+}
+
+function areDeletedColumnRelationshipRemovalsValid(
+  columnId: string,
+  previousModel: DiagramModel,
+  relationshipIds: string[],
+): boolean {
+  return relationshipIds.every((relationshipId) => {
+    const relationship = previousModel.relationships[relationshipId];
+
+    return Boolean(
+      relationship &&
+        (relationship.sourceColumnIds.includes(columnId) || relationship.targetColumnIds.includes(columnId)),
+    );
+  });
+}
+
+function areDeletedColumnCheckRemovalsValid(
+  columnId: string,
+  previousModel: DiagramModel,
+  checkIds: string[],
+): boolean {
+  return checkIds.every((checkId) => previousModel.checks[checkId]?.columnId === columnId);
 }
 
 function mergeRequestedColumnIds(
