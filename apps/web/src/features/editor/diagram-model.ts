@@ -6,8 +6,16 @@ import {
   normalizeDiagramModel,
   type ColumnTypeSpec,
   type CreateTableColumnInput,
+  type DatabaseColumn,
   type DiagramModel,
 } from '@tabliodb/schema-core';
+
+export type RealtimeColumnPatch = {
+  changes: Partial<DatabaseColumn>;
+  clearedKeys: Array<keyof DatabaseColumn>;
+  columnId: string;
+  metadataUpdatedAt?: string;
+};
 
 export type RealtimeTablePatch = {
   clearColor?: boolean;
@@ -199,6 +207,84 @@ export function createRealtimeTablePatch(
   }
 
   return patch;
+}
+
+export function createRealtimeColumnPatch(
+  previousModel: DiagramModel | null,
+  nextModel: DiagramModel,
+): RealtimeColumnPatch | null {
+  if (!previousModel) {
+    return null;
+  }
+
+  if (
+    previousModel.schemaVersion !== nextModel.schemaVersion ||
+    previousModel.dialect !== nextModel.dialect ||
+    !areJsonValuesEqual(previousModel.tables, nextModel.tables) ||
+    !areJsonValuesEqual(previousModel.indexes, nextModel.indexes) ||
+    !areJsonValuesEqual(previousModel.relationships, nextModel.relationships) ||
+    !areJsonValuesEqual(previousModel.enums, nextModel.enums) ||
+    !areJsonValuesEqual(previousModel.checks, nextModel.checks) ||
+    !areJsonValuesEqual(previousModel.notes, nextModel.notes) ||
+    !areJsonValuesEqual(previousModel.groups, nextModel.groups) ||
+    !areMetadataEqualExceptUpdatedAt(previousModel.metadata, nextModel.metadata)
+  ) {
+    return null;
+  }
+
+  const changedColumnIds = Array.from(new Set([...Object.keys(previousModel.columns), ...Object.keys(nextModel.columns)]))
+    .filter((columnId) => !areJsonValuesEqual(previousModel.columns[columnId], nextModel.columns[columnId]));
+
+  if (changedColumnIds.length !== 1) {
+    return null;
+  }
+
+  const columnId = changedColumnIds[0];
+  const previousColumn = previousModel.columns[columnId];
+  const nextColumn = nextModel.columns[columnId];
+
+  if (!previousColumn || !nextColumn) {
+    return null;
+  }
+
+  const changes: Partial<DatabaseColumn> = {};
+  const clearedKeys: Array<keyof DatabaseColumn> = [];
+  const columnKeys = Array.from(
+    new Set([...Object.keys(previousColumn), ...Object.keys(nextColumn)]),
+  ) as Array<keyof DatabaseColumn>;
+
+  for (const key of columnKeys) {
+    const previousValue = previousColumn[key];
+    const nextValue = nextColumn[key];
+
+    if (areJsonValuesEqual(previousValue, nextValue)) {
+      continue;
+    }
+
+    if (key === 'id' || key === 'tableId') {
+      return null;
+    }
+
+    if (nextValue === undefined) {
+      clearedKeys.push(key);
+      continue;
+    }
+
+    // Column patch sengaja hanya membawa field yang berubah agar concurrent edit pada field lain tidak ikut tertimpa.
+    (changes as Record<string, unknown>)[key] = nextValue;
+  }
+
+  if (Object.keys(changes).length === 0 && clearedKeys.length === 0) {
+    return null;
+  }
+
+  return {
+    changes,
+    clearedKeys,
+    columnId,
+    metadataUpdatedAt:
+      previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt ? nextModel.metadata.updatedAt : undefined,
+  };
 }
 
 function createEditorDefaultTableColumns(): CreateTableColumnInput[] {

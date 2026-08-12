@@ -2,6 +2,7 @@ import { applyDiagramCommand, getTableColumns } from '@tabliodb/schema-core';
 import { describe, expect, it } from 'vitest';
 import {
   addTableToDiagramModel,
+  createRealtimeColumnPatch,
   createRealtimeTablePatch,
   createSeedDiagramModel,
   createSnapshotSaveModel,
@@ -275,16 +276,52 @@ describe('editor diagram model helpers', () => {
     });
   });
 
-  it('falls back to full realtime model writes for column edits', () => {
-    const baseModel = createSeedDiagramModel('Realtime full write fallback test');
+  it('creates a field-level realtime patch for column updates', () => {
+    const baseModel = createSeedDiagramModel('Realtime column patch test');
     const columnModel = applyDiagramCommand(baseModel, {
       columnId: 'users-name',
       changes: {
+        comment: 'Public display name',
         name: 'display_name',
+        nullable: true,
+        type: { family: 'varchar', length: 180 },
       },
       type: 'column.update',
     });
 
+    const patch = createRealtimeColumnPatch(baseModel, columnModel);
+
     expect(createRealtimeTablePatch(baseModel, columnModel)).toBeNull();
+    expect(patch).toMatchObject({
+      changes: {
+        comment: 'Public display name',
+        name: 'display_name',
+        nullable: true,
+        type: { family: 'varchar', length: 180 },
+      },
+      clearedKeys: [],
+      columnId: 'users-name',
+    });
+    expect(patch?.metadataUpdatedAt).toBe(columnModel.metadata.updatedAt);
+  });
+
+  it('falls back to full realtime model writes for column add and reorder edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime column fallback test');
+    const addedColumnModel = applyDiagramCommand(baseModel, {
+      columnType: { family: 'varchar', length: 80 },
+      name: 'nickname',
+      nullable: true,
+      tableId: 'users',
+      type: 'column.create',
+    });
+    const reorderedColumnModel = applyDiagramCommand(baseModel, {
+      atIndex: 0,
+      columnId: 'users-email',
+      tableId: 'users',
+      type: 'column.reorder',
+    });
+
+    expect(createRealtimeColumnPatch(baseModel, addedColumnModel)).toBeNull();
+    expect(createRealtimeColumnPatch(baseModel, reorderedColumnModel)).toBeNull();
   });
 });

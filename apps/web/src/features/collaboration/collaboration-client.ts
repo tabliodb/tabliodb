@@ -4,6 +4,7 @@ import {
   readDiagramModelFromYjsDocument,
   writeDiagramModelToYjsDocument,
   yjsCollections,
+  type DatabaseColumn,
   type DiagramModel,
 } from '@tabliodb/schema-core';
 import {
@@ -41,6 +42,12 @@ export type DiagramCollaborationStatus = {
 };
 
 export type DiagramCollaborationStatusSubscriber = (status: DiagramCollaborationStatus) => void;
+export type DiagramCollaborationColumnPatch = {
+  changes: Partial<DatabaseColumn>;
+  clearedKeys: Array<keyof DatabaseColumn>;
+  columnId: string;
+  metadataUpdatedAt?: string;
+};
 export type DiagramCollaborationTablePatch = {
   clearColor?: boolean;
   color?: string;
@@ -153,6 +160,30 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     writeModel(model: DiagramModel) {
       writeDiagramModelToYjsDocument(document, model, localModelWriteOrigin);
     },
+    writeColumnPatch(patch: DiagramCollaborationColumnPatch) {
+      const columnMap = document.getMap<Y.Map<unknown>>(yjsCollections.columns).get(patch.columnId);
+
+      if (!(columnMap instanceof Y.Map)) {
+        return false;
+      }
+
+      document.transact(() => {
+        for (const key of patch.clearedKeys) {
+          columnMap.delete(key);
+        }
+
+        for (const [key, value] of Object.entries(patch.changes)) {
+          // Column updates are patched per changed field, so collaborative edits on unrelated column fields stay independent.
+          columnMap.set(key, cloneYjsSerializableValue(value));
+        }
+
+        if (patch.metadataUpdatedAt) {
+          document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
+        }
+      }, localModelWriteOrigin);
+
+      return true;
+    },
     writeTablePatch(patch: DiagramCollaborationTablePatch) {
       const tableMap = document.getMap<Y.Map<unknown>>(yjsCollections.tables).get(patch.tableId);
 
@@ -227,6 +258,14 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
 }
 
 export type DiagramCollaboration = ReturnType<typeof createDiagramCollaboration>;
+
+function cloneYjsSerializableValue(value: unknown): unknown {
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as unknown;
+}
 
 async function createRealtimeSessionProofToken(documentName: string): Promise<string> {
   const proofHeaders = await createSessionProofHeaders(realtimeSessionProofPath(documentName), {
