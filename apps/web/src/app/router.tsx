@@ -131,6 +131,9 @@ export const router = createBrowserRouter([
                 element: <AdminUsersPage />,
                 loader: adminUsersLoader,
                 path: routes.adminUsers.path,
+                handle: {
+                  title: 'Users',
+                },
               },
               {
                 element: <AdminSettingsPage />,
