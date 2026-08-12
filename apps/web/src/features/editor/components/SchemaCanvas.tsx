@@ -93,8 +93,10 @@ const relationshipRouteUTurnGap = 48;
 const relationshipEndpointGap = 3;
 const relationshipLaneGap = 3;
 const relationshipLaneSearchRadius = 14;
-const relationshipConnectorStraightEndpointVertices = 2;
-const relationshipConnectorMinimumRoundedSegment = relationshipRouteFanLength;
+const relationshipConnectorStraightEndpointVertices = 1; // Vertex paling dekat port tetap lurus agar line-in tidak punya lekukan mikro.
+const relationshipConnectorMinimumRoundedSegment = diagramRouterStepSize * 2; // Corner baru dibulatkan saat dua segmennya cukup panjang untuk tidak terlihat bergelombang.
+const relationshipManyMarkerLength = 16; // Crow-foot lebih panjang dari default agar cardinality tetap terbaca pada zoom editor.
+const relationshipManyMarkerSpread = 7; // Spread 7px membuat tiga cabang many terlihat jelas tanpa terlalu berat di light theme.
 const minimapAspectRatio = 192 / 124;
 
 let noteShapeRegistered = false;
@@ -2460,13 +2462,17 @@ function buildRelationshipMarkers(
   stroke: string,
   strokeWidth: number,
 ) {
+  const manyMarkerStrokeWidth = Math.max(strokeWidth + 0.7, 2.2);
   const manyMarker = {
-    d: 'M -12 -5 L 0 0 L -12 5 M -12 0 L 0 0',
+    // Crow-foot dibuat sedikit lebih panjang dan melebar agar cardinality "many" tetap terbaca pada zoom kecil seperti DrawSQL.
+    d: `M -${relationshipManyMarkerLength} -${relationshipManyMarkerSpread} L 0 0 L -${relationshipManyMarkerLength} ${relationshipManyMarkerSpread} M -${relationshipManyMarkerLength} 0 L 0 0`,
     fill: 'none',
     name: 'path' as const,
     offsetX: 0,
     stroke,
-    strokeWidth,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    strokeWidth: manyMarkerStrokeWidth,
   };
 
   switch (cardinality) {
@@ -2601,18 +2607,13 @@ function createRelationshipRoute(
   const targetStubX = snapRelationshipCoordinate(
     targetDockPoint.x + getRelationshipPortSideDirection(targetTerminal.side) * relationshipRouteFanLength,
   );
-  // Y lane sengaja tidak di-snap ke route grid karena rounding 3px bisa membuat step kecil sebelum garis masuk ke port.
-  const sourceLaneY = sourceDockPoint.y + laneOffset;
-  // Target juga mengikuti posisi port persis agar segmen terakhir tetap lurus dan tidak tampak patah.
-  const targetLaneY = targetDockPoint.y + laneOffset;
   const spineX = getRelationshipSpineX(sourceTerminal, targetTerminal, sourcePoint, targetPoint, laneOffset);
   const vertices = dedupeRelationshipVertices([
-    // Setiap relationship punya dock point sendiri; dari dock itu garis langsung horizontal sehingga tidak ada sambungan diagonal/meleyot.
+    // Route dibuat dock -> stub -> spine -> stub -> dock agar segmen yang masuk ke table selalu horizontal tegas.
     { x: sourceStubX, y: sourceDockPoint.y },
-    { x: sourceStubX, y: sourceLaneY },
-    { x: spineX, y: sourceLaneY },
-    { x: spineX, y: targetLaneY },
-    { x: targetStubX, y: targetLaneY },
+    // Lane offset sekarang hanya memengaruhi posisi spine X; Y endpoint tidak dibelokkan lagi tepat sebelum port.
+    { x: spineX, y: sourceDockPoint.y },
+    { x: spineX, y: targetDockPoint.y },
     { x: targetStubX, y: targetDockPoint.y },
   ]);
   const routePoints = [
