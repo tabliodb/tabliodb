@@ -97,7 +97,7 @@ const relationshipConnectorStraightEndpointVertices = 1; // Vertex paling dekat 
 const relationshipConnectorMinimumRoundedSegment = diagramRouterStepSize * 2; // Corner baru dibulatkan saat dua segmennya cukup panjang untuk tidak terlihat bergelombang.
 const relationshipManyMarkerLength = 16; // Crow-foot lebih panjang dari default agar cardinality tetap terbaca pada zoom editor.
 const relationshipManyMarkerSpread = 7; // Spread 7px membuat tiga cabang many terlihat jelas tanpa terlalu berat di light theme.
-const relationshipManyMarkerOffset = relationshipManyMarkerLength / 2; // X6 men-center marker bbox; offset ini menjaga crow-foot berada di luar table.
+const relationshipManyMarkerOutset = relationshipManyMarkerLength / 2; // X6 men-center marker bbox, jadi endpoint many perlu maju setengah marker ke luar table.
 const minimapAspectRatio = 192 / 124;
 
 let noteShapeRegistered = false;
@@ -2464,11 +2464,11 @@ function buildRelationshipMarkers(
   strokeWidth: number,
 ) {
   const targetManyMarker = {
-    // Target marker memakai path negatif karena marker-end mengarah ke table; offset menjaga seluruh crow-foot tetap di luar boundary.
+    // Marker path dibiarkan centered oleh X6; endpoint many yang digeser keluar agar crow-foot tidak tertanam di table.
     d: `M -${relationshipManyMarkerLength} -${relationshipManyMarkerSpread} L 0 0 L -${relationshipManyMarkerLength} ${relationshipManyMarkerSpread} M -${relationshipManyMarkerLength} 0 L 0 0`,
     fill: 'none',
     name: 'path' as const,
-    offsetX: relationshipManyMarkerOffset,
+    offsetX: 0,
     stroke,
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
@@ -2479,7 +2479,7 @@ function buildRelationshipMarkers(
     d: `M ${relationshipManyMarkerLength} -${relationshipManyMarkerSpread} L 0 0 L ${relationshipManyMarkerLength} ${relationshipManyMarkerSpread} M ${relationshipManyMarkerLength} 0 L 0 0`,
     fill: 'none',
     name: 'path' as const,
-    offsetX: -relationshipManyMarkerOffset,
+    offsetX: 0,
     stroke,
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
@@ -2878,6 +2878,16 @@ function createRelationshipEdgeMetadata(
     const stroke = terminals.source.active ? relationshipActiveColor : relationshipNeutralColor;
     const strokeWidth = terminals.source.active ? 1.7 : 1.5;
     const { sourceMarker, targetMarker } = buildRelationshipMarkers(relationship.cardinality, stroke, strokeWidth);
+    const sourcePoint = getRelationshipVisualEndpoint(
+      route.sourcePoint,
+      terminals.source,
+      isRelationshipSourceMany(relationship.cardinality),
+    );
+    const targetPoint = getRelationshipVisualEndpoint(
+      route.targetPoint,
+      terminals.target,
+      isRelationshipTargetMany(relationship.cardinality),
+    );
     const markerAttrs = {
       ...(sourceMarker ? { sourceMarker } : {}),
       ...(targetMarker ? { targetMarker } : {}),
@@ -2909,13 +2919,39 @@ function createRelationshipEdgeMetadata(
           name: 'normal',
         },
         // Relationship yang sudah tersimpan memakai endpoint visual hasil routing, bukan port X6 mentah, agar marker bisa fan-in tanpa bertumpuk.
-        source: route.sourcePoint,
-        target: route.targetPoint,
+        source: sourcePoint,
+        target: targetPoint,
         vertices: route.vertices,
         zIndex: terminals.source.active ? 1 : 0,
       },
     ];
   });
+}
+
+function isRelationshipSourceMany(cardinality: DatabaseRelationship['cardinality']): boolean {
+  return cardinality === 'many_to_many';
+}
+
+function isRelationshipTargetMany(cardinality: DatabaseRelationship['cardinality']): boolean {
+  return cardinality === 'one_to_many' || cardinality === 'many_to_many';
+}
+
+function getRelationshipVisualEndpoint(
+  point: RelationshipRoute['sourcePoint'],
+  terminal: RelationshipTerminal,
+  isMany: boolean,
+): RelationshipRoute['sourcePoint'] {
+  if (!isMany) {
+    return point;
+  }
+
+  const direction = getRelationshipPortSideDirection(terminal.side);
+
+  return {
+    // Crow-foot marker X6 dicenter pada endpoint; endpoint many dimajukan keluar agar marker tidak masuk ke area table.
+    x: point.x + direction * relationshipManyMarkerOutset,
+    y: point.y,
+  };
 }
 
 function createRelationshipPlan(
