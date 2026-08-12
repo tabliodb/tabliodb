@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnauthorizedException } from '@nestjs/common';
-import { Permission, ProjectRole } from '@tabliodb/shared';
+import { Permission, ProjectRole, REALTIME_PERSISTED_ACK_TYPE, diagramDocumentName } from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
 import { CollaborationService } from './collaboration.service.js';
 
@@ -29,7 +29,7 @@ describe(CollaborationService.name, () => {
         port: 1234,
       },
     });
-    collaborationRepository.storeDocument.mockResolvedValue(undefined);
+    collaborationRepository.storeDocument.mockResolvedValue(createStoredDocumentReceipt());
 
     service = new CollaborationService(
       authService as never,
@@ -71,6 +71,36 @@ describe(CollaborationService.name, () => {
 
     await vi.runOnlyPendingTimersAsync();
     expect(collaborationRepository.storeDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('broadcasts realtime persistence acknowledgement after a document is stored', async () => {
+    const broadcastStateless = vi.fn();
+
+    service['server'] = {
+      hocuspocus: {
+        documents: new Map([[diagramDocumentName('diagram-id'), { broadcastStateless }]]),
+      },
+    } as never;
+    collaborationRepository.storeDocument.mockResolvedValue(
+      createStoredDocumentReceipt({
+        persistenceTokens: { 'client-1': 'token-1' },
+        version: 9,
+      }),
+    );
+
+    service['scheduleDocumentStore']('diagram-id', new Uint8Array([8, 8, 8]));
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(broadcastStateless).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(broadcastStateless.mock.calls[0][0])).toEqual({
+      diagramId: 'diagram-id',
+      modelUpdatedAt: '2026-08-12T06:00:00.000Z',
+      persistedAt: '2026-08-12T06:00:01.000Z',
+      // Ack payload carries the newest per-client persistence tokens so browsers can clear only their own confirmed writes.
+      persistenceTokens: { 'client-1': 'token-1' },
+      type: REALTIME_PERSISTED_ACK_TYPE,
+      version: 9,
+    });
   });
 
   it('allows editor realtime connections to mutate the shared document', async () => {
@@ -127,6 +157,23 @@ describe(CollaborationService.name, () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
+
+function createStoredDocumentReceipt(
+  overrides: Partial<{
+    modelUpdatedAt: string;
+    persistedAt: string;
+    persistenceTokens: Record<string, string>;
+    version: number;
+  }> = {},
+) {
+  return {
+    modelUpdatedAt: '2026-08-12T06:00:00.000Z',
+    persistedAt: '2026-08-12T06:00:01.000Z',
+    persistenceTokens: {},
+    version: 1,
+    ...overrides,
+  };
+}
 
 function createAuthContext(overrides: Partial<AuthContext> = {}): AuthContext {
   return {

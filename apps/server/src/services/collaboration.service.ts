@@ -7,16 +7,22 @@ import type { IncomingHttpHeaders } from 'node:http';
 import {
   Permission,
   ProjectRole,
+  REALTIME_PERSISTED_ACK_TYPE,
   REALTIME_SESSION_PROOF_TOKEN_TYPE,
+  diagramDocumentName,
   isGranted,
   parseDiagramDocumentName,
   permissionsForProjectRole,
   realtimeSessionProofPath,
   type AwarenessState,
+  type RealtimePersistedAckMessage,
 } from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
 import { AuthService } from './auth.service.js';
-import { CollaborationRepository } from '../repositories/collaboration.repository.js';
+import {
+  CollaborationRepository,
+  type StoredRealtimeDocumentReceipt,
+} from '../repositories/collaboration.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
 
@@ -287,10 +293,39 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
     this.pendingDocumentStores.delete(diagramId);
 
     try {
-      await this.collaborationRepository.storeDocument(diagramId, pendingStore.state);
+      const receipt = await this.collaborationRepository.storeDocument(diagramId, pendingStore.state);
+
+      this.broadcastDocumentPersisted(diagramId, receipt);
+      this.logger.debug({
+        diagramId,
+        event: 'realtime.document_persisted',
+        persistedAt: receipt.persistedAt,
+        version: receipt.version,
+      });
     } catch (error) {
       this.logger.warn(`Failed to persist realtime document "${diagramId}". ${formatErrorMessage(error)}`);
     }
+  }
+
+  private broadcastDocumentPersisted(diagramId: string, receipt: StoredRealtimeDocumentReceipt): void {
+    const documentName = diagramDocumentName(diagramId);
+    const document = this.server?.hocuspocus.documents.get(documentName);
+
+    if (!document) {
+      return;
+    }
+
+    const message: RealtimePersistedAckMessage = {
+      diagramId,
+      modelUpdatedAt: receipt.modelUpdatedAt,
+      persistedAt: receipt.persistedAt,
+      // Client-specific tokens let each browser confirm that the ack includes its own latest local transaction.
+      persistenceTokens: receipt.persistenceTokens,
+      type: REALTIME_PERSISTED_ACK_TYPE,
+      version: receipt.version,
+    };
+
+    document.broadcastStateless(JSON.stringify(message));
   }
 
   private authenticateRealtimeConnection(options: {

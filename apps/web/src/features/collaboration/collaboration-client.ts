@@ -10,10 +10,12 @@ import {
   type DatabaseTable,
   type DiagramModel,
   type DiagramNote,
+  yjsRuntimeCollections,
 } from '@tabliodb/schema-core';
 import {
   REALTIME_SESSION_PROOF_TOKEN_TYPE,
   diagramDocumentName,
+  parseRealtimePersistedAckPayload,
   realtimeSessionProofPath,
   type AwarenessState,
 } from '@tabliodb/shared';
@@ -41,6 +43,9 @@ export type DiagramCollaborationConnection =
 export type DiagramCollaborationStatus = {
   connection: DiagramCollaborationConnection;
   message?: string;
+  pendingPersistence: boolean;
+  persistedAt?: string;
+  persistedVersion?: number;
   synced: boolean;
   unsyncedChanges: number;
 };
@@ -116,6 +121,7 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
   const document = new Y.Doc();
   const documentName = diagramDocumentName(options.diagramId);
   const localModelWriteOrigin = Symbol(`tabliodb:${options.diagramId}:local-model-write`);
+  const localPersistenceKey = String(document.clientID);
   const provider = new HocuspocusProvider({
     document,
     name: documentName,
@@ -125,10 +131,23 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
   });
   const statusSubscribers = new Set<DiagramCollaborationStatusSubscriber>();
   let currentStatus = readProviderStatus(provider);
+  let latestLocalPersistenceToken: string | null = null;
 
   function emitStatus(nextStatus: DiagramCollaborationStatus) {
     currentStatus = nextStatus;
     statusSubscribers.forEach((subscriber) => subscriber(currentStatus));
+  }
+
+  function markLocalPersistencePending() {
+    latestLocalPersistenceToken = createRealtimePersistenceToken(document.clientID);
+    document
+      .getMap<unknown>(yjsRuntimeCollections.persistenceTokens)
+      .set(localPersistenceKey, latestLocalPersistenceToken);
+    emitStatus({
+      ...currentStatus,
+      // A local Yjs mutation is only fully "saved" after the server persists a state containing this token.
+      pendingPersistence: true,
+    });
   }
 
   const handleProviderStatus = (event: { status?: unknown }) => {
@@ -168,10 +187,37 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     });
   };
 
+  const handleStateless = (event: { payload?: unknown }) => {
+    const payload = typeof event.payload === 'string' ? event.payload : '';
+    const acknowledgement = parseRealtimePersistedAckPayload(payload);
+
+    if (!acknowledgement || acknowledgement.diagramId !== options.diagramId) {
+      return;
+    }
+
+    const hasPendingLocalToken = Boolean(latestLocalPersistenceToken);
+    const localTokenPersisted =
+      latestLocalPersistenceToken === null ||
+      acknowledgement.persistenceTokens[localPersistenceKey] === latestLocalPersistenceToken;
+
+    if (localTokenPersisted) {
+      latestLocalPersistenceToken = null;
+    }
+
+    emitStatus({
+      ...currentStatus,
+      message: undefined,
+      pendingPersistence: hasPendingLocalToken ? !localTokenPersisted : false,
+      persistedAt: acknowledgement.persistedAt,
+      persistedVersion: acknowledgement.version,
+    });
+  };
+
   provider.on('status', handleProviderStatus);
   provider.on('synced', handleProviderSynced);
   provider.on('unsyncedChanges', handleUnsyncedChanges);
   provider.on('authenticationFailed', handleAuthenticationFailed);
+  provider.on('stateless', handleStateless);
 
   return {
     document,
@@ -212,6 +258,7 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       provider.awareness?.setLocalState(state);
     },
     writeModel(model: DiagramModel) {
+      markLocalPersistencePending();
       writeDiagramModelToYjsDocument(document, model, localModelWriteOrigin);
     },
     writeColumnStructuralPatch(patch: DiagramCollaborationColumnStructuralPatch) {
@@ -220,6 +267,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       if (!(tableMap instanceof Y.Map)) {
         return false;
       }
+
+      markLocalPersistencePending();
 
       const columnsMap = document.getMap<Y.Map<unknown>>(yjsCollections.columns);
       const indexesMap = document.getMap<Y.Map<unknown>>(yjsCollections.indexes);
@@ -268,9 +317,19 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
         }
 
         if (patch.action === 'create') {
-          insertYStringArrayValue(tableMap, 'columnIds', patch.columnId, patch.tablePatch.columnIds.indexOf(patch.columnId));
+          insertYStringArrayValue(
+            tableMap,
+            'columnIds',
+            patch.columnId,
+            patch.tablePatch.columnIds.indexOf(patch.columnId),
+          );
         } else if (patch.action === 'reorder') {
-          moveYStringArrayValue(tableMap, 'columnIds', patch.columnId, patch.tablePatch.columnIds.indexOf(patch.columnId));
+          moveYStringArrayValue(
+            tableMap,
+            'columnIds',
+            patch.columnId,
+            patch.tablePatch.columnIds.indexOf(patch.columnId),
+          );
         } else {
           removeYStringArrayValue(tableMap, 'columnIds', patch.columnId);
         }
@@ -295,6 +354,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
           return false;
         }
 
+        markLocalPersistencePending();
+
         document.transact(() => {
           for (const key of patch.clearedKeys) {
             relationshipMap.delete(key);
@@ -312,6 +373,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
 
         return true;
       }
+
+      markLocalPersistencePending();
 
       document.transact(() => {
         if (patch.action === 'delete') {
@@ -340,6 +403,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       const notesMap = document.getMap<Y.Map<unknown>>(yjsCollections.notes);
 
       if (patch.action === 'delete') {
+        markLocalPersistencePending();
+
         document.transact(() => {
           notesMap.delete(patch.noteId);
 
@@ -354,6 +419,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       if (patch.action === 'create') {
         const existingNoteMap = notesMap.get(patch.noteId);
         const noteMap = existingNoteMap instanceof Y.Map ? existingNoteMap : new Y.Map<unknown>();
+
+        markLocalPersistencePending();
 
         document.transact(() => {
           if (noteMap !== existingNoteMap) {
@@ -376,6 +443,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       if (!(noteMap instanceof Y.Map)) {
         return false;
       }
+
+      markLocalPersistencePending();
 
       document.transact(() => {
         for (const key of patch.clearedKeys) {
@@ -401,6 +470,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
         return false;
       }
 
+      markLocalPersistencePending();
+
       document.transact(() => {
         for (const key of patch.clearedKeys) {
           columnMap.delete(key);
@@ -424,6 +495,8 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       if (!(tableMap instanceof Y.Map)) {
         return false;
       }
+
+      markLocalPersistencePending();
 
       document.transact(() => {
         if (patch.name !== undefined) {
@@ -484,6 +557,7 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       provider.off('synced', handleProviderSynced);
       provider.off('unsyncedChanges', handleUnsyncedChanges);
       provider.off('authenticationFailed', handleAuthenticationFailed);
+      provider.off('stateless', handleStateless);
       statusSubscribers.clear();
       provider.destroy();
       document.destroy();
@@ -596,6 +670,16 @@ function clampArrayIndex(index: number, length: number): number {
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function createRealtimePersistenceToken(clientId: number): string {
+  const randomToken =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+
+  // Client id plus a timestamp makes the token easy to inspect while the random suffix keeps rapid local writes distinct.
+  return `${clientId}:${Date.now()}:${randomToken}`;
 }
 
 async function createRealtimeSessionProofToken(documentName: string): Promise<string> {
@@ -760,6 +844,7 @@ function readViewport(value: unknown): AwarenessState['viewport'] {
 function readProviderStatus(provider: HocuspocusProvider): DiagramCollaborationStatus {
   return {
     connection: parseConnectionStatus(provider.configuration.websocketProvider.status),
+    pendingPersistence: false,
     synced: provider.synced,
     unsyncedChanges: provider.unsyncedChanges,
   };

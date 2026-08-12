@@ -4,8 +4,10 @@ import {
   decodeDiagramModelFromYjsUpdate,
   encodeDiagramModelAsYjsUpdate,
   normalizeDiagramModel,
+  readYjsStringMapFromUpdate,
   type DatabaseDialect,
   type DiagramModel,
+  yjsRuntimeCollections,
 } from '@tabliodb/schema-core';
 import { Kysely } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
@@ -36,11 +38,12 @@ export class CollaborationRepository {
     return hydrationModel ? encodeDiagramModelAsYjsUpdate(hydrationModel) : null;
   }
 
-  async storeDocument(diagramId: string, state: Uint8Array): Promise<void> {
+  async storeDocument(diagramId: string, state: Uint8Array): Promise<StoredRealtimeDocumentReceipt> {
+    const persistenceTokens = readYjsStringMapFromUpdate(state, yjsRuntimeCollections.persistenceTokens);
     const normalizedModel = normalizeDiagramModel(decodeDiagramModelFromYjsUpdate(state));
     const normalizedState = Buffer.from(encodeDiagramModelAsYjsUpdate(normalizedModel));
 
-    await this.db
+    const row = await this.db
       .insertInto('diagram_documents')
       .values({ diagramId, yjsState: normalizedState, version: 1 })
       .onConflict((oc) =>
@@ -51,7 +54,16 @@ export class CollaborationRepository {
           updatedAt: new Date(),
         })),
       )
-      .execute();
+      .returning(['updatedAt', 'version'])
+      .executeTakeFirstOrThrow();
+
+    return {
+      modelUpdatedAt: normalizedModel.metadata.updatedAt,
+      persistedAt: toIsoDateString(row.updatedAt),
+      // The persisted row stores only canonical schema data; runtime tokens are returned solely for websocket acknowledgement.
+      persistenceTokens,
+      version: row.version,
+    };
   }
 
   private async loadHydrationModel(diagramId: string): Promise<DiagramModel | null> {
@@ -79,4 +91,15 @@ export class CollaborationRepository {
 
     return createEmptyDiagramModel(diagramRow.name, diagramRow.dialect as DatabaseDialect);
   }
+}
+
+export type StoredRealtimeDocumentReceipt = {
+  modelUpdatedAt?: string;
+  persistedAt: string;
+  persistenceTokens: Record<string, string>;
+  version: number;
+};
+
+function toIsoDateString(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }

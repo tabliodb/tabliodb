@@ -612,6 +612,7 @@ const emptyProjectMembers: ProjectMemberDto[] = [];
 const emptySnapshots: SnapshotResponseDto[] = [];
 const idleCollaborationStatus: DiagramCollaborationStatus = {
   connection: 'idle',
+  pendingPersistence: false,
   synced: false,
   unsyncedChanges: 0,
 };
@@ -2245,7 +2246,11 @@ export function EditorPage() {
             </>
           ) : null}
           {canCreateSnapshot ? (
-            <Button className="gap-2 px-3" disabled={saveSnapshotMutation.isPending} onClick={() => handleSaveSnapshot()}>
+            <Button
+              className="gap-2 px-3"
+              disabled={saveSnapshotMutation.isPending}
+              onClick={() => handleSaveSnapshot()}
+            >
               {saveSnapshotMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -2918,11 +2923,7 @@ function EditorConfirmDialog({
 }) {
   const isTableDelete = action?.type === 'table-delete';
   const isSnapshotGuard = action?.type === 'snapshot-save-unsafe';
-  const title = isTableDelete
-    ? 'Delete table?'
-    : isSnapshotGuard
-      ? action.guard.title
-      : 'Restore snapshot?';
+  const title = isTableDelete ? 'Delete table?' : isSnapshotGuard ? action.guard.title : 'Restore snapshot?';
   const description = isTableDelete
     ? `Table "${action.tableName}" and its relationships will be removed from this draft.`
     : isSnapshotGuard
@@ -9404,17 +9405,33 @@ function getCollaborationStatusMeta(
     };
   }
 
+  if (status.connection === 'connected' && status.pendingPersistence) {
+    return {
+      containerClassName:
+        'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+      dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
+      label: 'Saving',
+      pulse: true,
+      autosaveLine,
+      snapshotLine,
+      tooltipDescription: `Realtime is synced to collaborators and waiting for database persistence. ${collaboratorLabel}`,
+      tooltipTitle: 'Persisting live draft',
+    };
+  }
+
   if (status.connection === 'connected') {
     return {
       containerClassName:
         'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-primary))]',
-      label: saveState.draftPersisted ? 'Saved' : 'Live saved',
+      label: status.persistedAt || saveState.draftPersisted ? 'Saved' : 'Live',
       pulse: collaboratorCount > 0,
       autosaveLine,
       snapshotLine,
-      tooltipDescription: `Realtime is connected and synced. ${collaboratorLabel}`,
-      tooltipTitle: 'All live changes synced',
+      tooltipDescription: status.persistedAt
+        ? `Realtime is connected, synced, and database persistence is acknowledged. ${collaboratorLabel}`
+        : `Realtime is connected and synced. Waiting for the first database persistence acknowledgement. ${collaboratorLabel}`,
+      tooltipTitle: status.persistedAt ? 'All changes saved' : 'Live draft connected',
     };
   }
 
@@ -9452,6 +9469,14 @@ function formatLiveAutosaveStatusLine(status: DiagramCollaborationStatus): strin
 
   if (status.connection === 'connected' && (!status.synced || status.unsyncedChanges > 0)) {
     return 'Live draft autosave: Syncing';
+  }
+
+  if (status.connection === 'connected' && status.pendingPersistence) {
+    return 'Live draft autosave: Writing to database';
+  }
+
+  if (status.connection === 'connected' && status.persistedAt) {
+    return `Live draft autosave: Last saved ${formatRelativeDateTime(status.persistedAt)}`;
   }
 
   return 'Live draft autosave: On';

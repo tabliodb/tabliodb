@@ -321,6 +321,10 @@ export const yjsCollections = {
   metadata: 'metadata',
 } as const;
 
+export const yjsRuntimeCollections = {
+  persistenceTokens: 'runtime:persistenceTokens',
+} as const;
+
 const yjsEntityCollectionKeys = [
   'tables',
   'columns',
@@ -526,6 +530,26 @@ export function decodeDiagramModelFromYjsUpdate(update: Uint8Array, fallback?: D
   Y.applyUpdate(document, update);
 
   return readDiagramModelFromYjsDocument(document, fallback);
+}
+
+export function readYjsStringMapFromUpdate(update: Uint8Array, collectionName: string): Record<string, string> {
+  const document = new Y.Doc();
+
+  Y.applyUpdate(document, update);
+
+  const map = document.getMap<unknown>(collectionName);
+  const values: Record<string, string> = {};
+
+  for (const [key, value] of map.entries()) {
+    if (typeof value === 'string') {
+      // Runtime Yjs maps are not part of the diagram schema, so only primitive string tokens are allowed through this boundary.
+      values[key] = value;
+    }
+  }
+
+  document.destroy();
+
+  return values;
 }
 
 export function getTableColumns(model: DiagramModel, tableId: string): DatabaseColumn[] {
@@ -1090,7 +1114,9 @@ function canonicalizeEntityRecord<T extends { id: string }>(
 
   return {
     changed,
-    record: Object.fromEntries(Array.from(byCanonicalId.entries()).map(([entityId, entry]) => [entityId, entry.entity])),
+    record: Object.fromEntries(
+      Array.from(byCanonicalId.entries()).map(([entityId, entry]) => [entityId, entry.entity]),
+    ),
   };
 }
 
