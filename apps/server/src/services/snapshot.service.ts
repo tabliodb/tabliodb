@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { DiagramModel } from '@tabliodb/schema-core';
+import { normalizeDiagramModel, type DiagramModel } from '@tabliodb/schema-core';
 import { generateMigrationSqlWithWarnings } from '@tabliodb/sql';
 import { Permission } from '@tabliodb/shared';
 import { AuthContext } from '../database.js';
@@ -20,16 +20,17 @@ export class SnapshotService {
 
   async create(auth: AuthContext, dto: SnapshotCreateDto) {
     await this.diagramService.requireDiagram(auth, dto.diagramId, Permission.SnapshotCreate);
+    const snapshotModel = normalizeDiagramModel(dto.snapshot);
 
     const snapshot = await this.snapshotRepository.create({
       diagramId: dto.diagramId,
       createdById: auth.user.id,
       message: dto.message,
-      snapshot: dto.snapshot,
+      snapshot: snapshotModel,
     });
 
     // Snapshot adalah checkpoint eksplisit; menyimpan ulang signal di sini membuat panel review dan API history tidak basi.
-    await this.reviewSignalService.syncDiagramModel(dto.diagramId, dto.snapshot);
+    await this.reviewSignalService.syncDiagramModel(dto.diagramId, snapshotModel);
 
     return {
       id: snapshot.id,
@@ -37,7 +38,7 @@ export class SnapshotService {
       version: snapshot.version,
       message: snapshot.message,
       // Kolom JSON di database bertipe longgar; input sudah divalidasi DiagramModelSchema sebelum disimpan.
-      snapshot: snapshot.snapshot as DiagramModel,
+      snapshot: normalizeDiagramModel(snapshot.snapshot as DiagramModel),
       restoredFromSnapshotId: snapshot.restoredFromSnapshotId,
       createdAt: toIsoDateTime(snapshot.createdAt),
     };
@@ -57,6 +58,7 @@ export class SnapshotService {
         ...snapshot,
         // Snapshot history dikirim sebagai JSON murni agar generated SDK tidak membawa tipe Date browser yang palsu.
         createdAt: toIsoDateTime(snapshot.createdAt),
+        snapshot: normalizeDiagramModel(snapshot.snapshot as DiagramModel),
       })),
     };
   }
@@ -80,11 +82,11 @@ export class SnapshotService {
     return createSnapshotDiff(
       {
         ...fromSnapshot,
-        snapshot: fromSnapshot.snapshot as DiagramModel,
+        snapshot: normalizeDiagramModel(fromSnapshot.snapshot as DiagramModel),
       },
       {
         ...toSnapshot,
-        snapshot: toSnapshot.snapshot as DiagramModel,
+        snapshot: normalizeDiagramModel(toSnapshot.snapshot as DiagramModel),
       },
     );
   }
@@ -105,7 +107,7 @@ export class SnapshotService {
     // Restore membuat checkpoint baru dan menghidrasi diagram_documents, jadi review cache harus ikut membaca model hasil restore.
     await this.reviewSignalService.syncDiagramModel(
       restoredSnapshot.diagramId,
-      restoredSnapshot.snapshot as DiagramModel,
+      normalizeDiagramModel(restoredSnapshot.snapshot as DiagramModel),
     );
 
     return {
@@ -113,7 +115,7 @@ export class SnapshotService {
       diagramId: restoredSnapshot.diagramId,
       version: restoredSnapshot.version,
       message: restoredSnapshot.message,
-      snapshot: restoredSnapshot.snapshot as DiagramModel,
+      snapshot: normalizeDiagramModel(restoredSnapshot.snapshot as DiagramModel),
       restoredFromSnapshotId: restoredSnapshot.restoredFromSnapshotId,
       createdAt: toIsoDateTime(restoredSnapshot.createdAt),
     };

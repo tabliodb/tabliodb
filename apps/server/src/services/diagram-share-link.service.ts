@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   createEmptyDiagramModel,
   decodeDiagramModelFromYjsUpdate,
+  normalizeDiagramModel,
   parseDiagramModel,
   serializeDiagramModel,
   type DatabaseDialect,
@@ -193,7 +194,7 @@ export class DiagramShareLinkService {
       return fallback;
     }
 
-    return serializeDiagramModel(decodeDiagramModelFromYjsUpdate(update, fallback));
+    return serializeDiagramModel(normalizeDiagramModel(decodeDiagramModelFromYjsUpdate(update, fallback)));
   }
 
   private loadSnapshotShareModel(shareLink: PublicDiagramShareLinkRecord): DiagramModel {
@@ -202,7 +203,7 @@ export class DiagramShareLinkService {
       throw new NotFoundException('Snapshot not found');
     }
 
-    return serializeDiagramModel(parseDiagramModel(shareLink.snapshotModel));
+    return serializeDiagramModel(normalizeDiagramModel(parseDiagramModel(shareLink.snapshotModel)));
   }
 
   private serializeShareLink(shareLink: DiagramShareLinkRecord): DiagramShareLinkDto {

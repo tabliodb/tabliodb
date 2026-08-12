@@ -7,6 +7,7 @@ import {
   defaultDiagramReviewSettings,
   getDiagramModelIntegrityWarnings,
   getDiagramReviewSignals,
+  normalizeDiagramModel,
   parseDiagramModel,
   serializeDiagramModel,
   stringifyDiagramModel,
@@ -253,7 +254,7 @@ export class DiagramService {
       return fallback;
     }
 
-    return serializeDiagramModel(decodeDiagramModelFromYjsUpdate(update, fallback));
+    return serializeDiagramModel(normalizeDiagramModel(decodeDiagramModelFromYjsUpdate(update, fallback)));
   }
 
   private parseImportPayload(
@@ -290,14 +291,14 @@ export class DiagramService {
     model: DiagramModel,
     diagram: NonNullable<Awaited<ReturnType<DiagramRepository['getById']>>>,
   ): DiagramModel {
-    return serializeDiagramModel({
+    return serializeDiagramModel(normalizeDiagramModel({
       ...model,
       metadata: {
         ...model.metadata,
         name: model.metadata.name.trim() || diagram.name,
         updatedAt: new Date().toISOString(),
       },
-    });
+    }));
   }
 }
 

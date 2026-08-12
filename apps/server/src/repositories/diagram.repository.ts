@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   encodeDiagramModelAsYjsUpdate,
+  normalizeDiagramModel,
   serializeDiagramModel,
   type DatabaseDialect,
   type DiagramModel,
@@ -95,7 +96,7 @@ export class DiagramRepository {
   }
 
   async replaceDocumentModel(diagramId: string, model: DiagramModel, updatedById: string) {
-    const normalizedModel = serializeDiagramModel(model);
+    const normalizedModel = serializeDiagramModel(normalizeDiagramModel(model));
     const now = new Date();
     const yjsState = Buffer.from(encodeDiagramModelAsYjsUpdate(normalizedModel));
 

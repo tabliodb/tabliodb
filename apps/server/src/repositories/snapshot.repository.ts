@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { encodeDiagramModelAsYjsUpdate, type DiagramModel } from '@tabliodb/schema-core';
+import { encodeDiagramModelAsYjsUpdate, normalizeDiagramModel, type DiagramModel } from '@tabliodb/schema-core';
 import { Kysely, sql, type Transaction } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, JsonValue } from '../schema/index.js';
@@ -96,6 +96,7 @@ export class SnapshotRepository {
       snapshot: JsonValue;
     },
   ) {
+    const normalizedSnapshot = normalizeDiagramModel(options.snapshot as DiagramModel);
     const versionRow = await tx
       .selectFrom('diagram_snapshots')
       .select((eb) => eb.fn.coalesce(eb.fn.max('version'), sql<number>`0`).as('version'))
@@ -109,7 +110,8 @@ export class SnapshotRepository {
         createdById: options.createdById,
         message: options.message ?? null,
         restoredFromSnapshotId: options.restoredFromSnapshotId ?? null,
-        snapshot: options.snapshot,
+        // Snapshot yang masuk dari REST/restore dinormalisasi di repository supaya semua write path memakai invariant schema-core yang sama.
+        snapshot: normalizedSnapshot as unknown as JsonValue,
         version: Number(versionRow.version) + 1,
       })
       .returningAll()
@@ -132,13 +134,13 @@ export class SnapshotRepository {
       .insertInto('diagram_documents')
       .values({
         diagramId: options.diagramId,
-        schemaCache: snapshot.snapshot,
+        schemaCache: normalizedSnapshot as unknown as JsonValue,
         updatedById: options.createdById,
         yjsState: Buffer.from(encodeDiagramModelAsYjsUpdate(snapshotModel)),
       })
       .onConflict((oc) =>
         oc.column('diagramId').doUpdateSet((eb) => ({
-          schemaCache: snapshot.snapshot,
+          schemaCache: normalizedSnapshot as unknown as JsonValue,
           updatedAt: now,
           updatedById: options.createdById,
           // Snapshot creation becomes the persisted draft boundary, so realtime hydration sees the same model the user saved.

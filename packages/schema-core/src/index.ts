@@ -457,7 +457,7 @@ export function createStarterDiagramModel(
 }
 
 export function writeDiagramModelToYjsDocument(document: Y.Doc, model: DiagramModel, origin?: unknown): void {
-  const normalizedModel = serializeDiagramModel(model);
+  const normalizedModel = normalizeDiagramModel(model);
 
   document.transact(() => {
     const documentMap = document.getMap<unknown>(yjsCollections.document);
@@ -977,6 +977,61 @@ export function parseDiagramModel(value: unknown): DiagramModel {
 
 export function serializeDiagramModel(model: DiagramModel): DiagramModel {
   return DiagramModelSchema.parse(model);
+}
+
+export function normalizeDiagramModel(model: DiagramModel): DiagramModel {
+  const parsedModel = serializeDiagramModel(model);
+  let tables = parsedModel.tables;
+  let columns = parsedModel.columns;
+  let changed = false;
+
+  for (const table of Object.values(tables)) {
+    const ownedColumnIds = Object.values(columns)
+      .filter((column) => column.tableId === table.id)
+      .map((column) => column.id);
+    let nextColumnIds = table.columnIds;
+
+    if (nextColumnIds.length === 0 && ownedColumnIds.length > 0) {
+      // Yjs collection updates can arrive with column entities before the table order list; recover the order from owned columns instead of rendering an empty table.
+      nextColumnIds = ownedColumnIds;
+    } else {
+      const appendedColumnIds = ownedColumnIds.filter((columnId) => !nextColumnIds.includes(columnId));
+
+      if (appendedColumnIds.length > 0) {
+        // Columns whose tableId points at this table still belong to it, so append them after the persisted order instead of treating them as unreachable.
+        nextColumnIds = [...nextColumnIds, ...appendedColumnIds];
+      }
+    }
+
+    const repairedColumns = createMissingTableColumnEntities(table, nextColumnIds, columns);
+
+    if (repairedColumns.length > 0) {
+      columns = {
+        ...columns,
+        ...Object.fromEntries(repairedColumns.map((column) => [column.id, column])),
+      };
+      changed = true;
+    }
+
+    if (!areStringArraysEqual(nextColumnIds, table.columnIds)) {
+      tables = {
+        ...tables,
+        [table.id]: {
+          ...table,
+          columnIds: nextColumnIds,
+        },
+      };
+      changed = true;
+    }
+  }
+
+  return changed
+    ? DiagramModelSchema.parse({
+        ...parsedModel,
+        columns,
+        tables,
+      })
+    : parsedModel;
 }
 
 export function stringifyDiagramModel(model: DiagramModel, space = 2): string {
@@ -2240,6 +2295,57 @@ function getDefaultTableColumns(): CreateTableColumnInput[] {
       nullable: false,
     },
   ];
+}
+
+function createMissingTableColumnEntities(
+  table: DatabaseTable,
+  columnIds: string[],
+  columns: DiagramModel['columns'],
+): DatabaseColumn[] {
+  const usedNames = new Set(columnIds.flatMap((columnId) => (columns[columnId] ? [columns[columnId].name] : [])));
+  const repairedColumns: DatabaseColumn[] = [];
+
+  columnIds.forEach((columnId, columnIndex) => {
+    if (columns[columnId]) {
+      return;
+    }
+
+    const baseName = columnIndex === 0 ? 'id' : columnIndex === 1 ? 'new_column' : `new_column_${columnIndex}`;
+    const name = createUniqueRecoveredColumnName(usedNames, baseName);
+    usedNames.add(name);
+
+    // Recovered columns keep the broken snapshot's column IDs so relationship endpoints, comments, and future diffs stay addressable.
+    repairedColumns.push(
+      DatabaseColumnSchema.parse({
+        autoIncrement: false,
+        id: columnId,
+        name,
+        nullable: false,
+        primaryKey: columnIndex === 0,
+        tableId: table.id,
+        type: columnIndex === 0 ? { family: 'uuid' } : { family: 'varchar', length: 160 },
+        unique: false,
+      }),
+    );
+  });
+
+  return repairedColumns;
+}
+
+function createUniqueRecoveredColumnName(usedNames: Set<string>, baseName: string): string {
+  if (!usedNames.has(baseName)) {
+    return baseName;
+  }
+
+  let suffix = 2;
+  let nextName = `${baseName}_${suffix}`;
+
+  while (usedNames.has(nextName)) {
+    suffix += 1;
+    nextName = `${baseName}_${suffix}`;
+  }
+
+  return nextName;
 }
 
 function finalizeDiagramModel(model: DiagramModel, options: DiagramCommandOptions): DiagramModel {

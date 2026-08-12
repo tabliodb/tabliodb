@@ -13,6 +13,7 @@ import {
   getDiagramReviewSignals,
   getTableColumns,
   hasDiagramModelInYjsDocument,
+  normalizeDiagramModel,
   readDiagramModelFromYjsDocument,
   serializeDiagramModel,
   writeDiagramModelToYjsDocument,
@@ -100,6 +101,68 @@ describe('schema-core diagram commands', () => {
 
     expect(update.byteLength).toBeGreaterThan(0);
     expect(decodeDiagramModelFromYjsUpdate(update)).toEqual(serializeDiagramModel(model));
+  });
+
+  it('normalizes tables whose column order references missing column entities', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Normalize missing columns test'),
+      {
+        columns: [
+          { id: 'events-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'events-title', name: 'title', nullable: false, type: { family: 'varchar', length: 120 } },
+        ],
+        name: 'events',
+        tableId: 'events',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const damagedModel = {
+      ...model,
+      columns: {},
+    };
+
+    const normalizedModel = normalizeDiagramModel(damagedModel);
+
+    // Column IDs are repaired into real column entities so canvas/sidebar/snapshot all agree on the table shape again.
+    expect(getTableColumns(normalizedModel, 'events').map((column) => column.name)).toEqual(['id', 'new_column']);
+    expect(normalizedModel.columns['events-id']).toMatchObject({
+      nullable: false,
+      primaryKey: true,
+      type: { family: 'uuid' },
+    });
+  });
+
+  it('normalizes tables whose column entities exist but column order is empty', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Normalize empty order test'),
+      {
+        columns: [
+          { id: 'tasks-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'tasks-name', name: 'name', nullable: false, type: { family: 'varchar', length: 120 } },
+        ],
+        name: 'tasks',
+        tableId: 'tasks',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const damagedModel = {
+      ...model,
+      tables: {
+        ...model.tables,
+        tasks: {
+          ...model.tables.tasks,
+          columnIds: [],
+        },
+      },
+    };
+
+    const normalizedModel = normalizeDiagramModel(damagedModel);
+
+    // If Yjs sends column maps before the table order, ownership by tableId gives us a deterministic recovery path.
+    expect(normalizedModel.tables.tasks.columnIds).toEqual(['tasks-id', 'tasks-name']);
+    expect(getTableColumns(normalizedModel, 'tasks').map((column) => column.name)).toEqual(['id', 'name']);
   });
 
   it('reports integrity warnings for importable but inconsistent diagrams', () => {

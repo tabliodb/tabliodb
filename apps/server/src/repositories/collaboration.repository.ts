@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import {
   createEmptyDiagramModel,
+  decodeDiagramModelFromYjsUpdate,
   encodeDiagramModelAsYjsUpdate,
+  normalizeDiagramModel,
   type DatabaseDialect,
   type DiagramModel,
 } from '@tabliodb/schema-core';
@@ -21,7 +23,11 @@ export class CollaborationRepository {
       .executeTakeFirst();
 
     if (row?.yjsState) {
-      return new Uint8Array(row.yjsState);
+      const state = new Uint8Array(row.yjsState);
+      const model = normalizeDiagramModel(decodeDiagramModelFromYjsUpdate(state));
+
+      // Realtime fetch always returns a normalized Yjs update so reconnecting clients never hydrate a half-written table collection.
+      return encodeDiagramModelAsYjsUpdate(model);
     }
 
     const hydrationModel = await this.loadHydrationModel(diagramId);
@@ -31,12 +37,16 @@ export class CollaborationRepository {
   }
 
   async storeDocument(diagramId: string, state: Uint8Array): Promise<void> {
+    const normalizedModel = normalizeDiagramModel(decodeDiagramModelFromYjsUpdate(state));
+    const normalizedState = Buffer.from(encodeDiagramModelAsYjsUpdate(normalizedModel));
+
     await this.db
       .insertInto('diagram_documents')
-      .values({ diagramId, yjsState: Buffer.from(state), version: 1 })
+      .values({ diagramId, yjsState: normalizedState, version: 1 })
       .onConflict((oc) =>
         oc.column('diagramId').doUpdateSet((eb) => ({
-          yjsState: Buffer.from(state),
+          // Stored Yjs state is normalized at the persistence boundary to avoid keeping collection-order races across reloads.
+          yjsState: normalizedState,
           version: eb('diagram_documents.version', '+', 1),
           updatedAt: new Date(),
         })),
@@ -53,7 +63,7 @@ export class CollaborationRepository {
       .executeTakeFirst();
 
     if (snapshotRow) {
-      return snapshotRow.snapshot as DiagramModel;
+      return normalizeDiagramModel(snapshotRow.snapshot as DiagramModel);
     }
 
     const diagramRow = await this.db
