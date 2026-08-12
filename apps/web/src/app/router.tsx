@@ -139,6 +139,9 @@ export const router = createBrowserRouter([
                 element: <AdminSettingsPage />,
                 loader: adminSettingsLoader,
                 path: routes.adminSettings.path,
+                handle: {
+                  title: 'Settings',
+                },
               },
             ],
           },
