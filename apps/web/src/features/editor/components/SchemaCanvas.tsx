@@ -84,10 +84,12 @@ const relationshipPortRadius = 4;
 
 const relationshipObstaclePadding = 12;
 const relationshipRouteFanLength = 6;
+const relationshipRouteStepSize = 3;
 const relationshipRouteStubLength = 18;
 const relationshipRouteUTurnGap = 48;
-const relationshipLaneGap = 6;
-const relationshipLaneSearchRadius = 10;
+const relationshipEndpointGap = 3;
+const relationshipLaneGap = 3;
+const relationshipLaneSearchRadius = 14;
 const minimapAspectRatio = 192 / 124;
 
 let noteShapeRegistered = false;
@@ -205,7 +207,17 @@ type RelationshipHorizontalSegment = {
 
 type RelationshipRoute = {
   horizontalSegments: RelationshipHorizontalSegment[];
+  sourcePoint: { x: number; y: number };
+  targetPoint: { x: number; y: number };
   vertices: Array<{ x: number; y: number }>;
+};
+
+type RelationshipRouteInput = {
+  relationship: DatabaseRelationship;
+  sourcePoint: RelationshipTerminalPoint;
+  sourceTerminal: RelationshipTerminal;
+  targetPoint: RelationshipTerminalPoint;
+  targetTerminal: RelationshipTerminal;
 };
 
 type RemoteCanvasCursorPosition = RemoteCanvasCursor & {
@@ -2181,15 +2193,14 @@ function syncRelationshipEdge(graph: Graph, metadata: EdgeMetadata): void {
     return;
   }
 
-  if (
-    existing.getSourceCellId() !== getMetadataTerminalCellId(metadata.source) ||
-    existing.getTargetCellId() !== getMetadataTerminalCellId(metadata.target) ||
-    existing.getSourcePortId() !== getMetadataTerminalPortId(metadata.source) ||
-    existing.getTargetPortId() !== getMetadataTerminalPortId(metadata.target)
-  ) {
-    graph.removeCell(existing);
-    graph.addEdge(metadata);
-    return;
+  if (getRelationshipTerminalSignature(existing.getSource()) !== getRelationshipTerminalSignature(metadata.source)) {
+    // Endpoint relationship tersimpan bisa berupa absolute point supaya marker pada satu column tidak saling menimpa.
+    existing.setSource(metadata.source as never);
+  }
+
+  if (getRelationshipTerminalSignature(existing.getTarget()) !== getRelationshipTerminalSignature(metadata.target)) {
+    // Target point ikut disinkronkan saat drag/resize agar preview live sama dengan hasil final setelah mouse dilepas.
+    existing.setTarget(metadata.target as never);
   }
 
   existing.setLabels(metadata.labels ?? []);
@@ -2200,24 +2211,26 @@ function syncRelationshipEdge(graph: Graph, metadata: EdgeMetadata): void {
   existing.setZIndex(metadata.zIndex ?? 0);
 }
 
-function getMetadataTerminalCellId(terminal: EdgeMetadata['source']): string | null {
+function getRelationshipTerminalSignature(terminal: unknown): string {
   if (typeof terminal === 'string') {
-    return terminal;
+    return `cell:${terminal}`;
   }
 
-  if (terminal && typeof terminal === 'object' && 'cell' in terminal && typeof terminal.cell === 'string') {
-    return terminal.cell;
+  if (!terminal || typeof terminal !== 'object') {
+    return 'empty';
   }
 
-  return null;
-}
+  const terminalRecord = terminal as { cell?: unknown; port?: unknown; x?: unknown; y?: unknown };
 
-function getMetadataTerminalPortId(terminal: EdgeMetadata['source']): string | null {
-  if (terminal && typeof terminal === 'object' && 'port' in terminal && typeof terminal.port === 'string') {
-    return terminal.port;
+  if (typeof terminalRecord.cell === 'string' || typeof terminalRecord.port === 'string') {
+    return `cell:${String(terminalRecord.cell ?? '')}:port:${String(terminalRecord.port ?? '')}`;
   }
 
-  return null;
+  if (typeof terminalRecord.x === 'number' && typeof terminalRecord.y === 'number') {
+    return `point:${terminalRecord.x}:${terminalRecord.y}`;
+  }
+
+  return JSON.stringify(terminalRecord);
 }
 
 function createTableNodeMetadata(
@@ -2294,9 +2307,9 @@ function buildRelationshipMarkers(
     strokeWidth,
   };
 
-  // Crow's foot besar — shaft 10px + kaki terbuka 9px (mirip DrawSQL asli)
+  // Marker dibuat lebih ramping karena beberapa relationship bisa fan-in ke satu column dalam jarak beberapa pixel.
   const manyMarker = {
-    d: 'M -12 -7 L 0 0 L -12 7 M -12 0 L 0 0',
+    d: 'M -9 -4 L 0 0 L -9 4 M -9 0 L 0 0',
     fill: 'none',
     name: 'path' as const,
     offsetX: 0,
@@ -2324,7 +2337,7 @@ function createRelationshipRouteMap(
   const routesByRelationship = new Map<string, RelationshipRoute>();
   const usedHorizontalSegments: RelationshipHorizontalSegment[] = [];
   const laneOffsetCandidates = createRelationshipLaneOffsetCandidates();
-  const routeInputs = relationships
+  const routeInputs: RelationshipRouteInput[] = relationships
     .flatMap((relationship) => {
       const terminals = terminalsByRelationship.get(relationship.id);
 
@@ -2363,8 +2376,17 @@ function createRelationshipRouteMap(
         a.relationship.id.localeCompare(b.relationship.id)
       );
     });
+  const endpointOffsets = createRelationshipEndpointOffsetMap(routeInputs);
 
   for (const routeInput of routeInputs) {
+    const sourcePoint = applyRelationshipEndpointOffset(
+      routeInput.sourcePoint,
+      endpointOffsets.get(createRelationshipEndpointOffsetKey(routeInput.relationship.id, 'source')) ?? 0,
+    );
+    const targetPoint = applyRelationshipEndpointOffset(
+      routeInput.targetPoint,
+      endpointOffsets.get(createRelationshipEndpointOffsetKey(routeInput.relationship.id, 'target')) ?? 0,
+    );
     let selectedRoute: RelationshipRoute | null = null;
 
     for (const laneOffset of laneOffsetCandidates) {
@@ -2372,8 +2394,8 @@ function createRelationshipRouteMap(
         routeInput.relationship.id,
         routeInput.sourceTerminal,
         routeInput.targetTerminal,
-        routeInput.sourcePoint,
-        routeInput.targetPoint,
+        sourcePoint,
+        targetPoint,
         laneOffset,
       );
 
@@ -2390,8 +2412,8 @@ function createRelationshipRouteMap(
         routeInput.relationship.id,
         routeInput.sourceTerminal,
         routeInput.targetTerminal,
-        routeInput.sourcePoint,
-        routeInput.targetPoint,
+        sourcePoint,
+        targetPoint,
         laneOffsetCandidates[laneOffsetCandidates.length - 1] ?? 0,
       );
 
@@ -2430,6 +2452,8 @@ function createRelationshipRoute(
 
   return {
     horizontalSegments: createRelationshipHorizontalSegments(relationshipId, routePoints),
+    sourcePoint: { x: sourcePoint.x, y: sourcePoint.y },
+    targetPoint: { x: targetPoint.x, y: targetPoint.y },
     vertices,
   };
 }
@@ -2462,6 +2486,80 @@ function getRelationshipTerminalPoint(
     bounds,
     x: terminal.side === 'left' ? bounds.x : bounds.x + bounds.width,
     y: bounds.y + tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2,
+  };
+}
+
+function createRelationshipEndpointOffsetMap(routeInputs: RelationshipRouteInput[]): Map<string, number> {
+  const offsetByRelationshipRole = new Map<string, number>();
+  const terminalGroups = new Map<
+    string,
+    Array<{
+      oppositeY: number;
+      relationshipId: string;
+      role: 'source' | 'target';
+    }>
+  >();
+
+  for (const routeInput of routeInputs) {
+    const sourceKey = createRelationshipTerminalVisualKey(routeInput.sourceTerminal);
+    const targetKey = createRelationshipTerminalVisualKey(routeInput.targetTerminal);
+
+    terminalGroups.set(sourceKey, [
+      ...(terminalGroups.get(sourceKey) ?? []),
+      {
+        oppositeY: routeInput.targetPoint.y,
+        relationshipId: routeInput.relationship.id,
+        role: 'source',
+      },
+    ]);
+    terminalGroups.set(targetKey, [
+      ...(terminalGroups.get(targetKey) ?? []),
+      {
+        oppositeY: routeInput.sourcePoint.y,
+        relationshipId: routeInput.relationship.id,
+        role: 'target',
+      },
+    ]);
+  }
+
+  for (const entries of terminalGroups.values()) {
+    if (entries.length <= 1) {
+      continue;
+    }
+
+    entries
+      .sort(
+        (a, b) =>
+          a.oppositeY - b.oppositeY || a.relationshipId.localeCompare(b.relationshipId) || a.role.localeCompare(b.role),
+      )
+      .forEach((entry, index) => {
+        // DrawSQL-like fan-in: satu port interaktif tetap ada, tetapi endpoint visual disebar tipis agar marker tidak bertumpuk.
+        offsetByRelationshipRole.set(
+          createRelationshipEndpointOffsetKey(entry.relationshipId, entry.role),
+          (index - (entries.length - 1) / 2) * relationshipEndpointGap,
+        );
+      });
+  }
+
+  return offsetByRelationshipRole;
+}
+
+function createRelationshipTerminalVisualKey(terminal: RelationshipTerminal): string {
+  return [terminal.tableId, terminal.columnId, terminal.side].join(':');
+}
+
+function createRelationshipEndpointOffsetKey(relationshipId: string, role: 'source' | 'target'): string {
+  return `${relationshipId}:${role}`;
+}
+
+function applyRelationshipEndpointOffset(point: RelationshipTerminalPoint, offsetY: number): RelationshipTerminalPoint {
+  if (offsetY === 0) {
+    return point;
+  }
+
+  return {
+    ...point,
+    y: point.y + offsetY,
   };
 }
 
@@ -2523,7 +2621,8 @@ function getRelationshipPortSideDirection(side: PortSide): -1 | 1 {
 }
 
 function snapRelationshipCoordinate(value: number): number {
-  return Math.round(value / diagramRouterStepSize) * diagramRouterStepSize;
+  // Route final memakai step 3px supaya fan-in rapat tetap punya pemisahan halus; grid visual canvas tetap 12px.
+  return Math.round(value / relationshipRouteStepSize) * relationshipRouteStepSize;
 }
 
 function dedupeRelationshipVertices(vertices: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
@@ -2632,8 +2731,9 @@ function createRelationshipEdgeMetadata(
         router: {
           name: 'normal',
         },
-        source: { cell: relationship.sourceTableId, port: terminals.source.portId },
-        target: { cell: relationship.targetTableId, port: terminals.target.portId },
+        // Relationship yang sudah tersimpan memakai endpoint visual hasil routing, bukan port X6 mentah, agar marker bisa fan-in tanpa bertumpuk.
+        source: route.sourcePoint,
+        target: route.targetPoint,
         vertices: route.vertices,
         zIndex: terminals.source.active ? 1 : 0,
       },
