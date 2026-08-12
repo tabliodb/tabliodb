@@ -630,6 +630,7 @@ export function EditorPage() {
   const [tableDocsTableId, setTableDocsTableId] = useState<string | null>(null);
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
+  const snapshotRecoveryModelRef = useRef<DiagramModel | null>(null);
   const modelHistoryRef = useRef<EditorModelHistory>(createEmptyEditorModelHistory());
   const persistedDraftSignatureRef = useRef<string | null>(null);
   const loadedSnapshotIdRef = useRef<string | null>(null);
@@ -818,6 +819,7 @@ export function EditorPage() {
 
     modelHistoryRef.current = result.history;
     modelRef.current = result.model;
+    snapshotRecoveryModelRef.current = result.model;
     setModel(result.model);
     syncModelToCollaboration(result.model);
     reconcileModelSelection(result.model);
@@ -837,6 +839,7 @@ export function EditorPage() {
 
     modelHistoryRef.current = result.history;
     modelRef.current = result.model;
+    snapshotRecoveryModelRef.current = result.model;
     setModel(result.model);
     syncModelToCollaboration(result.model);
     reconcileModelSelection(result.model);
@@ -851,6 +854,7 @@ export function EditorPage() {
         // Snapshot creation returns the canonical versioned model while live editing remains a separate persistence concern.
         loadedSnapshotIdRef.current = snapshot.id;
         modelRef.current = snapshotModel;
+        snapshotRecoveryModelRef.current = snapshotModel;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshotModel);
         setModel(snapshotModel);
         syncModelToCollaboration(snapshotModel);
@@ -866,6 +870,7 @@ export function EditorPage() {
         // Restore membuat snapshot baru dari versi lama; local draft langsung mengikuti checkpoint baru itu.
         loadedSnapshotIdRef.current = snapshot.id;
         modelRef.current = snapshotModel;
+        snapshotRecoveryModelRef.current = snapshotModel;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshotModel);
         setModel(snapshotModel);
         syncModelToCollaboration(snapshotModel);
@@ -889,6 +894,7 @@ export function EditorPage() {
         // Server import writes the same model into diagram_documents, so this signature marks the local draft as persisted.
         loadedSnapshotIdRef.current = latestSnapshot?.id ?? loadedSnapshotIdRef.current;
         modelRef.current = importedModel;
+        snapshotRecoveryModelRef.current = importedModel;
         persistedDraftSignatureRef.current = createDiagramModelSignature(importedModel);
         setModel(importedModel);
         syncModelToCollaboration(importedModel);
@@ -930,6 +936,7 @@ export function EditorPage() {
     mutationConfig: {
       onSuccess: () => {
         modelRef.current = null;
+        snapshotRecoveryModelRef.current = null;
         persistedDraftSignatureRef.current = null;
         setModel(null);
         setSelectedTableId(null);
@@ -957,6 +964,7 @@ export function EditorPage() {
 
       // Keep the latest draft model synchronously available for snapshot clicks that happen immediately after an input blur.
       modelRef.current = safeNextModel;
+      snapshotRecoveryModelRef.current = safeNextModel;
       setModel(safeNextModel);
       syncModelToCollaboration(safeNextModel);
     },
@@ -1008,6 +1016,7 @@ export function EditorPage() {
 
   useEffect(() => {
     loadedSnapshotIdRef.current = null;
+    snapshotRecoveryModelRef.current = null;
     canvasViewportRef.current = null;
   }, [activeDiagram?.id]);
 
@@ -1209,6 +1218,7 @@ export function EditorPage() {
       }
 
       modelRef.current = null;
+      snapshotRecoveryModelRef.current = null;
       persistedDraftSignatureRef.current = null;
       setModel(null);
       setSelectedTableId(null);
@@ -1272,6 +1282,7 @@ export function EditorPage() {
 
         // Remote Yjs updates become the visible editor model, but they do not enter this user's local undo stack.
         modelRef.current = safeNextModel;
+        snapshotRecoveryModelRef.current = safeNextModel;
         persistedDraftSignatureRef.current = null;
         setModel(safeNextModel);
         reconcileModelSelection(safeNextModel);
@@ -1400,6 +1411,7 @@ export function EditorPage() {
 
     loadedSnapshotIdRef.current = latestSnapshot.id;
     modelRef.current = snapshotModel;
+    snapshotRecoveryModelRef.current = snapshotModel;
     persistedDraftSignatureRef.current = snapshotSignature;
     setModel(snapshotModel);
     if (createDiagramModelSignature(latestSnapshot.snapshot) !== snapshotSignature) {
@@ -1420,6 +1432,7 @@ export function EditorPage() {
     const seedModel = normalizeEditorDiagramModel(createSeedDiagramModel(activeDiagram.name));
     loadedSnapshotIdRef.current = null;
     modelRef.current = seedModel;
+    snapshotRecoveryModelRef.current = seedModel;
     persistedDraftSignatureRef.current = null;
     setModel(seedModel);
     setSelectedTableId(null);
@@ -1664,7 +1677,7 @@ export function EditorPage() {
     }
 
     window.setTimeout(() => {
-      const modelToSave = createSnapshotSaveModel(requestedModel, modelRef.current);
+      const modelToSave = createSnapshotSaveModel(requestedModel, modelRef.current, snapshotRecoveryModelRef.current);
 
       if (!activeDiagram || !modelToSave || !canCreateSnapshot || saveSnapshotMutation.isPending) {
         return;
@@ -1843,6 +1856,7 @@ export function EditorPage() {
               defaultDialect="postgresql"
               onCreated={(diagram) => {
                 modelRef.current = null;
+                snapshotRecoveryModelRef.current = null;
                 persistedDraftSignatureRef.current = null;
                 setModel(null);
                 navigate(
@@ -1940,6 +1954,7 @@ export function EditorPage() {
             onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
             onDiagramSelect={(diagram) => {
               modelRef.current = null;
+              snapshotRecoveryModelRef.current = null;
               persistedDraftSignatureRef.current = null;
               setModel(null);
               setSelectedTableId(null);
@@ -1954,6 +1969,7 @@ export function EditorPage() {
             }}
             onOrganizationSelect={(organization) => {
               modelRef.current = null;
+              snapshotRecoveryModelRef.current = null;
               persistedDraftSignatureRef.current = null;
               setModel(null);
               setSelectedTableId(null);
@@ -1964,6 +1980,7 @@ export function EditorPage() {
             onProjectSearchChange={setProjectSearchTerm}
             onProjectSelect={(project) => {
               modelRef.current = null;
+              snapshotRecoveryModelRef.current = null;
               persistedDraftSignatureRef.current = null;
               setModel(null);
               setSelectedTableId(null);
@@ -2107,6 +2124,7 @@ export function EditorPage() {
                 <ProjectSettingsDialog
                   onArchived={() => {
                     modelRef.current = null;
+                    snapshotRecoveryModelRef.current = null;
                     persistedDraftSignatureRef.current = null;
                     setModel(null);
                     setSelectedTableId(null);
@@ -2128,6 +2146,7 @@ export function EditorPage() {
                       }
 
                       const nextModel = updateLiveModelFromDiagram(current, diagram, modelRef);
+                      snapshotRecoveryModelRef.current = nextModel;
 
                       syncModelToCollaboration(nextModel);
 
@@ -2419,6 +2438,7 @@ export function EditorPage() {
       <CreateWorkspaceDialog
         onCreated={(organization) => {
           modelRef.current = null;
+          snapshotRecoveryModelRef.current = null;
           persistedDraftSignatureRef.current = null;
           setModel(null);
           setSelectedTableId(null);
@@ -2436,6 +2456,7 @@ export function EditorPage() {
         <CreateProjectDialog
           onCreated={(project) => {
             modelRef.current = null;
+            snapshotRecoveryModelRef.current = null;
             persistedDraftSignatureRef.current = null;
             setModel(null);
             setSelectedTableId(null);
@@ -2455,6 +2476,7 @@ export function EditorPage() {
           defaultDialect={model.dialect}
           onCreated={(diagram) => {
             modelRef.current = null;
+            snapshotRecoveryModelRef.current = null;
             persistedDraftSignatureRef.current = null;
             setModel(null);
             setSelectedTableId(null);
@@ -5760,7 +5782,7 @@ function DiagramTablesSidebar({
                 onClearTableSelection={onClearTableSelection}
                 onColumnSelect={onColumnSelect}
                 onModelChange={onModelChange}
-                onSelect={() => onTableSelect(table.id)}
+                onSelect={() => (table.id === selectedTable?.id ? onTableSelect(null) : onTableSelect(table.id))}
                 readOnly={readOnly}
                 selected={table.id === selectedTable?.id}
                 selectedColumnId={selectedColumnId}
@@ -5797,6 +5819,28 @@ function TableAccordionItem({
 }) {
   const columnCount = getTableColumns(model, table.id).length;
   const group = table.groupId ? model.groups[table.groupId] : null;
+  const [bodyMounted, setBodyMounted] = useState(selected);
+  const [bodyOpen, setBodyOpen] = useState(selected);
+
+  useEffect(() => {
+    if (selected) {
+      setBodyMounted(true);
+      const frameId = window.requestAnimationFrame(() => {
+        // Mount satu frame lebih dulu supaya CSS grid bisa menganimasikan transisi dari 0fr ke 1fr dengan halus.
+        setBodyOpen(true);
+      });
+
+      return () => window.cancelAnimationFrame(frameId);
+    }
+
+    setBodyOpen(false);
+    const timeoutId = window.setTimeout(() => {
+      // Body form dilepas setelah animasi close selesai agar list table tetap ringan walau jumlah tabel makin banyak.
+      setBodyMounted(false);
+    }, 220);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [selected]);
 
   return (
     <article
@@ -5832,20 +5876,27 @@ function TableAccordionItem({
           )}
         />
       </button>
-      {selected ? (
-        <div className="border-t border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))]">
-          <TableStructureSidebar
-            activeColumnId={selectedColumnId}
-            model={model}
-            onClearTableSelection={onClearTableSelection}
-            onColumnSelect={onColumnSelect}
-            onHide={() => undefined}
-            onModelChange={onModelChange}
-            readOnly={readOnly}
-            selectedTableId={table.id}
-            showHeader={false}
-            variant="accordion"
-          />
+      {bodyMounted ? (
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+            bodyOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className="min-h-0 overflow-hidden border-t border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))]">
+            <TableStructureSidebar
+              activeColumnId={selectedColumnId}
+              model={model}
+              onClearTableSelection={onClearTableSelection}
+              onColumnSelect={onColumnSelect}
+              onHide={() => undefined}
+              onModelChange={onModelChange}
+              readOnly={readOnly}
+              selectedTableId={table.id}
+              showHeader={false}
+              variant="accordion"
+            />
+          </div>
         </div>
       ) : null}
     </article>

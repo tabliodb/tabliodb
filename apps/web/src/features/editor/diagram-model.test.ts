@@ -94,6 +94,46 @@ describe('editor diagram model helpers', () => {
     expect(getTableColumns(modelToSave!, newTableId).map((column) => column.name)).toEqual(['id', 'new_column']);
   });
 
+  it('uses the last healthy local draft when realtime has already erased a new table column order', () => {
+    const baseModel = createSeedDiagramModel('Recovery save test');
+    const healthyDraftModel = addTableToDiagramModel(baseModel, 'audit_events', { x: 120, y: 144 });
+    const newTableId = Object.keys(healthyDraftModel.tables).find((tableId) => !baseModel.tables[tableId]) ?? '';
+    const staleEmptyModel = {
+      ...healthyDraftModel,
+      columns: Object.fromEntries(
+        Object.entries(healthyDraftModel.columns).filter(([, column]) => column.tableId !== newTableId),
+      ),
+      tables: {
+        ...healthyDraftModel.tables,
+        [newTableId]: {
+          ...healthyDraftModel.tables[newTableId],
+          columnIds: [],
+        },
+      },
+    };
+
+    const modelToSave = createSnapshotSaveModel(staleEmptyModel, staleEmptyModel, healthyDraftModel);
+
+    expect(modelToSave).not.toBeNull();
+    expect(getTableColumns(modelToSave!, newTableId).map((column) => column.name)).toEqual(['id', 'new_column']);
+  });
+
+  it('uses the last healthy local draft when realtime has not hydrated a new table yet', () => {
+    const baseModel = createSeedDiagramModel('Missing table recovery save test');
+    const healthyDraftModel = addTableToDiagramModel(baseModel, 'sessions', { x: 120, y: 144 });
+    const newTableId = Object.keys(healthyDraftModel.tables).find((tableId) => !baseModel.tables[tableId]) ?? '';
+    const staleModelWithoutNewTable = {
+      ...baseModel,
+      metadata: healthyDraftModel.metadata,
+    };
+
+    const modelToSave = createSnapshotSaveModel(staleModelWithoutNewTable, staleModelWithoutNewTable, healthyDraftModel);
+
+    expect(modelToSave).not.toBeNull();
+    expect(modelToSave!.tables[newTableId]?.name).toBe('sessions');
+    expect(getTableColumns(modelToSave!, newTableId).map((column) => column.name)).toEqual(['id', 'new_column']);
+  });
+
   it('preserves legitimate latest edits while restoring missing draft columns', () => {
     const baseModel = createSeedDiagramModel('Latest edits test');
     const requestedModel = addTableToDiagramModel(baseModel, undefined, { x: 120, y: 144 });
@@ -151,6 +191,17 @@ describe('editor diagram model helpers', () => {
           columnIds: [],
         },
       },
+    };
+
+    expect(shouldKeepLocalDiagramModelOverRealtime(localModel, staleRealtimeModel)).toBe(true);
+  });
+
+  it('keeps a local draft when a stale realtime model is missing a newly created table', () => {
+    const baseModel = createSeedDiagramModel('Realtime missing table test');
+    const localModel = addTableToDiagramModel(baseModel, 'draft_table', { x: 120, y: 144 });
+    const staleRealtimeModel = {
+      ...baseModel,
+      metadata: localModel.metadata,
     };
 
     expect(shouldKeepLocalDiagramModelOverRealtime(localModel, staleRealtimeModel)).toBe(true);

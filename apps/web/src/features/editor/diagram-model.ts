@@ -53,16 +53,27 @@ export function addTableToDiagramModel(
 export function createSnapshotSaveModel(
   requestedModel: DiagramModel | null,
   latestModel: DiagramModel | null,
+  recoveryModel: DiagramModel | null = null,
 ): DiagramModel | null {
   const requestedSafeModel = requestedModel ? normalizeEditorDiagramModel(requestedModel) : null;
   const latestSafeModel = latestModel ? normalizeEditorDiagramModel(latestModel) : null;
-  const modelToSave = latestSafeModel ?? requestedSafeModel;
+  const recoverySafeModel = recoveryModel ? normalizeEditorDiagramModel(recoveryModel) : null;
+  let modelToSave = latestSafeModel ?? requestedSafeModel ?? recoverySafeModel;
 
-  if (!requestedSafeModel || !modelToSave) {
-    return modelToSave;
+  if (!modelToSave) {
+    return null;
   }
 
-  return preserveRequestedDraftColumns(requestedSafeModel, modelToSave);
+  if (requestedSafeModel) {
+    modelToSave = preserveRequestedDraftColumns(requestedSafeModel, modelToSave);
+  }
+
+  if (recoverySafeModel) {
+    // The recovery model is the last local draft the user actually produced, so it protects snapshot payloads from stale realtime echoes that erase a new table's columnIds.
+    modelToSave = preserveRequestedDraftColumns(recoverySafeModel, modelToSave);
+  }
+
+  return modelToSave;
 }
 
 export function normalizeEditorDiagramModel(model: DiagramModel): DiagramModel {
@@ -113,8 +124,8 @@ export function shouldKeepLocalDiagramModelOverRealtime(
     }
   }
 
-  // Development Yjs documents can lag behind a repaired local draft; never downgrade a real table into an empty shell.
-  return hasRealtimeModelLostLocalColumns(localModel, realtimeModel);
+  // Development Yjs documents can lag behind a repaired local draft; never downgrade a real table into an empty shell or remove a table the user just created.
+  return hasRealtimeModelLostLocalTables(localModel, realtimeModel) || hasRealtimeModelLostLocalColumns(localModel, realtimeModel);
 }
 
 function createEditorDefaultTableColumns(): CreateTableColumnInput[] {
@@ -300,6 +311,10 @@ function hasRealtimeModelLostLocalColumns(localModel: DiagramModel, realtimeMode
 
     return localColumns.length > 0 && realtimeColumns.length === 0;
   });
+}
+
+function hasRealtimeModelLostLocalTables(localModel: DiagramModel, realtimeModel: DiagramModel): boolean {
+  return Object.values(localModel.tables).some((localTable) => !realtimeModel.tables[localTable.id]);
 }
 
 function getDiagramModelUpdatedAtTime(model: DiagramModel): number | null {
