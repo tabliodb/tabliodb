@@ -16,6 +16,14 @@ const auth: AuthContext = {
   },
 };
 
+const authWithReadApiKey: AuthContext = {
+  ...auth,
+  apiKey: {
+    id: 'api-key-id',
+    permissions: [Permission.DiagramRead],
+  },
+};
+
 const project = {
   createdAt: new Date('2026-07-29T10:00:00.000Z'),
   description: null,
@@ -128,6 +136,28 @@ describe(DiagramService.name, () => {
     diagramRepository.getById.mockResolvedValue(diagram);
 
     await expect(service.requireDiagram(auth, 'diagram-id', Permission.SnapshotCreate)).resolves.toMatchObject({
+      id: 'diagram-id',
+    });
+  });
+
+  it('blocks API keys without the requested diagram scope even when the owning user can edit', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+
+    await expect(
+      service.requireDiagram(authWithReadApiKey, 'diagram-id', Permission.SnapshotCreate),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    // API-key scope is checked before loading the diagram body, so low-scope automation cannot use user role as a bypass.
+    expect(diagramRepository.getById).not.toHaveBeenCalled();
+  });
+
+  it('allows API keys when both token scope and project role satisfy the requested diagram permission', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+    diagramRepository.getById.mockResolvedValue(diagram);
+
+    await expect(
+      service.requireDiagram(authWithReadApiKey, 'diagram-id', Permission.DiagramRead),
+    ).resolves.toMatchObject({
       id: 'diagram-id',
     });
   });

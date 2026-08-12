@@ -14,7 +14,7 @@ import { TabliodbHeader } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import { AuthService } from '../services/auth.service.js';
 
-const authMetadataKey = 'tabliodb:auth';
+export const authMetadataKey = 'tabliodb:auth';
 
 export type AuthenticatedOptions = {
   allowTemporaryPassword?: boolean;

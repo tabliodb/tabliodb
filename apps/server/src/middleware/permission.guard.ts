@@ -11,7 +11,7 @@ import { Permission } from '@tabliodb/shared';
 import type { AuthenticatedRequest } from './auth.guard.js';
 import { PermissionService, type PermissionTarget } from '../services/permission.service.js';
 
-const permissionMetadataKey = 'tabliodb:permission';
+export const permissionMetadataKey = 'tabliodb:permission';
 
 export type PermissionTargetSource = 'body' | 'param' | 'query';
 

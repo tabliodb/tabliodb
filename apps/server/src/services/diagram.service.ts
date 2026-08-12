@@ -49,7 +49,7 @@ export class DiagramService {
       throw new NotFoundException('Project not found');
     }
 
-    this.assertProjectPermission(project.projectRole, Permission.DiagramCreate);
+    this.assertProjectPermission(auth, project.projectRole, Permission.DiagramCreate);
 
     const diagram = await this.diagramRepository.create({
       projectId: dto.projectId,
@@ -68,7 +68,7 @@ export class DiagramService {
       throw new NotFoundException('Project not found');
     }
 
-    this.assertProjectPermission(project.projectRole, Permission.DiagramRead);
+    this.assertProjectPermission(auth, project.projectRole, Permission.DiagramRead);
 
     const diagrams = await this.diagramRepository.getByProject(projectId, {
       cursor: query.cursor,
@@ -92,7 +92,7 @@ export class DiagramService {
       throw new NotFoundException('Diagram not found');
     }
 
-    this.assertProjectPermission(role.role, permission);
+    this.assertProjectPermission(auth, role.role, permission);
 
     const diagram = await this.diagramRepository.getById(diagramId);
     if (!diagram) {
@@ -218,7 +218,12 @@ export class DiagramService {
     };
   }
 
-  private assertProjectPermission(role: ProjectRole, permission: Permission): void {
+  private assertProjectPermission(auth: AuthContext, role: ProjectRole, permission: Permission): void {
+    if (auth.apiKey && !isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
+      // Service-level diagram checks cover routes where the URL only has snapshot/comment/signal ids, so API key scope must be enforced here too.
+      throw new ForbiddenException(`${permission} API key scope is required`);
+    }
+
     if (
       !isGranted({
         current: permissionsForProjectRole(role),
@@ -291,14 +296,16 @@ export class DiagramService {
     model: DiagramModel,
     diagram: NonNullable<Awaited<ReturnType<DiagramRepository['getById']>>>,
   ): DiagramModel {
-    return serializeDiagramModel(normalizeDiagramModel({
-      ...model,
-      metadata: {
-        ...model.metadata,
-        name: model.metadata.name.trim() || diagram.name,
-        updatedAt: new Date().toISOString(),
-      },
-    }));
+    return serializeDiagramModel(
+      normalizeDiagramModel({
+        ...model,
+        metadata: {
+          ...model.metadata,
+          name: model.metadata.name.trim() || diagram.name,
+          updatedAt: new Date().toISOString(),
+        },
+      }),
+    );
   }
 }
 
