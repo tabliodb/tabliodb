@@ -488,7 +488,7 @@ export function hasDiagramModelInYjsDocument(document: Y.Doc): boolean {
 export function readDiagramModelFromYjsDocument(document: Y.Doc, fallback?: DiagramModel): DiagramModel {
   if (!hasDiagramModelInYjsDocument(document)) {
     if (fallback) {
-      return serializeDiagramModel(fallback);
+      return normalizeDiagramModel(fallback);
     }
 
     throw new DiagramCommandError('Yjs document does not contain a Tabliodb diagram model');
@@ -509,7 +509,7 @@ export function readDiagramModelFromYjsDocument(document: Y.Doc, fallback?: Diag
     metadata: readYMapAsRecord(document.getMap<unknown>(yjsCollections.metadata)),
   };
 
-  return parseDiagramModel(rawModel);
+  return normalizeDiagramModel(parseDiagramModel(rawModel));
 }
 
 export function encodeDiagramModelAsYjsUpdate(model: DiagramModel): Uint8Array {
@@ -981,9 +981,25 @@ export function serializeDiagramModel(model: DiagramModel): DiagramModel {
 
 export function normalizeDiagramModel(model: DiagramModel): DiagramModel {
   const parsedModel = serializeDiagramModel(model);
-  let tables = parsedModel.tables;
-  let columns = parsedModel.columns;
-  let changed = false;
+  const canonicalTables = canonicalizeEntityRecord(parsedModel.tables, mergeDuplicateTableEntity);
+  const canonicalColumns = canonicalizeEntityRecord(parsedModel.columns);
+  const canonicalIndexes = canonicalizeEntityRecord(parsedModel.indexes);
+  const canonicalRelationships = canonicalizeEntityRecord(parsedModel.relationships);
+  const canonicalEnums = canonicalizeEntityRecord(parsedModel.enums);
+  const canonicalChecks = canonicalizeEntityRecord(parsedModel.checks);
+  const canonicalNotes = canonicalizeEntityRecord(parsedModel.notes);
+  const canonicalGroups = canonicalizeEntityRecord(parsedModel.groups, mergeDuplicateGroupEntity);
+  let tables = canonicalTables.record;
+  let columns = canonicalColumns.record;
+  let changed =
+    canonicalTables.changed ||
+    canonicalColumns.changed ||
+    canonicalIndexes.changed ||
+    canonicalRelationships.changed ||
+    canonicalEnums.changed ||
+    canonicalChecks.changed ||
+    canonicalNotes.changed ||
+    canonicalGroups.changed;
 
   for (const table of Object.values(tables)) {
     const ownedColumnIds = Object.values(columns)
@@ -1028,10 +1044,75 @@ export function normalizeDiagramModel(model: DiagramModel): DiagramModel {
   return changed
     ? DiagramModelSchema.parse({
         ...parsedModel,
+        checks: canonicalChecks.record,
         columns,
+        enums: canonicalEnums.record,
+        groups: canonicalGroups.record,
+        indexes: canonicalIndexes.record,
+        notes: canonicalNotes.record,
+        relationships: canonicalRelationships.record,
         tables,
       })
     : parsedModel;
+}
+
+function canonicalizeEntityRecord<T extends { id: string }>(
+  entities: Record<string, T>,
+  mergeDuplicateEntity: (primary: T, duplicate: T) => T = (primary) => primary,
+): { changed: boolean; record: Record<string, T> } {
+  const byCanonicalId = new Map<string, { entity: T; fromCanonicalKey: boolean }>();
+  let changed = false;
+
+  for (const [recordKey, entity] of Object.entries(entities)) {
+    const canonicalKey = entity.id;
+    const fromCanonicalKey = recordKey === canonicalKey;
+    const current = byCanonicalId.get(canonicalKey);
+
+    if (!fromCanonicalKey) {
+      changed = true;
+    }
+
+    if (!current) {
+      byCanonicalId.set(canonicalKey, { entity, fromCanonicalKey });
+      continue;
+    }
+
+    changed = true;
+    const primary = fromCanonicalKey && !current.fromCanonicalKey ? entity : current.entity;
+    const duplicate = primary === entity ? current.entity : entity;
+
+    // JSONB readers must treat the entity's own `id` as the source of truth because Kysely can transform nested dynamic keys.
+    byCanonicalId.set(canonicalKey, {
+      entity: mergeDuplicateEntity(primary, duplicate),
+      fromCanonicalKey: current.fromCanonicalKey || fromCanonicalKey,
+    });
+  }
+
+  return {
+    changed,
+    record: Object.fromEntries(Array.from(byCanonicalId.entries()).map(([entityId, entry]) => [entityId, entry.entity])),
+  };
+}
+
+function mergeDuplicateTableEntity(primary: DatabaseTable, duplicate: DatabaseTable): DatabaseTable {
+  return DatabaseTableSchema.parse({
+    ...duplicate,
+    ...primary,
+    // Duplicate keys can come from old camelized JSONB reads; list fields are merged so no column/index reference is lost.
+    columnIds: uniqueValues([...duplicate.columnIds, ...primary.columnIds]),
+    id: primary.id,
+    indexIds: uniqueValues([...(duplicate.indexIds ?? []), ...(primary.indexIds ?? [])]),
+  });
+}
+
+function mergeDuplicateGroupEntity(primary: DiagramGroup, duplicate: DiagramGroup): DiagramGroup {
+  return DiagramGroupSchema.parse({
+    ...duplicate,
+    ...primary,
+    id: primary.id,
+    // Groups use dynamic table IDs too, so duplicate aliases should coalesce their table membership instead of dropping it.
+    tableIds: uniqueValues([...duplicate.tableIds, ...primary.tableIds]),
+  });
 }
 
 export function stringifyDiagramModel(model: DiagramModel, space = 2): string {

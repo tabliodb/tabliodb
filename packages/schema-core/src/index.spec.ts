@@ -133,6 +133,41 @@ describe('schema-core diagram commands', () => {
     });
   });
 
+  it('normalizes camelized JSONB entity record keys back to entity ids', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Normalize JSONB key aliases test'),
+      {
+        columns: [
+          { id: 'column_a1', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'column_b2', name: 'new_column', nullable: false, type: { family: 'varchar', length: 160 } },
+        ],
+        name: 'draft_table',
+        tableId: 'table_a1',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const damagedModel = {
+      ...model,
+      columns: {
+        columnA1: model.columns.column_a1,
+        columnB2: model.columns.column_b2,
+        column_a1: model.columns.column_a1,
+      },
+      tables: {
+        tableA1: model.tables.table_a1,
+        table_a1: model.tables.table_a1,
+      },
+    };
+
+    const normalizedModel = normalizeDiagramModel(damagedModel);
+
+    // Dynamic JSONB entity keys must stay identical to entity.id; otherwise React keys, table selection, and Yjs maps split one entity into aliases.
+    expect(Object.keys(normalizedModel.tables)).toEqual(['table_a1']);
+    expect(Object.keys(normalizedModel.columns).sort()).toEqual(['column_a1', 'column_b2']);
+    expect(getTableColumns(normalizedModel, 'table_a1').map((column) => column.name)).toEqual(['id', 'new_column']);
+  });
+
   it('normalizes tables whose column entities exist but column order is empty', () => {
     const model = applyDiagramCommand(
       createEmptyDiagramModel('Normalize empty order test'),
