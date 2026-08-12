@@ -207,9 +207,7 @@ type RelationshipHorizontalSegment = {
 
 type RelationshipRoute = {
   horizontalSegments: RelationshipHorizontalSegment[];
-  sourceMarkerOffsetY: number;
   sourcePoint: { x: number; y: number };
-  targetMarkerOffsetY: number;
   targetPoint: { x: number; y: number };
   vertices: Array<{ x: number; y: number }>;
 };
@@ -2299,32 +2297,26 @@ function buildRelationshipMarkers(
   cardinality: 'one_to_one' | 'one_to_many' | 'many_to_many',
   stroke: string,
   strokeWidth: number,
-  markerOffsets: { sourceY: number; targetY: number },
 ) {
-  const createManyMarker = (offsetY: number) => ({
+  const manyMarker = {
     d: 'M -12 -5 L 0 0 L -12 5 M -12 0 L 0 0',
     fill: 'none',
     name: 'path' as const,
     offsetX: 0,
-    // Marker boleh tersebar tipis, tetapi path edge tetap masuk tepat ke tengah row.
-    offsetY: -offsetY,
     stroke,
     strokeWidth,
-  });
+  };
 
   switch (cardinality) {
     case 'many_to_many':
-      return {
-        sourceMarker: createManyMarker(markerOffsets.sourceY),
-        targetMarker: createManyMarker(markerOffsets.targetY),
-      };
+      return { sourceMarker: manyMarker, targetMarker: manyMarker };
     case 'one_to_one':
       // 1:1 keeps the line plain at both ends; the row-level port already explains the exact column anchor.
       return {};
     case 'one_to_many':
     default:
       // Sisi "one" sengaja plain line; kardinalitas hanya ditandai di sisi "many".
-      return { targetMarker: createManyMarker(markerOffsets.targetY) };
+      return { targetMarker: manyMarker };
   }
 }
 
@@ -2433,32 +2425,42 @@ function createRelationshipRoute(
   targetEndpointOffset: number,
   laneOffset: number,
 ): RelationshipRoute {
+  const sourceDockPoint = {
+    ...sourcePoint,
+    y: sourcePoint.y + sourceEndpointOffset,
+  };
+  const targetDockPoint = {
+    ...targetPoint,
+    y: targetPoint.y + targetEndpointOffset,
+  };
   const sourceStubX = snapRelationshipCoordinate(
-    sourcePoint.x + getRelationshipPortSideDirection(sourceTerminal.side) * relationshipRouteFanLength,
+    sourceDockPoint.x + getRelationshipPortSideDirection(sourceTerminal.side) * relationshipRouteFanLength,
   );
   const targetStubX = snapRelationshipCoordinate(
-    targetPoint.x + getRelationshipPortSideDirection(targetTerminal.side) * relationshipRouteFanLength,
+    targetDockPoint.x + getRelationshipPortSideDirection(targetTerminal.side) * relationshipRouteFanLength,
   );
-  const sourceLaneY = snapRelationshipCoordinate(sourcePoint.y + sourceEndpointOffset + laneOffset);
-  const targetLaneY = snapRelationshipCoordinate(targetPoint.y + targetEndpointOffset + laneOffset);
+  const sourceLaneY = snapRelationshipCoordinate(sourceDockPoint.y + laneOffset);
+  const targetLaneY = snapRelationshipCoordinate(targetDockPoint.y + laneOffset);
   const spineX = getRelationshipSpineX(sourceTerminal, targetTerminal, sourcePoint, targetPoint, laneOffset);
   const vertices = dedupeRelationshipVertices([
-    // Endpoint tetap di row center; setelah stub pendek, garis baru menyebar ke lane agar tidak terlihat meleyot di sisi table.
-    { x: sourceStubX, y: sourcePoint.y },
+    // Setiap relationship punya dock point sendiri; dari dock itu garis langsung horizontal sehingga tidak ada sambungan diagonal/meleyot.
+    { x: sourceStubX, y: sourceDockPoint.y },
     { x: sourceStubX, y: sourceLaneY },
     { x: spineX, y: sourceLaneY },
     { x: spineX, y: targetLaneY },
     { x: targetStubX, y: targetLaneY },
-    { x: targetStubX, y: targetPoint.y },
+    { x: targetStubX, y: targetDockPoint.y },
   ]);
-  const routePoints = [{ x: sourcePoint.x, y: sourcePoint.y }, ...vertices, { x: targetPoint.x, y: targetPoint.y }];
+  const routePoints = [
+    { x: sourceDockPoint.x, y: sourceDockPoint.y },
+    ...vertices,
+    { x: targetDockPoint.x, y: targetDockPoint.y },
+  ];
 
   return {
     horizontalSegments: createRelationshipHorizontalSegments(relationshipId, routePoints),
-    sourceMarkerOffsetY: sourceEndpointOffset,
-    sourcePoint: { x: sourcePoint.x, y: sourcePoint.y },
-    targetMarkerOffsetY: targetEndpointOffset,
-    targetPoint: { x: targetPoint.x, y: targetPoint.y },
+    sourcePoint: { x: sourceDockPoint.x, y: sourceDockPoint.y },
+    targetPoint: { x: targetDockPoint.x, y: targetDockPoint.y },
     vertices,
   };
 }
@@ -2538,7 +2540,7 @@ function createRelationshipEndpointOffsetMap(routeInputs: RelationshipRouteInput
           a.oppositeY - b.oppositeY || a.relationshipId.localeCompare(b.relationshipId) || a.role.localeCompare(b.role),
       )
       .forEach((entry, index) => {
-        // DrawSQL-like fan-in: satu port interaktif tetap ada, tetapi endpoint visual disebar tipis agar marker tidak bertumpuk.
+        // DrawSQL-like fan-in: relationship punya dock point tipis di sisi table agar marker tidak bertumpuk di satu pixel.
         offsetByRelationshipRole.set(
           createRelationshipEndpointOffsetKey(entry.relationshipId, entry.role),
           (index - (entries.length - 1) / 2) * relationshipEndpointGap,
@@ -2699,10 +2701,7 @@ function createRelationshipEdgeMetadata(
 
     const stroke = terminals.source.active ? relationshipActiveColor : relationshipNeutralColor;
     const strokeWidth = terminals.source.active ? 1.7 : 1.5;
-    const { sourceMarker, targetMarker } = buildRelationshipMarkers(relationship.cardinality, stroke, strokeWidth, {
-      sourceY: route.sourceMarkerOffsetY,
-      targetY: route.targetMarkerOffsetY,
-    });
+    const { sourceMarker, targetMarker } = buildRelationshipMarkers(relationship.cardinality, stroke, strokeWidth);
     const markerAttrs = {
       ...(sourceMarker ? { sourceMarker } : {}),
       ...(targetMarker ? { targetMarker } : {}),
