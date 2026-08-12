@@ -97,6 +97,7 @@ const relationshipConnectorStraightEndpointVertices = 1; // Vertex paling dekat 
 const relationshipConnectorMinimumRoundedSegment = diagramRouterStepSize * 2; // Corner baru dibulatkan saat dua segmennya cukup panjang untuk tidak terlihat bergelombang.
 const relationshipManyMarkerLength = 16; // Crow-foot lebih panjang dari default agar cardinality tetap terbaca pada zoom editor.
 const relationshipManyMarkerSpread = 7; // Spread 7px membuat tiga cabang many terlihat jelas tanpa terlalu berat di light theme.
+const relationshipManyMarkerOffset = relationshipManyMarkerLength / 2; // X6 men-center marker bbox; offset ini menjaga crow-foot berada di luar table.
 const minimapAspectRatio = 192 / 124;
 
 let noteShapeRegistered = false;
@@ -2462,29 +2463,39 @@ function buildRelationshipMarkers(
   stroke: string,
   strokeWidth: number,
 ) {
-  const manyMarkerStrokeWidth = Math.max(strokeWidth + 0.7, 2.2);
-  const manyMarker = {
-    // Crow-foot dibuat sedikit lebih panjang dan melebar agar cardinality "many" tetap terbaca pada zoom kecil seperti DrawSQL.
+  const targetManyMarker = {
+    // Target marker memakai path negatif karena marker-end mengarah ke table; offset menjaga seluruh crow-foot tetap di luar boundary.
     d: `M -${relationshipManyMarkerLength} -${relationshipManyMarkerSpread} L 0 0 L -${relationshipManyMarkerLength} ${relationshipManyMarkerSpread} M -${relationshipManyMarkerLength} 0 L 0 0`,
     fill: 'none',
     name: 'path' as const,
-    offsetX: 0,
+    offsetX: relationshipManyMarkerOffset,
     stroke,
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
-    strokeWidth: manyMarkerStrokeWidth,
+    strokeWidth,
+  };
+  const sourceManyMarker = {
+    // Source marker harus mirror dari target marker karena marker-start mengikuti arah keluar dari table.
+    d: `M ${relationshipManyMarkerLength} -${relationshipManyMarkerSpread} L 0 0 L ${relationshipManyMarkerLength} ${relationshipManyMarkerSpread} M ${relationshipManyMarkerLength} 0 L 0 0`,
+    fill: 'none',
+    name: 'path' as const,
+    offsetX: -relationshipManyMarkerOffset,
+    stroke,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    strokeWidth,
   };
 
   switch (cardinality) {
     case 'many_to_many':
-      return { sourceMarker: manyMarker, targetMarker: manyMarker };
+      return { sourceMarker: sourceManyMarker, targetMarker: targetManyMarker };
     case 'one_to_one':
       // 1:1 keeps the line plain at both ends; the row-level port already explains the exact column anchor.
       return {};
     case 'one_to_many':
     default:
       // Sisi "one" sengaja plain line; kardinalitas hanya ditandai di sisi "many".
-      return { targetMarker: manyMarker };
+      return { targetMarker: targetManyMarker };
   }
 }
 
