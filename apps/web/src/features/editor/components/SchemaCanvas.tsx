@@ -2439,8 +2439,10 @@ function createRelationshipRoute(
   const targetStubX = snapRelationshipCoordinate(
     targetDockPoint.x + getRelationshipPortSideDirection(targetTerminal.side) * relationshipRouteFanLength,
   );
-  const sourceLaneY = snapRelationshipCoordinate(sourceDockPoint.y + laneOffset);
-  const targetLaneY = snapRelationshipCoordinate(targetDockPoint.y + laneOffset);
+  // Y lane sengaja tidak di-snap ke route grid karena rounding 3px bisa membuat step kecil sebelum garis masuk ke port.
+  const sourceLaneY = sourceDockPoint.y + laneOffset;
+  // Target juga mengikuti posisi port persis agar segmen terakhir tetap lurus dan tidak tampak patah.
+  const targetLaneY = targetDockPoint.y + laneOffset;
   const spineX = getRelationshipSpineX(sourceTerminal, targetTerminal, sourcePoint, targetPoint, laneOffset);
   const vertices = dedupeRelationshipVertices([
     // Setiap relationship punya dock point sendiri; dari dock itu garis langsung horizontal sehingga tidak ada sambungan diagonal/meleyot.
@@ -2720,8 +2722,9 @@ function createRelationshipEdgeMetadata(
           },
         },
         connector: {
-          // Endpoint relationship harus orthogonal tegas; rounded X6 membulatkan vertex pertama/terakhir dan membuat sambungan tampak meleyot.
-          name: 'normal',
+          // Rounded tetap dipakai untuk belokan DrawSQL-like; endpoint Y sudah presisi sehingga tidak memaksa garis patah di dekat port.
+          name: 'rounded',
+          args: { radius: relationshipConnectorRadius },
         },
         labels: [],
         router: {
@@ -2895,13 +2898,9 @@ function createColumnPorts(
               fill: isVisible ? color : 'transparent',
               magnet: !readOnly,
               opacity: isVisible ? 1 : 0,
-              r: isVisible
-                ? terminalSlot?.active
-                  ? relationshipPortRadius + 1
-                  : relationshipPortRadius
-                : relationshipPortRadius,
+              r: relationshipPortRadius,
               stroke: isVisible ? color : 'transparent',
-              strokeWidth: isVisible ? (terminalSlot?.related ? 2 : 1.5) : 0,
+              strokeWidth: isVisible ? 1.5 : 0,
             },
           },
           group: 'absolute',
