@@ -4,6 +4,7 @@ import {
   applyDiagramCommands,
   getDiagramReviewSignals,
   getTableColumns,
+  normalizeDiagramModel,
   type ColumnTypeFamily,
   type ColumnTypeSpec,
   type DatabaseCheck,
@@ -261,7 +262,7 @@ export function SchemaInspector({
   className,
   commentTargetSummaries = [],
   latestSnapshotVersion,
-  model,
+  model: rawModel,
   canIgnoreReviewSignals = false,
   isIgnoringReviewSignal = false,
   onHide,
@@ -274,6 +275,7 @@ export function SchemaInspector({
   reviewSignals: serverReviewSignals,
   selectedTableId,
 }: SchemaInspectorProps) {
+  const model = useMemo(() => normalizeDiagramModel(rawModel), [rawModel]);
   const enums = Object.values(model.enums);
   const selectedTable = selectedTableId ? model.tables[selectedTableId] : null;
   const selectedColumns = selectedTable ? getTableColumns(model, selectedTable.id) : [];

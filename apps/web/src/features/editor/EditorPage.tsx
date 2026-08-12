@@ -971,6 +971,25 @@ export function EditorPage() {
     [canEditDiagram, syncModelToCollaboration],
   );
 
+  useEffect(() => {
+    if (!model) {
+      return;
+    }
+
+    const safeModel = normalizeEditorDiagramModel(model);
+
+    if (createDiagramModelSignature(model) === createDiagramModelSignature(safeModel)) {
+      return;
+    }
+
+    // Model lama atau echo Yjs yang kehilangan column entity langsung direpair di state utama agar canvas, sidebar, inspector, dan snapshot membaca struktur yang sama.
+    modelRef.current = safeModel;
+    snapshotRecoveryModelRef.current = safeModel;
+    setModel(safeModel);
+    reconcileModelSelection(safeModel);
+    syncModelToCollaboration(safeModel);
+  }, [model, reconcileModelSelection, syncModelToCollaboration]);
+
   const handleCanvasViewportChange = useCallback((viewport: CanvasViewportRect) => {
     // Disimpan di ref supaya tombol Add Table/Note bisa membaca viewport terbaru tanpa membuat editor re-render tiap pan/zoom.
     canvasViewportRef.current = viewport;
@@ -5675,7 +5694,7 @@ function UserAccountMenu({
 }
 
 function DiagramTablesSidebar({
-  model,
+  model: rawModel,
   onClearTableSelection,
   onColumnSelect,
   onHide,
@@ -5695,6 +5714,7 @@ function DiagramTablesSidebar({
   selectedColumnId: string | null;
   selectedTableId: string | null;
 }) {
+  const model = useMemo(() => normalizeEditorDiagramModel(rawModel), [rawModel]);
   const [tableSearchTerm, setTableSearchTerm] = useState('');
   const listRef = useRef<HTMLDivElement | null>(null);
   const tables = useMemo(
@@ -5817,7 +5837,7 @@ function TableAccordionItem({
   selectedColumnId: string | null;
   table: DatabaseTable;
 }) {
-  const columnCount = getTableColumns(model, table.id).length;
+  const columnCount = Math.max(getTableColumns(model, table.id).length, table.columnIds.length);
   const group = table.groupId ? model.groups[table.groupId] : null;
   const [bodyMounted, setBodyMounted] = useState(selected);
   const [bodyOpen, setBodyOpen] = useState(selected);

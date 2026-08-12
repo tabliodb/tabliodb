@@ -15,6 +15,7 @@ import {
   defaultTableMinWidth,
   getRelationshipColumnPairs,
   getTableColumns,
+  normalizeDiagramModel,
   type DatabaseColumn,
   type DatabaseIndex,
   type DatabaseIndexColumn,
@@ -41,6 +42,7 @@ import type { AwarenessState } from '@tabliodb/shared';
 import { Copy, FileText, KeyRound, ListPlus, MessageSquareText, Scissors, Trash2, type LucideIcon } from 'lucide-react';
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -318,7 +320,7 @@ export function SchemaCanvas({
   floatingInsetLeft = 16,
   floatingInsetRight = 16,
   minimapToggleSignal = 0,
-  model,
+  model: rawModel,
   onCommentTargetOpen,
   onColumnSelect,
   onLocalCursorChange,
@@ -334,6 +336,7 @@ export function SchemaCanvas({
   toolbarOffsetLeft = '1rem',
   minimapOffsetRight = '1rem',
 }: SchemaCanvasProps) {
+  const model = useMemo(() => normalizeDiagramModel(rawModel), [rawModel]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const fitKeyRef = useRef<string | null>(null);

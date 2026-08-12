@@ -2,6 +2,7 @@ import {
   applyDiagramCommand,
   createDiagramEntityId,
   getTableColumns,
+  normalizeDiagramModel,
   type ColumnTypeFamily,
   type ColumnTypeSpec,
   type DatabaseColumn,
@@ -100,7 +101,7 @@ export type TableStructureSidebarProps = {
 
 export function TableStructureSidebar({
   activeColumnId = null,
-  model,
+  model: rawModel,
   onClearTableSelection,
   onColumnSelect,
   onHide,
@@ -110,6 +111,7 @@ export function TableStructureSidebar({
   showHeader = true,
   variant = 'panel',
 }: TableStructureSidebarProps) {
+  const model = useMemo(() => normalizeDiagramModel(rawModel), [rawModel]);
   const table = model.tables[selectedTableId] ?? null;
   const columns = useMemo(() => (table ? getTableColumns(model, table.id) : []), [model, table]);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -799,6 +801,14 @@ export function TableStructureSidebar({
                 selected={selectedColumn?.id === column.id}
               />
             ))}
+            {columns.length === 0 ? (
+              <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-4 text-center">
+                <p className="text-[12px] font-extrabold text-[rgb(var(--tabliodb-ink))]">No columns yet</p>
+                <p className="mt-1 text-[11px] font-bold leading-4 text-[rgb(var(--tabliodb-ink-muted))]">
+                  Add a column to make this table selectable from the canvas rows.
+                </p>
+              </div>
+            ) : null}
           </div>
         </section>
       </div>
