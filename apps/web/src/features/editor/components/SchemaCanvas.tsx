@@ -207,7 +207,9 @@ type RelationshipHorizontalSegment = {
 
 type RelationshipRoute = {
   horizontalSegments: RelationshipHorizontalSegment[];
+  sourceMarkerOffsetY: number;
   sourcePoint: { x: number; y: number };
+  targetMarkerOffsetY: number;
   targetPoint: { x: number; y: number };
   vertices: Array<{ x: number; y: number }>;
 };
@@ -2297,35 +2299,32 @@ function buildRelationshipMarkers(
   cardinality: 'one_to_one' | 'one_to_many' | 'many_to_many',
   stroke: string,
   strokeWidth: number,
+  markerOffsets: { sourceY: number; targetY: number },
 ) {
-  const oneMarker = {
-    d: 'M 0 -7 L 0 7',
+  const createManyMarker = (offsetY: number) => ({
+    d: 'M -12 -5 L 0 0 L -12 5 M -12 0 L 0 0',
     fill: 'none',
     name: 'path' as const,
     offsetX: 0,
+    // Marker boleh tersebar tipis, tetapi path edge tetap masuk tepat ke tengah row.
+    offsetY: -offsetY,
     stroke,
     strokeWidth,
-  };
-
-  // Marker dibuat lebih ramping karena beberapa relationship bisa fan-in ke satu column dalam jarak beberapa pixel.
-  const manyMarker = {
-    d: 'M -9 -4 L 0 0 L -9 4 M -9 0 L 0 0',
-    fill: 'none',
-    name: 'path' as const,
-    offsetX: 0,
-    stroke,
-    strokeWidth,
-  };
+  });
 
   switch (cardinality) {
     case 'many_to_many':
-      return { sourceMarker: manyMarker, targetMarker: manyMarker };
+      return {
+        sourceMarker: createManyMarker(markerOffsets.sourceY),
+        targetMarker: createManyMarker(markerOffsets.targetY),
+      };
     case 'one_to_one':
       // 1:1 keeps the line plain at both ends; the row-level port already explains the exact column anchor.
       return {};
     case 'one_to_many':
     default:
-      return { sourceMarker: oneMarker, targetMarker: manyMarker };
+      // Sisi "one" sengaja plain line; kardinalitas hanya ditandai di sisi "many".
+      return { targetMarker: createManyMarker(markerOffsets.targetY) };
   }
 }
 
@@ -2379,14 +2378,10 @@ function createRelationshipRouteMap(
   const endpointOffsets = createRelationshipEndpointOffsetMap(routeInputs);
 
   for (const routeInput of routeInputs) {
-    const sourcePoint = applyRelationshipEndpointOffset(
-      routeInput.sourcePoint,
-      endpointOffsets.get(createRelationshipEndpointOffsetKey(routeInput.relationship.id, 'source')) ?? 0,
-    );
-    const targetPoint = applyRelationshipEndpointOffset(
-      routeInput.targetPoint,
-      endpointOffsets.get(createRelationshipEndpointOffsetKey(routeInput.relationship.id, 'target')) ?? 0,
-    );
+    const sourceEndpointOffset =
+      endpointOffsets.get(createRelationshipEndpointOffsetKey(routeInput.relationship.id, 'source')) ?? 0;
+    const targetEndpointOffset =
+      endpointOffsets.get(createRelationshipEndpointOffsetKey(routeInput.relationship.id, 'target')) ?? 0;
     let selectedRoute: RelationshipRoute | null = null;
 
     for (const laneOffset of laneOffsetCandidates) {
@@ -2394,8 +2389,10 @@ function createRelationshipRouteMap(
         routeInput.relationship.id,
         routeInput.sourceTerminal,
         routeInput.targetTerminal,
-        sourcePoint,
-        targetPoint,
+        routeInput.sourcePoint,
+        routeInput.targetPoint,
+        sourceEndpointOffset,
+        targetEndpointOffset,
         laneOffset,
       );
 
@@ -2412,8 +2409,10 @@ function createRelationshipRouteMap(
         routeInput.relationship.id,
         routeInput.sourceTerminal,
         routeInput.targetTerminal,
-        sourcePoint,
-        targetPoint,
+        routeInput.sourcePoint,
+        routeInput.targetPoint,
+        sourceEndpointOffset,
+        targetEndpointOffset,
         laneOffsetCandidates[laneOffsetCandidates.length - 1] ?? 0,
       );
 
@@ -2430,6 +2429,8 @@ function createRelationshipRoute(
   targetTerminal: RelationshipTerminal,
   sourcePoint: RelationshipTerminalPoint,
   targetPoint: RelationshipTerminalPoint,
+  sourceEndpointOffset: number,
+  targetEndpointOffset: number,
   laneOffset: number,
 ): RelationshipRoute {
   const sourceStubX = snapRelationshipCoordinate(
@@ -2438,21 +2439,25 @@ function createRelationshipRoute(
   const targetStubX = snapRelationshipCoordinate(
     targetPoint.x + getRelationshipPortSideDirection(targetTerminal.side) * relationshipRouteFanLength,
   );
-  const sourceLaneY = snapRelationshipCoordinate(sourcePoint.y + laneOffset);
-  const targetLaneY = snapRelationshipCoordinate(targetPoint.y + laneOffset);
+  const sourceLaneY = snapRelationshipCoordinate(sourcePoint.y + sourceEndpointOffset + laneOffset);
+  const targetLaneY = snapRelationshipCoordinate(targetPoint.y + targetEndpointOffset + laneOffset);
   const spineX = getRelationshipSpineX(sourceTerminal, targetTerminal, sourcePoint, targetPoint, laneOffset);
   const vertices = dedupeRelationshipVertices([
-    // Fan-out dimulai segera setelah port, sehingga banyak relasi dari satu column hanya berbagi titik port, bukan badan konektor.
+    // Endpoint tetap di row center; setelah stub pendek, garis baru menyebar ke lane agar tidak terlihat meleyot di sisi table.
+    { x: sourceStubX, y: sourcePoint.y },
     { x: sourceStubX, y: sourceLaneY },
     { x: spineX, y: sourceLaneY },
     { x: spineX, y: targetLaneY },
     { x: targetStubX, y: targetLaneY },
+    { x: targetStubX, y: targetPoint.y },
   ]);
   const routePoints = [{ x: sourcePoint.x, y: sourcePoint.y }, ...vertices, { x: targetPoint.x, y: targetPoint.y }];
 
   return {
     horizontalSegments: createRelationshipHorizontalSegments(relationshipId, routePoints),
+    sourceMarkerOffsetY: sourceEndpointOffset,
     sourcePoint: { x: sourcePoint.x, y: sourcePoint.y },
+    targetMarkerOffsetY: targetEndpointOffset,
     targetPoint: { x: targetPoint.x, y: targetPoint.y },
     vertices,
   };
@@ -2550,17 +2555,6 @@ function createRelationshipTerminalVisualKey(terminal: RelationshipTerminal): st
 
 function createRelationshipEndpointOffsetKey(relationshipId: string, role: 'source' | 'target'): string {
   return `${relationshipId}:${role}`;
-}
-
-function applyRelationshipEndpointOffset(point: RelationshipTerminalPoint, offsetY: number): RelationshipTerminalPoint {
-  if (offsetY === 0) {
-    return point;
-  }
-
-  return {
-    ...point,
-    y: point.y + offsetY,
-  };
 }
 
 function getRelationshipSpineX(
@@ -2705,7 +2699,10 @@ function createRelationshipEdgeMetadata(
 
     const stroke = terminals.source.active ? relationshipActiveColor : relationshipNeutralColor;
     const strokeWidth = terminals.source.active ? 1.7 : 1.5;
-    const { sourceMarker, targetMarker } = buildRelationshipMarkers(relationship.cardinality, stroke, strokeWidth);
+    const { sourceMarker, targetMarker } = buildRelationshipMarkers(relationship.cardinality, stroke, strokeWidth, {
+      sourceY: route.sourceMarkerOffsetY,
+      targetY: route.targetMarkerOffsetY,
+    });
     const markerAttrs = {
       ...(sourceMarker ? { sourceMarker } : {}),
       ...(targetMarker ? { targetMarker } : {}),
