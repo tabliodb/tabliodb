@@ -458,7 +458,17 @@ type EditorConfirmAction =
   | {
       snapshotId: string;
       type: 'snapshot-restore';
+    }
+  | {
+      guard: SnapshotRealtimeGuard;
+      type: 'snapshot-save-unsafe';
     };
+
+type SnapshotRealtimeGuard = {
+  description: string;
+  detail: string;
+  title: string;
+};
 
 const commentFormSchema = z.object({
   body: z.string().trim().min(1, 'Write a comment first.').max(4000, 'Keep the comment under 4000 characters.'),
@@ -1688,7 +1698,23 @@ export function EditorPage() {
     setSelectedCommentTarget({ targetId: noteId, targetType: 'note' });
   }
 
-  function handleSaveSnapshot() {
+  function handleSaveSnapshot(options: { bypassRealtimeGuard?: boolean } = {}) {
+    if (!activeDiagram || !canCreateSnapshot || saveSnapshotMutation.isPending) {
+      return;
+    }
+
+    if (!options.bypassRealtimeGuard) {
+      const guard = getSnapshotRealtimeGuard(collaborationStatus);
+
+      if (guard) {
+        setEditorConfirmAction({
+          guard,
+          type: 'snapshot-save-unsafe',
+        });
+        return;
+      }
+    }
+
     const requestedModel = modelRef.current;
 
     if (document.activeElement instanceof HTMLElement) {
@@ -1770,6 +1796,13 @@ export function EditorPage() {
       }
 
       setEditorConfirmAction(null);
+      return;
+    }
+
+    if (action.type === 'snapshot-save-unsafe') {
+      setEditorConfirmAction(null);
+      // User sudah membaca realtime guard dan memilih checkpoint manual secara sadar.
+      handleSaveSnapshot({ bypassRealtimeGuard: true });
     }
   }
 
@@ -2177,7 +2210,7 @@ export function EditorPage() {
             </>
           ) : null}
           {canCreateSnapshot ? (
-            <Button className="gap-2 px-3" disabled={saveSnapshotMutation.isPending} onClick={handleSaveSnapshot}>
+            <Button className="gap-2 px-3" disabled={saveSnapshotMutation.isPending} onClick={() => handleSaveSnapshot()}>
               {saveSnapshotMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -2340,7 +2373,7 @@ export function EditorPage() {
 
       <EditorConfirmDialog
         action={editorConfirmAction}
-        disabled={restoreSnapshotMutation.isPending}
+        disabled={restoreSnapshotMutation.isPending || saveSnapshotMutation.isPending}
         onCancel={() => setEditorConfirmAction(null)}
         onConfirm={handleEditorConfirmAction}
       />
@@ -2849,6 +2882,25 @@ function EditorConfirmDialog({
   onConfirm: () => void;
 }) {
   const isTableDelete = action?.type === 'table-delete';
+  const isSnapshotGuard = action?.type === 'snapshot-save-unsafe';
+  const title = isTableDelete
+    ? 'Delete table?'
+    : isSnapshotGuard
+      ? action.guard.title
+      : 'Restore snapshot?';
+  const description = isTableDelete
+    ? `Table "${action.tableName}" and its relationships will be removed from this draft.`
+    : isSnapshotGuard
+      ? action.guard.description
+      : 'Your current unsaved draft will be replaced by the selected snapshot.';
+  const confirmIcon = isTableDelete ? (
+    <Trash2 className="size-4" />
+  ) : isSnapshotGuard ? (
+    <Save className="size-4" />
+  ) : (
+    <RotateCcw className="size-4" />
+  );
+  const confirmLabel = isTableDelete ? 'Delete table' : isSnapshotGuard ? 'Save anyway' : 'Restore';
 
   return (
     <Dialog
@@ -2861,20 +2913,31 @@ function EditorConfirmDialog({
     >
       <DialogContent className="w-[min(92vw,420px)]">
         <DialogHeader>
-          <DialogTitle>{isTableDelete ? 'Delete table?' : 'Restore snapshot?'}</DialogTitle>
-          <DialogDescription>
-            {isTableDelete
-              ? `Table "${action.tableName}" and its relationships will be removed from this draft.`
-              : 'Your current unsaved draft will be replaced by the selected snapshot.'}
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {isSnapshotGuard ? (
+          <div className="rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-sm font-bold leading-6 text-[rgb(var(--tabliodb-gold-text))]">
+            <div className="mb-1 flex items-center gap-2 text-[13px] font-extrabold">
+              <FileWarning className="size-4" />
+              Realtime guard
+            </div>
+            <p>{action.guard.detail}</p>
+          </div>
+        ) : null}
         <DialogFooter>
           <Button disabled={disabled} onClick={onCancel} type="button" variant="secondary">
             Cancel
           </Button>
-          <Button className="gap-2" disabled={disabled} onClick={onConfirm} type="button" variant="danger">
-            {isTableDelete ? <Trash2 className="size-4" /> : <RotateCcw className="size-4" />}
-            {isTableDelete ? 'Delete table' : 'Restore'}
+          <Button
+            className="gap-2"
+            disabled={disabled}
+            onClick={onConfirm}
+            type="button"
+            variant={isSnapshotGuard ? 'primary' : 'danger'}
+          >
+            {confirmIcon}
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -9357,6 +9420,46 @@ function formatLiveAutosaveStatusLine(status: DiagramCollaborationStatus): strin
   }
 
   return 'Live draft autosave: On';
+}
+
+function getSnapshotRealtimeGuard(status: DiagramCollaborationStatus): SnapshotRealtimeGuard | null {
+  if (status.connection === 'connected' && status.synced && status.unsyncedChanges === 0) {
+    return null;
+  }
+
+  if (status.connection === 'authentication_failed') {
+    return {
+      description: 'Realtime authentication failed, so the editor cannot confirm that your live draft is synced.',
+      detail:
+        status.message ??
+        'Refresh after signing in again. Saving anyway may create a snapshot that misses recent collaborative changes.',
+      title: 'Save while realtime auth failed?',
+    };
+  }
+
+  if (status.connection === 'disconnected') {
+    return {
+      description: 'Realtime is currently disconnected and waiting to reconnect.',
+      detail:
+        'Wait until the status changes back to Saved when possible. Saving anyway can checkpoint a local draft before remote changes arrive.',
+      title: 'Save while reconnecting?',
+    };
+  }
+
+  if (status.connection === 'connected') {
+    return {
+      description: 'Realtime is connected but still syncing pending changes.',
+      detail: `There are ${status.unsyncedChanges} pending change(s). Wait for Saved if this snapshot needs to become the official checkpoint for the team.`,
+      title: 'Save before sync finishes?',
+    };
+  }
+
+  return {
+    description: 'Realtime collaboration is still preparing for this diagram.',
+    detail:
+      'Wait until the status becomes Saved when possible. Saving anyway creates a manual checkpoint from the current local draft.',
+    title: 'Save before realtime is ready?',
+  };
 }
 
 function UserAvatar({ className, user }: { className?: string; user: AvatarIdentity }) {
