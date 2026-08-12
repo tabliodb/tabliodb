@@ -940,6 +940,13 @@ export function EditorPage() {
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
+      onError: (error) => {
+        toast.warning({
+          // Snapshot save tidak selalu berada di dialog, jadi kegagalan harus muncul sebagai feedback global yang langsung terlihat.
+          description: getErrorMessage(error),
+          title: 'Snapshot was not saved',
+        });
+      },
       onSuccess: (snapshot) => {
         const snapshotModel = normalizeEditorDiagramModel(snapshot.snapshot);
 

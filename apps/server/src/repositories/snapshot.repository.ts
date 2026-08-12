@@ -4,6 +4,7 @@ import { Kysely, sql, type Transaction } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, JsonValue } from '../schema/index.js';
 import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
+import { acquireDiagramOperationLock, type DiagramOperationLockKind } from './diagram-operation-lock.js';
 
 export type SnapshotListOptions = {
   cursor?: string;
@@ -22,7 +23,7 @@ export class SnapshotRepository {
     snapshot: JsonValue;
   }) {
     return this.db.transaction().execute(async (tx) => {
-      return this.insertSnapshot(tx, options);
+      return this.insertSnapshot(tx, options, 'snapshot_create');
     });
   }
 
@@ -46,14 +47,18 @@ export class SnapshotRepository {
         return null;
       }
 
-      return this.insertSnapshot(tx, {
-        diagramId: source.diagramId,
-        createdById: restoredById,
-        message: `Restored snapshot v${source.version}`,
-        restoredFromSnapshotId: source.id,
-        // Restore memakai snapshot JSON lama sebagai sumber, lalu menulis checkpoint baru supaya audit history tetap append-only.
-        snapshot: source.snapshot,
-      });
+      return this.insertSnapshot(
+        tx,
+        {
+          diagramId: source.diagramId,
+          createdById: restoredById,
+          message: `Restored snapshot v${source.version}`,
+          restoredFromSnapshotId: source.id,
+          // Restore memakai snapshot JSON lama sebagai sumber, lalu menulis checkpoint baru supaya audit history tetap append-only.
+          snapshot: source.snapshot,
+        },
+        'snapshot_restore',
+      );
     });
   }
 
@@ -95,7 +100,10 @@ export class SnapshotRepository {
       restoredFromSnapshotId?: string | null;
       snapshot: JsonValue;
     },
+    operation: DiagramOperationLockKind,
   ) {
+    await acquireDiagramOperationLock(tx, options.diagramId, operation);
+
     const normalizedSnapshot = normalizeDiagramModel(options.snapshot as DiagramModel);
     const versionRow = await tx
       .selectFrom('diagram_snapshots')

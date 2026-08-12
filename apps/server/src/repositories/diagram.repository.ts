@@ -10,6 +10,7 @@ import { Insertable, Kysely } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, DiagramTable, JsonValue } from '../schema/index.js';
 import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
+import { acquireDiagramOperationLock } from './diagram-operation-lock.js';
 
 export type DiagramListOptions = {
   cursor?: string;
@@ -101,6 +102,8 @@ export class DiagramRepository {
     const yjsState = Buffer.from(encodeDiagramModelAsYjsUpdate(normalizedModel));
 
     await this.db.transaction().execute(async (tx) => {
+      await acquireDiagramOperationLock(tx, diagramId, 'diagram_import_replace');
+
       await tx
         .insertInto('diagram_documents')
         .values({
