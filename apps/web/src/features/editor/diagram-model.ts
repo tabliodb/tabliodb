@@ -9,6 +9,13 @@ import {
   type DiagramModel,
 } from '@tabliodb/schema-core';
 
+export type RealtimeTablePatch = {
+  tableId: string;
+  metadataUpdatedAt?: string;
+  position?: { x: number; y: number };
+  width?: number;
+};
+
 export function formatColumnType(type: ColumnTypeSpec): string {
   if (type.raw) {
     return type.raw;
@@ -103,6 +110,74 @@ export function shouldKeepLocalDiagramModelOverRealtime(
 
   // Development Yjs documents can lag behind a repaired local draft; never downgrade a real table into an empty shell or remove a table the user just created.
   return hasRealtimeModelLostLocalTables(localModel, realtimeModel) || hasRealtimeModelLostLocalColumns(localModel, realtimeModel);
+}
+
+export function createRealtimeTablePatch(
+  previousModel: DiagramModel | null,
+  nextModel: DiagramModel,
+): RealtimeTablePatch | null {
+  if (!previousModel) {
+    return null;
+  }
+
+  if (
+    previousModel.schemaVersion !== nextModel.schemaVersion ||
+    previousModel.dialect !== nextModel.dialect ||
+    !areJsonValuesEqual(previousModel.columns, nextModel.columns) ||
+    !areJsonValuesEqual(previousModel.indexes, nextModel.indexes) ||
+    !areJsonValuesEqual(previousModel.relationships, nextModel.relationships) ||
+    !areJsonValuesEqual(previousModel.enums, nextModel.enums) ||
+    !areJsonValuesEqual(previousModel.checks, nextModel.checks) ||
+    !areJsonValuesEqual(previousModel.notes, nextModel.notes) ||
+    !areJsonValuesEqual(previousModel.groups, nextModel.groups) ||
+    !areMetadataEqualExceptUpdatedAt(previousModel.metadata, nextModel.metadata)
+  ) {
+    return null;
+  }
+
+  const changedTableIds = Array.from(new Set([...Object.keys(previousModel.tables), ...Object.keys(nextModel.tables)]))
+    .filter((tableId) => !areJsonValuesEqual(previousModel.tables[tableId], nextModel.tables[tableId]));
+
+  if (changedTableIds.length !== 1) {
+    return null;
+  }
+
+  const tableId = changedTableIds[0];
+  const previousTable = previousModel.tables[tableId];
+  const nextTable = nextModel.tables[tableId];
+
+  if (!previousTable || !nextTable) {
+    return null;
+  }
+
+  const { position: previousPosition, width: previousWidth, ...previousStableTable } = previousTable;
+  const { position: nextPosition, width: nextWidth, ...nextStableTable } = nextTable;
+
+  if (!areJsonValuesEqual(previousStableTable, nextStableTable)) {
+    return null;
+  }
+
+  const patch: RealtimeTablePatch = {
+    tableId,
+  };
+
+  if (!areJsonValuesEqual(previousPosition, nextPosition)) {
+    patch.position = nextPosition;
+  }
+
+  if (previousWidth !== nextWidth) {
+    patch.width = nextWidth;
+  }
+
+  if (!patch.position && patch.width === undefined) {
+    return null;
+  }
+
+  if (previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt && nextModel.metadata.updatedAt) {
+    patch.metadataUpdatedAt = nextModel.metadata.updatedAt;
+  }
+
+  return patch;
 }
 
 function createEditorDefaultTableColumns(): CreateTableColumnInput[] {
@@ -228,6 +303,21 @@ function mergeRequestedColumnIds(
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function areMetadataEqualExceptUpdatedAt(
+  left: DiagramModel['metadata'],
+  right: DiagramModel['metadata'],
+): boolean {
+  const { updatedAt: _leftUpdatedAt, ...leftRest } = left;
+  const { updatedAt: _rightUpdatedAt, ...rightRest } = right;
+
+  // Command-level realtime patches may carry only updatedAt besides the entity mutation; every other metadata field still requires a full model write.
+  return areJsonValuesEqual(leftRest, rightRest);
+}
+
+function areJsonValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function hasRealtimeModelLostLocalColumns(localModel: DiagramModel, realtimeModel: DiagramModel): boolean {

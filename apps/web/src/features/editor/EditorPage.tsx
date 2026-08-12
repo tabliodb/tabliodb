@@ -254,6 +254,7 @@ import {
 } from '@/resources/share-links';
 import {
   addTableToDiagramModel,
+  createRealtimeTablePatch,
   createSeedDiagramModel,
   createSnapshotSaveModel,
   formatColumnType,
@@ -791,12 +792,18 @@ export function EditorPage() {
   );
 
   const syncModelToCollaboration = useCallback(
-    (nextModel: DiagramModel) => {
+    (nextModel: DiagramModel, previousModel: DiagramModel | null = null) => {
       if (!canEditDiagram) {
         return;
       }
 
-      // Local edits are written into the shared Y.Doc; the collaboration wrapper tags the transaction origin so it does not echo back into local state.
+      const tablePatch = createRealtimeTablePatch(previousModel, nextModel);
+
+      if (tablePatch && collaborationRef.current?.writeTablePatch(tablePatch)) {
+        return;
+      }
+
+      // Complex edits still use the canonical full-model writer until each command gets its own operation-level Yjs patch.
       collaborationRef.current?.writeModel(nextModel);
     },
     [canEditDiagram],
@@ -976,7 +983,7 @@ export function EditorPage() {
       modelRef.current = safeNextModel;
       snapshotRecoveryModelRef.current = safeNextModel;
       setModel(safeNextModel);
-      syncModelToCollaboration(safeNextModel);
+      syncModelToCollaboration(safeNextModel, currentModel);
     },
     [canEditDiagram, syncModelToCollaboration],
   );

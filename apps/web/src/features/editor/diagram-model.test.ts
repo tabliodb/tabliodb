@@ -2,6 +2,7 @@ import { applyDiagramCommand, getTableColumns } from '@tabliodb/schema-core';
 import { describe, expect, it } from 'vitest';
 import {
   addTableToDiagramModel,
+  createRealtimeTablePatch,
   createSeedDiagramModel,
   createSnapshotSaveModel,
   normalizeEditorDiagramModel,
@@ -225,5 +226,40 @@ describe('editor diagram model helpers', () => {
     };
 
     expect(shouldKeepLocalDiagramModelOverRealtime(localModel, realtimeModel)).toBe(false);
+  });
+
+  it('creates a small realtime patch for table move and resize only', () => {
+    const baseModel = createSeedDiagramModel('Realtime table patch test');
+    const tableId = 'users';
+    const movedModel = applyDiagramCommand(baseModel, {
+      position: { x: 240, y: 288 },
+      tableId,
+      type: 'table.move',
+    });
+    const resizedModel = applyDiagramCommand(movedModel, {
+      tableId,
+      type: 'table.resize',
+      width: 336,
+    });
+
+    const patch = createRealtimeTablePatch(baseModel, resizedModel);
+
+    expect(patch).toMatchObject({
+      position: { x: 240, y: 288 },
+      tableId,
+      width: 336,
+    });
+    expect(patch?.metadataUpdatedAt).toBe(resizedModel.metadata.updatedAt);
+  });
+
+  it('falls back to full realtime model writes for non-layout table edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime full write fallback test');
+    const renamedModel = applyDiagramCommand(baseModel, {
+      name: 'members',
+      tableId: 'users',
+      type: 'table.rename',
+    });
+
+    expect(createRealtimeTablePatch(baseModel, renamedModel)).toBeNull();
   });
 });

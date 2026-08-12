@@ -3,6 +3,7 @@ import {
   hasDiagramModelInYjsDocument,
   readDiagramModelFromYjsDocument,
   writeDiagramModelToYjsDocument,
+  yjsCollections,
   type DiagramModel,
 } from '@tabliodb/schema-core';
 import {
@@ -40,6 +41,12 @@ export type DiagramCollaborationStatus = {
 };
 
 export type DiagramCollaborationStatusSubscriber = (status: DiagramCollaborationStatus) => void;
+export type DiagramCollaborationTablePatch = {
+  tableId: string;
+  metadataUpdatedAt?: string;
+  position?: { x: number; y: number };
+  width?: number;
+};
 
 export function createDiagramCollaboration(options: DiagramCollaborationOptions) {
   const document = new Y.Doc();
@@ -142,6 +149,30 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     },
     writeModel(model: DiagramModel) {
       writeDiagramModelToYjsDocument(document, model, localModelWriteOrigin);
+    },
+    writeTablePatch(patch: DiagramCollaborationTablePatch) {
+      const tableMap = document.getMap<Y.Map<unknown>>(yjsCollections.tables).get(patch.tableId);
+
+      if (!(tableMap instanceof Y.Map)) {
+        return false;
+      }
+
+      document.transact(() => {
+        if (patch.position) {
+          // Position is patched at entity scope so table drags do not rewrite columns, relationships, notes, or other users' table edits.
+          tableMap.set('position', { ...patch.position });
+        }
+
+        if (patch.width !== undefined) {
+          tableMap.set('width', patch.width);
+        }
+
+        if (patch.metadataUpdatedAt) {
+          document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
+        }
+      }, localModelWriteOrigin);
+
+      return true;
     },
     subscribeAwareness(subscriber: AwarenessSubscriber) {
       const awareness = provider.awareness;
