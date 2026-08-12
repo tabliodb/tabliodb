@@ -60,6 +60,9 @@ export const router = createBrowserRouter([
         element: <SetupPage />,
         loader: setupLoader,
         path: routes.setup.path,
+        handle: {
+          title: 'Onboarding',
+        },
       },
       {
         element: <RootLayout />,
