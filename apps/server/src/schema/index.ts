@@ -220,6 +220,7 @@ export interface ProjectTeamAccessTable {
 export interface ApiKeyTable {
   id: Generated<string>;
   keyHash: BinaryColumn;
+  keyPrefix: string;
   name: string;
   userId: string;
   organizationId: NullableColumn<string>;

@@ -18,7 +18,9 @@
           }
         },
         "summary": "",
-        "tags": ["server"]
+        "tags": [
+          "server"
+        ]
       }
     },
     "/server/metrics": {
@@ -38,7 +40,9 @@
           }
         },
         "summary": "",
-        "tags": ["server"]
+        "tags": [
+          "server"
+        ]
       }
     },
     "/auth/me": {
@@ -69,7 +73,9 @@
           }
         ],
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/me/profile": {
@@ -110,7 +116,9 @@
           }
         ],
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/me/password": {
@@ -151,7 +159,9 @@
           }
         ],
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/me/temporary-password": {
@@ -192,7 +202,9 @@
           }
         ],
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/me/avatar": {
@@ -210,7 +222,9 @@
                     "type": "string"
                   }
                 },
-                "required": ["file"],
+                "required": [
+                  "file"
+                ],
                 "type": "object"
               }
             }
@@ -240,7 +254,9 @@
           }
         ],
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       },
       "delete": {
         "operationId": "deleteCurrentUserAvatar",
@@ -269,7 +285,9 @@
           }
         ],
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/sign-up": {
@@ -299,7 +317,9 @@
           }
         },
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/login": {
@@ -329,7 +349,9 @@
           }
         },
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/oidc/provider": {
@@ -349,7 +371,9 @@
           }
         },
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/oidc/start": {
@@ -379,7 +403,9 @@
           }
         },
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/oidc/callback": {
@@ -392,7 +418,9 @@
           }
         },
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/logout": {
@@ -423,7 +451,9 @@
           }
         ],
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/password-reset/request": {
@@ -453,7 +483,9 @@
           }
         },
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/password-reset/confirm": {
@@ -483,7 +515,9 @@
           }
         },
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/auth/api-keys": {
@@ -524,7 +558,99 @@
           }
         ],
         "summary": "",
-        "tags": ["auth"]
+        "tags": [
+          "auth"
+        ]
+      },
+      "get": {
+        "operationId": "getApiKeys",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyListResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/api-keys/{apiKeyId}": {
+      "delete": {
+        "operationId": "revokeApiKey",
+        "parameters": [
+          {
+            "name": "apiKeyId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyRevokeResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/comments/threads": {
@@ -565,7 +691,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/diagram/{diagramId}/summary": {
@@ -605,7 +733,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/diagram/{diagramId}/threads": {
@@ -661,7 +791,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/threads/{threadId}/comments": {
@@ -726,7 +858,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       },
       "post": {
         "operationId": "replyToCommentThread",
@@ -774,7 +908,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/threads/{threadId}/root-comments": {
@@ -830,7 +966,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/comments/{commentId}/replies": {
@@ -886,7 +1024,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       },
       "post": {
         "operationId": "replyToComment",
@@ -934,7 +1074,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/comments/{commentId}": {
@@ -984,7 +1126,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       },
       "delete": {
         "operationId": "deleteComment",
@@ -1022,7 +1166,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/threads/{threadId}/read-state": {
@@ -1062,7 +1208,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/threads/{threadId}/read": {
@@ -1102,7 +1250,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/threads/{threadId}/resolve": {
@@ -1142,7 +1292,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/comments/threads/{threadId}/unresolve": {
@@ -1182,7 +1334,9 @@
           }
         ],
         "summary": "",
-        "tags": ["comments"]
+        "tags": [
+          "comments"
+        ]
       }
     },
     "/diagrams/{diagramId}/share-links": {
@@ -1238,7 +1392,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagram-share-links"]
+        "tags": [
+          "diagram-share-links"
+        ]
       },
       "post": {
         "operationId": "createDiagramShareLink",
@@ -1286,7 +1442,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagram-share-links"]
+        "tags": [
+          "diagram-share-links"
+        ]
       }
     },
     "/diagrams/{diagramId}/share-links/{shareLinkId}": {
@@ -1334,7 +1492,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagram-share-links"]
+        "tags": [
+          "diagram-share-links"
+        ]
       }
     },
     "/diagrams": {
@@ -1375,7 +1535,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagrams"]
+        "tags": [
+          "diagrams"
+        ]
       }
     },
     "/diagrams/{diagramId}": {
@@ -1425,7 +1587,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagrams"]
+        "tags": [
+          "diagrams"
+        ]
       }
     },
     "/diagrams/{diagramId}/export": {
@@ -1445,7 +1609,13 @@
             "required": false,
             "in": "query",
             "schema": {
-              "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"],
+              "enum": [
+                "postgresql",
+                "mysql",
+                "sqlite",
+                "mariadb",
+                "sqlserver"
+              ],
               "type": "string"
             }
           },
@@ -1454,7 +1624,12 @@
             "required": false,
             "in": "query",
             "schema": {
-              "enum": ["tabliodb_json", "sql", "markdown", "svg"],
+              "enum": [
+                "tabliodb_json",
+                "sql",
+                "markdown",
+                "svg"
+              ],
               "type": "string"
             }
           },
@@ -1491,7 +1666,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagrams"]
+        "tags": [
+          "diagrams"
+        ]
       }
     },
     "/diagrams/{diagramId}/import": {
@@ -1541,7 +1718,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagrams"]
+        "tags": [
+          "diagrams"
+        ]
       }
     },
     "/diagrams/{diagramId}/review": {
@@ -1581,7 +1760,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagrams"]
+        "tags": [
+          "diagrams"
+        ]
       }
     },
     "/diagrams/{diagramId}/review/events": {
@@ -1637,7 +1818,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagrams"]
+        "tags": [
+          "diagrams"
+        ]
       }
     },
     "/diagrams/{diagramId}/review/actions": {
@@ -1687,7 +1870,9 @@
           }
         ],
         "summary": "",
-        "tags": ["diagrams"]
+        "tags": [
+          "diagrams"
+        ]
       }
     },
     "/files/{fileId}": {
@@ -1720,7 +1905,9 @@
           }
         ],
         "summary": "",
-        "tags": ["files"]
+        "tags": [
+          "files"
+        ]
       }
     },
     "/invitations": {
@@ -1761,7 +1948,9 @@
           }
         ],
         "summary": "",
-        "tags": ["invitations"]
+        "tags": [
+          "invitations"
+        ]
       }
     },
     "/invitations/{token}": {
@@ -1790,7 +1979,9 @@
           }
         },
         "summary": "",
-        "tags": ["invitations"]
+        "tags": [
+          "invitations"
+        ]
       }
     },
     "/invitations/accept": {
@@ -1820,7 +2011,9 @@
           }
         },
         "summary": "",
-        "tags": ["invitations"]
+        "tags": [
+          "invitations"
+        ]
       }
     },
     "/notifications/inbox": {
@@ -1868,7 +2061,9 @@
           }
         ],
         "summary": "",
-        "tags": ["notifications"]
+        "tags": [
+          "notifications"
+        ]
       }
     },
     "/notifications/summary": {
@@ -1899,7 +2094,9 @@
           }
         ],
         "summary": "",
-        "tags": ["notifications"]
+        "tags": [
+          "notifications"
+        ]
       }
     },
     "/organizations": {
@@ -1940,7 +2137,9 @@
           }
         ],
         "summary": "",
-        "tags": ["organizations"]
+        "tags": [
+          "organizations"
+        ]
       },
       "get": {
         "operationId": "getOrganizations",
@@ -1986,7 +2185,9 @@
           }
         ],
         "summary": "",
-        "tags": ["organizations"]
+        "tags": [
+          "organizations"
+        ]
       }
     },
     "/organizations/{organizationId}/settings": {
@@ -2026,7 +2227,9 @@
           }
         ],
         "summary": "",
-        "tags": ["organizations"]
+        "tags": [
+          "organizations"
+        ]
       },
       "patch": {
         "operationId": "updateOrganizationSettings",
@@ -2074,7 +2277,9 @@
           }
         ],
         "summary": "",
-        "tags": ["organizations"]
+        "tags": [
+          "organizations"
+        ]
       }
     },
     "/organizations/{organizationId}/members": {
@@ -2130,7 +2335,9 @@
           }
         ],
         "summary": "",
-        "tags": ["organizations"]
+        "tags": [
+          "organizations"
+        ]
       }
     },
     "/organizations/{organizationId}/members/{userId}": {
@@ -2188,7 +2395,9 @@
           }
         ],
         "summary": "",
-        "tags": ["organizations"]
+        "tags": [
+          "organizations"
+        ]
       },
       "delete": {
         "operationId": "removeOrganizationMember",
@@ -2234,7 +2443,9 @@
           }
         ],
         "summary": "",
-        "tags": ["organizations"]
+        "tags": [
+          "organizations"
+        ]
       }
     },
     "/organizations/{organizationId}/audit-logs": {
@@ -2290,7 +2501,9 @@
           }
         ],
         "summary": "",
-        "tags": ["organizations"]
+        "tags": [
+          "organizations"
+        ]
       }
     },
     "/projects": {
@@ -2346,7 +2559,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       },
       "post": {
         "operationId": "createProject",
@@ -2385,7 +2600,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       }
     },
     "/projects/{projectId}": {
@@ -2435,7 +2652,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       },
       "delete": {
         "operationId": "archiveProject",
@@ -2473,7 +2692,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       }
     },
     "/projects/{projectId}/members": {
@@ -2529,7 +2750,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       },
       "post": {
         "operationId": "addProjectMember",
@@ -2577,7 +2800,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       }
     },
     "/projects/{projectId}/members/{userId}": {
@@ -2635,7 +2860,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       },
       "delete": {
         "operationId": "removeProjectMember",
@@ -2681,7 +2908,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       }
     },
     "/projects/{projectId}/diagrams": {
@@ -2737,7 +2966,9 @@
           }
         ],
         "summary": "",
-        "tags": ["projects"]
+        "tags": [
+          "projects"
+        ]
       }
     },
     "/public/share-links/{token}": {
@@ -2766,7 +2997,9 @@
           }
         },
         "summary": "",
-        "tags": ["public-share-links"]
+        "tags": [
+          "public-share-links"
+        ]
       }
     },
     "/review-signals/diagram/{diagramId}": {
@@ -2830,7 +3063,9 @@
           }
         ],
         "summary": "",
-        "tags": ["review-signals"]
+        "tags": [
+          "review-signals"
+        ]
       }
     },
     "/review-signals/project/{projectId}/settings": {
@@ -2870,7 +3105,9 @@
           }
         ],
         "summary": "",
-        "tags": ["review-signals"]
+        "tags": [
+          "review-signals"
+        ]
       },
       "patch": {
         "operationId": "updateProjectReviewSignalSettings",
@@ -2918,7 +3155,9 @@
           }
         ],
         "summary": "",
-        "tags": ["review-signals"]
+        "tags": [
+          "review-signals"
+        ]
       }
     },
     "/review-signals/diagram/{diagramId}/settings": {
@@ -2958,7 +3197,9 @@
           }
         ],
         "summary": "",
-        "tags": ["review-signals"]
+        "tags": [
+          "review-signals"
+        ]
       },
       "patch": {
         "operationId": "updateDiagramReviewSignalSettings",
@@ -3006,7 +3247,9 @@
           }
         ],
         "summary": "",
-        "tags": ["review-signals"]
+        "tags": [
+          "review-signals"
+        ]
       }
     },
     "/review-signals/{signalId}/ignore": {
@@ -3046,7 +3289,9 @@
           }
         ],
         "summary": "",
-        "tags": ["review-signals"]
+        "tags": [
+          "review-signals"
+        ]
       }
     },
     "/review-signals/{signalId}/unignore": {
@@ -3086,7 +3331,9 @@
           }
         ],
         "summary": "",
-        "tags": ["review-signals"]
+        "tags": [
+          "review-signals"
+        ]
       }
     },
     "/setup": {
@@ -3106,7 +3353,9 @@
           }
         },
         "summary": "",
-        "tags": ["setup"]
+        "tags": [
+          "setup"
+        ]
       },
       "post": {
         "operationId": "completeSetup",
@@ -3134,7 +3383,9 @@
           }
         },
         "summary": "",
-        "tags": ["setup"]
+        "tags": [
+          "setup"
+        ]
       }
     },
     "/setup/auth-settings": {
@@ -3165,7 +3416,9 @@
           }
         ],
         "summary": "",
-        "tags": ["setup"]
+        "tags": [
+          "setup"
+        ]
       },
       "post": {
         "operationId": "updateInstanceAuthSettings",
@@ -3204,7 +3457,9 @@
           }
         ],
         "summary": "",
-        "tags": ["setup"]
+        "tags": [
+          "setup"
+        ]
       }
     },
     "/setup/oidc-provider": {
@@ -3235,7 +3490,9 @@
           }
         ],
         "summary": "",
-        "tags": ["setup"]
+        "tags": [
+          "setup"
+        ]
       },
       "post": {
         "operationId": "updateOidcProviderSettings",
@@ -3274,7 +3531,9 @@
           }
         ],
         "summary": "",
-        "tags": ["setup"]
+        "tags": [
+          "setup"
+        ]
       }
     },
     "/setup/smtp-settings": {
@@ -3305,7 +3564,9 @@
           }
         ],
         "summary": "",
-        "tags": ["setup"]
+        "tags": [
+          "setup"
+        ]
       },
       "post": {
         "operationId": "updateSmtpSettings",
@@ -3344,7 +3605,9 @@
           }
         ],
         "summary": "",
-        "tags": ["setup"]
+        "tags": [
+          "setup"
+        ]
       }
     },
     "/snapshots": {
@@ -3385,7 +3648,9 @@
           }
         ],
         "summary": "",
-        "tags": ["snapshots"]
+        "tags": [
+          "snapshots"
+        ]
       }
     },
     "/snapshots/diagram/{diagramId}": {
@@ -3441,7 +3706,9 @@
           }
         ],
         "summary": "",
-        "tags": ["snapshots"]
+        "tags": [
+          "snapshots"
+        ]
       }
     },
     "/snapshots/{fromSnapshotId}/diff/{toSnapshotId}": {
@@ -3489,7 +3756,9 @@
           }
         ],
         "summary": "",
-        "tags": ["snapshots"]
+        "tags": [
+          "snapshots"
+        ]
       }
     },
     "/snapshots/{snapshotId}/restore": {
@@ -3529,7 +3798,9 @@
           }
         ],
         "summary": "",
-        "tags": ["snapshots"]
+        "tags": [
+          "snapshots"
+        ]
       }
     },
     "/teams": {
@@ -3585,7 +3856,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       },
       "post": {
         "operationId": "createTeam",
@@ -3624,7 +3897,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       }
     },
     "/teams/{teamId}": {
@@ -3674,7 +3949,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       },
       "delete": {
         "operationId": "archiveTeam",
@@ -3712,7 +3989,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       }
     },
     "/teams/{teamId}/members": {
@@ -3768,7 +4047,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       },
       "post": {
         "operationId": "addTeamMember",
@@ -3816,7 +4097,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       }
     },
     "/teams/{teamId}/members/{userId}": {
@@ -3864,7 +4147,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       }
     },
     "/teams/{teamId}/projects": {
@@ -3920,7 +4205,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       },
       "post": {
         "operationId": "upsertTeamProjectAccess",
@@ -3968,7 +4255,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       }
     },
     "/teams/{teamId}/projects/{projectId}": {
@@ -4016,7 +4305,9 @@
           }
         ],
         "summary": "",
-        "tags": ["teams"]
+        "tags": [
+          "teams"
+        ]
       }
     },
     "/users": {
@@ -4036,7 +4327,12 @@
             "required": false,
             "in": "query",
             "schema": {
-              "enum": ["owner", "instance-admin", "org-admin", "member"],
+              "enum": [
+                "owner",
+                "instance-admin",
+                "org-admin",
+                "member"
+              ],
               "type": "string"
             }
           },
@@ -4081,7 +4377,9 @@
           }
         ],
         "summary": "",
-        "tags": ["users"]
+        "tags": [
+          "users"
+        ]
       },
       "post": {
         "operationId": "createUser",
@@ -4120,7 +4418,9 @@
           }
         ],
         "summary": "",
-        "tags": ["users"]
+        "tags": [
+          "users"
+        ]
       }
     },
     "/users/{userId}/status": {
@@ -4170,7 +4470,9 @@
           }
         ],
         "summary": "",
-        "tags": ["users"]
+        "tags": [
+          "users"
+        ]
       }
     },
     "/users/{userId}/reset-password": {
@@ -4220,7 +4522,9 @@
           }
         ],
         "summary": "",
-        "tags": ["users"]
+        "tags": [
+          "users"
+        ]
       }
     },
     "/users/{userId}/revoke-sessions": {
@@ -4260,7 +4564,9 @@
           }
         ],
         "summary": "",
-        "tags": ["users"]
+        "tags": [
+          "users"
+        ]
       }
     }
   },
@@ -4308,10 +4614,16 @@
           },
           "status": {
             "type": "string",
-            "enum": ["disabled", "error", "ok"]
+            "enum": [
+              "disabled",
+              "error",
+              "ok"
+            ]
           }
         },
-        "required": ["status"],
+        "required": [
+          "status"
+        ],
         "additionalProperties": false
       },
       "ServerHealthResponseDto_Output": {
@@ -4330,7 +4642,10 @@
                 "$ref": "#/components/schemas/ServerDependencyHealthDto_Output"
               }
             },
-            "required": ["database", "redis"],
+            "required": [
+              "database",
+              "redis"
+            ],
             "additionalProperties": false
           },
           "name": {
@@ -4348,7 +4663,14 @@
             "type": "string"
           }
         },
-        "required": ["checkedAt", "dependencies", "name", "ok", "uptimeSeconds", "version"],
+        "required": [
+          "checkedAt",
+          "dependencies",
+          "name",
+          "ok",
+          "uptimeSeconds",
+          "version"
+        ],
         "additionalProperties": false
       },
       "ServerHttpRouteMetricsDto_Output": {
@@ -4436,7 +4758,13 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["arrayBuffers", "external", "heapTotal", "heapUsed", "rss"],
+        "required": [
+          "arrayBuffers",
+          "external",
+          "heapTotal",
+          "heapUsed",
+          "rss"
+        ],
         "additionalProperties": false
       },
       "ServerMetricsResponseDto_Output": {
@@ -4467,7 +4795,10 @@
                       "type": "string"
                     }
                   },
-                  "required": ["count", "method"],
+                  "required": [
+                    "count",
+                    "method"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -4506,7 +4837,13 @@
                     "maximum": 9007199254740991
                   }
                 },
-                "required": ["clientError", "informational", "redirection", "serverError", "success"],
+                "required": [
+                  "clientError",
+                  "informational",
+                  "redirection",
+                  "serverError",
+                  "success"
+                ],
                 "additionalProperties": false
               },
               "totalRequests": {
@@ -4515,7 +4852,13 @@
                 "maximum": 9007199254740991
               }
             },
-            "required": ["errorRequests", "methods", "routes", "statusGroups", "totalRequests"],
+            "required": [
+              "errorRequests",
+              "methods",
+              "routes",
+              "statusGroups",
+              "totalRequests"
+            ],
             "additionalProperties": false
           },
           "process": {
@@ -4538,7 +4881,12 @@
                 "maximum": 9007199254740991
               }
             },
-            "required": ["memoryBytes", "nodeVersion", "pid", "uptimeSeconds"],
+            "required": [
+              "memoryBytes",
+              "nodeVersion",
+              "pid",
+              "uptimeSeconds"
+            ],
             "additionalProperties": false
           },
           "startedAt": {
@@ -4558,11 +4906,20 @@
                 "maximum": 9007199254740991
               }
             },
-            "required": ["maxTrackedRoutes", "routeDurationSampleSize"],
+            "required": [
+              "maxTrackedRoutes",
+              "routeDurationSampleSize"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["generatedAt", "http", "process", "startedAt", "window"],
+        "required": [
+          "generatedAt",
+          "http",
+          "process",
+          "startedAt",
+          "window"
+        ],
         "additionalProperties": false
       },
       "AuthUserDto_Output": {
@@ -4592,7 +4949,14 @@
             "type": "boolean"
           }
         },
-        "required": ["id", "email", "name", "avatarUrl", "cursorColor", "passwordChangeRequired"],
+        "required": [
+          "id",
+          "email",
+          "name",
+          "avatarUrl",
+          "cursorColor",
+          "passwordChangeRequired"
+        ],
         "additionalProperties": false
       },
       "CurrentUserResponseDto_Output": {
@@ -4624,7 +4988,10 @@
             "minLength": 8
           }
         },
-        "required": ["currentPassword", "password"]
+        "required": [
+          "currentPassword",
+          "password"
+        ]
       },
       "CurrentUserTemporaryPasswordUpdateDto": {
         "type": "object",
@@ -4634,27 +5001,36 @@
             "minLength": 8
           }
         },
-        "required": ["password"]
+        "required": [
+          "password"
+        ]
       },
       "SessionBindingDto": {
         "type": "object",
         "properties": {
           "algorithm": {
             "type": "string",
-            "enum": ["ecdsa-p256-sha256"]
+            "enum": [
+              "ecdsa-p256-sha256"
+            ]
           },
           "publicKey": {
             "$ref": "#/components/schemas/SessionBindingPublicKeyDto"
           }
         },
-        "required": ["algorithm", "publicKey"]
+        "required": [
+          "algorithm",
+          "publicKey"
+        ]
       },
       "SessionBindingPublicKeyDto": {
         "type": "object",
         "properties": {
           "crv": {
             "type": "string",
-            "enum": ["P-256"]
+            "enum": [
+              "P-256"
+            ]
           },
           "ext": {
             "type": "boolean"
@@ -4667,7 +5043,9 @@
           },
           "kty": {
             "type": "string",
-            "enum": ["EC"]
+            "enum": [
+              "EC"
+            ]
           },
           "x": {
             "type": "string",
@@ -4678,7 +5056,12 @@
             "minLength": 1
           }
         },
-        "required": ["crv", "kty", "x", "y"]
+        "required": [
+          "crv",
+          "kty",
+          "x",
+          "y"
+        ]
       },
       "SignUpDto": {
         "type": "object",
@@ -4700,7 +5083,11 @@
             "minLength": 1
           }
         },
-        "required": ["email", "password", "name"]
+        "required": [
+          "email",
+          "password",
+          "name"
+        ]
       },
       "LoginResponseDto_Output": {
         "type": "object",
@@ -4712,7 +5099,10 @@
             "$ref": "#/components/schemas/AuthUserDto_Output"
           }
         },
-        "required": ["accessToken", "user"],
+        "required": [
+          "accessToken",
+          "user"
+        ],
         "additionalProperties": false
       },
       "LoginCredentialDto": {
@@ -4731,7 +5121,10 @@
             "$ref": "#/components/schemas/SessionBindingDto"
           }
         },
-        "required": ["email", "password"]
+        "required": [
+          "email",
+          "password"
+        ]
       },
       "OidcLoginProviderDto_Output": {
         "type": "object",
@@ -4743,7 +5136,10 @@
             "type": "boolean"
           }
         },
-        "required": ["buttonLabel", "enabled"],
+        "required": [
+          "buttonLabel",
+          "enabled"
+        ],
         "additionalProperties": false
       },
       "OidcLoginStartDto": {
@@ -4766,7 +5162,9 @@
             "format": "uri"
           }
         },
-        "required": ["authorizationUrl"],
+        "required": [
+          "authorizationUrl"
+        ],
         "additionalProperties": false
       },
       "LogoutResponseDto_Output": {
@@ -4776,7 +5174,9 @@
             "type": "boolean"
           }
         },
-        "required": ["successful"],
+        "required": [
+          "successful"
+        ],
         "additionalProperties": false
       },
       "PasswordResetRequestDto": {
@@ -4788,7 +5188,9 @@
             "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           }
         },
-        "required": ["email"]
+        "required": [
+          "email"
+        ]
       },
       "PasswordResetRequestResponseDto_Output": {
         "type": "object",
@@ -4812,7 +5214,12 @@
             "type": "boolean"
           }
         },
-        "required": ["expiresAt", "resetToken", "resetUrl", "successful"],
+        "required": [
+          "expiresAt",
+          "resetToken",
+          "resetUrl",
+          "successful"
+        ],
         "additionalProperties": false
       },
       "PasswordResetConfirmDto": {
@@ -4827,7 +5234,10 @@
             "minLength": 16
           }
         },
-        "required": ["password", "token"]
+        "required": [
+          "password",
+          "token"
+        ]
       },
       "PasswordResetConfirmResponseDto_Output": {
         "type": "object",
@@ -4841,19 +5251,30 @@
             "type": "boolean"
           }
         },
-        "required": ["revokedSessions", "successful"],
+        "required": [
+          "revokedSessions",
+          "successful"
+        ],
         "additionalProperties": false
       },
       "ApiKeyCreateDto": {
         "type": "object",
         "properties": {
+          "expiresInDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          },
           "name": {
             "default": "API Key",
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 120
           },
           "permissions": {
-            "default": ["all"],
+            "default": [
+              "all"
+            ],
             "type": "array",
             "items": {
               "type": "string",
@@ -4879,6 +5300,86 @@
           }
         }
       },
+      "ApiKeyDto_Output": {
+        "type": "object",
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "all",
+                "organization.read",
+                "organization.manage",
+                "project.create",
+                "project.read",
+                "project.update",
+                "project.delete",
+                "project.member.manage",
+                "diagram.create",
+                "diagram.read",
+                "diagram.update",
+                "diagram.delete",
+                "diagram.comment",
+                "snapshot.create",
+                "snapshot.read",
+                "api-key.manage"
+              ]
+            }
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "createdAt",
+          "expiresAt",
+          "id",
+          "lastUsedAt",
+          "name",
+          "permissions",
+          "prefix",
+          "revokedAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
       "ApiKeyCreateResponseDto_Output": {
         "type": "object",
         "properties": {
@@ -4886,46 +5387,57 @@
             "type": "string"
           },
           "apiKey": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "name": {
-                "type": "string"
-              },
-              "permissions": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "all",
-                    "organization.read",
-                    "organization.manage",
-                    "project.create",
-                    "project.read",
-                    "project.update",
-                    "project.delete",
-                    "project.member.manage",
-                    "diagram.create",
-                    "diagram.read",
-                    "diagram.update",
-                    "diagram.delete",
-                    "diagram.comment",
-                    "snapshot.create",
-                    "snapshot.read",
-                    "api-key.manage"
-                  ]
-                }
-              }
-            },
-            "required": ["id", "name", "permissions"],
-            "additionalProperties": false
+            "$ref": "#/components/schemas/ApiKeyDto_Output"
           }
         },
-        "required": ["secret", "apiKey"],
+        "required": [
+          "secret",
+          "apiKey"
+        ],
+        "additionalProperties": false
+      },
+      "ApiKeyListResponseDto_Output": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyDto_Output"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
+        "additionalProperties": false
+      },
+      "ApiKeyRevokeResponseDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "revoked"
+        ],
         "additionalProperties": false
       },
       "CommentLexicalDocumentDto": {
@@ -4941,14 +5453,21 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["root"]
+                "enum": [
+                  "root"
+                ]
               }
             },
-            "required": ["children", "type"],
+            "required": [
+              "children",
+              "type"
+            ],
             "additionalProperties": {}
           }
         },
-        "required": ["root"],
+        "required": [
+          "root"
+        ],
         "additionalProperties": {}
       },
       "CommentThreadCreateDto": {
@@ -4968,10 +5487,25 @@
           },
           "targetType": {
             "type": "string",
-            "enum": ["diagram", "table", "column", "relationship", "index", "enum", "check", "note", "group"]
+            "enum": [
+              "diagram",
+              "table",
+              "column",
+              "relationship",
+              "index",
+              "enum",
+              "check",
+              "note",
+              "group"
+            ]
           }
         },
-        "required": ["bodyJson", "diagramId", "targetId", "targetType"]
+        "required": [
+          "bodyJson",
+          "diagramId",
+          "targetId",
+          "targetType"
+        ]
       },
       "CommentResponseDto_Output": {
         "type": "object",
@@ -5000,7 +5534,13 @@
                 "type": "string"
               }
             },
-            "required": ["avatarUrl", "cursorColor", "email", "id", "name"],
+            "required": [
+              "avatarUrl",
+              "cursorColor",
+              "email",
+              "id",
+              "name"
+            ],
             "additionalProperties": false
           },
           "body": {
@@ -5008,7 +5548,9 @@
           },
           "bodyFormat": {
             "type": "string",
-            "enum": ["lexical"]
+            "enum": [
+              "lexical"
+            ]
           },
           "bodyJson": {
             "$ref": "#/components/schemas/CommentLexicalDocumentDto_Output"
@@ -5105,14 +5647,21 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["root"]
+                "enum": [
+                  "root"
+                ]
               }
             },
-            "required": ["children", "type"],
+            "required": [
+              "children",
+              "type"
+            ],
             "additionalProperties": {}
           }
         },
-        "required": ["root"],
+        "required": [
+          "root"
+        ],
         "additionalProperties": {}
       },
       "CommentThreadResponseDto_Output": {
@@ -5155,7 +5704,10 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["open", "resolved"]
+                "enum": [
+                  "open",
+                  "resolved"
+                ]
               },
               "targetId": {
                 "type": "string",
@@ -5163,7 +5715,17 @@
               },
               "targetType": {
                 "type": "string",
-                "enum": ["diagram", "table", "column", "relationship", "index", "enum", "check", "note", "group"]
+                "enum": [
+                  "diagram",
+                  "table",
+                  "column",
+                  "relationship",
+                  "index",
+                  "enum",
+                  "check",
+                  "note",
+                  "group"
+                ]
               },
               "unreadCount": {
                 "type": "integer",
@@ -5195,7 +5757,10 @@
             "$ref": "#/components/schemas/CommentResponseDto_Output"
           }
         },
-        "required": ["thread", "comment"],
+        "required": [
+          "thread",
+          "comment"
+        ],
         "additionalProperties": false
       },
       "CommentThreadTargetSummaryDto_Output": {
@@ -5217,7 +5782,17 @@
           },
           "targetType": {
             "type": "string",
-            "enum": ["diagram", "table", "column", "relationship", "index", "enum", "check", "note", "group"]
+            "enum": [
+              "diagram",
+              "table",
+              "column",
+              "relationship",
+              "index",
+              "enum",
+              "check",
+              "note",
+              "group"
+            ]
           },
           "totalCount": {
             "type": "integer",
@@ -5236,7 +5811,15 @@
             "nullable": true
           }
         },
-        "required": ["openCount", "resolvedCount", "targetId", "targetType", "totalCount", "unreadCount", "updatedAt"],
+        "required": [
+          "openCount",
+          "resolvedCount",
+          "targetId",
+          "targetType",
+          "totalCount",
+          "unreadCount",
+          "updatedAt"
+        ],
         "additionalProperties": false
       },
       "CommentDiagramSummaryDto_Output": {
@@ -5280,7 +5863,15 @@
             "nullable": true
           }
         },
-        "required": ["diagramId", "openCount", "resolvedCount", "targets", "totalCount", "unreadCount", "updatedAt"],
+        "required": [
+          "diagramId",
+          "openCount",
+          "resolvedCount",
+          "targets",
+          "totalCount",
+          "unreadCount",
+          "updatedAt"
+        ],
         "additionalProperties": false
       },
       "CommentThreadListItemDto_Output": {
@@ -5320,7 +5911,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["open", "resolved"]
+            "enum": [
+              "open",
+              "resolved"
+            ]
           },
           "targetId": {
             "type": "string",
@@ -5328,7 +5922,17 @@
           },
           "targetType": {
             "type": "string",
-            "enum": ["diagram", "table", "column", "relationship", "index", "enum", "check", "note", "group"]
+            "enum": [
+              "diagram",
+              "table",
+              "column",
+              "relationship",
+              "index",
+              "enum",
+              "check",
+              "note",
+              "group"
+            ]
           },
           "unreadCount": {
             "type": "integer",
@@ -5375,7 +5979,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "CommentListResponseDto_Output": {
@@ -5397,7 +6005,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "CommentReplyCreateDto": {
@@ -5413,7 +6025,9 @@
             "nullable": true
           }
         },
-        "required": ["bodyJson"]
+        "required": [
+          "bodyJson"
+        ]
       },
       "CommentUpdateDto": {
         "type": "object",
@@ -5422,7 +6036,9 @@
             "$ref": "#/components/schemas/CommentLexicalDocumentDto"
           }
         },
-        "required": ["bodyJson"]
+        "required": [
+          "bodyJson"
+        ]
       },
       "CommentThreadReadStateDto_Output": {
         "type": "object",
@@ -5479,11 +6095,21 @@
                       "type": "string"
                     }
                   },
-                  "required": ["avatarUrl", "cursorColor", "email", "id", "name"],
+                  "required": [
+                    "avatarUrl",
+                    "cursorColor",
+                    "email",
+                    "id",
+                    "name"
+                  ],
                   "additionalProperties": false
                 }
               },
-              "required": ["lastReadAt", "lastReadCommentId", "user"],
+              "required": [
+                "lastReadAt",
+                "lastReadCommentId",
+                "user"
+              ],
               "additionalProperties": false
             }
           },
@@ -5557,7 +6183,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["open", "resolved"]
+            "enum": [
+              "open",
+              "resolved"
+            ]
           },
           "targetId": {
             "type": "string",
@@ -5565,7 +6194,17 @@
           },
           "targetType": {
             "type": "string",
-            "enum": ["diagram", "table", "column", "relationship", "index", "enum", "check", "note", "group"]
+            "enum": [
+              "diagram",
+              "table",
+              "column",
+              "relationship",
+              "index",
+              "enum",
+              "check",
+              "note",
+              "group"
+            ]
           },
           "unreadCount": {
             "type": "integer",
@@ -5614,7 +6253,10 @@
           },
           "targetType": {
             "type": "string",
-            "enum": ["diagram", "snapshot"]
+            "enum": [
+              "diagram",
+              "snapshot"
+            ]
           },
           "label": {
             "type": "string",
@@ -5622,7 +6264,11 @@
           },
           "status": {
             "type": "string",
-            "enum": ["active", "expired", "revoked"]
+            "enum": [
+              "active",
+              "expired",
+              "revoked"
+            ]
           },
           "expiresAt": {
             "type": "string",
@@ -5703,7 +6349,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "DiagramShareLinkCreateDto": {
@@ -5728,7 +6378,10 @@
           "targetType": {
             "default": "diagram",
             "type": "string",
-            "enum": ["diagram", "snapshot"]
+            "enum": [
+              "diagram",
+              "snapshot"
+            ]
           }
         }
       },
@@ -5746,7 +6399,11 @@
             "format": "uri"
           }
         },
-        "required": ["shareLink", "token", "url"],
+        "required": [
+          "shareLink",
+          "token",
+          "url"
+        ],
         "additionalProperties": false
       },
       "DiagramShareLinkRevokeResponseDto_Output": {
@@ -5756,7 +6413,9 @@
             "type": "boolean"
           }
         },
-        "required": ["successful"],
+        "required": [
+          "successful"
+        ],
         "additionalProperties": false
       },
       "DiagramCreateDto": {
@@ -5774,10 +6433,19 @@
           "dialect": {
             "default": "postgresql",
             "type": "string",
-            "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+            "enum": [
+              "postgresql",
+              "mysql",
+              "sqlite",
+              "mariadb",
+              "sqlserver"
+            ]
           }
         },
-        "required": ["projectId", "name"]
+        "required": [
+          "projectId",
+          "name"
+        ]
       },
       "DiagramResponseDto_Output": {
         "type": "object",
@@ -5797,11 +6465,22 @@
           },
           "dialect": {
             "type": "string",
-            "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+            "enum": [
+              "postgresql",
+              "mysql",
+              "sqlite",
+              "mariadb",
+              "sqlserver"
+            ]
           },
           "status": {
             "type": "string",
-            "enum": ["draft", "reviewed", "approved", "changes_requested"]
+            "enum": [
+              "draft",
+              "reviewed",
+              "approved",
+              "changes_requested"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -5814,7 +6493,15 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": ["id", "projectId", "name", "dialect", "status", "createdAt", "updatedAt"],
+        "required": [
+          "id",
+          "projectId",
+          "name",
+          "dialect",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
         "additionalProperties": false
       },
       "DiagramUpdateDto": {
@@ -5827,7 +6514,13 @@
           },
           "dialect": {
             "type": "string",
-            "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+            "enum": [
+              "postgresql",
+              "mysql",
+              "sqlite",
+              "mariadb",
+              "sqlserver"
+            ]
           }
         }
       },
@@ -5842,7 +6535,12 @@
           },
           "format": {
             "type": "string",
-            "enum": ["tabliodb_json", "sql", "markdown", "svg"]
+            "enum": [
+              "tabliodb_json",
+              "sql",
+              "markdown",
+              "svg"
+            ]
           },
           "mediaType": {
             "type": "string"
@@ -5871,16 +6569,28 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "type"],
+                  "required": [
+                    "id",
+                    "type"
+                  ],
                   "additionalProperties": false
                 }
               },
-              "required": ["code", "message"],
+              "required": [
+                "code",
+                "message"
+              ],
               "additionalProperties": false
             }
           }
         },
-        "required": ["content", "filename", "format", "mediaType", "warnings"],
+        "required": [
+          "content",
+          "filename",
+          "format",
+          "mediaType",
+          "warnings"
+        ],
         "additionalProperties": false
       },
       "DiagramImportDto": {
@@ -5892,19 +6602,33 @@
           },
           "dialect": {
             "type": "string",
-            "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+            "enum": [
+              "postgresql",
+              "mysql",
+              "sqlite",
+              "mariadb",
+              "sqlserver"
+            ]
           },
           "mode": {
             "default": "replace",
             "type": "string",
-            "enum": ["replace"]
+            "enum": [
+              "replace"
+            ]
           },
           "source": {
             "type": "string",
-            "enum": ["tabliodb_json", "sql"]
+            "enum": [
+              "tabliodb_json",
+              "sql"
+            ]
           }
         },
-        "required": ["content", "source"]
+        "required": [
+          "content",
+          "source"
+        ]
       },
       "DiagramImportResponseDto_Output": {
         "type": "object",
@@ -5924,7 +6648,13 @@
               },
               "dialect": {
                 "type": "string",
-                "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+                "enum": [
+                  "postgresql",
+                  "mysql",
+                  "sqlite",
+                  "mariadb",
+                  "sqlserver"
+                ]
               },
               "tables": {
                 "type": "object",
@@ -5950,7 +6680,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -5968,7 +6701,11 @@
                     },
                     "displayMode": {
                       "type": "string",
-                      "enum": ["all_columns", "pk_fk_only", "header_only"]
+                      "enum": [
+                        "all_columns",
+                        "pk_fk_only",
+                        "header_only"
+                      ]
                     },
                     "columnIds": {
                       "type": "array",
@@ -5990,7 +6727,14 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "position", "width", "columnIds", "indexIds"],
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "columnIds",
+                    "indexIds"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -6053,7 +6797,9 @@
                           "type": "string"
                         }
                       },
-                      "required": ["family"],
+                      "required": [
+                        "family"
+                      ],
                       "additionalProperties": false
                     },
                     "primaryKey": {
@@ -6088,7 +6834,16 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "type", "primaryKey", "nullable", "unique", "autoIncrement"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "type",
+                    "primaryKey",
+                    "nullable",
+                    "unique",
+                    "autoIncrement"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -6116,14 +6871,22 @@
                           },
                           "order": {
                             "type": "string",
-                            "enum": ["asc", "desc"]
+                            "enum": [
+                              "asc",
+                              "desc"
+                            ]
                           },
                           "nulls": {
                             "type": "string",
-                            "enum": ["first", "last"]
+                            "enum": [
+                              "first",
+                              "last"
+                            ]
                           }
                         },
-                        "required": ["columnId"],
+                        "required": [
+                          "columnId"
+                        ],
                         "additionalProperties": false
                       }
                     },
@@ -6133,7 +6896,13 @@
                     },
                     "method": {
                       "type": "string",
-                      "enum": ["btree", "hash", "gin", "gist", "brin"]
+                      "enum": [
+                        "btree",
+                        "hash",
+                        "gin",
+                        "gist",
+                        "brin"
+                      ]
                     },
                     "where": {
                       "type": "string"
@@ -6148,7 +6917,13 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "columns", "unique"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "columns",
+                    "unique"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -6182,15 +6957,31 @@
                     },
                     "cardinality": {
                       "type": "string",
-                      "enum": ["one_to_one", "one_to_many", "many_to_many"]
+                      "enum": [
+                        "one_to_one",
+                        "one_to_many",
+                        "many_to_many"
+                      ]
                     },
                     "onDelete": {
                       "type": "string",
-                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
                     },
                     "onUpdate": {
                       "type": "string",
-                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
                     },
                     "name": {
                       "type": "string"
@@ -6200,7 +6991,11 @@
                     },
                     "matchType": {
                       "type": "string",
-                      "enum": ["simple", "full", "partial"]
+                      "enum": [
+                        "simple",
+                        "full",
+                        "partial"
+                      ]
                     },
                     "comment": {
                       "type": "string"
@@ -6241,7 +7036,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "values"],
+                  "required": [
+                    "id",
+                    "name",
+                    "values"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -6270,7 +7069,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "expression"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "expression"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -6295,7 +7099,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -6308,7 +7115,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "text", "position"],
+                  "required": [
+                    "id",
+                    "text",
+                    "position"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -6334,7 +7145,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -6359,7 +7173,14 @@
                       }
                     }
                   },
-                  "required": ["id", "name", "position", "width", "height", "tableIds"],
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "height",
+                    "tableIds"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -6387,7 +7208,11 @@
                         "type": "number"
                       }
                     },
-                    "required": ["x", "y", "zoom"],
+                    "required": [
+                      "x",
+                      "y",
+                      "zoom"
+                    ],
                     "additionalProperties": false
                   },
                   "gridSize": {
@@ -6404,10 +7229,16 @@
                   },
                   "relationshipRouting": {
                     "type": "string",
-                    "enum": ["smart_orthogonal", "straight", "manual"]
+                    "enum": [
+                      "smart_orthogonal",
+                      "straight",
+                      "manual"
+                    ]
                   }
                 },
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "additionalProperties": false
               }
             },
@@ -6450,16 +7281,26 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "type"],
+                  "required": [
+                    "id",
+                    "type"
+                  ],
                   "additionalProperties": false
                 }
               },
-              "required": ["code", "message"],
+              "required": [
+                "code",
+                "message"
+              ],
               "additionalProperties": false
             }
           }
         },
-        "required": ["diagram", "model", "warnings"],
+        "required": [
+          "diagram",
+          "model",
+          "warnings"
+        ],
         "additionalProperties": false
       },
       "DiagramReviewEventDto_Output": {
@@ -6467,7 +7308,11 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["commented", "approved", "changes_requested"]
+            "enum": [
+              "commented",
+              "approved",
+              "changes_requested"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -6495,11 +7340,21 @@
           },
           "nextStatus": {
             "type": "string",
-            "enum": ["draft", "reviewed", "approved", "changes_requested"]
+            "enum": [
+              "draft",
+              "reviewed",
+              "approved",
+              "changes_requested"
+            ]
           },
           "previousStatus": {
             "type": "string",
-            "enum": ["draft", "reviewed", "approved", "changes_requested"]
+            "enum": [
+              "draft",
+              "reviewed",
+              "approved",
+              "changes_requested"
+            ]
           },
           "reviewer": {
             "type": "object",
@@ -6525,7 +7380,13 @@
                 "type": "string"
               }
             },
-            "required": ["avatarUrl", "cursorColor", "email", "id", "name"],
+            "required": [
+              "avatarUrl",
+              "cursorColor",
+              "email",
+              "id",
+              "name"
+            ],
             "additionalProperties": false
           },
           "snapshotId": {
@@ -6569,7 +7430,12 @@
           },
           "currentStatus": {
             "type": "string",
-            "enum": ["draft", "reviewed", "approved", "changes_requested"]
+            "enum": [
+              "draft",
+              "reviewed",
+              "approved",
+              "changes_requested"
+            ]
           },
           "diagramId": {
             "type": "string",
@@ -6627,7 +7493,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "DiagramReviewActionCreateDto": {
@@ -6635,7 +7505,11 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["commented", "approved", "changes_requested"]
+            "enum": [
+              "commented",
+              "approved",
+              "changes_requested"
+            ]
           },
           "message": {
             "type": "string",
@@ -6643,7 +7517,9 @@
             "nullable": true
           }
         },
-        "required": ["action"]
+        "required": [
+          "action"
+        ]
       },
       "InvitationCreateDto": {
         "type": "object",
@@ -6661,7 +7537,10 @@
           "organizationRole": {
             "default": "member",
             "type": "string",
-            "enum": ["admin", "member"]
+            "enum": [
+              "admin",
+              "member"
+            ]
           },
           "projectId": {
             "type": "string",
@@ -6670,7 +7549,11 @@
           },
           "projectRole": {
             "type": "string",
-            "enum": ["editor", "commenter", "viewer"]
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ]
           },
           "message": {
             "type": "string",
@@ -6683,7 +7566,9 @@
             "maximum": 30
           }
         },
-        "required": ["email"]
+        "required": [
+          "email"
+        ]
       },
       "InvitationDto_Output": {
         "type": "object",
@@ -6711,7 +7596,10 @@
           },
           "organizationRole": {
             "type": "string",
-            "enum": ["admin", "member"]
+            "enum": [
+              "admin",
+              "member"
+            ]
           },
           "projectId": {
             "type": "string",
@@ -6725,7 +7613,11 @@
           },
           "projectRole": {
             "type": "string",
-            "enum": ["editor", "commenter", "viewer"],
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ],
             "nullable": true
           },
           "message": {
@@ -6770,7 +7662,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["pending", "accepted", "revoked", "expired"]
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired"
+            ]
           }
         },
         "required": [
@@ -6809,7 +7706,11 @@
             "format": "uri"
           }
         },
-        "required": ["invitation", "token", "acceptUrl"],
+        "required": [
+          "invitation",
+          "token",
+          "acceptUrl"
+        ],
         "additionalProperties": false
       },
       "InvitationPublicDto_Output": {
@@ -6825,7 +7726,10 @@
           },
           "organizationRole": {
             "type": "string",
-            "enum": ["admin", "member"]
+            "enum": [
+              "admin",
+              "member"
+            ]
           },
           "projectName": {
             "type": "string",
@@ -6833,7 +7737,11 @@
           },
           "projectRole": {
             "type": "string",
-            "enum": ["editor", "commenter", "viewer"],
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ],
             "nullable": true
           },
           "message": {
@@ -6847,7 +7755,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["pending", "accepted", "revoked", "expired"]
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired"
+            ]
           }
         },
         "required": [
@@ -6881,7 +7794,11 @@
             "$ref": "#/components/schemas/SessionBindingDto"
           }
         },
-        "required": ["token", "name", "password"]
+        "required": [
+          "token",
+          "name",
+          "password"
+        ]
       },
       "InvitationAcceptResponseDto_Output": {
         "type": "object",
@@ -6896,7 +7813,11 @@
             "$ref": "#/components/schemas/InvitationPublicDto_Output"
           }
         },
-        "required": ["accessToken", "user", "invitation"],
+        "required": [
+          "accessToken",
+          "user",
+          "invitation"
+        ],
         "additionalProperties": false
       },
       "NotificationInboxItemDto_Output": {
@@ -6929,7 +7850,13 @@
                     "type": "string"
                   }
                 },
-                "required": ["avatarUrl", "cursorColor", "email", "id", "name"],
+                "required": [
+                  "avatarUrl",
+                  "cursorColor",
+                  "email",
+                  "id",
+                  "name"
+                ],
                 "additionalProperties": false
               },
               "body": {
@@ -6937,7 +7864,9 @@
               },
               "bodyFormat": {
                 "type": "string",
-                "enum": ["lexical"]
+                "enum": [
+                  "lexical"
+                ]
               },
               "bodyJson": {
                 "$ref": "#/components/schemas/CommentLexicalDocumentDto_Output"
@@ -7031,7 +7960,13 @@
             "properties": {
               "dialect": {
                 "type": "string",
-                "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+                "enum": [
+                  "postgresql",
+                  "mysql",
+                  "sqlite",
+                  "mariadb",
+                  "sqlserver"
+                ]
               },
               "id": {
                 "type": "string",
@@ -7042,7 +7977,11 @@
                 "type": "string"
               }
             },
-            "required": ["dialect", "id", "name"],
+            "required": [
+              "dialect",
+              "id",
+              "name"
+            ],
             "additionalProperties": false
           },
           "id": {
@@ -7078,7 +8017,13 @@
                     "type": "string"
                   }
                 },
-                "required": ["avatarUrl", "cursorColor", "email", "id", "name"],
+                "required": [
+                  "avatarUrl",
+                  "cursorColor",
+                  "email",
+                  "id",
+                  "name"
+                ],
                 "additionalProperties": false
               },
               "bodyText": {
@@ -7090,7 +8035,11 @@
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               }
             },
-            "required": ["author", "bodyText", "id"],
+            "required": [
+              "author",
+              "bodyText",
+              "id"
+            ],
             "additionalProperties": false,
             "nullable": true
           },
@@ -7120,7 +8069,14 @@
                 "type": "string"
               }
             },
-            "required": ["id", "name", "organizationId", "organizationName", "organizationSlug", "slug"],
+            "required": [
+              "id",
+              "name",
+              "organizationId",
+              "organizationName",
+              "organizationSlug",
+              "slug"
+            ],
             "additionalProperties": false
           },
           "thread": {
@@ -7133,7 +8089,10 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["open", "resolved"]
+                "enum": [
+                  "open",
+                  "resolved"
+                ]
               },
               "targetId": {
                 "type": "string",
@@ -7141,7 +8100,17 @@
               },
               "targetType": {
                 "type": "string",
-                "enum": ["diagram", "table", "column", "relationship", "index", "enum", "check", "note", "group"]
+                "enum": [
+                  "diagram",
+                  "table",
+                  "column",
+                  "relationship",
+                  "index",
+                  "enum",
+                  "check",
+                  "note",
+                  "group"
+                ]
               },
               "updatedAt": {
                 "type": "string",
@@ -7149,15 +8118,34 @@
                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
               }
             },
-            "required": ["id", "status", "targetId", "targetType", "updatedAt"],
+            "required": [
+              "id",
+              "status",
+              "targetId",
+              "targetType",
+              "updatedAt"
+            ],
             "additionalProperties": false
           },
           "type": {
             "type": "string",
-            "enum": ["mention", "reply"]
+            "enum": [
+              "mention",
+              "reply"
+            ]
           }
         },
-        "required": ["comment", "createdAt", "diagram", "id", "isUnread", "parentComment", "project", "thread", "type"],
+        "required": [
+          "comment",
+          "createdAt",
+          "diagram",
+          "id",
+          "isUnread",
+          "parentComment",
+          "project",
+          "thread",
+          "type"
+        ],
         "additionalProperties": false
       },
       "NotificationInboxListResponseDto_Output": {
@@ -7179,7 +8167,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "NotificationSummaryDto_Output": {
@@ -7202,7 +8194,11 @@
             "nullable": true
           }
         },
-        "required": ["totalCount", "unreadCount", "updatedAt"],
+        "required": [
+          "totalCount",
+          "unreadCount",
+          "updatedAt"
+        ],
         "additionalProperties": false
       },
       "OrganizationCreateDto": {
@@ -7214,7 +8210,9 @@
             "maxLength": 80
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "OrganizationDto_Output": {
         "type": "object",
@@ -7232,14 +8230,23 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "admin", "member", "guest"]
+            "enum": [
+              "owner",
+              "admin",
+              "member",
+              "guest"
+            ]
           },
           "status": {
             "type": "string"
           },
           "defaultProjectRole": {
             "type": "string",
-            "enum": ["editor", "commenter", "viewer"],
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ],
             "nullable": true
           },
           "allowMemberProjectCreate": {
@@ -7288,7 +8295,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "OrganizationSettingsDto_Output": {
@@ -7307,7 +8318,11 @@
           },
           "defaultProjectRole": {
             "type": "string",
-            "enum": ["editor", "commenter", "viewer"],
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ],
             "nullable": true
           },
           "allowMemberProjectCreate": {
@@ -7324,7 +8339,15 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": ["id", "name", "slug", "defaultProjectRole", "allowMemberProjectCreate", "createdAt", "updatedAt"],
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "defaultProjectRole",
+          "allowMemberProjectCreate",
+          "createdAt",
+          "updatedAt"
+        ],
         "additionalProperties": false
       },
       "OrganizationSettingsUpdateDto": {
@@ -7337,7 +8360,11 @@
           },
           "defaultProjectRole": {
             "type": "string",
-            "enum": ["editor", "commenter", "viewer"],
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ],
             "nullable": true
           },
           "allowMemberProjectCreate": {
@@ -7376,11 +8403,20 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "admin", "member", "guest"]
+            "enum": [
+              "owner",
+              "admin",
+              "member",
+              "guest"
+            ]
           },
           "status": {
             "type": "string",
-            "enum": ["pending", "active", "suspended"]
+            "enum": [
+              "pending",
+              "active",
+              "suspended"
+            ]
           },
           "updatedAt": {
             "type": "string",
@@ -7426,7 +8462,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "OrganizationMemberUpdateDto": {
@@ -7434,10 +8474,17 @@
         "properties": {
           "role": {
             "type": "string",
-            "enum": ["owner", "admin", "member", "guest"]
+            "enum": [
+              "owner",
+              "admin",
+              "member",
+              "guest"
+            ]
           }
         },
-        "required": ["role"]
+        "required": [
+          "role"
+        ]
       },
       "OrganizationMemberRemoveResponseDto_Output": {
         "type": "object",
@@ -7446,7 +8493,9 @@
             "type": "boolean"
           }
         },
-        "required": ["successful"],
+        "required": [
+          "successful"
+        ],
         "additionalProperties": false
       },
       "AuditLogDto_Output": {
@@ -7560,7 +8609,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "ProjectResponseDto_Output": {
@@ -7584,7 +8637,12 @@
           },
           "projectRole": {
             "type": "string",
-            "enum": ["owner", "editor", "commenter", "viewer"]
+            "enum": [
+              "owner",
+              "editor",
+              "commenter",
+              "viewer"
+            ]
           },
           "name": {
             "type": "string"
@@ -7640,7 +8698,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "ProjectCreateDto": {
@@ -7659,7 +8721,10 @@
             "type": "string"
           }
         },
-        "required": ["organizationId", "name"]
+        "required": [
+          "organizationId",
+          "name"
+        ]
       },
       "ProjectUpdateDto": {
         "type": "object",
@@ -7681,7 +8746,9 @@
             "type": "boolean"
           }
         },
-        "required": ["successful"],
+        "required": [
+          "successful"
+        ],
         "additionalProperties": false
       },
       "ProjectMemberDto_Output": {
@@ -7709,7 +8776,12 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "editor", "commenter", "viewer"]
+            "enum": [
+              "owner",
+              "editor",
+              "commenter",
+              "viewer"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -7722,7 +8794,16 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": ["userId", "email", "name", "avatarUrl", "cursorColor", "role", "createdAt", "updatedAt"],
+        "required": [
+          "userId",
+          "email",
+          "name",
+          "avatarUrl",
+          "cursorColor",
+          "role",
+          "createdAt",
+          "updatedAt"
+        ],
         "additionalProperties": false
       },
       "ProjectMemberListResponseDto_Output": {
@@ -7744,7 +8825,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "ProjectMemberCreateDto": {
@@ -7758,20 +8843,34 @@
           "role": {
             "default": "viewer",
             "type": "string",
-            "enum": ["owner", "editor", "commenter", "viewer"]
+            "enum": [
+              "owner",
+              "editor",
+              "commenter",
+              "viewer"
+            ]
           }
         },
-        "required": ["email"]
+        "required": [
+          "email"
+        ]
       },
       "ProjectMemberUpdateDto": {
         "type": "object",
         "properties": {
           "role": {
             "type": "string",
-            "enum": ["owner", "editor", "commenter", "viewer"]
+            "enum": [
+              "owner",
+              "editor",
+              "commenter",
+              "viewer"
+            ]
           }
         },
-        "required": ["role"]
+        "required": [
+          "role"
+        ]
       },
       "ProjectMemberRemoveResponseDto_Output": {
         "type": "object",
@@ -7780,7 +8879,9 @@
             "type": "boolean"
           }
         },
-        "required": ["successful"],
+        "required": [
+          "successful"
+        ],
         "additionalProperties": false
       },
       "DiagramListResponseDto_Output": {
@@ -7802,7 +8903,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "PublicDiagramShareSnapshotDto_Output": {
@@ -7829,7 +8934,12 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": ["id", "version", "message", "createdAt"],
+        "required": [
+          "id",
+          "version",
+          "message",
+          "createdAt"
+        ],
         "additionalProperties": false
       },
       "PublicDiagramShareResponseDto_Output": {
@@ -7845,7 +8955,13 @@
               },
               "dialect": {
                 "type": "string",
-                "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+                "enum": [
+                  "postgresql",
+                  "mysql",
+                  "sqlite",
+                  "mariadb",
+                  "sqlserver"
+                ]
               },
               "name": {
                 "type": "string"
@@ -7857,7 +8973,13 @@
                 "type": "string"
               }
             },
-            "required": ["id", "dialect", "name", "organizationName", "projectName"],
+            "required": [
+              "id",
+              "dialect",
+              "name",
+              "organizationName",
+              "projectName"
+            ],
             "additionalProperties": false
           },
           "model": {
@@ -7872,7 +8994,13 @@
               },
               "dialect": {
                 "type": "string",
-                "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+                "enum": [
+                  "postgresql",
+                  "mysql",
+                  "sqlite",
+                  "mariadb",
+                  "sqlserver"
+                ]
               },
               "tables": {
                 "type": "object",
@@ -7898,7 +9026,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -7916,7 +9047,11 @@
                     },
                     "displayMode": {
                       "type": "string",
-                      "enum": ["all_columns", "pk_fk_only", "header_only"]
+                      "enum": [
+                        "all_columns",
+                        "pk_fk_only",
+                        "header_only"
+                      ]
                     },
                     "columnIds": {
                       "type": "array",
@@ -7938,7 +9073,14 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "position", "width", "columnIds", "indexIds"],
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "columnIds",
+                    "indexIds"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -8001,7 +9143,9 @@
                           "type": "string"
                         }
                       },
-                      "required": ["family"],
+                      "required": [
+                        "family"
+                      ],
                       "additionalProperties": false
                     },
                     "primaryKey": {
@@ -8036,7 +9180,16 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "type", "primaryKey", "nullable", "unique", "autoIncrement"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "type",
+                    "primaryKey",
+                    "nullable",
+                    "unique",
+                    "autoIncrement"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -8064,14 +9217,22 @@
                           },
                           "order": {
                             "type": "string",
-                            "enum": ["asc", "desc"]
+                            "enum": [
+                              "asc",
+                              "desc"
+                            ]
                           },
                           "nulls": {
                             "type": "string",
-                            "enum": ["first", "last"]
+                            "enum": [
+                              "first",
+                              "last"
+                            ]
                           }
                         },
-                        "required": ["columnId"],
+                        "required": [
+                          "columnId"
+                        ],
                         "additionalProperties": false
                       }
                     },
@@ -8081,7 +9242,13 @@
                     },
                     "method": {
                       "type": "string",
-                      "enum": ["btree", "hash", "gin", "gist", "brin"]
+                      "enum": [
+                        "btree",
+                        "hash",
+                        "gin",
+                        "gist",
+                        "brin"
+                      ]
                     },
                     "where": {
                       "type": "string"
@@ -8096,7 +9263,13 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "columns", "unique"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "columns",
+                    "unique"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -8130,15 +9303,31 @@
                     },
                     "cardinality": {
                       "type": "string",
-                      "enum": ["one_to_one", "one_to_many", "many_to_many"]
+                      "enum": [
+                        "one_to_one",
+                        "one_to_many",
+                        "many_to_many"
+                      ]
                     },
                     "onDelete": {
                       "type": "string",
-                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
                     },
                     "onUpdate": {
                       "type": "string",
-                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
                     },
                     "name": {
                       "type": "string"
@@ -8148,7 +9337,11 @@
                     },
                     "matchType": {
                       "type": "string",
-                      "enum": ["simple", "full", "partial"]
+                      "enum": [
+                        "simple",
+                        "full",
+                        "partial"
+                      ]
                     },
                     "comment": {
                       "type": "string"
@@ -8189,7 +9382,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "values"],
+                  "required": [
+                    "id",
+                    "name",
+                    "values"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -8218,7 +9415,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "expression"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "expression"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -8243,7 +9445,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -8256,7 +9461,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "text", "position"],
+                  "required": [
+                    "id",
+                    "text",
+                    "position"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -8282,7 +9491,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -8307,7 +9519,14 @@
                       }
                     }
                   },
-                  "required": ["id", "name", "position", "width", "height", "tableIds"],
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "height",
+                    "tableIds"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -8335,7 +9554,11 @@
                         "type": "number"
                       }
                     },
-                    "required": ["x", "y", "zoom"],
+                    "required": [
+                      "x",
+                      "y",
+                      "zoom"
+                    ],
                     "additionalProperties": false
                   },
                   "gridSize": {
@@ -8352,10 +9575,16 @@
                   },
                   "relationshipRouting": {
                     "type": "string",
-                    "enum": ["smart_orthogonal", "straight", "manual"]
+                    "enum": [
+                      "smart_orthogonal",
+                      "straight",
+                      "manual"
+                    ]
                   }
                 },
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "additionalProperties": false
               }
             },
@@ -8385,10 +9614,16 @@
               },
               "targetType": {
                 "type": "string",
-                "enum": ["diagram", "snapshot"]
+                "enum": [
+                  "diagram",
+                  "snapshot"
+                ]
               }
             },
-            "required": ["expiresAt", "targetType"],
+            "required": [
+              "expiresAt",
+              "targetType"
+            ],
             "additionalProperties": false
           },
           "snapshot": {
@@ -8400,7 +9635,12 @@
             "nullable": true
           }
         },
-        "required": ["diagram", "model", "share", "snapshot"],
+        "required": [
+          "diagram",
+          "model",
+          "share",
+          "snapshot"
+        ],
         "additionalProperties": false
       },
       "ReviewSignalResponseDto_Output": {
@@ -8444,7 +9684,12 @@
           },
           "severity": {
             "type": "string",
-            "enum": ["info", "warning", "error", "success"]
+            "enum": [
+              "info",
+              "warning",
+              "error",
+              "success"
+            ]
           },
           "targetId": {
             "type": "string",
@@ -8492,7 +9737,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "ReviewSignalSettingsDto_Output": {
@@ -8516,7 +9765,9 @@
             }
           }
         },
-        "required": ["disabledRuleKeys"],
+        "required": [
+          "disabledRuleKeys"
+        ],
         "additionalProperties": false
       },
       "ReviewSignalSettingsDto": {
@@ -8554,7 +9805,11 @@
             "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
           }
         },
-        "required": ["diagram", "effective", "project"],
+        "required": [
+          "diagram",
+          "effective",
+          "project"
+        ],
         "additionalProperties": false
       },
       "SetupStatusResponseDto_Output": {
@@ -8577,10 +9832,22 @@
           },
           "signupPolicy": {
             "type": "string",
-            "enum": ["signup_disabled", "invite_only", "allowed_domains", "sso_only", "public_signup"]
+            "enum": [
+              "signup_disabled",
+              "invite_only",
+              "allowed_domains",
+              "sso_only",
+              "public_signup"
+            ]
           }
         },
-        "required": ["completedAt", "hasOrganization", "hasOwner", "isSetupComplete", "signupPolicy"],
+        "required": [
+          "completedAt",
+          "hasOrganization",
+          "hasOwner",
+          "isSetupComplete",
+          "signupPolicy"
+        ],
         "additionalProperties": false
       },
       "InstanceAuthSettingsDto_Output": {
@@ -8594,10 +9861,19 @@
           },
           "signupPolicy": {
             "type": "string",
-            "enum": ["signup_disabled", "invite_only", "allowed_domains", "sso_only", "public_signup"]
+            "enum": [
+              "signup_disabled",
+              "invite_only",
+              "allowed_domains",
+              "sso_only",
+              "public_signup"
+            ]
           }
         },
-        "required": ["allowedDomains", "signupPolicy"],
+        "required": [
+          "allowedDomains",
+          "signupPolicy"
+        ],
         "additionalProperties": false
       },
       "InstanceAuthSettingsUpdateDto": {
@@ -8612,10 +9888,19 @@
           },
           "signupPolicy": {
             "type": "string",
-            "enum": ["signup_disabled", "invite_only", "allowed_domains", "sso_only", "public_signup"]
+            "enum": [
+              "signup_disabled",
+              "invite_only",
+              "allowed_domains",
+              "sso_only",
+              "public_signup"
+            ]
           }
         },
-        "required": ["allowedDomains", "signupPolicy"]
+        "required": [
+          "allowedDomains",
+          "signupPolicy"
+        ]
       },
       "OidcProviderSettingsDto_Output": {
         "type": "object",
@@ -8631,7 +9916,10 @@
           },
           "autoJoinOrganizationRole": {
             "type": "string",
-            "enum": ["member", "guest"],
+            "enum": [
+              "member",
+              "guest"
+            ],
             "nullable": true
           },
           "buttonLabel": {
@@ -8697,7 +9985,10 @@
           },
           "autoJoinOrganizationRole": {
             "type": "string",
-            "enum": ["member", "guest"],
+            "enum": [
+              "member",
+              "guest"
+            ],
             "nullable": true
           },
           "buttonLabel": {
@@ -8750,7 +10041,11 @@
       },
       "SmtpSecurity_Output": {
         "type": "string",
-        "enum": ["none", "starttls", "tls"]
+        "enum": [
+          "none",
+          "starttls",
+          "tls"
+        ]
       },
       "SmtpSettingsDto_Output": {
         "type": "object",
@@ -8822,7 +10117,11 @@
       },
       "SmtpSecurity": {
         "type": "string",
-        "enum": ["none", "starttls", "tls"]
+        "enum": [
+          "none",
+          "starttls",
+          "tls"
+        ]
       },
       "SmtpSettingsUpdateDto": {
         "type": "object",
@@ -8878,7 +10177,16 @@
             "nullable": true
           }
         },
-        "required": ["enabled", "fromEmail", "fromName", "host", "port", "replyToEmail", "security", "username"]
+        "required": [
+          "enabled",
+          "fromEmail",
+          "fromName",
+          "host",
+          "port",
+          "replyToEmail",
+          "security",
+          "username"
+        ]
       },
       "SetupCreateDto": {
         "type": "object",
@@ -8908,7 +10216,12 @@
             "minLength": 1
           }
         },
-        "required": ["ownerEmail", "ownerName", "ownerPassword", "workspaceName"]
+        "required": [
+          "ownerEmail",
+          "ownerName",
+          "ownerPassword",
+          "workspaceName"
+        ]
       },
       "SetupCreateResponseDto_Output": {
         "type": "object",
@@ -8943,11 +10256,21 @@
                 "type": "string"
               }
             },
-            "required": ["avatarUrl", "cursorColor", "email", "id", "name"],
+            "required": [
+              "avatarUrl",
+              "cursorColor",
+              "email",
+              "id",
+              "name"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["accessToken", "setup", "user"],
+        "required": [
+          "accessToken",
+          "setup",
+          "user"
+        ],
         "additionalProperties": false
       },
       "SnapshotCreateDto": {
@@ -8973,7 +10296,13 @@
               },
               "dialect": {
                 "type": "string",
-                "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+                "enum": [
+                  "postgresql",
+                  "mysql",
+                  "sqlite",
+                  "mariadb",
+                  "sqlserver"
+                ]
               },
               "tables": {
                 "type": "object",
@@ -8999,7 +10328,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"]
+                      "required": [
+                        "x",
+                        "y"
+                      ]
                     },
                     "width": {
                       "default": 288,
@@ -9016,7 +10348,11 @@
                     },
                     "displayMode": {
                       "type": "string",
-                      "enum": ["all_columns", "pk_fk_only", "header_only"]
+                      "enum": [
+                        "all_columns",
+                        "pk_fk_only",
+                        "header_only"
+                      ]
                     },
                     "columnIds": {
                       "type": "array",
@@ -9038,7 +10374,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "position", "columnIds"]
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "columnIds"
+                  ]
                 }
               },
               "columns": {
@@ -9100,7 +10441,9 @@
                           "type": "string"
                         }
                       },
-                      "required": ["family"]
+                      "required": [
+                        "family"
+                      ]
                     },
                     "primaryKey": {
                       "default": false,
@@ -9134,7 +10477,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "type"]
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "type"
+                  ]
                 }
               },
               "indexes": {
@@ -9161,14 +10509,22 @@
                           },
                           "order": {
                             "type": "string",
-                            "enum": ["asc", "desc"]
+                            "enum": [
+                              "asc",
+                              "desc"
+                            ]
                           },
                           "nulls": {
                             "type": "string",
-                            "enum": ["first", "last"]
+                            "enum": [
+                              "first",
+                              "last"
+                            ]
                           }
                         },
-                        "required": ["columnId"]
+                        "required": [
+                          "columnId"
+                        ]
                       }
                     },
                     "unique": {
@@ -9177,7 +10533,13 @@
                     },
                     "method": {
                       "type": "string",
-                      "enum": ["btree", "hash", "gin", "gist", "brin"]
+                      "enum": [
+                        "btree",
+                        "hash",
+                        "gin",
+                        "gist",
+                        "brin"
+                      ]
                     },
                     "where": {
                       "type": "string"
@@ -9192,7 +10554,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "columns"]
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "columns"
+                  ]
                 }
               },
               "relationships": {
@@ -9225,15 +10592,31 @@
                     },
                     "cardinality": {
                       "type": "string",
-                      "enum": ["one_to_one", "one_to_many", "many_to_many"]
+                      "enum": [
+                        "one_to_one",
+                        "one_to_many",
+                        "many_to_many"
+                      ]
                     },
                     "onDelete": {
                       "type": "string",
-                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
                     },
                     "onUpdate": {
                       "type": "string",
-                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
                     },
                     "name": {
                       "type": "string"
@@ -9243,7 +10626,11 @@
                     },
                     "matchType": {
                       "type": "string",
-                      "enum": ["simple", "full", "partial"]
+                      "enum": [
+                        "simple",
+                        "full",
+                        "partial"
+                      ]
                     },
                     "comment": {
                       "type": "string"
@@ -9283,7 +10670,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "values"]
+                  "required": [
+                    "id",
+                    "name",
+                    "values"
+                  ]
                 }
               },
               "checks": {
@@ -9311,7 +10702,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "expression"]
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "expression"
+                  ]
                 }
               },
               "notes": {
@@ -9335,7 +10731,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"]
+                      "required": [
+                        "x",
+                        "y"
+                      ]
                     },
                     "width": {
                       "type": "integer",
@@ -9347,7 +10746,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "text", "position"]
+                  "required": [
+                    "id",
+                    "text",
+                    "position"
+                  ]
                 }
               },
               "groups": {
@@ -9372,7 +10775,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"]
+                      "required": [
+                        "x",
+                        "y"
+                      ]
                     },
                     "width": {
                       "type": "integer",
@@ -9396,7 +10802,14 @@
                       }
                     }
                   },
-                  "required": ["id", "name", "position", "width", "height", "tableIds"]
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "height",
+                    "tableIds"
+                  ]
                 }
               },
               "metadata": {
@@ -9423,7 +10836,11 @@
                         "type": "number"
                       }
                     },
-                    "required": ["x", "y", "zoom"]
+                    "required": [
+                      "x",
+                      "y",
+                      "zoom"
+                    ]
                   },
                   "gridSize": {
                     "type": "integer",
@@ -9439,16 +10856,34 @@
                   },
                   "relationshipRouting": {
                     "type": "string",
-                    "enum": ["smart_orthogonal", "straight", "manual"]
+                    "enum": [
+                      "smart_orthogonal",
+                      "straight",
+                      "manual"
+                    ]
                   }
                 },
-                "required": ["name"]
+                "required": [
+                  "name"
+                ]
               }
             },
-            "required": ["dialect", "tables", "columns", "indexes", "relationships", "enums", "notes", "metadata"]
+            "required": [
+              "dialect",
+              "tables",
+              "columns",
+              "indexes",
+              "relationships",
+              "enums",
+              "notes",
+              "metadata"
+            ]
           }
         },
-        "required": ["diagramId", "snapshot"]
+        "required": [
+          "diagramId",
+          "snapshot"
+        ]
       },
       "SnapshotResponseDto_Output": {
         "type": "object",
@@ -9482,7 +10917,13 @@
               },
               "dialect": {
                 "type": "string",
-                "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+                "enum": [
+                  "postgresql",
+                  "mysql",
+                  "sqlite",
+                  "mariadb",
+                  "sqlserver"
+                ]
               },
               "tables": {
                 "type": "object",
@@ -9508,7 +10949,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -9526,7 +10970,11 @@
                     },
                     "displayMode": {
                       "type": "string",
-                      "enum": ["all_columns", "pk_fk_only", "header_only"]
+                      "enum": [
+                        "all_columns",
+                        "pk_fk_only",
+                        "header_only"
+                      ]
                     },
                     "columnIds": {
                       "type": "array",
@@ -9548,7 +10996,14 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "position", "width", "columnIds", "indexIds"],
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "columnIds",
+                    "indexIds"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -9611,7 +11066,9 @@
                           "type": "string"
                         }
                       },
-                      "required": ["family"],
+                      "required": [
+                        "family"
+                      ],
                       "additionalProperties": false
                     },
                     "primaryKey": {
@@ -9646,7 +11103,16 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "type", "primaryKey", "nullable", "unique", "autoIncrement"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "type",
+                    "primaryKey",
+                    "nullable",
+                    "unique",
+                    "autoIncrement"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -9674,14 +11140,22 @@
                           },
                           "order": {
                             "type": "string",
-                            "enum": ["asc", "desc"]
+                            "enum": [
+                              "asc",
+                              "desc"
+                            ]
                           },
                           "nulls": {
                             "type": "string",
-                            "enum": ["first", "last"]
+                            "enum": [
+                              "first",
+                              "last"
+                            ]
                           }
                         },
-                        "required": ["columnId"],
+                        "required": [
+                          "columnId"
+                        ],
                         "additionalProperties": false
                       }
                     },
@@ -9691,7 +11165,13 @@
                     },
                     "method": {
                       "type": "string",
-                      "enum": ["btree", "hash", "gin", "gist", "brin"]
+                      "enum": [
+                        "btree",
+                        "hash",
+                        "gin",
+                        "gist",
+                        "brin"
+                      ]
                     },
                     "where": {
                       "type": "string"
@@ -9706,7 +11186,13 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "columns", "unique"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "columns",
+                    "unique"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -9740,15 +11226,31 @@
                     },
                     "cardinality": {
                       "type": "string",
-                      "enum": ["one_to_one", "one_to_many", "many_to_many"]
+                      "enum": [
+                        "one_to_one",
+                        "one_to_many",
+                        "many_to_many"
+                      ]
                     },
                     "onDelete": {
                       "type": "string",
-                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
                     },
                     "onUpdate": {
                       "type": "string",
-                      "enum": ["cascade", "restrict", "set_null", "set_default", "no_action"]
+                      "enum": [
+                        "cascade",
+                        "restrict",
+                        "set_null",
+                        "set_default",
+                        "no_action"
+                      ]
                     },
                     "name": {
                       "type": "string"
@@ -9758,7 +11260,11 @@
                     },
                     "matchType": {
                       "type": "string",
-                      "enum": ["simple", "full", "partial"]
+                      "enum": [
+                        "simple",
+                        "full",
+                        "partial"
+                      ]
                     },
                     "comment": {
                       "type": "string"
@@ -9799,7 +11305,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "values"],
+                  "required": [
+                    "id",
+                    "name",
+                    "values"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -9828,7 +11338,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "tableId", "name", "expression"],
+                  "required": [
+                    "id",
+                    "tableId",
+                    "name",
+                    "expression"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -9853,7 +11368,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -9866,7 +11384,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["id", "text", "position"],
+                  "required": [
+                    "id",
+                    "text",
+                    "position"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -9892,7 +11414,10 @@
                           "type": "number"
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     },
                     "width": {
@@ -9917,7 +11442,14 @@
                       }
                     }
                   },
-                  "required": ["id", "name", "position", "width", "height", "tableIds"],
+                  "required": [
+                    "id",
+                    "name",
+                    "position",
+                    "width",
+                    "height",
+                    "tableIds"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -9945,7 +11477,11 @@
                         "type": "number"
                       }
                     },
-                    "required": ["x", "y", "zoom"],
+                    "required": [
+                      "x",
+                      "y",
+                      "zoom"
+                    ],
                     "additionalProperties": false
                   },
                   "gridSize": {
@@ -9962,10 +11498,16 @@
                   },
                   "relationshipRouting": {
                     "type": "string",
-                    "enum": ["smart_orthogonal", "straight", "manual"]
+                    "enum": [
+                      "smart_orthogonal",
+                      "straight",
+                      "manual"
+                    ]
                   }
                 },
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "additionalProperties": false
               }
             },
@@ -9996,7 +11538,15 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": ["id", "diagramId", "version", "message", "snapshot", "restoredFromSnapshotId", "createdAt"],
+        "required": [
+          "id",
+          "diagramId",
+          "version",
+          "message",
+          "snapshot",
+          "restoredFromSnapshotId",
+          "createdAt"
+        ],
         "additionalProperties": false
       },
       "SnapshotListResponseDto_Output": {
@@ -10018,7 +11568,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "SnapshotReferenceDto_Output": {
@@ -10053,7 +11607,14 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": ["id", "diagramId", "version", "message", "restoredFromSnapshotId", "createdAt"],
+        "required": [
+          "id",
+          "diagramId",
+          "version",
+          "message",
+          "restoredFromSnapshotId",
+          "createdAt"
+        ],
         "additionalProperties": false
       },
       "SnapshotMigrationSqlDto_Output": {
@@ -10061,7 +11622,13 @@
         "properties": {
           "dialect": {
             "type": "string",
-            "enum": ["postgresql", "mysql", "sqlite", "mariadb", "sqlserver"]
+            "enum": [
+              "postgresql",
+              "mysql",
+              "sqlite",
+              "mariadb",
+              "sqlserver"
+            ]
           },
           "sql": {
             "type": "string"
@@ -10073,7 +11640,11 @@
             }
           }
         },
-        "required": ["dialect", "sql", "warnings"],
+        "required": [
+          "dialect",
+          "sql",
+          "warnings"
+        ],
         "additionalProperties": false
       },
       "SnapshotMigrationSqlWarningDto_Output": {
@@ -10096,14 +11667,27 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["check", "column", "enum", "index", "relationship", "table"]
+                "enum": [
+                  "check",
+                  "column",
+                  "enum",
+                  "index",
+                  "relationship",
+                  "table"
+                ]
               }
             },
-            "required": ["id", "type"],
+            "required": [
+              "id",
+              "type"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "additionalProperties": false
       },
       "SnapshotTableChangeSummaryDto_Output": {
@@ -10131,7 +11715,12 @@
             }
           }
         },
-        "required": ["added", "removed", "changed", "renamed"],
+        "required": [
+          "added",
+          "removed",
+          "changed",
+          "renamed"
+        ],
         "additionalProperties": false
       },
       "SnapshotTableRenameDto_Output": {
@@ -10147,7 +11736,11 @@
             "type": "string"
           }
         },
-        "required": ["id", "fromName", "toName"],
+        "required": [
+          "id",
+          "fromName",
+          "toName"
+        ],
         "additionalProperties": false
       },
       "SnapshotEntityChangeSummaryDto_Output": {
@@ -10169,7 +11762,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["added", "removed", "changed"],
+        "required": [
+          "added",
+          "removed",
+          "changed"
+        ],
         "additionalProperties": false
       },
       "SnapshotDiffResponseDto_Output": {
@@ -10312,7 +11909,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "TeamCreateDto": {
@@ -10331,7 +11932,10 @@
             "type": "string"
           }
         },
-        "required": ["organizationId", "name"]
+        "required": [
+          "organizationId",
+          "name"
+        ]
       },
       "TeamUpdateDto": {
         "type": "object",
@@ -10353,7 +11957,9 @@
             "type": "boolean"
           }
         },
-        "required": ["successful"],
+        "required": [
+          "successful"
+        ],
         "additionalProperties": false
       },
       "TeamMemberDto_Output": {
@@ -10385,7 +11991,14 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": ["userId", "email", "name", "avatarUrl", "cursorColor", "createdAt"],
+        "required": [
+          "userId",
+          "email",
+          "name",
+          "avatarUrl",
+          "cursorColor",
+          "createdAt"
+        ],
         "additionalProperties": false
       },
       "TeamMemberListResponseDto_Output": {
@@ -10407,7 +12020,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "TeamMemberCreateDto": {
@@ -10419,7 +12036,9 @@
             "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           }
         },
-        "required": ["email"]
+        "required": [
+          "email"
+        ]
       },
       "TeamMemberRemoveResponseDto_Output": {
         "type": "object",
@@ -10428,7 +12047,9 @@
             "type": "boolean"
           }
         },
-        "required": ["successful"],
+        "required": [
+          "successful"
+        ],
         "additionalProperties": false
       },
       "TeamProjectAccessDto_Output": {
@@ -10447,7 +12068,11 @@
           },
           "role": {
             "type": "string",
-            "enum": ["editor", "commenter", "viewer"]
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -10460,7 +12085,14 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
           }
         },
-        "required": ["projectId", "projectName", "projectSlug", "role", "createdAt", "updatedAt"],
+        "required": [
+          "projectId",
+          "projectName",
+          "projectSlug",
+          "role",
+          "createdAt",
+          "updatedAt"
+        ],
         "additionalProperties": false
       },
       "TeamProjectAccessListResponseDto_Output": {
@@ -10482,7 +12114,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "TeamProjectAccessUpsertDto": {
@@ -10496,10 +12132,16 @@
           "role": {
             "default": "viewer",
             "type": "string",
-            "enum": ["editor", "commenter", "viewer"]
+            "enum": [
+              "editor",
+              "commenter",
+              "viewer"
+            ]
           }
         },
-        "required": ["projectId"]
+        "required": [
+          "projectId"
+        ]
       },
       "TeamProjectAccessRemoveResponseDto_Output": {
         "type": "object",
@@ -10508,7 +12150,9 @@
             "type": "boolean"
           }
         },
-        "required": ["successful"],
+        "required": [
+          "successful"
+        ],
         "additionalProperties": false
       },
       "UserResponseDto_Output": {
@@ -10542,7 +12186,10 @@
           },
           "instanceRole": {
             "type": "string",
-            "enum": ["owner", "admin"],
+            "enum": [
+              "owner",
+              "admin"
+            ],
             "nullable": true
           },
           "organizations": {
@@ -10568,7 +12215,13 @@
                   "type": "string"
                 }
               },
-              "required": ["id", "name", "slug", "role", "status"],
+              "required": [
+                "id",
+                "name",
+                "slug",
+                "role",
+                "status"
+              ],
               "additionalProperties": false
             }
           },
@@ -10617,7 +12270,11 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "nextCursor", "totalCount"],
+        "required": [
+          "items",
+          "nextCursor",
+          "totalCount"
+        ],
         "additionalProperties": false
       },
       "UserCreateDto": {
@@ -10643,14 +12300,23 @@
           },
           "organizationRole": {
             "type": "string",
-            "enum": ["admin", "member"]
+            "enum": [
+              "admin",
+              "member"
+            ]
           },
           "instanceRole": {
             "type": "string",
-            "enum": ["admin"]
+            "enum": [
+              "admin"
+            ]
           }
         },
-        "required": ["email", "name", "password"]
+        "required": [
+          "email",
+          "name",
+          "password"
+        ]
       },
       "UserStatusUpdateDto": {
         "type": "object",
@@ -10659,7 +12325,9 @@
             "type": "boolean"
           }
         },
-        "required": ["isDisabled"]
+        "required": [
+          "isDisabled"
+        ]
       },
       "UserPasswordResetDto": {
         "type": "object",
@@ -10669,7 +12337,9 @@
             "minLength": 8
           }
         },
-        "required": ["password"]
+        "required": [
+          "password"
+        ]
       },
       "UserPasswordResetResponseDto_Output": {
         "type": "object",
@@ -10683,7 +12353,10 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["successful", "revokedSessions"],
+        "required": [
+          "successful",
+          "revokedSessions"
+        ],
         "additionalProperties": false
       },
       "UserSessionRevokeResponseDto_Output": {
@@ -10698,7 +12371,10 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["successful", "revokedSessions"],
+        "required": [
+          "successful",
+          "revokedSessions"
+        ],
         "additionalProperties": false
       }
     }

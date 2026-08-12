@@ -5,6 +5,8 @@ import type { AuthContext } from '../database.js';
 
 export type AuthDto = AuthContext;
 
+const DateTimeSchema = z.iso.datetime({ offset: true });
+
 export const SessionBindingSchema = z
   .object({
     algorithm: z.literal('ecdsa-p256-sha256'),
@@ -111,21 +113,54 @@ const CurrentUserResponseSchema = AuthUserSchema.meta({ id: 'CurrentUserResponse
 
 const ApiKeyCreateSchema = z
   .object({
-    name: z.string().min(1).default('API Key'),
+    expiresInDays: z.coerce.number().int().min(1).max(365).optional(),
+    name: z.string().trim().min(1).max(120).default('API Key'),
     permissions: z.array(z.enum(Permission)).default([Permission.All]),
   })
   .meta({ id: 'ApiKeyCreateDto' });
 
+const ApiKeySchema = z
+  .object({
+    createdAt: DateTimeSchema,
+    expiresAt: DateTimeSchema.nullable(),
+    id: z.string().uuid(),
+    lastUsedAt: DateTimeSchema.nullable(),
+    name: z.string(),
+    permissions: z.array(z.enum(Permission)),
+    prefix: z.string(),
+    revokedAt: DateTimeSchema.nullable(),
+    updatedAt: DateTimeSchema,
+  })
+  .meta({ id: 'ApiKeyDto' });
+
 const ApiKeyCreateResponseSchema = z
   .object({
     secret: z.string(),
-    apiKey: z.object({
-      id: z.string().uuid(),
-      name: z.string(),
-      permissions: z.array(z.enum(Permission)),
-    }),
+    apiKey: ApiKeySchema,
   })
   .meta({ id: 'ApiKeyCreateResponseDto' });
+
+const ApiKeyListQuerySchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .meta({ id: 'ApiKeyListQueryDto' });
+
+const ApiKeyListResponseSchema = z
+  .object({
+    items: z.array(ApiKeySchema),
+    nextCursor: z.string().nullable(),
+    totalCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'ApiKeyListResponseDto' });
+
+const ApiKeyRevokeResponseSchema = z
+  .object({
+    id: z.string().uuid(),
+    revoked: z.boolean(),
+  })
+  .meta({ id: 'ApiKeyRevokeResponseDto' });
 
 const LogoutResponseSchema = z
   .object({
@@ -162,6 +197,9 @@ export class CurrentUserPasswordUpdateDto extends createZodDto(CurrentUserPasswo
 export class CurrentUserTemporaryPasswordUpdateDto extends createZodDto(CurrentUserTemporaryPasswordUpdateSchema) {}
 export class ApiKeyCreateDto extends createZodDto(ApiKeyCreateSchema) {}
 export class ApiKeyCreateResponseDto extends createZodDto(ApiKeyCreateResponseSchema) {}
+export class ApiKeyListQueryDto extends createZodDto(ApiKeyListQuerySchema) {}
+export class ApiKeyListResponseDto extends createZodDto(ApiKeyListResponseSchema) {}
+export class ApiKeyRevokeResponseDto extends createZodDto(ApiKeyRevokeResponseSchema) {}
 export class LogoutResponseDto extends createZodDto(LogoutResponseSchema) {}
 export class PasswordResetConfirmDto extends createZodDto(PasswordResetConfirmSchema) {}
 export class PasswordResetConfirmResponseDto extends createZodDto(PasswordResetConfirmResponseSchema) {}

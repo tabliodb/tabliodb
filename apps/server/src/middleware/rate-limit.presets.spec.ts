@@ -38,6 +38,7 @@ describe('rate limit presets', () => {
       },
       { handler: AuthController.prototype.uploadCurrentUserAvatar, preset: RateLimitPreset.AvatarUpload },
       { handler: AuthController.prototype.createApiKey, preset: RateLimitPreset.ApiKeyCreate },
+      { handler: AuthController.prototype.revokeApiKey, preset: RateLimitPreset.ApiKeyCreate },
       { handler: SetupController.prototype.complete, preset: RateLimitPreset.SetupComplete },
       { handler: InvitationController.prototype.createInvitation, preset: RateLimitPreset.InvitationCreate },
       { handler: InvitationController.prototype.acceptInvitation, preset: RateLimitPreset.InvitationAccept },

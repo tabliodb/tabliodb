@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { OrganizationRole, Permission, isGranted } from '@tabliodb/shared';
@@ -15,6 +16,9 @@ import { AuthContext } from '../database.js';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
+  ApiKeyListQueryDto,
+  ApiKeyListResponseDto,
+  ApiKeyRevokeResponseDto,
   CurrentUserPasswordUpdateDto,
   CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
@@ -46,6 +50,8 @@ import {
 } from '../repositories/setup.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
+import { toIsoDateTime, toNullableIsoDateTime } from '../utils/date-time.js';
+import { clampPaginationLimit } from '../utils/pagination.js';
 import { FileService, type UploadedAvatarFile } from './file.service.js';
 import { RedisService } from './redis.service.js';
 
@@ -57,6 +63,10 @@ const SESSION_PROOF_NONCE_MAX_LENGTH = 120;
 const SESSION_PROOF_TTL_MS = 2 * 60 * 1000;
 const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
 const OIDC_STATE_PREFIX = 'oidc:state';
+const API_KEY_SECRET_PREFIX = 'tdb';
+const API_KEY_PREFIX_BYTES = 6;
+const API_KEY_SECRET_BYTES = 32;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export type ValidateRequest = {
   headers: IncomingHttpHeaders;
@@ -467,23 +477,48 @@ export class AuthService {
       throw new ForbiddenException('API key cannot create a key with broader permissions');
     }
 
-    const secret = this.cryptoRepository.randomBytesAsText(32);
+    const prefix = `${API_KEY_SECRET_PREFIX}_${this.cryptoRepository.randomBytesAsText(API_KEY_PREFIX_BYTES)}`;
+    const secret = `${prefix}_${this.cryptoRepository.randomBytesAsText(API_KEY_SECRET_BYTES)}`;
     const key = this.cryptoRepository.hashSha256(secret);
+    const expiresAt = dto.expiresInDays ? new Date(Date.now() + dto.expiresInDays * ONE_DAY_MS) : null;
 
     const apiKey = await this.apiKeyRepository.create({
+      expiresAt,
       keyHash: key,
-      name: dto.name,
+      keyPrefix: prefix,
+      name: dto.name.trim(),
       permissions,
       userId: auth.user.id,
     });
 
     return {
       secret,
-      apiKey: {
-        id: apiKey.id,
-        name: apiKey.name,
-        permissions: apiKey.permissions,
-      },
+      apiKey: serializeApiKey(apiKey),
+    };
+  }
+
+  async getApiKeys(auth: AuthContext, query: ApiKeyListQueryDto): Promise<ApiKeyListResponseDto> {
+    const apiKeys = await this.apiKeyRepository.getByUser(auth.user.id, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+    });
+
+    return {
+      ...apiKeys,
+      items: apiKeys.items.map(serializeApiKey),
+    };
+  }
+
+  async revokeApiKey(auth: AuthContext, apiKeyId: string): Promise<ApiKeyRevokeResponseDto> {
+    const apiKey = await this.apiKeyRepository.revokeForUser(apiKeyId, auth.user.id);
+
+    if (!apiKey) {
+      throw new NotFoundException('API key not found');
+    }
+
+    return {
+      id: apiKey.id,
+      revoked: true,
     };
   }
 
@@ -840,6 +875,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid API key');
     }
 
+    // lastUsedAt membantu user/admin mengidentifikasi credential automation yang masih aktif tanpa menyimpan token plaintext.
+    await this.apiKeyRepository.markUsed(apiKey.id);
+
     return {
       user: apiKey.user,
       apiKey: {
@@ -1140,6 +1178,30 @@ function parseOidcLoginState(value: string): StoredOidcLoginState | null {
 
 function createSessionProofPayload(input: { method: string; nonce: string; path: string; timestamp: string }): string {
   return [input.method.toUpperCase(), input.path, input.timestamp, input.nonce].join('\n');
+}
+
+function serializeApiKey(apiKey: {
+  createdAt: Date | string;
+  expiresAt: Date | string | null;
+  id: string;
+  keyPrefix: string;
+  lastUsedAt: Date | string | null;
+  name: string;
+  permissions: Permission[];
+  revokedAt: Date | string | null;
+  updatedAt: Date | string;
+}) {
+  return {
+    createdAt: toIsoDateTime(apiKey.createdAt),
+    expiresAt: toNullableIsoDateTime(apiKey.expiresAt),
+    id: apiKey.id,
+    lastUsedAt: toNullableIsoDateTime(apiKey.lastUsedAt),
+    name: apiKey.name,
+    permissions: apiKey.permissions,
+    prefix: apiKey.keyPrefix,
+    revokedAt: toNullableIsoDateTime(apiKey.revokedAt),
+    updatedAt: toIsoDateTime(apiKey.updatedAt),
+  };
 }
 
 function stableJson(value: JsonValue): string {

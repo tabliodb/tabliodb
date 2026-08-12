@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Permission } from '@tabliodb/shared';
 import { webcrypto } from 'node:crypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { AuthService } from './auth.service.js';
 
@@ -20,10 +20,17 @@ const authWithLimitedApiKey: AuthContext = {
   },
 };
 
+const authWithSession: AuthContext = {
+  user: authWithLimitedApiKey.user,
+};
+
 describe(AuthService.name, () => {
   const apiKeyRepository = {
     create: vi.fn(),
+    getByUser: vi.fn(),
     getByToken: vi.fn(),
+    markUsed: vi.fn(),
+    revokeForUser: vi.fn(),
   };
   const auditLogRepository = {
     create: vi.fn(),
@@ -148,6 +155,10 @@ describe(AuthService.name, () => {
     sessionRepository.create.mockResolvedValue({ id: 'session-id' });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('prevents a limited API key from minting a broader key', async () => {
     await expect(
       service.createApiKey(authWithLimitedApiKey, {
@@ -159,6 +170,124 @@ describe(AuthService.name, () => {
     // Secret generation happens only after authorization so rejected requests do not create throwaway credentials.
     expect(cryptoRepository.randomBytesAsText).not.toHaveBeenCalled();
     expect(apiKeyRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a hashed API key with visible prefix and optional expiry', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-29T12:00:00.000Z'));
+    cryptoRepository.randomBytesAsText.mockReturnValueOnce('prefixabc').mockReturnValueOnce('secretxyz');
+    cryptoRepository.hashSha256.mockReturnValueOnce(Buffer.from('hashed-api-key'));
+    apiKeyRepository.create.mockResolvedValue({
+      createdAt: new Date('2026-07-29T12:00:00.000Z'),
+      expiresAt: new Date('2026-08-05T12:00:00.000Z'),
+      id: '11111111-1111-4111-8111-111111111111',
+      keyPrefix: 'tdb_prefixabc',
+      lastUsedAt: null,
+      name: 'Deploy bot',
+      permissions: [Permission.DiagramRead],
+      revokedAt: null,
+      updatedAt: new Date('2026-07-29T12:00:00.000Z'),
+    });
+
+    await expect(
+      service.createApiKey(authWithSession, {
+        expiresInDays: 7,
+        name: ' Deploy bot ',
+        permissions: [Permission.DiagramRead],
+      }),
+    ).resolves.toMatchObject({
+      apiKey: {
+        expiresAt: '2026-08-05T12:00:00.000Z',
+        prefix: 'tdb_prefixabc',
+      },
+      secret: 'tdb_prefixabc_secretxyz',
+    });
+
+    expect(apiKeyRepository.create).toHaveBeenCalledWith({
+      expiresAt: new Date('2026-08-05T12:00:00.000Z'),
+      keyHash: Buffer.from('hashed-api-key'),
+      keyPrefix: 'tdb_prefixabc',
+      name: 'Deploy bot',
+      permissions: [Permission.DiagramRead],
+      userId: 'user-id',
+    });
+  });
+
+  it('marks an API key as used after a successful API key authentication', async () => {
+    cryptoRepository.hashSha256.mockReturnValueOnce(Buffer.from('hashed-api-key'));
+    apiKeyRepository.getByToken.mockResolvedValue({
+      id: 'api-key-id',
+      permissions: [Permission.DiagramRead],
+      user: authWithLimitedApiKey.user,
+    });
+
+    await expect(
+      service.authenticate({
+        headers: {
+          'x-api-key': 'tdb_visible_secret',
+        },
+        queryParams: {},
+      }),
+    ).resolves.toMatchObject({
+      apiKey: {
+        id: 'api-key-id',
+        permissions: [Permission.DiagramRead],
+      },
+      user: {
+        id: 'user-id',
+      },
+    });
+
+    expect(apiKeyRepository.markUsed).toHaveBeenCalledWith('api-key-id');
+  });
+
+  it('lists active API keys without exposing secrets', async () => {
+    apiKeyRepository.getByUser.mockResolvedValue({
+      items: [
+        {
+          createdAt: new Date('2026-07-29T12:00:00.000Z'),
+          expiresAt: null,
+          id: '11111111-1111-4111-8111-111111111111',
+          keyPrefix: 'tdb_visible',
+          lastUsedAt: new Date('2026-07-29T12:10:00.000Z'),
+          name: 'Deploy bot',
+          permissions: [Permission.DiagramRead],
+          revokedAt: null,
+          updatedAt: new Date('2026-07-29T12:10:00.000Z'),
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    await expect(service.getApiKeys(authWithLimitedApiKey, { limit: 10 })).resolves.toEqual({
+      items: [
+        {
+          createdAt: '2026-07-29T12:00:00.000Z',
+          expiresAt: null,
+          id: '11111111-1111-4111-8111-111111111111',
+          lastUsedAt: '2026-07-29T12:10:00.000Z',
+          name: 'Deploy bot',
+          permissions: [Permission.DiagramRead],
+          prefix: 'tdb_visible',
+          revokedAt: null,
+          updatedAt: '2026-07-29T12:10:00.000Z',
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+  });
+
+  it('revokes only the current user API key', async () => {
+    apiKeyRepository.revokeForUser.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' });
+
+    await expect(service.revokeApiKey(authWithLimitedApiKey, '11111111-1111-4111-8111-111111111111')).resolves.toEqual({
+      id: '11111111-1111-4111-8111-111111111111',
+      revoked: true,
+    });
+
+    expect(apiKeyRepository.revokeForUser).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', 'user-id');
   });
 
   it('allows password sign-up when the email matches an allowed domain', async () => {

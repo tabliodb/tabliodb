@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Patch,
   Post,
   Query,
@@ -13,13 +14,16 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
 import {
   ApiKeyCreateDto,
   ApiKeyCreateResponseDto,
+  ApiKeyListQueryDto,
+  ApiKeyListResponseDto,
+  ApiKeyRevokeResponseDto,
   CurrentUserPasswordUpdateDto,
   CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
@@ -45,6 +49,7 @@ import { AVATAR_MAX_BYTES, type UploadedAvatarFile } from '../services/file.serv
 import { AuthType } from '../constants.js';
 import { clearAuthCookies, respondWithAuthCookies, setCsrfCookie } from '../utils/response.js';
 import type { AuthContext } from '../database.js';
+import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -243,5 +248,27 @@ export class AuthController {
   @ZodResponse({ status: HttpStatus.CREATED, type: ApiKeyCreateResponseDto })
   createApiKey(@Auth() auth: AuthContext, @Body() dto: ApiKeyCreateDto): Promise<ApiKeyCreateResponseDto> {
     return this.service.createApiKey(auth, dto);
+  }
+
+  @Get('api-keys')
+  @Authenticated()
+  @RequirePermission(Permission.ApiKeyManage)
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getApiKeys' })
+  @ZodResponse({ status: HttpStatus.OK, type: ApiKeyListResponseDto })
+  getApiKeys(@Auth() auth: AuthContext, @Query() query: ApiKeyListQueryDto): Promise<ApiKeyListResponseDto> {
+    return this.service.getApiKeys(auth, query);
+  }
+
+  @Delete('api-keys/:apiKeyId')
+  @RateLimit(RateLimitPreset.ApiKeyCreate)
+  @Authenticated()
+  @RequirePermission(Permission.ApiKeyManage)
+  @HttpCode(HttpStatus.OK)
+  @ApiParam({ name: 'apiKeyId', type: String })
+  @ApiOperation({ operationId: 'revokeApiKey' })
+  @ZodResponse({ status: HttpStatus.OK, type: ApiKeyRevokeResponseDto })
+  revokeApiKey(@Auth() auth: AuthContext, @Param('apiKeyId') apiKeyId: string): Promise<ApiKeyRevokeResponseDto> {
+    return this.service.revokeApiKey(auth, apiKeyId);
   }
 }

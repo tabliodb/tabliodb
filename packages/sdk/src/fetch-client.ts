@@ -156,16 +156,33 @@ export type PasswordResetConfirmResponseDtoOutput = {
   successful: boolean;
 };
 export type ApiKeyCreateDto = {
+  expiresInDays?: number;
   name?: string;
   permissions?: Permissions[];
 };
+export type ApiKeyDtoOutput = {
+  createdAt: string;
+  expiresAt: string | null;
+  id: string;
+  lastUsedAt: string | null;
+  name: string;
+  permissions: Permissions[];
+  prefix: string;
+  revokedAt: string | null;
+  updatedAt: string;
+};
 export type ApiKeyCreateResponseDtoOutput = {
   secret: string;
-  apiKey: {
-    id: string;
-    name: string;
-    permissions: Permissions[];
-  };
+  apiKey: ApiKeyDtoOutput;
+};
+export type ApiKeyListResponseDtoOutput = {
+  items: ApiKeyDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type ApiKeyRevokeResponseDtoOutput = {
+  id: string;
+  revoked: boolean;
 };
 export type CommentLexicalDocumentDto = {
   root: {
@@ -1851,6 +1868,51 @@ export function createApiKey(
         body: apiKeyCreateDto,
       }),
     ),
+  );
+}
+export function getApiKeys(
+  {
+    cursor,
+    limit,
+  }: {
+    cursor?: string;
+    limit?: number;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ApiKeyListResponseDtoOutput;
+    }>(
+      `/auth/api-keys${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function revokeApiKey(
+  {
+    apiKeyId,
+  }: {
+    apiKeyId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ApiKeyRevokeResponseDtoOutput;
+    }>(`/auth/api-keys/${encodeURIComponent(apiKeyId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
   );
 }
 export function createCommentThread(
