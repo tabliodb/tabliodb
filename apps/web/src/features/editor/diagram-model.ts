@@ -10,8 +10,11 @@ import {
 } from '@tabliodb/schema-core';
 
 export type RealtimeTablePatch = {
+  clearColor?: boolean;
+  color?: string;
   tableId: string;
   metadataUpdatedAt?: string;
+  name?: string;
   position?: { x: number; y: number };
   width?: number;
 };
@@ -150,8 +153,14 @@ export function createRealtimeTablePatch(
     return null;
   }
 
-  const { position: previousPosition, width: previousWidth, ...previousStableTable } = previousTable;
-  const { position: nextPosition, width: nextWidth, ...nextStableTable } = nextTable;
+  const {
+    color: previousColor,
+    name: previousName,
+    position: previousPosition,
+    width: previousWidth,
+    ...previousStableTable
+  } = previousTable;
+  const { color: nextColor, name: nextName, position: nextPosition, width: nextWidth, ...nextStableTable } = nextTable;
 
   if (!areJsonValuesEqual(previousStableTable, nextStableTable)) {
     return null;
@@ -161,6 +170,18 @@ export function createRealtimeTablePatch(
     tableId,
   };
 
+  if (previousName !== nextName) {
+    patch.name = nextName;
+  }
+
+  if (previousColor !== nextColor) {
+    if (nextColor) {
+      patch.color = nextColor;
+    } else {
+      patch.clearColor = true;
+    }
+  }
+
   if (!areJsonValuesEqual(previousPosition, nextPosition)) {
     patch.position = nextPosition;
   }
@@ -169,7 +190,7 @@ export function createRealtimeTablePatch(
     patch.width = nextWidth;
   }
 
-  if (!patch.position && patch.width === undefined) {
+  if (!patch.clearColor && patch.color === undefined && patch.name === undefined && !patch.position && patch.width === undefined) {
     return null;
   }
 

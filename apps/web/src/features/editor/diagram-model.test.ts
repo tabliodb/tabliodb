@@ -252,14 +252,39 @@ describe('editor diagram model helpers', () => {
     expect(patch?.metadataUpdatedAt).toBe(resizedModel.metadata.updatedAt);
   });
 
-  it('falls back to full realtime model writes for non-layout table edits', () => {
-    const baseModel = createSeedDiagramModel('Realtime full write fallback test');
+  it('creates a small realtime patch for table rename and color edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime table rename patch test');
+    const tableId = 'users';
     const renamedModel = applyDiagramCommand(baseModel, {
       name: 'members',
-      tableId: 'users',
+      tableId,
       type: 'table.rename',
     });
+    const coloredModel = applyDiagramCommand(renamedModel, {
+      color: '#ffc800',
+      tableId,
+      type: 'table.changeColor',
+    });
 
-    expect(createRealtimeTablePatch(baseModel, renamedModel)).toBeNull();
+    const patch = createRealtimeTablePatch(baseModel, coloredModel);
+
+    expect(patch).toMatchObject({
+      color: '#ffc800',
+      name: 'members',
+      tableId,
+    });
+  });
+
+  it('falls back to full realtime model writes for column edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime full write fallback test');
+    const columnModel = applyDiagramCommand(baseModel, {
+      columnId: 'users-name',
+      changes: {
+        name: 'display_name',
+      },
+      type: 'column.update',
+    });
+
+    expect(createRealtimeTablePatch(baseModel, columnModel)).toBeNull();
   });
 });

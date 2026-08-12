@@ -42,8 +42,11 @@ export type DiagramCollaborationStatus = {
 
 export type DiagramCollaborationStatusSubscriber = (status: DiagramCollaborationStatus) => void;
 export type DiagramCollaborationTablePatch = {
+  clearColor?: boolean;
+  color?: string;
   tableId: string;
   metadataUpdatedAt?: string;
+  name?: string;
   position?: { x: number; y: number };
   width?: number;
 };
@@ -158,6 +161,17 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
       }
 
       document.transact(() => {
+        if (patch.name !== undefined) {
+          tableMap.set('name', patch.name);
+        }
+
+        if (patch.clearColor) {
+          // Optional fields are deleted from the Y.Map when cleared so remote readers see the same shape as canonical snapshots.
+          tableMap.delete('color');
+        } else if (patch.color !== undefined) {
+          tableMap.set('color', patch.color);
+        }
+
         if (patch.position) {
           // Position is patched at entity scope so table drags do not rewrite columns, relationships, notes, or other users' table edits.
           tableMap.set('position', { ...patch.position });
