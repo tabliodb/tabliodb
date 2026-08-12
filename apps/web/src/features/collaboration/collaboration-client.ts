@@ -267,8 +267,16 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
           checksMap.delete(checkId);
         }
 
-        tableMap.set('columnIds', [...patch.tablePatch.columnIds]);
-        tableMap.set('indexIds', [...patch.tablePatch.indexIds]);
+        if (patch.action === 'create') {
+          insertYStringArrayValue(tableMap, 'columnIds', patch.columnId, patch.tablePatch.columnIds.indexOf(patch.columnId));
+        } else if (patch.action === 'reorder') {
+          moveYStringArrayValue(tableMap, 'columnIds', patch.columnId, patch.tablePatch.columnIds.indexOf(patch.columnId));
+        } else {
+          removeYStringArrayValue(tableMap, 'columnIds', patch.columnId);
+        }
+
+        // Index order can change when deleting a column that removes invalid indexes, so it is synced as the table's canonical ordered index list.
+        syncYStringArrayField(tableMap, 'indexIds', patch.tablePatch.indexIds);
 
         if (patch.metadataUpdatedAt) {
           document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
@@ -505,6 +513,89 @@ function syncYMapFromRecord(map: Y.Map<unknown>, record: Record<string, unknown>
   for (const [key, value] of Object.entries(record)) {
     map.set(key, cloneYjsSerializableValue(value));
   }
+}
+
+function insertYStringArrayValue(map: Y.Map<unknown>, key: string, value: string, targetIndex: number): void {
+  const array = getOrCreateYStringArrayField(map, key);
+  const currentIndex = array.toArray().indexOf(value);
+
+  if (currentIndex >= 0) {
+    moveYStringArrayValue(map, key, value, targetIndex);
+    return;
+  }
+
+  array.insert(clampArrayIndex(targetIndex, array.length), [value]);
+}
+
+function moveYStringArrayValue(map: Y.Map<unknown>, key: string, value: string, targetIndex: number): void {
+  const array = getOrCreateYStringArrayField(map, key);
+  const currentIndex = array.toArray().indexOf(value);
+
+  if (currentIndex < 0) {
+    insertYStringArrayValue(map, key, value, targetIndex);
+    return;
+  }
+
+  array.delete(currentIndex, 1);
+  array.insert(clampArrayIndex(targetIndex, array.length), [value]);
+}
+
+function removeYStringArrayValue(map: Y.Map<unknown>, key: string, value: string): void {
+  const array = getOrCreateYStringArrayField(map, key);
+  const currentIndex = array.toArray().indexOf(value);
+
+  if (currentIndex >= 0) {
+    array.delete(currentIndex, 1);
+  }
+}
+
+function syncYStringArrayField(map: Y.Map<unknown>, key: string, values: string[]): void {
+  const array = getOrCreateYStringArrayField(map, key);
+
+  if (areStringArraysEqual(array.toArray(), values)) {
+    return;
+  }
+
+  if (array.length > 0) {
+    array.delete(0, array.length);
+  }
+
+  if (values.length > 0) {
+    array.insert(0, values);
+  }
+}
+
+function getOrCreateYStringArrayField(map: Y.Map<unknown>, key: string): Y.Array<string> {
+  const existingValue = map.get(key);
+
+  if (existingValue instanceof Y.Array) {
+    return existingValue as Y.Array<string>;
+  }
+
+  const array = new Y.Array<string>();
+  const existingValues = Array.isArray(existingValue)
+    ? existingValue.filter((item): item is string => typeof item === 'string')
+    : [];
+
+  if (existingValues.length > 0) {
+    array.insert(0, existingValues);
+  }
+
+  map.set(key, array);
+
+  return array;
+}
+
+function clampArrayIndex(index: number, length: number): number {
+  if (!Number.isFinite(index)) {
+    return length;
+  }
+
+  return Math.max(0, Math.min(index, length));
+}
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 async function createRealtimeSessionProofToken(documentName: string): Promise<string> {

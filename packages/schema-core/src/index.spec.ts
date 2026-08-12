@@ -65,8 +65,11 @@ describe('schema-core diagram commands', () => {
     writeDiagramModelToYjsDocument(document, model);
 
     const tables = document.getMap<Y.Map<unknown>>(yjsCollections.tables);
+    const usersTableMap = tables.get('users');
     expect(hasDiagramModelInYjsDocument(document)).toBe(true);
-    expect(tables.get('users')).toBeInstanceOf(Y.Map);
+    expect(usersTableMap).toBeInstanceOf(Y.Map);
+    expect(usersTableMap?.get('columnIds')).toBeInstanceOf(Y.Array);
+    expect((usersTableMap?.get('columnIds') as Y.Array<string>).toArray()).toEqual(['users-id', 'users-email']);
     expect(readDiagramModelFromYjsDocument(document)).toEqual(serializeDiagramModel(model));
   });
 

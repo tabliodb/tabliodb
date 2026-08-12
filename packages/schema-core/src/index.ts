@@ -1647,8 +1647,45 @@ function syncYMapFromRecord(map: Y.Map<unknown>, record: YjsRecord): void {
   }
 
   for (const [key, value] of Object.entries(record)) {
+    if (isOrderedStringArrayField(key, value)) {
+      syncYStringArrayField(map, key, value);
+      continue;
+    }
+
     map.set(key, cloneYjsSerializableValue(value));
   }
+}
+
+function syncYStringArrayField(map: Y.Map<unknown>, key: string, values: string[]): void {
+  const existingValue = map.get(key);
+  const array = existingValue instanceof Y.Array ? existingValue : new Y.Array<string>();
+
+  if (array !== existingValue) {
+    map.set(key, array);
+  }
+
+  const currentValues = array.toArray();
+
+  if (areStringArraysEqual(currentValues, values)) {
+    return;
+  }
+
+  if (array.length > 0) {
+    array.delete(0, array.length);
+  }
+
+  if (values.length > 0) {
+    // Ordered ID fields live as Y.Array in realtime so column reorder can use order operations instead of replacing the table entity.
+    array.insert(0, values);
+  }
+}
+
+function isOrderedStringArrayField(key: string, value: unknown): value is string[] {
+  return (
+    (key === 'columnIds' || key === 'indexIds' || key === 'tableIds') &&
+    Array.isArray(value) &&
+    value.every((item) => typeof item === 'string')
+  );
 }
 
 function readYEntityCollection(collection: Y.Map<Y.Map<unknown>>): Record<string, unknown> {
