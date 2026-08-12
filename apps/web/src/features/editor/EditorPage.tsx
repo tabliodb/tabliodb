@@ -251,7 +251,7 @@ import {
   useCreateDiagramShareLinkMutation,
   useRevokeDiagramShareLinkMutation,
 } from '@/resources/share-links';
-import { addTableToDiagramModel, createSeedDiagramModel } from './diagram-model';
+import { addTableToDiagramModel, createSeedDiagramModel, createSnapshotSaveModel } from './diagram-model';
 import { createEmptyCommentFormBody } from './comment-body';
 import {
   createDiagramModelSignature,
@@ -1620,12 +1620,14 @@ export function EditorPage() {
   }
 
   function handleSaveSnapshot() {
+    const requestedModel = modelRef.current;
+
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
 
     window.setTimeout(() => {
-      const modelToSave = modelRef.current;
+      const modelToSave = createSnapshotSaveModel(requestedModel, modelRef.current);
 
       if (!activeDiagram || !modelToSave || !canCreateSnapshot || saveSnapshotMutation.isPending) {
         return;

@@ -485,6 +485,20 @@ export function SchemaCanvas({
       return target.closest<HTMLElement>('.tabliodb-table-node__column');
     };
 
+    const getTableNodeFromEvent = (event: MouseEvent) => {
+      const target = getElementFromEventTarget(event.target);
+
+      if (
+        !target ||
+        target.closest('.tabliodb-table-node__comment-marker') ||
+        target.closest('.tabliodb-table-node__resize-zone')
+      ) {
+        return null;
+      }
+
+      return target.closest<HTMLElement>('[data-tabliodb-table-id]');
+    };
+
     const getNoteActionFromEvent = (event: Event, fallbackNoteId?: string) => {
       const target = getElementFromEventTarget(event.target);
       const actionButton = target?.closest<HTMLButtonElement>('[data-note-action]');
@@ -656,6 +670,18 @@ export function SchemaCanvas({
       onColumnSelectRef.current?.(columnId);
     };
 
+    const handleTableNodeMouseDown = (event: MouseEvent) => {
+      const tableElement = getTableNodeFromEvent(event);
+      const tableId = tableElement?.dataset.tabliodbTableId;
+
+      if (!tableElement || !tableId) {
+        return;
+      }
+
+      setRelationshipMenu(null);
+      onSelectedTableChangeRef.current(tableId);
+    };
+
     const handleNoteInteractiveMouseDown = (event: MouseEvent) => {
       if (handleNoteActionEvent(event)) {
         return;
@@ -816,6 +842,7 @@ export function SchemaCanvas({
     container.addEventListener('mousedown', handleCommentMarkerMouseDown, true);
     container.addEventListener('click', handleCommentMarkerClick, true);
     container.addEventListener('click', handleColumnRowClick, true);
+    container.addEventListener('mousedown', handleTableNodeMouseDown, true);
     container.addEventListener('mousedown', handleNoteInteractiveMouseDown, true);
     container.addEventListener('click', handleNoteActionClick, true);
     container.addEventListener('focusout', handleNoteFocusOut, true);
@@ -1028,6 +1055,7 @@ export function SchemaCanvas({
       container.removeEventListener('mousedown', handleCommentMarkerMouseDown, true);
       container.removeEventListener('click', handleCommentMarkerClick, true);
       container.removeEventListener('click', handleColumnRowClick, true);
+      container.removeEventListener('mousedown', handleTableNodeMouseDown, true);
       container.removeEventListener('mousedown', handleNoteInteractiveMouseDown, true);
       container.removeEventListener('click', handleNoteActionClick, true);
       container.removeEventListener('focusout', handleNoteFocusOut, true);
