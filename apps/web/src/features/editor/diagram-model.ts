@@ -2,6 +2,7 @@ import {
   applyDiagramCommand,
   createDiagramEntityId,
   createStarterDiagramModel,
+  getTableColumns,
   type ColumnTypeSpec,
   type CreateTableColumnInput,
   type DatabaseColumn,
@@ -89,6 +90,31 @@ export function normalizeEditorDiagramModel(model: DiagramModel): DiagramModel {
         columns,
       }
     : model;
+}
+
+export function shouldKeepLocalDiagramModelOverRealtime(
+  localModel: DiagramModel | null,
+  realtimeModel: DiagramModel,
+): boolean {
+  if (!localModel) {
+    return false;
+  }
+
+  const localUpdatedAt = getDiagramModelUpdatedAtTime(localModel);
+  const realtimeUpdatedAt = getDiagramModelUpdatedAtTime(realtimeModel);
+
+  if (localUpdatedAt !== null && realtimeUpdatedAt !== null) {
+    if (localUpdatedAt > realtimeUpdatedAt) {
+      return true;
+    }
+
+    if (realtimeUpdatedAt > localUpdatedAt) {
+      return false;
+    }
+  }
+
+  // Development Yjs documents can lag behind a repaired local draft; never downgrade a real table into an empty shell.
+  return hasRealtimeModelLostLocalColumns(localModel, realtimeModel);
 }
 
 function createEditorDefaultTableColumns(): CreateTableColumnInput[] {
@@ -259,6 +285,31 @@ function mergeRequestedColumnIds(
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function hasRealtimeModelLostLocalColumns(localModel: DiagramModel, realtimeModel: DiagramModel): boolean {
+  return Object.values(localModel.tables).some((localTable) => {
+    const realtimeTable = realtimeModel.tables[localTable.id];
+
+    if (!realtimeTable) {
+      return false;
+    }
+
+    const localColumns = getTableColumns(localModel, localTable.id);
+    const realtimeColumns = getTableColumns(realtimeModel, realtimeTable.id);
+
+    return localColumns.length > 0 && realtimeColumns.length === 0;
+  });
+}
+
+function getDiagramModelUpdatedAtTime(model: DiagramModel): number | null {
+  if (!model.metadata.updatedAt) {
+    return null;
+  }
+
+  const time = Date.parse(model.metadata.updatedAt);
+
+  return Number.isFinite(time) ? time : null;
 }
 
 function normalizeTableName(tableName?: string): string {

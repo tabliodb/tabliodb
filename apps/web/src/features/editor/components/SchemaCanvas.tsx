@@ -11,10 +11,13 @@ import {
 } from '@antv/x6';
 import {
   applyDiagramCommand,
+  createDiagramEntityId,
   defaultTableMinWidth,
   getRelationshipColumnPairs,
   getTableColumns,
   type DatabaseColumn,
+  type DatabaseIndex,
+  type DatabaseIndexColumn,
   type DatabaseRelationship,
   type DatabaseTable,
   type DiagramGroup,
@@ -31,9 +34,11 @@ import {
   DialogHeader,
   DialogTitle,
   cn,
+  toast,
 } from '@tabliodb/ui';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@/resources/comments';
 import type { AwarenessState } from '@tabliodb/shared';
+import { Copy, FileText, KeyRound, ListPlus, MessageSquareText, Scissors, Trash2, type LucideIcon } from 'lucide-react';
 import {
   useEffect,
   useRef,
@@ -116,6 +121,7 @@ export type SchemaCanvasProps = {
   onViewportChange?: (viewport: CanvasViewportRect) => void;
   onCommentTargetOpen?: (target: { targetId: string; targetType: CommentTargetType }) => void;
   onColumnSelect?: (columnId: string) => void;
+  onTableDocsOpen?: (tableId: string) => void;
   selectedTableId: string | null;
   selectedColumnId?: string | null;
   onModelChange: (model: DiagramModel) => void;
@@ -252,6 +258,12 @@ type RelationshipMenuState = {
   top: number;
 };
 
+type TableContextMenuState = {
+  left: number;
+  tableId: string;
+  top: number;
+};
+
 type CanvasConfirmAction =
   | {
       id: string;
@@ -262,6 +274,11 @@ type CanvasConfirmAction =
       id: string;
       name: string;
       type: 'relationship';
+    }
+  | {
+      id: string;
+      name: string;
+      type: 'table';
     };
 
 type ParsedColumnPortId = {
@@ -307,6 +324,7 @@ export function SchemaCanvas({
   onLocalCursorChange,
   onModelChange,
   onSelectedTableChange,
+  onTableDocsOpen,
   onViewportChange,
   readOnly = false,
   remoteCursors = [],
@@ -334,9 +352,11 @@ export function SchemaCanvas({
   const onColumnSelectRef = useRef(onColumnSelect);
   const onModelChangeRef = useRef(onModelChange);
   const onSelectedTableChangeRef = useRef(onSelectedTableChange);
+  const onTableDocsOpenRef = useRef(onTableDocsOpen);
   const onViewportChangeRef = useRef(onViewportChange);
   const remoteCursorsRef = useRef(remoteCursors);
   const [relationshipMenu, setRelationshipMenu] = useState<RelationshipMenuState | null>(null);
+  const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
   const [confirmAction, setConfirmAction] = useState<CanvasConfirmAction | null>(null);
   const [remoteCursorPositions, setRemoteCursorPositions] = useState<RemoteCanvasCursorPosition[]>([]);
   // Minimap dimulai dalam keadaan minimized agar editor pertama kali terbuka dengan fokus penuh ke canvas.
@@ -383,6 +403,10 @@ export function SchemaCanvas({
   }, [onColumnSelect]);
 
   useEffect(() => {
+    onTableDocsOpenRef.current = onTableDocsOpen;
+  }, [onTableDocsOpen]);
+
+  useEffect(() => {
     onSelectedTableChangeRef.current = onSelectedTableChange;
   }, [onSelectedTableChange]);
 
@@ -400,6 +424,41 @@ export function SchemaCanvas({
       setRelationshipMenu(null);
     }
   }, [model.relationships, relationshipMenu]);
+
+  useEffect(() => {
+    if (tableContextMenu && !model.tables[tableContextMenu.tableId]) {
+      setTableContextMenu(null);
+    }
+  }, [model.tables, tableContextMenu]);
+
+  useEffect(() => {
+    if (!tableContextMenu) {
+      return;
+    }
+
+    const handleOutsideMouseDown = (event: MouseEvent) => {
+      const target = getElementFromEventTarget(event.target);
+
+      if (target?.closest('[data-tabliodb-table-context-menu]')) {
+        return;
+      }
+
+      setTableContextMenu(null);
+    };
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTableContextMenu(null);
+      }
+    };
+
+    window.addEventListener('mousedown', handleOutsideMouseDown);
+    window.addEventListener('keydown', handleEscapeKey);
+
+    return () => {
+      window.removeEventListener('mousedown', handleOutsideMouseDown);
+      window.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [tableContextMenu]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -556,6 +615,7 @@ export function SchemaCanvas({
     graph.on('node:click', ({ e, node }) => {
       const data = node.getData<TableNodeData | NoteNodeData>();
       setRelationshipMenu(null);
+      setTableContextMenu(null);
 
       if (isNoteNodeData(data) && handleNoteActionEvent(e as unknown as MouseEvent, data.noteId)) {
         return;
@@ -573,6 +633,7 @@ export function SchemaCanvas({
 
     graph.on('blank:click', () => {
       setRelationshipMenu(null);
+      setTableContextMenu(null);
       onSelectedTableChangeRef.current(null);
     });
 
@@ -598,6 +659,7 @@ export function SchemaCanvas({
         relationshipId: relationship.id,
         top: clamp(event.clientY - containerRect.top - menuHeight / 2, 12, containerRect.height - menuHeight - 12),
       });
+      setTableContextMenu(null);
     });
 
     graph.on('edge:connected', ({ edge, isNew }) => {
@@ -679,6 +741,37 @@ export function SchemaCanvas({
       }
 
       setRelationshipMenu(null);
+      setTableContextMenu(null);
+      onSelectedTableChangeRef.current(tableId);
+    };
+
+    const handleTableContextMenu = (event: MouseEvent) => {
+      const tableElement = getTableNodeFromEvent(event);
+      const tableId = tableElement?.dataset.tabliodbTableId;
+
+      if (!tableElement || !tableId || !modelRef.current.tables[tableId]) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const containerRect = container.getBoundingClientRect();
+      const menuWidth = 256;
+      const menuHeight = 318;
+      const safeMinLeft = Math.min(
+        floatingInsetLeftRef.current + 12,
+        Math.max(12, containerRect.width - menuWidth - 12),
+      );
+      const safeMaxLeft = Math.max(safeMinLeft, containerRect.width - floatingInsetRightRef.current - menuWidth - 12);
+
+      // X6 HTML nodes are mounted outside React's synthetic event ownership, so right-click is captured with a native listener.
+      setRelationshipMenu(null);
+      setTableContextMenu({
+        left: clamp(event.clientX - containerRect.left, safeMinLeft, safeMaxLeft),
+        tableId,
+        top: clamp(event.clientY - containerRect.top, 12, containerRect.height - menuHeight - 12),
+      });
       onSelectedTableChangeRef.current(tableId);
     };
 
@@ -843,6 +936,7 @@ export function SchemaCanvas({
     container.addEventListener('click', handleCommentMarkerClick, true);
     container.addEventListener('click', handleColumnRowClick, true);
     container.addEventListener('mousedown', handleTableNodeMouseDown, true);
+    container.addEventListener('contextmenu', handleTableContextMenu, true);
     container.addEventListener('mousedown', handleNoteInteractiveMouseDown, true);
     container.addEventListener('click', handleNoteActionClick, true);
     container.addEventListener('focusout', handleNoteFocusOut, true);
@@ -1056,6 +1150,7 @@ export function SchemaCanvas({
       container.removeEventListener('click', handleCommentMarkerClick, true);
       container.removeEventListener('click', handleColumnRowClick, true);
       container.removeEventListener('mousedown', handleTableNodeMouseDown, true);
+      container.removeEventListener('contextmenu', handleTableContextMenu, true);
       container.removeEventListener('mousedown', handleNoteInteractiveMouseDown, true);
       container.removeEventListener('click', handleNoteActionClick, true);
       container.removeEventListener('focusout', handleNoteFocusOut, true);
@@ -1241,7 +1336,128 @@ export function SchemaCanvas({
   }
 
   const activeRelationship = relationshipMenu ? (model.relationships[relationshipMenu.relationshipId] ?? null) : null;
+  const activeContextTable = tableContextMenu ? (model.tables[tableContextMenu.tableId] ?? null) : null;
+  const activeContextTableColumns = activeContextTable ? getTableColumns(model, activeContextTable.id) : [];
   const canShowMinimap = Object.keys(model.tables).length > 0;
+
+  function closeTableContextMenu() {
+    setTableContextMenu(null);
+  }
+
+  function handleTableDiscuss(table: DatabaseTable) {
+    closeTableContextMenu();
+    onCommentTargetOpenRef.current?.({ targetId: table.id, targetType: 'table' });
+  }
+
+  function handleTableDocsOpen(table: DatabaseTable) {
+    closeTableContextMenu();
+    onTableDocsOpenRef.current?.(table.id);
+  }
+
+  function handleCopyTable(table: DatabaseTable) {
+    closeTableContextMenu();
+
+    void copyTableToClipboard(modelRef.current, table)
+      .then(() => {
+        toast.success({
+          description: `"${table.name}" is now available as a Tabliodb table payload.`,
+          title: 'Table copied',
+        });
+      })
+      .catch(() => {
+        toast.warning({
+          description: 'Your browser blocked clipboard access, so the table could not be copied.',
+          title: 'Copy failed',
+        });
+      });
+  }
+
+  function handleDuplicateTable(table: DatabaseTable) {
+    if (readOnly) {
+      closeTableContextMenu();
+      return;
+    }
+
+    const result = duplicateTableInModel(modelRef.current, table.id);
+
+    closeTableContextMenu();
+
+    if (!result) {
+      return;
+    }
+
+    onModelChangeRef.current(result.model);
+    onSelectedTableChangeRef.current(result.tableId);
+  }
+
+  function handleAddContextColumn(table: DatabaseTable) {
+    if (readOnly) {
+      closeTableContextMenu();
+      return;
+    }
+
+    const currentModel = modelRef.current;
+    const columns = getTableColumns(currentModel, table.id);
+    const columnId = createDiagramEntityId('column');
+    const nextModel = applyDiagramCommand(currentModel, {
+      columnId,
+      columnType: { family: 'varchar', length: 160 },
+      name: createUniqueColumnName(columns, 'new_column'),
+      nullable: false,
+      tableId: table.id,
+      type: 'column.create',
+    });
+
+    closeTableContextMenu();
+    onModelChangeRef.current(nextModel);
+    onSelectedTableChangeRef.current(table.id);
+    onColumnSelectRef.current?.(columnId);
+  }
+
+  function handleAddContextIndex(table: DatabaseTable) {
+    if (readOnly) {
+      closeTableContextMenu();
+      return;
+    }
+
+    const currentModel = modelRef.current;
+    const columns = getTableColumns(currentModel, table.id);
+    const firstColumn = columns[0];
+
+    closeTableContextMenu();
+
+    if (!firstColumn) {
+      toast.warning({
+        description: 'Add a column first, then Tabliodb can create an index for this table.',
+        title: 'No column to index',
+      });
+      return;
+    }
+
+    onModelChangeRef.current(
+      applyDiagramCommand(currentModel, {
+        columns: [{ columnId: firstColumn.id }],
+        name: createUniqueIndexName(currentModel, table, firstColumn.name),
+        tableId: table.id,
+        type: 'index.create',
+      }),
+    );
+    onSelectedTableChangeRef.current(table.id);
+  }
+
+  function handleDeleteContextTable(table: DatabaseTable) {
+    closeTableContextMenu();
+
+    if (readOnly) {
+      return;
+    }
+
+    setConfirmAction({
+      id: table.id,
+      name: table.name,
+      type: 'table',
+    });
+  }
 
   function handleRelationshipCardinalityChange(cardinality: DatabaseRelationship['cardinality']) {
     if (!activeRelationship || readOnly || activeRelationship.cardinality === cardinality) {
@@ -1281,6 +1497,13 @@ export function SchemaCanvas({
     }
 
     const currentModel = modelRef.current;
+
+    if (confirmAction.type === 'table' && currentModel.tables[confirmAction.id]) {
+      onModelChangeRef.current(applyDiagramCommand(currentModel, { tableId: confirmAction.id, type: 'table.delete' }));
+      onSelectedTableChangeRef.current(null);
+      setConfirmAction(null);
+      return;
+    }
 
     if (confirmAction.type === 'note' && currentModel.notes[confirmAction.id]) {
       // Note deletion mutates the canonical model, so snapshot/save/history paths observe the same operation.
@@ -1337,6 +1560,24 @@ export function SchemaCanvas({
           readOnly={readOnly}
           relationship={activeRelationship}
           top={relationshipMenu.top}
+        />
+      ) : null}
+      {activeContextTable && tableContextMenu ? (
+        <TableNodeContextMenu
+          canEdit={!readOnly}
+          canOpenDocs={Boolean(onTableDocsOpen)}
+          columnCount={activeContextTableColumns.length}
+          left={tableContextMenu.left}
+          onAddColumn={() => handleAddContextColumn(activeContextTable)}
+          onAddIndex={() => handleAddContextIndex(activeContextTable)}
+          onCopy={() => handleCopyTable(activeContextTable)}
+          onCut={() => undefined}
+          onDelete={() => handleDeleteContextTable(activeContextTable)}
+          onDiscuss={() => handleTableDiscuss(activeContextTable)}
+          onDuplicate={() => handleDuplicateTable(activeContextTable)}
+          onViewDocs={() => handleTableDocsOpen(activeContextTable)}
+          table={activeContextTable}
+          top={tableContextMenu.top}
         />
       ) : null}
       <CanvasConfirmDialog
@@ -1643,6 +1884,135 @@ function RelationshipEndpointPill({ label, tone }: { label: string; tone: 'sourc
   );
 }
 
+function TableNodeContextMenu({
+  canEdit,
+  canOpenDocs,
+  columnCount,
+  left,
+  onAddColumn,
+  onAddIndex,
+  onCopy,
+  onCut,
+  onDelete,
+  onDiscuss,
+  onDuplicate,
+  onViewDocs,
+  table,
+  top,
+}: {
+  canEdit: boolean;
+  canOpenDocs: boolean;
+  columnCount: number;
+  left: number;
+  onAddColumn: () => void;
+  onAddIndex: () => void;
+  onCopy: () => void;
+  onCut: () => void;
+  onDelete: () => void;
+  onDiscuss: () => void;
+  onDuplicate: () => void;
+  onViewDocs: () => void;
+  table: DatabaseTable;
+  top: number;
+}) {
+  return (
+    <section
+      aria-label={`Actions for ${table.name}`}
+      className="absolute z-40 w-64 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-1.5 text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_18px_42px_rgb(15_23_42/0.16)]"
+      data-tabliodb-table-context-menu=""
+      onContextMenu={(event) => event.preventDefault()}
+      onMouseDown={(event) => event.stopPropagation()}
+      role="menu"
+      style={{ left, top }}
+    >
+      <TableNodeContextMenuItem icon={MessageSquareText} label="Discuss" onSelect={onDiscuss} shortcut="Ctrl+Shift+;" />
+      <TableNodeContextMenuItem disabled={!canOpenDocs} icon={FileText} label="View docs" onSelect={onViewDocs} />
+
+      <div className="-mx-0.5 my-1 h-px bg-[rgb(var(--tabliodb-border))]" />
+
+      <TableNodeContextMenuItem icon={Copy} label="Copy" onSelect={onCopy} shortcut="Ctrl+C" />
+      <TableNodeContextMenuItem disabled icon={Scissors} label="Cut" onSelect={onCut} shortcut="Ctrl+X" />
+      <TableNodeContextMenuItem
+        disabled={!canEdit}
+        icon={Copy}
+        label="Duplicate"
+        onSelect={onDuplicate}
+        shortcut="Ctrl+D"
+      />
+      <TableNodeContextMenuItem
+        disabled={!canEdit}
+        icon={ListPlus}
+        label="Add column"
+        onSelect={onAddColumn}
+        shortcut="Ctrl+Enter"
+      />
+      <TableNodeContextMenuItem
+        disabled={!canEdit || columnCount === 0}
+        icon={KeyRound}
+        label="Add index"
+        onSelect={onAddIndex}
+        shortcut="Ctrl+'"
+      />
+
+      <div className="-mx-0.5 my-1 h-px bg-[rgb(var(--tabliodb-border))]" />
+
+      <TableNodeContextMenuItem
+        destructive
+        disabled={!canEdit}
+        icon={Trash2}
+        label="Delete"
+        onSelect={onDelete}
+        shortcut="Del"
+      />
+    </section>
+  );
+}
+
+function TableNodeContextMenuItem({
+  destructive,
+  disabled,
+  icon: Icon,
+  label,
+  onSelect,
+  shortcut,
+}: {
+  destructive?: boolean;
+  disabled?: boolean;
+  icon: LucideIcon;
+  label: string;
+  onSelect: () => void;
+  shortcut?: string;
+}) {
+  return (
+    <button
+      className={cn(
+        'grid min-h-9 w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--tabliodb-radius-sm)] px-3 py-2 text-left text-[13px] font-bold outline-none transition-colors hover:bg-[rgb(var(--tabliodb-selected-surface))] hover:text-[rgb(var(--tabliodb-primary-text))] focus-visible:bg-[rgb(var(--tabliodb-selected-surface))] focus-visible:text-[rgb(var(--tabliodb-primary-text))] disabled:cursor-not-allowed disabled:opacity-50',
+        destructive &&
+          'text-[rgb(var(--tabliodb-danger))] hover:bg-[rgb(var(--tabliodb-danger-soft))] hover:text-[rgb(var(--tabliodb-danger))] focus-visible:bg-[rgb(var(--tabliodb-danger-soft))] focus-visible:text-[rgb(var(--tabliodb-danger))]',
+      )}
+      disabled={disabled}
+      onClick={onSelect}
+      role="menuitem"
+      type="button"
+    >
+      <Icon className="size-4" />
+      <span className="min-w-0 truncate">{label}</span>
+      {shortcut ? (
+        <span
+          className={cn(
+            'ml-5 text-[12px] font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]',
+            destructive && 'text-[rgb(var(--tabliodb-danger))]',
+          )}
+        >
+          {shortcut}
+        </span>
+      ) : (
+        <span />
+      )}
+    </button>
+  );
+}
+
 function CanvasConfirmDialog({
   action,
   onConfirm,
@@ -1653,16 +2023,19 @@ function CanvasConfirmDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const isNote = action?.type === 'note';
+  const isTable = action?.type === 'table';
 
   return (
     <Dialog onOpenChange={onOpenChange} open={Boolean(action)}>
       <DialogContent className="w-[min(92vw,420px)]">
         <DialogHeader>
-          <DialogTitle>{isNote ? 'Delete note?' : 'Delete relationship?'}</DialogTitle>
+          <DialogTitle>{isTable ? 'Delete table?' : isNote ? 'Delete note?' : 'Delete relationship?'}</DialogTitle>
           <DialogDescription>
-            {isNote
-              ? `Remove "${action?.name ?? 'this note'}" from the diagram draft.`
-              : `Remove the relationship connected to "${action?.name ?? 'this column'}".`}
+            {isTable
+              ? `Remove "${action?.name ?? 'this table'}", its columns, indexes, checks, and connected relationships from the diagram draft.`
+              : isNote
+                ? `Remove "${action?.name ?? 'this note'}" from the diagram draft.`
+                : `Remove the relationship connected to "${action?.name ?? 'this column'}".`}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -1676,6 +2049,173 @@ function CanvasConfirmDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+async function copyTableToClipboard(model: DiagramModel, table: DatabaseTable): Promise<void> {
+  const payload = {
+    columns: getTableColumns(model, table.id),
+    indexes: getTableIndexes(model, table),
+    kind: 'tabliodb.table.copy.v1',
+    table,
+  };
+
+  // Clipboard payload tetap JSON terstruktur agar fitur paste/import table nanti bisa membaca data yang sama tanpa scraping text.
+  await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+}
+
+function duplicateTableInModel(model: DiagramModel, tableId: string): { model: DiagramModel; tableId: string } | null {
+  const sourceTable = model.tables[tableId];
+
+  if (!sourceTable) {
+    return null;
+  }
+
+  const sourceColumns = getTableColumns(model, sourceTable.id);
+  const nextTableId = createDiagramEntityId('table');
+  const nextColumnIdBySourceId = new Map<string, string>();
+  const duplicateColumns = sourceColumns.map((column) => {
+    const nextColumnId = createDiagramEntityId('column');
+
+    nextColumnIdBySourceId.set(column.id, nextColumnId);
+
+    return {
+      autoIncrement: column.autoIncrement,
+      collation: column.collation,
+      comment: column.comment,
+      defaultValue: column.defaultValue,
+      generatedExpression: column.generatedExpression,
+      id: nextColumnId,
+      name: column.name,
+      nullable: column.nullable,
+      primaryKey: column.primaryKey,
+      type: { ...column.type },
+      unique: column.unique,
+      unsigned: column.unsigned,
+    };
+  });
+  let nextModel = applyDiagramCommand(model, {
+    color: sourceTable.color,
+    columns: duplicateColumns,
+    name: createUniqueTableName(Object.values(model.tables), `${sourceTable.name}_copy`, sourceTable.schema),
+    position: {
+      x: sourceTable.position.x + diagramDragGridSize * 3,
+      y: sourceTable.position.y + diagramDragGridSize * 3,
+    },
+    schema: sourceTable.schema,
+    tableId: nextTableId,
+    type: 'table.create',
+    width: sourceTable.width,
+  });
+
+  for (const index of getTableIndexes(model, sourceTable)) {
+    const remappedColumns = remapIndexColumns(index.columns, nextColumnIdBySourceId);
+
+    if (remappedColumns.length === 0) {
+      continue;
+    }
+
+    nextModel = applyDiagramCommand(nextModel, {
+      columns: remappedColumns,
+      comment: index.comment,
+      includeColumnIds: remapColumnIds(index.includeColumnIds ?? [], nextColumnIdBySourceId),
+      method: index.method,
+      name: createUniqueIndexName(nextModel, nextModel.tables[nextTableId] ?? sourceTable, index.name),
+      tableId: nextTableId,
+      type: 'index.create',
+      unique: index.unique,
+      where: index.where,
+    });
+  }
+
+  return { model: nextModel, tableId: nextTableId };
+}
+
+function getTableIndexes(model: DiagramModel, table: DatabaseTable): DatabaseIndex[] {
+  return table.indexIds.flatMap((indexId) => {
+    const index = model.indexes[indexId];
+
+    return index ? [index] : [];
+  });
+}
+
+function remapIndexColumns(
+  columns: DatabaseIndexColumn[],
+  columnIdBySourceId: Map<string, string>,
+): DatabaseIndexColumn[] {
+  return columns.flatMap((column) => {
+    const columnId = columnIdBySourceId.get(column.columnId);
+
+    return columnId ? [{ ...column, columnId }] : [];
+  });
+}
+
+function remapColumnIds(columnIds: string[], columnIdBySourceId: Map<string, string>): string[] {
+  return columnIds.flatMap((columnId) => {
+    const nextColumnId = columnIdBySourceId.get(columnId);
+
+    return nextColumnId ? [nextColumnId] : [];
+  });
+}
+
+function createUniqueColumnName(columns: DatabaseColumn[], baseName: string): string {
+  return createUniqueName(
+    new Set(columns.map((column) => column.name.toLowerCase())),
+    normalizeDiagramIdentifier(baseName),
+  );
+}
+
+function createUniqueTableName(tables: DatabaseTable[], baseName: string, schema: string | undefined): string {
+  const usedNames = new Set(tables.map((table) => `${table.schema ?? ''}.${table.name}`.toLowerCase()));
+  const normalizedBaseName = normalizeDiagramIdentifier(baseName);
+  const schemaPrefix = schema ?? '';
+
+  if (!usedNames.has(`${schemaPrefix}.${normalizedBaseName}`)) {
+    return normalizedBaseName;
+  }
+
+  let suffix = 2;
+  let nextName = `${normalizedBaseName}_${suffix}`;
+
+  while (usedNames.has(`${schemaPrefix}.${nextName}`)) {
+    suffix += 1;
+    nextName = `${normalizedBaseName}_${suffix}`;
+  }
+
+  return nextName;
+}
+
+function createUniqueIndexName(model: DiagramModel, table: DatabaseTable, baseName: string): string {
+  const usedNames = new Set(Object.values(model.indexes).map((index) => index.name.toLowerCase()));
+  const normalizedBaseName = normalizeDiagramIdentifier(`${table.name}_${baseName}_idx`);
+
+  return createUniqueName(usedNames, normalizedBaseName);
+}
+
+function createUniqueName(usedNames: Set<string>, baseName: string): string {
+  if (!usedNames.has(baseName.toLowerCase())) {
+    return baseName;
+  }
+
+  let suffix = 2;
+  let nextName = `${baseName}_${suffix}`;
+
+  while (usedNames.has(nextName.toLowerCase())) {
+    suffix += 1;
+    nextName = `${baseName}_${suffix}`;
+  }
+
+  return nextName;
+}
+
+function normalizeDiagramIdentifier(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return normalized || 'item';
 }
 
 function createCanvasMinimapStaticState(

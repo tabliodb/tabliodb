@@ -5,6 +5,7 @@ import {
   createSeedDiagramModel,
   createSnapshotSaveModel,
   normalizeEditorDiagramModel,
+  shouldKeepLocalDiagramModelOverRealtime,
 } from './diagram-model';
 
 describe('editor diagram model helpers', () => {
@@ -122,5 +123,56 @@ describe('editor diagram model helpers', () => {
 
     expect(modelToSave?.tables[newTableId]?.name).toBe('renamed_table');
     expect(getTableColumns(modelToSave!, newTableId).map((column) => column.name)).toEqual(['id', 'new_column']);
+  });
+
+  it('keeps a fresher local draft over a stale realtime model with empty table columns', () => {
+    const baseModel = createSeedDiagramModel('Realtime stale model test');
+    const localModel = {
+      ...addTableToDiagramModel(baseModel, 'draft_table', { x: 120, y: 144 }),
+      metadata: {
+        ...baseModel.metadata,
+        updatedAt: '2026-07-31T12:00:00.000Z',
+      },
+    };
+    const newTableId = Object.keys(localModel.tables).find((tableId) => !baseModel.tables[tableId]) ?? '';
+    const staleRealtimeModel = {
+      ...localModel,
+      columns: Object.fromEntries(
+        Object.entries(localModel.columns).filter(([, column]) => column.tableId !== newTableId),
+      ),
+      metadata: {
+        ...localModel.metadata,
+        updatedAt: '2026-07-31T11:59:00.000Z',
+      },
+      tables: {
+        ...localModel.tables,
+        [newTableId]: {
+          ...localModel.tables[newTableId],
+          columnIds: [],
+        },
+      },
+    };
+
+    expect(shouldKeepLocalDiagramModelOverRealtime(localModel, staleRealtimeModel)).toBe(true);
+  });
+
+  it('accepts a newer realtime model so collaboration can move forward', () => {
+    const baseModel = createSeedDiagramModel('Realtime newer model test');
+    const localModel = {
+      ...addTableToDiagramModel(baseModel, 'draft_table', { x: 120, y: 144 }),
+      metadata: {
+        ...baseModel.metadata,
+        updatedAt: '2026-07-31T12:00:00.000Z',
+      },
+    };
+    const realtimeModel = {
+      ...localModel,
+      metadata: {
+        ...localModel.metadata,
+        updatedAt: '2026-07-31T12:01:00.000Z',
+      },
+    };
+
+    expect(shouldKeepLocalDiagramModelOverRealtime(localModel, realtimeModel)).toBe(false);
   });
 });
