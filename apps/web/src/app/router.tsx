@@ -108,6 +108,9 @@ export const router = createBrowserRouter([
                 element: <AcceptInvitationPage />,
                 loader: acceptInvitationLoader,
                 path: routes.invitation.path,
+                handle: {
+                  title: 'Accept Invitation',
+                },
               },
             ],
           },
