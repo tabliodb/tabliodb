@@ -169,7 +169,7 @@ export class FileService {
   }
 
   private validateAvatarFile(file: UploadedAvatarFile | undefined): AvatarUploadCandidate {
-    if (!file?.buffer || file.buffer.length === 0) {
+    if (!Buffer.isBuffer(file?.buffer) || file.buffer.length === 0) {
       throw new BadRequestException('Avatar image is required');
     }
 
@@ -188,8 +188,16 @@ export class FileService {
     return {
       buffer: file.buffer,
       mimeType,
-      originalName: path.basename(file.originalname ?? 'avatar').slice(0, 255),
+      originalName: this.normalizeOriginalAvatarName(file.originalname),
     };
+  }
+
+  private normalizeOriginalAvatarName(value: string | undefined): string {
+    const filename = (value ?? 'avatar').split(/[\\/]/).at(-1) ?? 'avatar';
+    const safeFilename = filename.replaceAll(/[\u0000-\u001f\u007f]/g, '').trim();
+
+    // Original names are stored only as metadata, but normalizing both Windows and POSIX separators avoids leaking fake paths.
+    return (safeFilename || 'avatar').slice(0, 255);
   }
 
   private async processAvatarUpload(upload: AvatarUploadCandidate): Promise<ProcessedAvatarUpload> {

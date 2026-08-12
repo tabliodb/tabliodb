@@ -1,11 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import sharp from 'sharp';
 import { AVATAR_SERVE_VARIANT } from '../repositories/file.repository.js';
-import { FileService } from './file.service.js';
+import { AVATAR_MAX_BYTES, FileService } from './file.service.js';
 
 describe(FileService.name, () => {
   const configRepository = {
@@ -53,7 +53,7 @@ describe(FileService.name, () => {
     await service.uploadUserAvatar('user-id', {
       buffer: pngBuffer,
       mimetype: 'image/png',
-      originalname: 'avatar.png',
+      originalname: 'C:\\fakepath\\avatar\u0000.png',
       size: pngBuffer.length,
     });
 
@@ -68,6 +68,7 @@ describe(FileService.name, () => {
         strippedMetadata: true,
       },
       mimeType: 'image/webp',
+      originalName: 'avatar.png',
       ownerId: 'user-id',
       status: 'ready',
     });
@@ -104,6 +105,86 @@ describe(FileService.name, () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(fileRepository.replaceUserAvatar).not.toHaveBeenCalled();
+  });
+
+  it('rejects avatar uploads without a real file buffer', async () => {
+    await expect(
+      service.uploadUserAvatar('user-id', {
+        buffer: 'not-a-buffer' as never,
+        mimetype: 'image/png',
+        originalname: 'avatar.png',
+        size: 12,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(fileRepository.replaceUserAvatar).not.toHaveBeenCalled();
+  });
+
+  it('rejects avatar uploads that exceed the configured size limit', async () => {
+    await expect(
+      service.uploadUserAvatar('user-id', {
+        buffer: Buffer.alloc(AVATAR_MAX_BYTES + 1),
+        mimetype: 'image/png',
+        originalname: 'avatar.png',
+        size: AVATAR_MAX_BYTES + 1,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(fileRepository.replaceUserAvatar).not.toHaveBeenCalled();
+  });
+
+  it('rejects avatar uploads when the declared MIME type does not match the image signature', async () => {
+    await expect(
+      service.uploadUserAvatar('user-id', {
+        buffer: pngBuffer,
+        mimetype: 'image/jpeg',
+        originalname: 'avatar.jpg',
+        size: pngBuffer.length,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(fileRepository.replaceUserAvatar).not.toHaveBeenCalled();
+  });
+
+  it('rejects corrupt images even when the first bytes look like an allowed image', async () => {
+    const corruptPng = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from('not a real png payload'),
+    ]);
+
+    await expect(
+      service.uploadUserAvatar('user-id', {
+        buffer: corruptPng,
+        mimetype: 'image/png',
+        originalname: 'avatar.png',
+        size: corruptPng.length,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(fileRepository.replaceUserAvatar).not.toHaveBeenCalled();
+  });
+
+  it('removes newly written avatar files when the database replacement fails', async () => {
+    fileRepository.replaceUserAvatar.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(
+      service.uploadUserAvatar('user-id', {
+        buffer: pngBuffer,
+        mimetype: 'image/png',
+        originalname: 'avatar.png',
+        size: pngBuffer.length,
+      }),
+    ).rejects.toThrow('database unavailable');
+
+    const avatarOptions = fileRepository.replaceUserAvatar.mock.calls[0][0];
+    const storedPaths = [
+      avatarOptions.file.storageKey,
+      ...avatarOptions.variants.map((variant: { storageKey: string }) => variant.storageKey),
+    ];
+
+    for (const storageKey of storedPaths) {
+      await expect(stat(path.join(storageRoot, storageKey))).rejects.toMatchObject({ code: 'ENOENT' });
+    }
   });
 
   it('returns a stream only for ready avatar records that exist on disk', async () => {
@@ -152,5 +233,17 @@ describe(FileService.name, () => {
     });
 
     await expect(service.getReadyAvatarFile('viewer-id', 'file-id')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects avatar storage keys that escape the configured storage root', async () => {
+    fileRepository.getReadyAvatarById.mockResolvedValue({
+      byteSize: '12',
+      checksumSha256: 'checksum',
+      mimeType: 'image/png',
+      ownerId: 'user-id',
+      storageKey: '../outside-storage.png',
+    });
+
+    await expect(service.getReadyAvatarFile('viewer-id', 'file-id')).rejects.toBeInstanceOf(BadRequestException);
   });
 });
