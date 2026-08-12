@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForOrganizationRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import { AuditLogListQueryDto, AuditLogListResponseDto } from '../dtos/audit-log.dto.js';
@@ -59,6 +59,8 @@ export class OrganizationService {
   }
 
   async getAll(auth: AuthContext, query: OrganizationListQueryDto): Promise<OrganizationListResponseDto> {
+    this.assertApiKeyScope(auth, Permission.OrganizationRead);
+
     const organizations = await this.organizationRepository.listForUser(auth.user.id, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
@@ -71,6 +73,8 @@ export class OrganizationService {
   }
 
   async getSettings(auth: AuthContext, organizationId: string): Promise<OrganizationSettingsDto> {
+    await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationRead);
+
     const organization = await this.organizationRepository.getSettingsForUser(auth.user.id, organizationId);
     if (!organization) {
       throw new NotFoundException('Organization not found');
@@ -88,14 +92,16 @@ export class OrganizationService {
       throw new BadRequestException('At least one workspace setting is required');
     }
 
-    const current = await this.organizationRepository.getSettingsForUser(auth.user.id, organizationId);
-    if (!current) {
-      throw new NotFoundException('Organization not found');
-    }
-
     const nextName = dto.name?.trim();
     if (dto.name !== undefined && !nextName) {
       throw new BadRequestException('Workspace name is required');
+    }
+
+    await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+
+    const current = await this.organizationRepository.getSettingsForUser(auth.user.id, organizationId);
+    if (!current) {
+      throw new NotFoundException('Organization not found');
     }
 
     const organization = await this.organizationRepository.updateSettings(organizationId, {
@@ -124,10 +130,12 @@ export class OrganizationService {
   }
 
   async getMembers(
-    _auth: AuthContext,
+    auth: AuthContext,
     organizationId: string,
     query: OrganizationMemberListQueryDto,
   ): Promise<OrganizationMemberListResponseDto> {
+    await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+
     const members = await this.organizationRepository.getMembers(organizationId, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
@@ -145,6 +153,8 @@ export class OrganizationService {
     userId: string,
     dto: OrganizationMemberUpdateDto,
   ): Promise<OrganizationMemberDto> {
+    await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+
     const currentMember = await this.assertCanChangeOwnerRole(organizationId, userId, dto.role);
     const member = await this.organizationRepository.updateMemberRole(organizationId, userId, dto.role);
 
@@ -177,6 +187,8 @@ export class OrganizationService {
     organizationId: string,
     userId: string,
   ): Promise<OrganizationMemberRemoveResponseDto> {
+    await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+
     const currentMember = await this.organizationRepository.getMember(organizationId, userId);
     if (!currentMember) {
       throw new NotFoundException('Workspace member not found');
@@ -207,10 +219,12 @@ export class OrganizationService {
   }
 
   async getAuditLogs(
-    _auth: AuthContext,
+    auth: AuthContext,
     organizationId: string,
     query: AuditLogListQueryDto,
   ): Promise<AuditLogListResponseDto> {
+    await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+
     const auditLogs = await this.auditLogRepository.listForOrganization({
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
@@ -252,6 +266,40 @@ export class OrganizationService {
     }
 
     return { changes };
+  }
+
+  private async requireOrganizationPermission(
+    auth: AuthContext,
+    organizationId: string,
+    permission: Permission,
+  ): Promise<void> {
+    this.assertApiKeyScope(auth, permission);
+
+    const membership = await this.organizationRepository.getRole(auth.user.id, organizationId);
+    if (!membership) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (
+      !isGranted({
+        current: permissionsForOrganizationRole(this.toOrganizationRole(membership.role)),
+        requested: [permission],
+      })
+    ) {
+      // Workspace-level mutations must remain protected when services are called outside HTTP controllers.
+      throw new ForbiddenException(`${permission} permission is required`);
+    }
+  }
+
+  private assertApiKeyScope(auth: AuthContext, permission: Permission): void {
+    if (!auth.apiKey) {
+      return;
+    }
+
+    if (!isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
+      // API key scope is checked before organization membership to avoid using low-scope keys for existence probing.
+      throw new ForbiddenException(`${permission} API key scope is required`);
+    }
   }
 
   private async assertCanChangeOwnerRole(organizationId: string, userId: string, nextRole: OrganizationRole) {

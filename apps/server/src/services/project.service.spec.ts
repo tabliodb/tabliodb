@@ -1,5 +1,5 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { ProjectService } from './project.service.js';
@@ -12,6 +12,14 @@ const auth: AuthContext = {
     id: 'owner-id',
     name: 'Project Owner',
     passwordChangeRequired: false,
+  },
+};
+
+const authWithReadApiKey: AuthContext = {
+  ...auth,
+  apiKey: {
+    id: 'api-key-id',
+    permissions: [Permission.ProjectRead],
   },
 };
 
@@ -36,6 +44,7 @@ describe(ProjectService.name, () => {
     createPersonalOrganization: vi.fn(),
     getByIdForUser: vi.fn(),
     getFirstForUser: vi.fn(),
+    getRole: vi.fn(),
   };
   const projectRepository = {
     archive: vi.fn(),
@@ -66,6 +75,36 @@ describe(ProjectService.name, () => {
     );
 
     projectRepository.getByIdForUser.mockResolvedValue(project);
+  });
+
+  it('blocks project updates from project viewers at the service boundary', async () => {
+    projectRepository.getByIdForUser.mockResolvedValue({
+      ...project,
+      projectRole: ProjectRole.Viewer,
+    });
+
+    await expect(
+      service.update(auth, 'project-id', {
+        name: 'Readonly Rename',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    // Controller decorators are not the only protection; service callers must also respect project roles.
+    expect(projectRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('blocks low-scope API keys before project member management lookups', async () => {
+    await expect(
+      service.addMember(authWithReadApiKey, 'project-id', {
+        email: 'editor@tabliodb.local',
+        role: ProjectRole.Editor,
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    // API-key scope is checked before loading the project so low-scope tokens cannot probe project existence.
+    expect(projectRepository.getByIdForUser).not.toHaveBeenCalled();
+    expect(userRepository.getByEmail).not.toHaveBeenCalled();
+    expect(projectRepository.upsertMember).not.toHaveBeenCalled();
   });
 
   it('adds an existing workspace user as a project member', async () => {

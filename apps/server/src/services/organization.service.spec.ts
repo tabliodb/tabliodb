@@ -1,5 +1,5 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { OrganizationRole } from '@tabliodb/shared';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { OrganizationRole, Permission } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { OrganizationService } from './organization.service.js';
@@ -12,6 +12,14 @@ const auth: AuthContext = {
     id: 'owner-id',
     name: 'Workspace Owner',
     passwordChangeRequired: false,
+  },
+};
+
+const authWithReadApiKey: AuthContext = {
+  ...auth,
+  apiKey: {
+    id: 'api-key-id',
+    permissions: [Permission.OrganizationRead],
   },
 };
 
@@ -33,6 +41,7 @@ describe(OrganizationService.name, () => {
     create: vi.fn(),
   };
   const organizationRepository = {
+    getRole: vi.fn(),
     getMember: vi.fn(),
     getMembers: vi.fn(),
     getOrganizationOwnerCount: vi.fn(),
@@ -48,6 +57,31 @@ describe(OrganizationService.name, () => {
   beforeEach(() => {
     vi.resetAllMocks();
     service = new OrganizationService(auditLogRepository as never, organizationRepository as never);
+    organizationRepository.getRole.mockResolvedValue({ role: OrganizationRole.Owner });
+  });
+
+  it('blocks workspace members from updating workspace settings at the service boundary', async () => {
+    organizationRepository.getRole.mockResolvedValue({ role: OrganizationRole.Member });
+
+    await expect(
+      service.updateSettings(auth, 'organization-id', {
+        name: 'Member Rename',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    // Service-level permission prevents internal callers from relying only on controller decorators.
+    expect(organizationRepository.getSettingsForUser).not.toHaveBeenCalled();
+    expect(organizationRepository.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('blocks low-scope API keys before workspace member list lookups', async () => {
+    await expect(service.getMembers(authWithReadApiKey, 'organization-id', { limit: 10 })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+
+    // API-key scope is rejected before membership lookup so low-scope tokens cannot probe workspace existence.
+    expect(organizationRepository.getRole).not.toHaveBeenCalled();
+    expect(organizationRepository.getMembers).not.toHaveBeenCalled();
   });
 
   it('prevents demoting the last workspace owner', async () => {

@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrganizationRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, isGranted } from '@tabliodb/shared';
 import { AuditAction, SALT_ROUNDS } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import {
@@ -194,6 +194,11 @@ export class UserService {
   }
 
   private async requireInstanceManager(auth: AuthContext) {
+    if (auth.apiKey && !isGranted({ current: auth.apiKey.permissions, requested: [Permission.OrganizationManage] })) {
+      // User lifecycle endpoints are instance-admin operations, so API keys must carry the same management scope as the HTTP guard.
+      throw new ForbiddenException(`${Permission.OrganizationManage} API key scope is required`);
+    }
+
     const instanceMember = await this.userRepository.getInstanceRole(auth.user.id);
 
     if (!instanceMember) {

@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { defaultDiagramReviewSettings } from '@tabliodb/schema-core';
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import { AuthContext } from '../database.js';
 import {
@@ -42,6 +42,8 @@ export class ProjectService {
   ) {}
 
   async getAll(auth: AuthContext, query: ProjectListQueryDto): Promise<ProjectListResponseDto> {
+    this.assertApiKeyScope(auth, Permission.ProjectRead);
+
     const projects = await this.projectRepository.getVisibleToUser(auth.user.id, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
@@ -55,6 +57,8 @@ export class ProjectService {
   }
 
   async create(auth: AuthContext, dto: ProjectCreateDto) {
+    this.assertApiKeyScope(auth, Permission.ProjectCreate);
+
     const organization = await this.organizationRepository.getByIdForUser(auth.user.id, dto.organizationId);
 
     if (!organization) {
@@ -99,6 +103,8 @@ export class ProjectService {
       throw new BadRequestException('Project name is required');
     }
 
+    await this.requireProject(auth, projectId, Permission.ProjectUpdate);
+
     const project = await this.projectRepository.update(auth.user.id, projectId, {
       description: dto.description === undefined ? undefined : dto.description?.trim() || null,
       name: nextName,
@@ -112,7 +118,7 @@ export class ProjectService {
   }
 
   async archive(auth: AuthContext, projectId: string): Promise<ProjectArchiveResponseDto> {
-    const project = await this.requireProject(auth, projectId);
+    const project = await this.requireProject(auth, projectId, Permission.ProjectDelete);
     const archived = await this.projectRepository.archive(projectId);
 
     if (!archived) {
@@ -135,10 +141,12 @@ export class ProjectService {
   }
 
   async getMembers(
-    _auth: AuthContext,
+    auth: AuthContext,
     projectId: string,
     query: ProjectMemberListQueryDto,
   ): Promise<ProjectMemberListResponseDto> {
+    await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
+
     const members = await this.projectRepository.getMembers(projectId, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
@@ -151,7 +159,7 @@ export class ProjectService {
   }
 
   async addMember(auth: AuthContext, projectId: string, dto: ProjectMemberCreateDto): Promise<ProjectMemberDto> {
-    const project = await this.requireProject(auth, projectId);
+    const project = await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
     const user = await this.userRepository.getByEmail(dto.email);
 
     if (!user) {
@@ -214,7 +222,7 @@ export class ProjectService {
     userId: string,
     dto: ProjectMemberUpdateDto,
   ): Promise<ProjectMemberDto> {
-    const project = await this.requireProject(auth, projectId);
+    const project = await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
     const currentMember = await this.assertCanChangeOwnerRole(projectId, userId, dto.role);
 
     const member = await this.projectRepository.updateMember(projectId, userId, dto.role);
@@ -244,7 +252,7 @@ export class ProjectService {
   }
 
   async removeMember(auth: AuthContext, projectId: string, userId: string): Promise<ProjectMemberRemoveResponseDto> {
-    const project = await this.requireProject(auth, projectId);
+    const project = await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
     const currentMember = await this.projectRepository.getMember(projectId, userId);
     if (!currentMember) {
       throw new NotFoundException('Project member not found');
@@ -275,13 +283,34 @@ export class ProjectService {
     return { successful: true };
   }
 
-  async requireProject(auth: AuthContext, projectId: string) {
+  async requireProject(auth: AuthContext, projectId: string, permission: Permission = Permission.ProjectRead) {
+    this.assertApiKeyScope(auth, permission);
+
     const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
     if (!project) {
       throw new NotFoundException('Project not found');
     }
 
+    this.assertProjectRole(project.projectRole, permission);
+
     return project;
+  }
+
+  private assertApiKeyScope(auth: AuthContext, permission: Permission): void {
+    if (!auth.apiKey) {
+      return;
+    }
+
+    if (!isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
+      // Service-level checks protect internal callers and routes whose controller metadata can be bypassed in tests.
+      throw new ForbiddenException(`${permission} API key scope is required`);
+    }
+  }
+
+  private assertProjectRole(role: ProjectRole, permission: Permission): void {
+    if (!isGranted({ current: permissionsForProjectRole(role), requested: [permission] })) {
+      throw new ForbiddenException(`${permission} permission is required`);
+    }
   }
 
   private async assertCanCreateProject(

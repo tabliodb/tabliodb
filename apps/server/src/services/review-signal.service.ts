@@ -56,6 +56,8 @@ export class ReviewSignalService {
   }
 
   async getProjectSettings(auth: AuthContext, projectId: string): Promise<ReviewSignalSettingsDto> {
+    this.assertApiKeyScope(auth, Permission.ProjectRead);
+
     const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
     if (!project) {
       throw new NotFoundException('Project not found');
@@ -73,6 +75,8 @@ export class ReviewSignalService {
     projectId: string,
     dto: ReviewSignalSettingsDto,
   ): Promise<ReviewSignalSettingsDto> {
+    this.assertApiKeyScope(auth, Permission.ProjectUpdate);
+
     const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
     if (!project) {
       throw new NotFoundException('Project not found');
@@ -154,6 +158,17 @@ export class ReviewSignalService {
     }
 
     return serializeReviewSignal(updatedSignal);
+  }
+
+  private assertApiKeyScope(auth: AuthContext, permission: Permission): void {
+    if (!auth.apiKey) {
+      return;
+    }
+
+    if (!isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
+      // Project-level review settings can be called from service tests and SDK automation, so token scope is enforced outside controllers too.
+      throw new ForbiddenException(`${permission} API key scope is required`);
+    }
   }
 
   private assertProjectPermission(role: ProjectRole, permission: Permission): void {

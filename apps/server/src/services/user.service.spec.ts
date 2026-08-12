@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
-import { OrganizationRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { UserService } from './user.service.js';
@@ -12,6 +12,14 @@ const auth: AuthContext = {
     id: 'owner-id',
     name: 'Tabliodb Owner',
     passwordChangeRequired: false,
+  },
+};
+
+const authWithReadApiKey: AuthContext = {
+  ...auth,
+  apiKey: {
+    id: 'api-key-id',
+    permissions: [Permission.OrganizationRead],
   },
 };
 
@@ -108,6 +116,14 @@ describe(UserService.name, () => {
       role: undefined,
       search: undefined,
     });
+  });
+
+  it('blocks low-scope API keys before instance admin lookup', async () => {
+    await expect(service.getAll(authWithReadApiKey, { limit: 10 })).rejects.toBeInstanceOf(ForbiddenException);
+
+    // Scope rejection happens before instance-role lookup so low-scope automation cannot probe admin state.
+    expect(userRepository.getInstanceRole).not.toHaveBeenCalled();
+    expect(userRepository.listManagedUsers).not.toHaveBeenCalled();
   });
 
   it('blocks instance admin creation from a non-owner instance admin', async () => {
