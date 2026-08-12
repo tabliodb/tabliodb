@@ -4,6 +4,7 @@ import {
   addTableToDiagramModel,
   createRealtimeColumnPatch,
   createRealtimeNotePatch,
+  createRealtimeRelationshipPatch,
   createRealtimeTablePatch,
   createSeedDiagramModel,
   createSnapshotSaveModel,
@@ -324,6 +325,72 @@ describe('editor diagram model helpers', () => {
 
     expect(createRealtimeColumnPatch(baseModel, addedColumnModel)).toBeNull();
     expect(createRealtimeColumnPatch(baseModel, reorderedColumnModel)).toBeNull();
+  });
+
+  it('creates a realtime patch for relationship create edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime relationship create patch test');
+    const relationshipModel = applyDiagramCommand(
+      baseModel,
+      {
+        cardinality: 'one_to_one',
+        relationshipId: 'users_books_test_fkey',
+        sourceColumnIds: ['users-id'],
+        sourceTableId: 'users',
+        targetColumnIds: ['books-id'],
+        targetTableId: 'books',
+        type: 'relationship.create',
+      },
+      { now: () => '2026-08-12T02:00:00.000Z' },
+    );
+
+    const patch = createRealtimeRelationshipPatch(baseModel, relationshipModel);
+
+    expect(patch).toMatchObject({
+      action: 'create',
+      metadataUpdatedAt: '2026-08-12T02:00:00.000Z',
+      relationship: {
+        cardinality: 'one_to_one',
+        id: 'users_books_test_fkey',
+        sourceColumnIds: ['users-id'],
+        sourceTableId: 'users',
+        targetColumnIds: ['books-id'],
+        targetTableId: 'books',
+      },
+      relationshipId: 'users_books_test_fkey',
+    });
+  });
+
+  it('creates a realtime patch for relationship delete edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime relationship delete patch test');
+    const deletedRelationshipModel = applyDiagramCommand(
+      baseModel,
+      {
+        relationshipId: 'users-borrowings',
+        type: 'relationship.delete',
+      },
+      { now: () => '2026-08-12T02:01:00.000Z' },
+    );
+
+    const patch = createRealtimeRelationshipPatch(baseModel, deletedRelationshipModel);
+
+    expect(patch).toEqual({
+      action: 'delete',
+      metadataUpdatedAt: '2026-08-12T02:01:00.000Z',
+      relationshipId: 'users-borrowings',
+    });
+  });
+
+  it('falls back to full realtime model writes for relationship update edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime relationship update fallback test');
+    const updatedRelationshipModel = applyDiagramCommand(baseModel, {
+      changes: {
+        onDelete: 'cascade',
+      },
+      relationshipId: 'books-borrowings',
+      type: 'relationship.update',
+    });
+
+    expect(createRealtimeRelationshipPatch(baseModel, updatedRelationshipModel)).toBeNull();
   });
 
   it('creates a field-level realtime patch for note update and move edits', () => {

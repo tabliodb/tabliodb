@@ -5,6 +5,7 @@ import {
   writeDiagramModelToYjsDocument,
   yjsCollections,
   type DatabaseColumn,
+  type DatabaseRelationship,
   type DiagramModel,
   type DiagramNote,
 } from '@tabliodb/schema-core';
@@ -58,6 +59,18 @@ export type DiagramCollaborationTablePatch = {
   position?: { x: number; y: number };
   width?: number;
 };
+export type DiagramCollaborationRelationshipPatch =
+  | {
+      action: 'create';
+      metadataUpdatedAt?: string;
+      relationship: DatabaseRelationship;
+      relationshipId: string;
+    }
+  | {
+      action: 'delete';
+      metadataUpdatedAt?: string;
+      relationshipId: string;
+    };
 export type DiagramCollaborationNotePatch = {
   changes: Partial<DiagramNote>;
   clearedKeys: Array<keyof DiagramNote>;
@@ -166,6 +179,32 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     },
     writeModel(model: DiagramModel) {
       writeDiagramModelToYjsDocument(document, model, localModelWriteOrigin);
+    },
+    writeRelationshipPatch(patch: DiagramCollaborationRelationshipPatch) {
+      const relationshipsMap = document.getMap<Y.Map<unknown>>(yjsCollections.relationships);
+
+      document.transact(() => {
+        if (patch.action === 'delete') {
+          relationshipsMap.delete(patch.relationshipId);
+        } else {
+          const existingRelationshipMap = relationshipsMap.get(patch.relationshipId);
+          const relationshipMap =
+            existingRelationshipMap instanceof Y.Map ? existingRelationshipMap : new Y.Map<unknown>();
+
+          if (relationshipMap !== existingRelationshipMap) {
+            relationshipsMap.set(patch.relationshipId, relationshipMap);
+          }
+
+          // Relationship create writes only the relationship entity, leaving tables and columns untouched in the shared Y.Doc.
+          syncYMapFromRecord(relationshipMap, patch.relationship as unknown as Record<string, unknown>);
+        }
+
+        if (patch.metadataUpdatedAt) {
+          document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
+        }
+      }, localModelWriteOrigin);
+
+      return true;
     },
     writeNotePatch(patch: DiagramCollaborationNotePatch) {
       const noteMap = document.getMap<Y.Map<unknown>>(yjsCollections.notes).get(patch.noteId);
@@ -296,6 +335,20 @@ function cloneYjsSerializableValue(value: unknown): unknown {
   }
 
   return JSON.parse(JSON.stringify(value)) as unknown;
+}
+
+function syncYMapFromRecord(map: Y.Map<unknown>, record: Record<string, unknown>): void {
+  const nextKeys = new Set(Object.keys(record));
+
+  for (const existingKey of Array.from(map.keys())) {
+    if (!nextKeys.has(existingKey)) {
+      map.delete(existingKey);
+    }
+  }
+
+  for (const [key, value] of Object.entries(record)) {
+    map.set(key, cloneYjsSerializableValue(value));
+  }
 }
 
 async function createRealtimeSessionProofToken(documentName: string): Promise<string> {

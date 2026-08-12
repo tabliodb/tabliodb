@@ -256,6 +256,7 @@ import {
   addTableToDiagramModel,
   createRealtimeColumnPatch,
   createRealtimeNotePatch,
+  createRealtimeRelationshipPatch,
   createRealtimeTablePatch,
   createSeedDiagramModel,
   createSnapshotSaveModel,
@@ -808,6 +809,12 @@ export function EditorPage() {
       const columnPatch = createRealtimeColumnPatch(previousModel, nextModel);
 
       if (columnPatch && collaborationRef.current?.writeColumnPatch(columnPatch)) {
+        return;
+      }
+
+      const relationshipPatch = createRealtimeRelationshipPatch(previousModel, nextModel);
+
+      if (relationshipPatch && collaborationRef.current?.writeRelationshipPatch(relationshipPatch)) {
         return;
       }
 

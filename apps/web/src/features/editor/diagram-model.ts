@@ -7,6 +7,7 @@ import {
   type ColumnTypeSpec,
   type CreateTableColumnInput,
   type DatabaseColumn,
+  type DatabaseRelationship,
   type DiagramModel,
   type DiagramNote,
 } from '@tabliodb/schema-core';
@@ -27,6 +28,19 @@ export type RealtimeTablePatch = {
   position?: { x: number; y: number };
   width?: number;
 };
+
+export type RealtimeRelationshipPatch =
+  | {
+      action: 'create';
+      metadataUpdatedAt?: string;
+      relationship: DatabaseRelationship;
+      relationshipId: string;
+    }
+  | {
+      action: 'delete';
+      metadataUpdatedAt?: string;
+      relationshipId: string;
+    };
 
 export type RealtimeNotePatch = {
   changes: Partial<DiagramNote>;
@@ -293,6 +307,67 @@ export function createRealtimeColumnPatch(
     metadataUpdatedAt:
       previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt ? nextModel.metadata.updatedAt : undefined,
   };
+}
+
+export function createRealtimeRelationshipPatch(
+  previousModel: DiagramModel | null,
+  nextModel: DiagramModel,
+): RealtimeRelationshipPatch | null {
+  if (!previousModel) {
+    return null;
+  }
+
+  if (
+    previousModel.schemaVersion !== nextModel.schemaVersion ||
+    previousModel.dialect !== nextModel.dialect ||
+    !areJsonValuesEqual(previousModel.tables, nextModel.tables) ||
+    !areJsonValuesEqual(previousModel.columns, nextModel.columns) ||
+    !areJsonValuesEqual(previousModel.indexes, nextModel.indexes) ||
+    !areJsonValuesEqual(previousModel.enums, nextModel.enums) ||
+    !areJsonValuesEqual(previousModel.checks, nextModel.checks) ||
+    !areJsonValuesEqual(previousModel.notes, nextModel.notes) ||
+    !areJsonValuesEqual(previousModel.groups, nextModel.groups) ||
+    !areMetadataEqualExceptUpdatedAt(previousModel.metadata, nextModel.metadata)
+  ) {
+    return null;
+  }
+
+  const changedRelationshipIds = Array.from(
+    new Set([...Object.keys(previousModel.relationships), ...Object.keys(nextModel.relationships)]),
+  ).filter(
+    (relationshipId) =>
+      !areJsonValuesEqual(previousModel.relationships[relationshipId], nextModel.relationships[relationshipId]),
+  );
+
+  if (changedRelationshipIds.length !== 1) {
+    return null;
+  }
+
+  const relationshipId = changedRelationshipIds[0];
+  const previousRelationship = previousModel.relationships[relationshipId];
+  const nextRelationship = nextModel.relationships[relationshipId];
+  const metadataUpdatedAt =
+    previousModel.metadata.updatedAt !== nextModel.metadata.updatedAt ? nextModel.metadata.updatedAt : undefined;
+
+  if (!previousRelationship && nextRelationship) {
+    return {
+      action: 'create',
+      metadataUpdatedAt,
+      relationship: nextRelationship,
+      relationshipId,
+    };
+  }
+
+  if (previousRelationship && !nextRelationship) {
+    return {
+      action: 'delete',
+      metadataUpdatedAt,
+      relationshipId,
+    };
+  }
+
+  // Relationship field edits stay on the full-model path until they get their own conflict policy.
+  return null;
 }
 
 export function createRealtimeNotePatch(
