@@ -380,17 +380,37 @@ describe('editor diagram model helpers', () => {
     });
   });
 
-  it('falls back to full realtime model writes for relationship update edits', () => {
-    const baseModel = createSeedDiagramModel('Realtime relationship update fallback test');
-    const updatedRelationshipModel = applyDiagramCommand(baseModel, {
+  it('creates a field-level realtime patch for relationship update edits', () => {
+    const baseModel = createSeedDiagramModel('Realtime relationship update patch test');
+    const updatedRelationshipModel = applyDiagramCommand(
+      baseModel,
+      {
+        changes: {
+          cardinality: 'many_to_many',
+          comment: 'Temporary library copy relationship',
+          deferrable: true,
+          onDelete: 'cascade',
+        },
+        relationshipId: 'books-borrowings',
+        type: 'relationship.update',
+      },
+      { now: () => '2026-08-12T02:02:00.000Z' },
+    );
+
+    const patch = createRealtimeRelationshipPatch(baseModel, updatedRelationshipModel);
+
+    expect(patch).toMatchObject({
+      action: 'update',
       changes: {
+        cardinality: 'many_to_many',
+        comment: 'Temporary library copy relationship',
+        deferrable: true,
         onDelete: 'cascade',
       },
+      clearedKeys: [],
+      metadataUpdatedAt: '2026-08-12T02:02:00.000Z',
       relationshipId: 'books-borrowings',
-      type: 'relationship.update',
     });
-
-    expect(createRealtimeRelationshipPatch(baseModel, updatedRelationshipModel)).toBeNull();
   });
 
   it('creates a field-level realtime patch for note update and move edits', () => {

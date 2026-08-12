@@ -40,6 +40,13 @@ export type RealtimeRelationshipPatch =
       action: 'delete';
       metadataUpdatedAt?: string;
       relationshipId: string;
+    }
+  | {
+      action: 'update';
+      changes: Partial<DatabaseRelationship>;
+      clearedKeys: Array<keyof DatabaseRelationship>;
+      metadataUpdatedAt?: string;
+      relationshipId: string;
     };
 
 export type RealtimeNotePatch = {
@@ -366,8 +373,48 @@ export function createRealtimeRelationshipPatch(
     };
   }
 
-  // Relationship field edits stay on the full-model path until they get their own conflict policy.
-  return null;
+  if (!previousRelationship || !nextRelationship) {
+    return null;
+  }
+
+  const changes: Partial<DatabaseRelationship> = {};
+  const clearedKeys: Array<keyof DatabaseRelationship> = [];
+  const relationshipKeys = Array.from(
+    new Set([...Object.keys(previousRelationship), ...Object.keys(nextRelationship)]),
+  ) as Array<keyof DatabaseRelationship>;
+
+  for (const key of relationshipKeys) {
+    const previousValue = previousRelationship[key];
+    const nextValue = nextRelationship[key];
+
+    if (areJsonValuesEqual(previousValue, nextValue)) {
+      continue;
+    }
+
+    if (key === 'id') {
+      return null;
+    }
+
+    if (nextValue === undefined) {
+      clearedKeys.push(key);
+      continue;
+    }
+
+    // Relationship update juga dipatch per field supaya edit cardinality tidak menimpa perubahan referential action dari user lain.
+    (changes as Record<string, unknown>)[key] = nextValue;
+  }
+
+  if (Object.keys(changes).length === 0 && clearedKeys.length === 0) {
+    return null;
+  }
+
+  return {
+    action: 'update',
+    changes,
+    clearedKeys,
+    metadataUpdatedAt,
+    relationshipId,
+  };
 }
 
 export function createRealtimeNotePatch(

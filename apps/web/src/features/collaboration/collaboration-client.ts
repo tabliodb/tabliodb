@@ -70,6 +70,13 @@ export type DiagramCollaborationRelationshipPatch =
       action: 'delete';
       metadataUpdatedAt?: string;
       relationshipId: string;
+    }
+  | {
+      action: 'update';
+      changes: Partial<DatabaseRelationship>;
+      clearedKeys: Array<keyof DatabaseRelationship>;
+      metadataUpdatedAt?: string;
+      relationshipId: string;
     };
 export type DiagramCollaborationNotePatch = {
   changes: Partial<DiagramNote>;
@@ -182,6 +189,31 @@ export function createDiagramCollaboration(options: DiagramCollaborationOptions)
     },
     writeRelationshipPatch(patch: DiagramCollaborationRelationshipPatch) {
       const relationshipsMap = document.getMap<Y.Map<unknown>>(yjsCollections.relationships);
+
+      if (patch.action === 'update') {
+        const relationshipMap = relationshipsMap.get(patch.relationshipId);
+
+        if (!(relationshipMap instanceof Y.Map)) {
+          return false;
+        }
+
+        document.transact(() => {
+          for (const key of patch.clearedKeys) {
+            relationshipMap.delete(key);
+          }
+
+          for (const [key, value] of Object.entries(patch.changes)) {
+            // Relationship updates stay scoped to changed fields so separate cardinality/action edits can merge in Yjs.
+            relationshipMap.set(key, cloneYjsSerializableValue(value));
+          }
+
+          if (patch.metadataUpdatedAt) {
+            document.getMap<unknown>(yjsCollections.metadata).set('updatedAt', patch.metadataUpdatedAt);
+          }
+        }, localModelWriteOrigin);
+
+        return true;
+      }
 
       document.transact(() => {
         if (patch.action === 'delete') {
