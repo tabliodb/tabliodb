@@ -76,6 +76,9 @@ export const router = createBrowserRouter([
                 element: <LoginPage />,
                 loader: loginLoader,
                 path: routes.login.path,
+                handle: {
+                  title: 'Login',
+                },
               },
               {
                 element: <LoadingState message="Completing SSO sign-in" />,
