@@ -84,6 +84,9 @@ export const router = createBrowserRouter([
                 element: <LoadingState message="Completing SSO sign-in" />,
                 loader: oidcCompleteLoader,
                 path: routes.oidcComplete.path,
+                handle: {
+                  title: 'Completing SSO sign-in',
+                },
               },
               {
                 element: <ForgotPasswordPage />,
@@ -97,6 +100,9 @@ export const router = createBrowserRouter([
                 element: <ResetPasswordPage />,
                 loader: passwordRecoveryLoader,
                 path: routes.resetPassword.path,
+                handle: {
+                  title: 'Reset Password',
+                },
               },
               {
                 element: <AcceptInvitationPage />,
