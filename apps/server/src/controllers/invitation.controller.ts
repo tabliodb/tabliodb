@@ -14,6 +14,8 @@ import {
 } from '../dtos/invitation.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { InvitationService } from '../services/invitation.service.js';
 import { respondWithAuthCookies } from '../utils/response.js';
 
@@ -23,6 +25,7 @@ export class InvitationController {
   constructor(private readonly service: InvitationService) {}
 
   @Post()
+  @RateLimit(RateLimitPreset.InvitationCreate)
   @Authenticated()
   @RequirePermission(Permission.OrganizationManage)
   @ApiBody({ type: InvitationCreateDto })
@@ -33,6 +36,7 @@ export class InvitationController {
   }
 
   @Get(':token')
+  @RateLimit(RateLimitPreset.InvitationLookup)
   @ApiParam({ name: 'token', type: String })
   @ApiOperation({ operationId: 'getInvitationByToken' })
   @ZodResponse({ status: HttpStatus.OK, type: InvitationPublicDto })
@@ -41,6 +45,7 @@ export class InvitationController {
   }
 
   @Post('accept')
+  @RateLimit(RateLimitPreset.InvitationAccept)
   @ApiBody({ type: InvitationAcceptDto })
   @ApiOperation({ operationId: 'acceptInvitation' })
   @ZodResponse({ status: HttpStatus.CREATED, type: InvitationAcceptResponseDto })

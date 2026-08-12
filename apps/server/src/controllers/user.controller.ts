@@ -15,6 +15,8 @@ import {
 } from '../dtos/user.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { UserService } from '../services/user.service.js';
 
 @ApiTags('users')
@@ -36,6 +38,7 @@ export class UserController {
   }
 
   @Post()
+  @RateLimit(RateLimitPreset.UserWrite)
   @RequirePermission(Permission.OrganizationManage)
   @HttpCode(HttpStatus.CREATED)
   @ApiBody({ type: UserCreateDto })
@@ -46,6 +49,7 @@ export class UserController {
   }
 
   @Patch(':userId/status')
+  @RateLimit(RateLimitPreset.UserWrite)
   @RequirePermission(Permission.OrganizationManage)
   @ApiParam({ name: 'userId', type: String })
   @ApiBody({ type: UserStatusUpdateDto })
@@ -60,6 +64,7 @@ export class UserController {
   }
 
   @Post(':userId/reset-password')
+  @RateLimit(RateLimitPreset.UserPasswordReset)
   @RequirePermission(Permission.OrganizationManage)
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'userId', type: String })
@@ -75,6 +80,7 @@ export class UserController {
   }
 
   @Post(':userId/revoke-sessions')
+  @RateLimit(RateLimitPreset.UserWrite)
   @RequirePermission(Permission.OrganizationManage)
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'userId', type: String })

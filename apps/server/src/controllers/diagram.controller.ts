@@ -20,6 +20,8 @@ import {
 } from '../dtos/diagram-review.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { DiagramService } from '../services/diagram.service.js';
 import { DiagramReviewService } from '../services/diagram-review.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
@@ -53,6 +55,7 @@ export class DiagramController {
   }
 
   @Get(':diagramId/export')
+  @RateLimit(RateLimitPreset.DiagramExport)
   @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
   @ApiQuery({ enum: ['tabliodb_json', 'sql', 'markdown', 'svg'], name: 'format', required: false })
@@ -69,6 +72,7 @@ export class DiagramController {
   }
 
   @Post(':diagramId/import')
+  @RateLimit(RateLimitPreset.DiagramImport)
   @RequirePermission(Permission.DiagramUpdate, { key: 'diagramId', source: 'param', type: 'diagram' })
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'diagramId', type: String })
@@ -103,6 +107,7 @@ export class DiagramController {
   }
 
   @Post(':diagramId/review/actions')
+  @RateLimit(RateLimitPreset.DiagramReviewAction)
   @RequirePermission(Permission.DiagramComment, { key: 'diagramId', source: 'param', type: 'diagram' })
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'diagramId', type: String })

@@ -19,6 +19,7 @@ import {
 } from '../dtos/comment.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
 import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { CommentService } from '../services/comment.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
@@ -30,7 +31,7 @@ export class CommentController {
   constructor(private readonly service: CommentService) {}
 
   @Post('threads')
-  @RateLimit({ key: 'comments:write', limit: 24, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.CommentWrite)
   @RequirePermission(Permission.DiagramComment, { key: 'diagramId', source: 'body', type: 'diagram' })
   @ApiBody({ type: CommentThreadCreateDto })
   @ApiOperation({ operationId: 'createCommentThread' })
@@ -66,7 +67,8 @@ export class CommentController {
   @ApiParam({ name: 'threadId', type: String })
   @ApiPaginationQuery()
   @ApiQuery({
-    description: 'Use null to list root comments, a comment id to list direct replies, or omit it for legacy flat lists.',
+    description:
+      'Use null to list root comments, a comment id to list direct replies, or omit it for legacy flat lists.',
     name: 'parentCommentId',
     required: false,
     type: String,
@@ -95,7 +97,7 @@ export class CommentController {
   }
 
   @Post('threads/:threadId/comments')
-  @RateLimit({ key: 'comments:write', limit: 24, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.CommentWrite)
   @ApiParam({ name: 'threadId', type: String })
   @ApiBody({ type: CommentReplyCreateDto })
   @ApiOperation({ operationId: 'replyToCommentThread' })
@@ -118,7 +120,7 @@ export class CommentController {
   }
 
   @Post('comments/:commentId/replies')
-  @RateLimit({ key: 'comments:write', limit: 24, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.CommentWrite)
   @ApiParam({ name: 'commentId', type: String })
   @ApiBody({ type: CommentReplyCreateDto })
   @ApiOperation({ operationId: 'replyToComment' })
@@ -128,7 +130,7 @@ export class CommentController {
   }
 
   @Patch('comments/:commentId')
-  @RateLimit({ key: 'comments:write', limit: 24, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.CommentWrite)
   @ApiParam({ name: 'commentId', type: String })
   @ApiBody({ type: CommentUpdateDto })
   @ApiOperation({ operationId: 'updateComment' })
@@ -138,6 +140,7 @@ export class CommentController {
   }
 
   @Delete('comments/:commentId')
+  @RateLimit(RateLimitPreset.CommentWrite)
   @ApiParam({ name: 'commentId', type: String })
   @ApiOperation({ operationId: 'deleteComment' })
   @ZodResponse({ status: HttpStatus.OK, type: CommentResponseDto })
@@ -162,6 +165,7 @@ export class CommentController {
   }
 
   @Patch('threads/:threadId/resolve')
+  @RateLimit(RateLimitPreset.CommentWrite)
   @ApiParam({ name: 'threadId', type: String })
   @ApiOperation({ operationId: 'resolveCommentThread' })
   @ZodResponse({ status: HttpStatus.OK, type: CommentThreadStatusResponseDto })
@@ -170,6 +174,7 @@ export class CommentController {
   }
 
   @Patch('threads/:threadId/unresolve')
+  @RateLimit(RateLimitPreset.CommentWrite)
   @ApiParam({ name: 'threadId', type: String })
   @ApiOperation({ operationId: 'unresolveCommentThread' })
   @ZodResponse({ status: HttpStatus.OK, type: CommentThreadStatusResponseDto })

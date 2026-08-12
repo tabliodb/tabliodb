@@ -18,6 +18,8 @@ import {
 } from '../dtos/setup.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { SetupService } from '../services/setup.service.js';
 import { respondWithAuthCookies } from '../utils/response.js';
 
@@ -43,6 +45,7 @@ export class SetupController {
   }
 
   @Post('auth-settings')
+  @RateLimit(RateLimitPreset.InstanceSettingsWrite)
   @Authenticated()
   @RequirePermission(Permission.OrganizationManage)
   @HttpCode(HttpStatus.OK)
@@ -66,6 +69,7 @@ export class SetupController {
   }
 
   @Post('oidc-provider')
+  @RateLimit(RateLimitPreset.InstanceSettingsWrite)
   @Authenticated()
   @RequirePermission(Permission.OrganizationManage)
   @HttpCode(HttpStatus.OK)
@@ -89,6 +93,7 @@ export class SetupController {
   }
 
   @Post('smtp-settings')
+  @RateLimit(RateLimitPreset.InstanceSettingsWrite)
   @Authenticated()
   @RequirePermission(Permission.OrganizationManage)
   @HttpCode(HttpStatus.OK)
@@ -100,6 +105,7 @@ export class SetupController {
   }
 
   @Post()
+  @RateLimit(RateLimitPreset.SetupComplete)
   @HttpCode(HttpStatus.CREATED)
   @ApiBody({ type: SetupCreateDto })
   @ApiOperation({ operationId: 'completeSetup' })

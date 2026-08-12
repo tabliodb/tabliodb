@@ -38,6 +38,7 @@ import {
 } from '../dtos/auth.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
 import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { AuthService } from '../services/auth.service.js';
 import { AVATAR_MAX_BYTES, type UploadedAvatarFile } from '../services/file.service.js';
@@ -76,6 +77,7 @@ export class AuthController {
   }
 
   @Patch('me/password')
+  @RateLimit(RateLimitPreset.CurrentPasswordChange)
   @Authenticated()
   @ApiBody({ type: CurrentUserPasswordUpdateDto })
   @ApiOperation({ operationId: 'updateCurrentUserPassword' })
@@ -88,6 +90,7 @@ export class AuthController {
   }
 
   @Patch('me/temporary-password')
+  @RateLimit(RateLimitPreset.CurrentPasswordChange)
   @Authenticated({ allowTemporaryPassword: true })
   @ApiBody({ type: CurrentUserTemporaryPasswordUpdateDto })
   @ApiOperation({ operationId: 'updateCurrentUserTemporaryPassword' })
@@ -100,6 +103,7 @@ export class AuthController {
   }
 
   @Post('me/avatar')
+  @RateLimit(RateLimitPreset.AvatarUpload)
   @Authenticated()
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: AVATAR_MAX_BYTES } }))
@@ -135,7 +139,7 @@ export class AuthController {
   }
 
   @Post('sign-up')
-  @RateLimit({ key: 'auth:sign-up', limit: 8, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.AuthSignUp)
   @ApiBody({ type: SignUpDto })
   @ApiOperation({ operationId: 'signUp' })
   @ZodResponse({ status: HttpStatus.CREATED, type: LoginResponseDto })
@@ -149,7 +153,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @RateLimit({ key: 'auth:login', limit: 10, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.AuthLogin)
   @HttpCode(HttpStatus.OK)
   @ApiBody({ type: LoginCredentialDto })
   @ApiOperation({ operationId: 'login' })
@@ -171,7 +175,7 @@ export class AuthController {
   }
 
   @Post('oidc/start')
-  @RateLimit({ key: 'auth:oidc-start', limit: 20, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.AuthOidcStart)
   @HttpCode(HttpStatus.OK)
   @ApiBody({ type: OidcLoginStartDto })
   @ApiOperation({ operationId: 'startOidcLogin' })
@@ -181,7 +185,7 @@ export class AuthController {
   }
 
   @Get('oidc/callback')
-  @RateLimit({ key: 'auth:oidc-callback', limit: 60, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.AuthOidcCallback)
   @ApiOperation({ operationId: 'completeOidcLogin' })
   async completeOidcLogin(
     @Res() response: Response,
@@ -211,7 +215,7 @@ export class AuthController {
   }
 
   @Post('password-reset/request')
-  @RateLimit({ key: 'auth:password-reset-request', limit: 5, windowMs: 15 * 60_000 })
+  @RateLimit(RateLimitPreset.AuthPasswordResetRequest)
   @HttpCode(HttpStatus.OK)
   @ApiBody({ type: PasswordResetRequestDto })
   @ApiOperation({ operationId: 'requestPasswordReset' })
@@ -221,7 +225,7 @@ export class AuthController {
   }
 
   @Post('password-reset/confirm')
-  @RateLimit({ key: 'auth:password-reset-confirm', limit: 10, windowMs: 15 * 60_000 })
+  @RateLimit(RateLimitPreset.AuthPasswordResetConfirm)
   @HttpCode(HttpStatus.OK)
   @ApiBody({ type: PasswordResetConfirmDto })
   @ApiOperation({ operationId: 'confirmPasswordReset' })
@@ -231,6 +235,7 @@ export class AuthController {
   }
 
   @Post('api-keys')
+  @RateLimit(RateLimitPreset.ApiKeyCreate)
   @Authenticated()
   @RequirePermission(Permission.ApiKeyManage)
   @ApiBody({ type: ApiKeyCreateDto })

@@ -12,6 +12,8 @@ import {
 } from '../dtos/share-link.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { DiagramShareLinkService } from '../services/diagram-share-link.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
@@ -36,6 +38,7 @@ export class DiagramShareLinkController {
   }
 
   @Post()
+  @RateLimit(RateLimitPreset.ShareLinkWrite)
   @RequirePermission(Permission.DiagramUpdate, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
   @ApiBody({ type: DiagramShareLinkCreateDto })
@@ -50,6 +53,7 @@ export class DiagramShareLinkController {
   }
 
   @Delete(':shareLinkId')
+  @RateLimit(RateLimitPreset.ShareLinkWrite)
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.DiagramUpdate, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })

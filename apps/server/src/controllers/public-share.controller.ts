@@ -2,6 +2,7 @@ import { Controller, Get, HttpStatus, Param } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ZodResponse } from 'nestjs-zod';
 import { PublicDiagramShareResponseDto } from '../dtos/share-link.dto.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
 import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { DiagramShareLinkService } from '../services/diagram-share-link.service.js';
 
@@ -11,7 +12,7 @@ export class PublicShareController {
   constructor(private readonly service: DiagramShareLinkService) {}
 
   @Get(':token')
-  @RateLimit({ key: 'public-share-link', limit: 120, windowMs: 60_000 })
+  @RateLimit(RateLimitPreset.PublicShareRead)
   @ApiParam({ name: 'token', type: String })
   @ApiOperation({ operationId: 'getPublicDiagramShare' })
   @ZodResponse({ status: HttpStatus.OK, type: PublicDiagramShareResponseDto })

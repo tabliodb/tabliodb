@@ -1,0 +1,37 @@
+import type { RateLimitOptions } from './rate-limit.guard.js';
+
+export const RateLimitPreset = {
+  // Auth public endpoints memakai IP bucket karena belum ada user identity yang bisa dipercaya.
+  AuthLogin: { key: 'auth:login', limit: 10, windowMs: 60_000 },
+  AuthOidcCallback: { key: 'auth:oidc-callback', limit: 60, windowMs: 60_000 },
+  AuthOidcStart: { key: 'auth:oidc-start', limit: 20, windowMs: 60_000 },
+  AuthPasswordResetConfirm: { key: 'auth:password-reset-confirm', limit: 10, windowMs: 15 * 60_000 },
+  AuthPasswordResetRequest: { key: 'auth:password-reset-request', limit: 5, windowMs: 15 * 60_000 },
+  AuthSignUp: { key: 'auth:sign-up', limit: 8, windowMs: 60_000 },
+
+  // Authenticated security mutations memakai user/API-key bucket agar satu user tidak menekan seluruh instance.
+  ApiKeyCreate: { key: 'api-keys:create', limit: 10, windowMs: 15 * 60_000 },
+  AvatarUpload: { key: 'avatar:upload', limit: 10, windowMs: 15 * 60_000 },
+  CurrentPasswordChange: { key: 'auth:password-change', limit: 6, windowMs: 15 * 60_000 },
+
+  // Setup dan invitation tetap dibatasi karena keduanya bisa membuat akun/session baru.
+  InstanceSettingsWrite: { key: 'instance-settings:write', limit: 20, windowMs: 15 * 60_000 },
+  InvitationAccept: { key: 'invitations:accept', limit: 10, windowMs: 15 * 60_000 },
+  InvitationCreate: { key: 'invitations:create', limit: 20, windowMs: 60_000 },
+  InvitationLookup: { key: 'invitations:lookup', limit: 60, windowMs: 60_000 },
+  SetupComplete: { key: 'setup:complete', limit: 5, windowMs: 15 * 60_000 },
+
+  // Editor-heavy operations bisa mahal untuk CPU/DB dan beberapa di antaranya bersifat destructive.
+  CommentWrite: { key: 'comments:write', limit: 24, windowMs: 60_000 },
+  DiagramExport: { key: 'diagrams:export', limit: 60, windowMs: 60_000 },
+  DiagramImport: { key: 'diagrams:import', limit: 10, windowMs: 15 * 60_000 },
+  DiagramReviewAction: { key: 'diagrams:review-action', limit: 30, windowMs: 60_000 },
+  PublicShareRead: { key: 'public-share-link', limit: 120, windowMs: 60_000 },
+  ShareLinkWrite: { key: 'share-links:write', limit: 20, windowMs: 15 * 60_000 },
+  SnapshotCreate: { key: 'snapshots:create', limit: 20, windowMs: 60_000 },
+  SnapshotRestore: { key: 'snapshots:restore', limit: 10, windowMs: 15 * 60_000 },
+
+  // Admin user lifecycle perlu throttle karena aksi ini bisa memengaruhi akses banyak orang.
+  UserPasswordReset: { key: 'users:password-reset', limit: 20, windowMs: 15 * 60_000 },
+  UserWrite: { key: 'users:write', limit: 30, windowMs: 15 * 60_000 },
+} as const satisfies Record<string, RateLimitOptions>;

@@ -12,6 +12,8 @@ import {
 } from '../dtos/snapshot.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { SnapshotService } from '../services/snapshot.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
@@ -22,6 +24,7 @@ export class SnapshotController {
   constructor(private readonly service: SnapshotService) {}
 
   @Post()
+  @RateLimit(RateLimitPreset.SnapshotCreate)
   @RequirePermission(Permission.SnapshotCreate, { key: 'diagramId', source: 'body', type: 'diagram' })
   @ApiBody({ type: SnapshotCreateDto })
   @ApiOperation({ operationId: 'createSnapshot' })
@@ -59,6 +62,7 @@ export class SnapshotController {
   }
 
   @Post(':snapshotId/restore')
+  @RateLimit(RateLimitPreset.SnapshotRestore)
   @ApiParam({ name: 'snapshotId', type: String })
   @ApiOperation({ operationId: 'restoreSnapshot' })
   @ZodResponse({ status: HttpStatus.CREATED, type: SnapshotResponseDto })
