@@ -154,6 +154,9 @@ export const router = createBrowserRouter([
                 element: <ProfilePage />,
                 loader: profileLoader,
                 path: routes.profile.path,
+                handle: {
+                  title: 'Profile',
+                },
               },
             ],
           },
