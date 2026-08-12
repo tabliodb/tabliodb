@@ -83,7 +83,7 @@ const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
 
 const relationshipObstaclePadding = 12;
-const relationshipRouteFanLength = 6;
+const relationshipRouteFanLength = 18;
 const relationshipRouteStepSize = 3;
 const relationshipRouteStubLength = 18;
 const relationshipRouteUTurnGap = 48;
@@ -2720,8 +2720,8 @@ function createRelationshipEdgeMetadata(
           },
         },
         connector: {
-          name: 'rounded',
-          args: { radius: relationshipConnectorRadius },
+          // Endpoint relationship harus orthogonal tegas; rounded X6 membulatkan vertex pertama/terakhir dan membuat sambungan tampak meleyot.
+          name: 'normal',
         },
         labels: [],
         router: {
