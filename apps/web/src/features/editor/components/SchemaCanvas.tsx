@@ -735,7 +735,7 @@ export function SchemaCanvas({
       onColumnSelectRef.current?.(columnId);
     };
 
-    const handleTableNodeMouseDown = (event: MouseEvent) => {
+    const handleTableNodeClick = (event: MouseEvent) => {
       const tableElement = getTableNodeFromEvent(event);
       const tableId = tableElement?.dataset.tabliodbTableId;
 
@@ -743,6 +743,7 @@ export function SchemaCanvas({
         return;
       }
 
+      // Selection diproses di click, bukan mousedown, supaya React tidak me-render ulang HTML node tepat saat X6 memulai drag pertama.
       setRelationshipMenu(null);
       setTableContextMenu(null);
       onSelectedTableChangeRef.current(tableId);
@@ -938,7 +939,7 @@ export function SchemaCanvas({
     container.addEventListener('mousedown', handleCommentMarkerMouseDown, true);
     container.addEventListener('click', handleCommentMarkerClick, true);
     container.addEventListener('click', handleColumnRowClick, true);
-    container.addEventListener('mousedown', handleTableNodeMouseDown, true);
+    container.addEventListener('click', handleTableNodeClick, true);
     container.addEventListener('contextmenu', handleTableContextMenu, true);
     container.addEventListener('mousedown', handleNoteInteractiveMouseDown, true);
     container.addEventListener('click', handleNoteActionClick, true);
@@ -1060,6 +1061,8 @@ export function SchemaCanvas({
             },
           }),
         );
+        // Drag table yang belum selected tetap berakhir dengan table tersebut aktif, tanpa memutus gesture drag pertamanya.
+        onSelectedTableChangeRef.current(table.id);
         return;
       }
 
@@ -1152,7 +1155,7 @@ export function SchemaCanvas({
       container.removeEventListener('mousedown', handleCommentMarkerMouseDown, true);
       container.removeEventListener('click', handleCommentMarkerClick, true);
       container.removeEventListener('click', handleColumnRowClick, true);
-      container.removeEventListener('mousedown', handleTableNodeMouseDown, true);
+      container.removeEventListener('click', handleTableNodeClick, true);
       container.removeEventListener('contextmenu', handleTableContextMenu, true);
       container.removeEventListener('mousedown', handleNoteInteractiveMouseDown, true);
       container.removeEventListener('click', handleNoteActionClick, true);
