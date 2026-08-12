@@ -89,6 +89,9 @@ export const router = createBrowserRouter([
                 element: <ForgotPasswordPage />,
                 loader: passwordRecoveryLoader,
                 path: routes.forgotPassword.path,
+                handle: {
+                  title: 'Forgot Password',
+                },
               },
               {
                 element: <ResetPasswordPage />,
