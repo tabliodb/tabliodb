@@ -83,6 +83,10 @@ const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
 
 const relationshipObstaclePadding = 12;
+const relationshipRouteStubLength = 18;
+const relationshipRouteUTurnGap = 48;
+const relationshipLaneGap = 6;
+const relationshipLaneSearchRadius = 10;
 const minimapAspectRatio = 192 / 124;
 
 let noteShapeRegistered = false;
@@ -170,6 +174,7 @@ type RelationshipTerminal = {
 };
 
 type RelationshipPlan = {
+  routesByRelationship: Map<string, RelationshipRoute>;
   terminalsByRelationship: Map<string, { source?: RelationshipTerminal; target?: RelationshipTerminal }>;
   terminalsByTable: Map<string, RelationshipTerminal[]>;
 };
@@ -182,6 +187,24 @@ type RelationshipTableGeometry = {
 type RelationshipTerminalSlot = {
   active: boolean;
   related: boolean;
+};
+
+type RelationshipTerminalPoint = {
+  bounds: CanvasRect;
+  x: number;
+  y: number;
+};
+
+type RelationshipHorizontalSegment = {
+  relationshipId: string;
+  x1: number;
+  x2: number;
+  y: number;
+};
+
+type RelationshipRoute = {
+  horizontalSegments: RelationshipHorizontalSegment[];
+  vertices: Array<{ x: number; y: number }>;
 };
 
 type RemoteCanvasCursorPosition = RemoteCanvasCursor & {
@@ -2271,6 +2294,280 @@ function buildRelationshipMarkers(
   }
 }
 
+function createRelationshipRouteMap(
+  model: DiagramModel,
+  relationships: DatabaseRelationship[],
+  terminalsByRelationship: RelationshipPlan['terminalsByRelationship'],
+): Map<string, RelationshipRoute> {
+  const routesByRelationship = new Map<string, RelationshipRoute>();
+  const usedHorizontalSegments: RelationshipHorizontalSegment[] = [];
+  const laneOffsetCandidates = createRelationshipLaneOffsetCandidates();
+  const routeInputs = relationships
+    .flatMap((relationship) => {
+      const terminals = terminalsByRelationship.get(relationship.id);
+
+      if (!terminals?.source || !terminals.target) {
+        return [];
+      }
+
+      const sourcePoint = getRelationshipTerminalPoint(model, terminals.source);
+      const targetPoint = getRelationshipTerminalPoint(model, terminals.target);
+
+      if (!sourcePoint || !targetPoint) {
+        return [];
+      }
+
+      return [
+        {
+          relationship,
+          sourcePoint,
+          sourceTerminal: terminals.source,
+          targetPoint,
+          targetTerminal: terminals.target,
+        },
+      ];
+    })
+    .sort((a, b) => {
+      const aLeft = Math.min(a.sourcePoint.x, a.targetPoint.x);
+      const bLeft = Math.min(b.sourcePoint.x, b.targetPoint.x);
+      const aTop = Math.min(a.sourcePoint.y, a.targetPoint.y);
+      const bTop = Math.min(b.sourcePoint.y, b.targetPoint.y);
+
+      return (
+        aLeft - bLeft ||
+        aTop - bTop ||
+        a.sourcePoint.y - b.sourcePoint.y ||
+        a.targetPoint.y - b.targetPoint.y ||
+        a.relationship.id.localeCompare(b.relationship.id)
+      );
+    });
+
+  for (const routeInput of routeInputs) {
+    let selectedRoute: RelationshipRoute | null = null;
+
+    for (const laneOffset of laneOffsetCandidates) {
+      const route = createRelationshipRoute(
+        routeInput.relationship.id,
+        routeInput.sourceTerminal,
+        routeInput.targetTerminal,
+        routeInput.sourcePoint,
+        routeInput.targetPoint,
+        laneOffset,
+      );
+
+      if (!hasRelationshipHorizontalSegmentConflict(route.horizontalSegments, usedHorizontalSegments)) {
+        selectedRoute = route;
+        break;
+      }
+    }
+
+    // Kandidat terakhir tetap dipakai sebagai fallback agar edge tidak hilang ketika canvas sudah sangat padat.
+    const route =
+      selectedRoute ??
+      createRelationshipRoute(
+        routeInput.relationship.id,
+        routeInput.sourceTerminal,
+        routeInput.targetTerminal,
+        routeInput.sourcePoint,
+        routeInput.targetPoint,
+        laneOffsetCandidates[laneOffsetCandidates.length - 1] ?? 0,
+      );
+
+    routesByRelationship.set(routeInput.relationship.id, route);
+    usedHorizontalSegments.push(...route.horizontalSegments);
+  }
+
+  return routesByRelationship;
+}
+
+function createRelationshipRoute(
+  relationshipId: string,
+  sourceTerminal: RelationshipTerminal,
+  targetTerminal: RelationshipTerminal,
+  sourcePoint: RelationshipTerminalPoint,
+  targetPoint: RelationshipTerminalPoint,
+  laneOffset: number,
+): RelationshipRoute {
+  const sourceStubX = snapRelationshipCoordinate(
+    sourcePoint.x + getRelationshipPortSideDirection(sourceTerminal.side) * relationshipRouteStubLength,
+  );
+  const targetStubX = snapRelationshipCoordinate(
+    targetPoint.x + getRelationshipPortSideDirection(targetTerminal.side) * relationshipRouteStubLength,
+  );
+  const sourceLaneY = snapRelationshipCoordinate(sourcePoint.y + laneOffset);
+  const targetLaneY = snapRelationshipCoordinate(targetPoint.y + laneOffset);
+  const spineX = getRelationshipSpineX(sourceTerminal, targetTerminal, sourcePoint, targetPoint, laneOffset);
+  const vertices = dedupeRelationshipVertices([
+    { x: sourceStubX, y: sourcePoint.y },
+    { x: sourceStubX, y: sourceLaneY },
+    { x: spineX, y: sourceLaneY },
+    { x: spineX, y: targetLaneY },
+    { x: targetStubX, y: targetLaneY },
+    { x: targetStubX, y: targetPoint.y },
+  ]);
+  const routePoints = [{ x: sourcePoint.x, y: sourcePoint.y }, ...vertices, { x: targetPoint.x, y: targetPoint.y }];
+
+  return {
+    horizontalSegments: createRelationshipHorizontalSegments(relationshipId, routePoints),
+    vertices,
+  };
+}
+
+function getRelationshipTerminalPoint(
+  model: DiagramModel,
+  terminal: RelationshipTerminal,
+): RelationshipTerminalPoint | null {
+  const table = model.tables[terminal.tableId];
+
+  if (!table) {
+    return null;
+  }
+
+  const visibleColumns = getVisibleTableColumns(model, table);
+  const columnIndex = visibleColumns.findIndex((column) => column.id === terminal.columnId);
+
+  if (columnIndex === -1) {
+    return null;
+  }
+
+  const bounds = {
+    height: getTableNodeHeight(model, table),
+    width: getTableWidth(table),
+    x: table.position.x,
+    y: table.position.y,
+  };
+
+  return {
+    bounds,
+    x: terminal.side === 'left' ? bounds.x : bounds.x + bounds.width,
+    y: bounds.y + tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2,
+  };
+}
+
+function getRelationshipSpineX(
+  sourceTerminal: RelationshipTerminal,
+  targetTerminal: RelationshipTerminal,
+  sourcePoint: RelationshipTerminalPoint,
+  targetPoint: RelationshipTerminalPoint,
+  laneOffset: number,
+): number {
+  if (shouldUseCenteredRelationshipSpine(sourceTerminal, targetTerminal, sourcePoint, targetPoint)) {
+    // DrawSQL-like: jika dua table saling berhadapan dan ada ruang, siku utama jatuh di tengah gap table kiri/kanan.
+    return snapRelationshipCoordinate((sourcePoint.x + targetPoint.x) / 2);
+  }
+
+  const uTurnSide = getRelationshipUTurnSide(sourceTerminal, targetTerminal);
+  const direction = getRelationshipPortSideDirection(uTurnSide);
+  const edgeX =
+    uTurnSide === 'left'
+      ? Math.min(sourcePoint.bounds.x, targetPoint.bounds.x)
+      : Math.max(sourcePoint.bounds.x + sourcePoint.bounds.width, targetPoint.bounds.x + targetPoint.bounds.width);
+
+  // Lane offset juga memisahkan trunk U-turn supaya beberapa relasi vertikal tidak memakai spine yang sama.
+  return snapRelationshipCoordinate(edgeX + direction * (relationshipRouteUTurnGap + Math.abs(laneOffset)));
+}
+
+function shouldUseCenteredRelationshipSpine(
+  sourceTerminal: RelationshipTerminal,
+  targetTerminal: RelationshipTerminal,
+  sourcePoint: RelationshipTerminalPoint,
+  targetPoint: RelationshipTerminalPoint,
+): boolean {
+  const minimumClearGap = relationshipRouteStubLength * 2 + relationshipLaneGap * 2;
+
+  return (
+    (sourceTerminal.side === 'right' &&
+      targetTerminal.side === 'left' &&
+      targetPoint.x - sourcePoint.x >= minimumClearGap) ||
+    (sourceTerminal.side === 'left' &&
+      targetTerminal.side === 'right' &&
+      sourcePoint.x - targetPoint.x >= minimumClearGap)
+  );
+}
+
+function getRelationshipUTurnSide(
+  sourceTerminal: RelationshipTerminal,
+  targetTerminal: RelationshipTerminal,
+): PortSide {
+  if (sourceTerminal.side === targetTerminal.side) {
+    return sourceTerminal.side;
+  }
+
+  // Saat table terlalu dekat/overlap, pilih sisi keluar source agar garis tidak dipaksa patah di area sempit antar table.
+  return sourceTerminal.side;
+}
+
+function getRelationshipPortSideDirection(side: PortSide): -1 | 1 {
+  return side === 'left' ? -1 : 1;
+}
+
+function snapRelationshipCoordinate(value: number): number {
+  return Math.round(value / diagramRouterStepSize) * diagramRouterStepSize;
+}
+
+function dedupeRelationshipVertices(vertices: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  return vertices.filter((vertex, index) => {
+    const previous = vertices[index - 1];
+
+    return !previous || previous.x !== vertex.x || previous.y !== vertex.y;
+  });
+}
+
+function createRelationshipHorizontalSegments(
+  relationshipId: string,
+  points: Array<{ x: number; y: number }>,
+): RelationshipHorizontalSegment[] {
+  return points.flatMap((point, index) => {
+    const nextPoint = points[index + 1];
+
+    if (!nextPoint || point.y !== nextPoint.y) {
+      return [];
+    }
+
+    const x1 = Math.min(point.x, nextPoint.x);
+    const x2 = Math.max(point.x, nextPoint.x);
+
+    // Stub pendek dari port memang boleh berbagi titik; yang perlu dipisah adalah body horizontal panjang.
+    if (x2 - x1 < relationshipRouteStubLength + relationshipLaneGap) {
+      return [];
+    }
+
+    return [
+      {
+        relationshipId,
+        x1,
+        x2,
+        y: point.y,
+      },
+    ];
+  });
+}
+
+function createRelationshipLaneOffsetCandidates(): number[] {
+  return Array.from({ length: relationshipLaneSearchRadius + 1 }).flatMap((_, index) => {
+    if (index === 0) {
+      return [0];
+    }
+
+    const offset = index * relationshipLaneGap;
+
+    return [offset, -offset];
+  });
+}
+
+function hasRelationshipHorizontalSegmentConflict(
+  segments: RelationshipHorizontalSegment[],
+  usedSegments: RelationshipHorizontalSegment[],
+): boolean {
+  return segments.some((segment) =>
+    usedSegments.some(
+      (usedSegment) =>
+        Math.abs(segment.y - usedSegment.y) < relationshipLaneGap &&
+        Math.min(segment.x2, usedSegment.x2) - Math.max(segment.x1, usedSegment.x1) > relationshipLaneGap,
+    ),
+  );
+}
+
 function createRelationshipEdgeMetadata(
   model: DiagramModel,
   plan: RelationshipPlan,
@@ -2280,8 +2577,9 @@ function createRelationshipEdgeMetadata(
     const sourceTable = model.tables[relationship.sourceTableId];
     const targetTable = model.tables[relationship.targetTableId];
     const terminals = plan.terminalsByRelationship.get(relationship.id);
+    const route = plan.routesByRelationship.get(relationship.id);
 
-    if (!sourceTable || !targetTable || !terminals?.source || !terminals.target) {
+    if (!sourceTable || !targetTable || !terminals?.source || !terminals.target || !route) {
       return [];
     }
 
@@ -2311,11 +2609,11 @@ function createRelationshipEdgeMetadata(
         },
         labels: [],
         router: {
-          name: 'manhattan',
-          args: buildManhattanRouterArgs(terminals.source.side, terminals.target.side),
+          name: 'normal',
         },
         source: { cell: relationship.sourceTableId, port: terminals.source.portId },
         target: { cell: relationship.targetTableId, port: terminals.target.portId },
+        vertices: route.vertices,
         zIndex: terminals.source.active ? 1 : 0,
       },
     ];
@@ -2400,7 +2698,9 @@ function createRelationshipPlan(
     ]);
   }
 
-  return { terminalsByRelationship, terminalsByTable };
+  const routesByRelationship = createRelationshipRouteMap(model, relationships, terminalsByRelationship);
+
+  return { routesByRelationship, terminalsByRelationship, terminalsByTable };
 }
 
 function createRelationshipTableGeometry(
@@ -2461,20 +2761,7 @@ function createColumnPorts(
     },
     items: visibleColumns.flatMap((column, columnIndex) =>
       portSides.map((side) => {
-        // Hitung urutan terminal di side ini untuk kasih index
-        const sideTerminals = terminals
-          .filter((t) => t.side === side)
-          .sort((a, b) => {
-            const aIdx = visibleColumns.findIndex((c) => c.id === a.columnId);
-            const bIdx = visibleColumns.findIndex((c) => c.id === b.columnId);
-            return aIdx - bIdx;
-          });
-        const laneIndex = sideTerminals.findIndex((t) => t.columnId === column.id);
-        const offset =
-          sideTerminals.length > 1
-            ? (laneIndex - (sideTerminals.length - 1) / 2) * 6 // 6px = setengah grid
-            : 0;
-        const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2 + offset;
+        const y = tableHeaderHeight + columnIndex * tableColumnHeight + tableColumnHeight / 2;
         const terminalSlot = terminalSlots.get(createRelationshipTerminalSlotKey(column.id, side));
 
         const isVisible = selected || Boolean(terminalSlot?.active);
@@ -2646,12 +2933,7 @@ function refreshTableResizePreview(
   const affectedRelationships = Object.values(previewModel.relationships).filter(
     (relationship) => relationship.sourceTableId === tableId || relationship.targetTableId === tableId,
   );
-  const relationshipPlan = createRelationshipPlan(
-    previewModel,
-    selectedTableId,
-    selectedRelationshipId,
-    affectedRelationships,
-  );
+  const relationshipPlan = createRelationshipPlan(previewModel, selectedTableId, selectedRelationshipId);
   const visibleColumns = getVisibleTableColumns(previewModel, previewTable);
 
   graph.batchUpdate('tabliodb-resize-preview', () => {
