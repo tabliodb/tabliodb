@@ -83,6 +83,7 @@ const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
 
 const relationshipObstaclePadding = 12;
+const relationshipRouteFanLength = 6;
 const relationshipRouteStubLength = 18;
 const relationshipRouteUTurnGap = 48;
 const relationshipLaneGap = 6;
@@ -841,6 +842,27 @@ export function SchemaCanvas({
     };
 
     container.addEventListener('wheel', handleCanvasWheel, { passive: false });
+
+    graph.on('node:moving', ({ node }) => {
+      if (readOnly) {
+        return;
+      }
+
+      const data = node.getData<TableNodeData | NoteNodeData>();
+
+      if (!isTableNodeData(data) || resizingTableIdRef.current === data.tableId) {
+        return;
+      }
+
+      refreshTableMovePreview(
+        graph,
+        modelRef.current,
+        data.tableId,
+        node.getPosition(),
+        selectedTableIdRef.current,
+        selectedRelationshipIdRef.current,
+      );
+    });
 
     graph.on('node:moved', ({ node }) => {
       if (readOnly) {
@@ -2389,21 +2411,20 @@ function createRelationshipRoute(
   laneOffset: number,
 ): RelationshipRoute {
   const sourceStubX = snapRelationshipCoordinate(
-    sourcePoint.x + getRelationshipPortSideDirection(sourceTerminal.side) * relationshipRouteStubLength,
+    sourcePoint.x + getRelationshipPortSideDirection(sourceTerminal.side) * relationshipRouteFanLength,
   );
   const targetStubX = snapRelationshipCoordinate(
-    targetPoint.x + getRelationshipPortSideDirection(targetTerminal.side) * relationshipRouteStubLength,
+    targetPoint.x + getRelationshipPortSideDirection(targetTerminal.side) * relationshipRouteFanLength,
   );
   const sourceLaneY = snapRelationshipCoordinate(sourcePoint.y + laneOffset);
   const targetLaneY = snapRelationshipCoordinate(targetPoint.y + laneOffset);
   const spineX = getRelationshipSpineX(sourceTerminal, targetTerminal, sourcePoint, targetPoint, laneOffset);
   const vertices = dedupeRelationshipVertices([
-    { x: sourceStubX, y: sourcePoint.y },
+    // Fan-out dimulai segera setelah port, sehingga banyak relasi dari satu column hanya berbagi titik port, bukan badan konektor.
     { x: sourceStubX, y: sourceLaneY },
     { x: spineX, y: sourceLaneY },
     { x: spineX, y: targetLaneY },
     { x: targetStubX, y: targetLaneY },
-    { x: targetStubX, y: targetPoint.y },
   ]);
   const routePoints = [{ x: sourcePoint.x, y: sourcePoint.y }, ...vertices, { x: targetPoint.x, y: targetPoint.y }];
 
@@ -2473,7 +2494,7 @@ function shouldUseCenteredRelationshipSpine(
   sourcePoint: RelationshipTerminalPoint,
   targetPoint: RelationshipTerminalPoint,
 ): boolean {
-  const minimumClearGap = relationshipRouteStubLength * 2 + relationshipLaneGap * 2;
+  const minimumClearGap = relationshipRouteFanLength * 2 + relationshipLaneGap * 2;
 
   return (
     (sourceTerminal.side === 'right' &&
@@ -2899,6 +2920,48 @@ function createRelationshipCommandFromPorts(
     targetTableId: foreignPort.tableId,
     type: 'relationship.create' as const,
   };
+}
+
+function refreshTableMovePreview(
+  graph: Graph,
+  model: DiagramModel,
+  tableId: string,
+  position: DatabaseTable['position'],
+  selectedTableId: string | null,
+  selectedRelationshipId: string | null,
+): void {
+  const table = model.tables[tableId];
+
+  if (!table) {
+    return;
+  }
+
+  const previewModel = {
+    ...model,
+    tables: {
+      ...model.tables,
+      [tableId]: {
+        ...table,
+        position,
+      },
+    },
+  };
+  const affectedRelationships = Object.values(previewModel.relationships).filter(
+    (relationship) => relationship.sourceTableId === tableId || relationship.targetTableId === tableId,
+  );
+
+  if (affectedRelationships.length === 0) {
+    return;
+  }
+
+  const relationshipPlan = createRelationshipPlan(previewModel, selectedTableId, selectedRelationshipId);
+
+  graph.batchUpdate('tabliodb-move-preview', () => {
+    for (const edgeMetadata of createRelationshipEdgeMetadata(previewModel, relationshipPlan, affectedRelationships)) {
+      // Drag preview memakai route generator yang sama dengan model final agar garis tidak membentuk path sementara yang patah.
+      syncRelationshipEdge(graph, edgeMetadata);
+    }
+  });
 }
 
 function refreshTableResizePreview(
