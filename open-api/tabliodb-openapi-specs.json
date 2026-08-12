@@ -4640,11 +4640,15 @@
               },
               "redis": {
                 "$ref": "#/components/schemas/ServerDependencyHealthDto_Output"
+              },
+              "storage": {
+                "$ref": "#/components/schemas/ServerDependencyHealthDto_Output"
               }
             },
             "required": [
               "database",
-              "redis"
+              "redis",
+              "storage"
             ],
             "additionalProperties": false
           },

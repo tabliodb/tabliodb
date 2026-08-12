@@ -24,6 +24,7 @@ export type ServerHealthResponseDtoOutput = {
   dependencies: {
     database: ServerDependencyHealthDtoOutput;
     redis: ServerDependencyHealthDtoOutput;
+    storage: ServerDependencyHealthDtoOutput;
   };
   name: string;
   ok: boolean;

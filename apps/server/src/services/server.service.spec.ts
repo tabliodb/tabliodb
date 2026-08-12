@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServerService } from './server.service.js';
 
 describe(ServerService.name, () => {
@@ -15,7 +18,17 @@ describe(ServerService.name, () => {
     ping: vi.fn(),
   };
 
-  function createService(options: { metricsEnabled?: boolean; redisUrl?: string } = {}) {
+  let storageRoot: string;
+
+  beforeEach(async () => {
+    storageRoot = await mkdtemp(path.join(tmpdir(), 'tabliodb-health-storage-'));
+  });
+
+  afterEach(async () => {
+    await rm(storageRoot, { force: true, recursive: true });
+  });
+
+  function createService(options: { metricsEnabled?: boolean; redisUrl?: string; storagePath?: string } = {}) {
     vi.resetAllMocks();
     configRepository.getEnv.mockReturnValue({
       metrics: {
@@ -23,6 +36,9 @@ describe(ServerService.name, () => {
       },
       redis: {
         url: options.redisUrl,
+      },
+      storage: {
+        localPath: options.storagePath ?? storageRoot,
       },
     });
     databaseRepository.ping.mockResolvedValue(undefined);
@@ -80,6 +96,9 @@ describe(ServerService.name, () => {
         redis: {
           status: 'disabled',
         },
+        storage: {
+          status: 'ok',
+        },
       },
       ok: true,
     });
@@ -113,6 +132,21 @@ describe(ServerService.name, () => {
       message: 'database connection failed',
       status: 'error',
     });
+  });
+
+  it('marks the server unhealthy when local storage is not a directory', async () => {
+    const blockedStoragePath = path.join(storageRoot, 'storage-file');
+    await writeFile(blockedStoragePath, 'not a directory');
+    const service = createService({ storagePath: blockedStoragePath });
+
+    const health = await service.getHealth();
+
+    expect(health.ok).toBe(false);
+    expect(health.dependencies.storage).toMatchObject({
+      message: 'Storage path is not ready (EEXIST).',
+      status: 'error',
+    });
+    expect(health.dependencies.storage.message).not.toContain(blockedStoragePath);
   });
 
   it('returns metrics when the optional endpoint is enabled', () => {

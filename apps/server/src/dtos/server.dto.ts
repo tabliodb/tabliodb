@@ -15,6 +15,7 @@ export const ServerHealthResponseSchema = z
     dependencies: z.object({
       database: ServerDependencyHealthSchema,
       redis: ServerDependencyHealthSchema,
+      storage: ServerDependencyHealthSchema,
     }),
     name: z.string(),
     ok: z.boolean(),
