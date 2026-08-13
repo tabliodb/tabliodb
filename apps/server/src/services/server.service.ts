@@ -4,7 +4,7 @@ import { constants as fsConstants } from 'node:fs';
 import { access, mkdir, stat } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import type { AuthContext } from '../database.js';
-import type { ServerHealthResponse, ServerMetricsResponse } from '../dtos/server.dto.js';
+import type { ServerHealthResponse, ServerLivenessResponse, ServerMetricsResponse } from '../dtos/server.dto.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { DatabaseRepository } from '../repositories/database.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
@@ -23,7 +23,23 @@ export class ServerService {
     private readonly userRepository: UserRepository,
   ) {}
 
+  getLiveness(): ServerLivenessResponse {
+    return {
+      checkedAt: new Date().toISOString(),
+      name: 'tabliodb-server',
+      // Liveness intentionally avoids database/Redis/storage checks so orchestrators do not restart a healthy process
+      // just because an external dependency is briefly unavailable.
+      ok: true,
+      uptimeSeconds: Math.floor(process.uptime()),
+      version: '0.1.0',
+    };
+  }
+
   async getHealth(): Promise<ServerHealthResponse> {
+    return this.getReadiness();
+  }
+
+  async getReadiness(): Promise<ServerHealthResponse> {
     const { redis, storage } = this.configRepository.getEnv();
     const [databaseHealth, redisHealth, storageHealth] = await Promise.all([
       this.checkDependency(() => this.databaseRepository.ping()),

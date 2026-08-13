@@ -114,6 +114,29 @@ describe(ServerService.name, () => {
     expect(redisService.ping).not.toHaveBeenCalled();
   });
 
+  it('keeps liveness cheap and independent from external dependencies', () => {
+    const service = createService({ redisUrl: 'redis://localhost:6379' });
+
+    expect(service.getLiveness()).toMatchObject({
+      name: 'tabliodb-server',
+      ok: true,
+      version: '0.1.0',
+    });
+    expect(databaseRepository.ping).not.toHaveBeenCalled();
+    expect(redisService.ping).not.toHaveBeenCalled();
+  });
+
+  it('keeps health as a compatibility alias for readiness', async () => {
+    const service = createService();
+
+    const [health, readiness] = await Promise.all([service.getHealth(), service.getReadiness()]);
+
+    expect(health.ok).toBe(readiness.ok);
+    expect(health.dependencies.database.status).toBe(readiness.dependencies.database.status);
+    expect(health.dependencies.redis.status).toBe(readiness.dependencies.redis.status);
+    expect(health.dependencies.storage.status).toBe(readiness.dependencies.storage.status);
+  });
+
   it('marks the server unhealthy when configured Redis is unavailable', async () => {
     const service = createService({ redisUrl: 'redis://localhost:6379' });
 

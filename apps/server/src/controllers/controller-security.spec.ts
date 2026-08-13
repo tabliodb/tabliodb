@@ -7,6 +7,8 @@ import { controllers } from './index.js';
 
 const publicRoutes = new Set([
   'AppController.getHealth',
+  'AppController.getLiveness',
+  'AppController.getReadiness',
   'AuthController.completeOidcLogin',
   'AuthController.confirmPasswordReset',
   'AuthController.getOidcLoginProvider',

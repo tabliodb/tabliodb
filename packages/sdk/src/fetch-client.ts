@@ -31,6 +31,13 @@ export type ServerHealthResponseDtoOutput = {
   uptimeSeconds: number;
   version: string;
 };
+export type ServerLivenessResponseDtoOutput = {
+  checkedAt: string;
+  name: string;
+  ok: true;
+  uptimeSeconds: number;
+  version: string;
+};
 export type ServerHttpRouteMetricsDtoOutput = {
   averageDurationMs: number;
   count: number;
@@ -1606,6 +1613,26 @@ export function getServerHealth(opts?: Oazapfts.RequestOpts) {
       status: 200;
       data: ServerHealthResponseDtoOutput;
     }>('/server/health', {
+      ...opts,
+    }),
+  );
+}
+export function getServerLiveness(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ServerLivenessResponseDtoOutput;
+    }>('/server/live', {
+      ...opts,
+    }),
+  );
+}
+export function getServerReadiness(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ServerHealthResponseDtoOutput;
+    }>('/server/ready', {
       ...opts,
     }),
   );

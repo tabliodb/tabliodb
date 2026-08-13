@@ -24,6 +24,16 @@ export const ServerHealthResponseSchema = z
   })
   .meta({ id: 'ServerHealthResponseDto' });
 
+export const ServerLivenessResponseSchema = z
+  .object({
+    checkedAt: z.string(),
+    name: z.string(),
+    ok: z.literal(true),
+    uptimeSeconds: z.number().int().min(0),
+    version: z.string(),
+  })
+  .meta({ id: 'ServerLivenessResponseDto' });
+
 export const ServerMemoryMetricsSchema = z
   .object({
     arrayBuffers: z.number().int().min(0),
@@ -92,7 +102,9 @@ export const ServerMetricsResponseSchema = z
   .meta({ id: 'ServerMetricsResponseDto' });
 
 export type ServerHealthResponse = z.infer<typeof ServerHealthResponseSchema>;
+export type ServerLivenessResponse = z.infer<typeof ServerLivenessResponseSchema>;
 export type ServerMetricsResponse = z.infer<typeof ServerMetricsResponseSchema>;
 
 export class ServerHealthResponseDto extends createZodDto(ServerHealthResponseSchema) {}
+export class ServerLivenessResponseDto extends createZodDto(ServerLivenessResponseSchema) {}
 export class ServerMetricsResponseDto extends createZodDto(ServerMetricsResponseSchema) {}

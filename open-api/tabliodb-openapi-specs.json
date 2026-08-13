@@ -23,6 +23,50 @@
         ]
       }
     },
+    "/server/live": {
+      "get": {
+        "operationId": "getServerLiveness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerLivenessResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "",
+        "tags": [
+          "server"
+        ]
+      }
+    },
+    "/server/ready": {
+      "get": {
+        "operationId": "getServerReadiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerHealthResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "",
+        "tags": [
+          "server"
+        ]
+      }
+    },
     "/server/metrics": {
       "get": {
         "operationId": "getServerMetrics",
@@ -4755,6 +4799,39 @@
         "required": [
           "checkedAt",
           "dependencies",
+          "name",
+          "ok",
+          "uptimeSeconds",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "ServerLivenessResponseDto_Output": {
+        "type": "object",
+        "properties": {
+          "checkedAt": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "uptimeSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "checkedAt",
           "name",
           "ok",
           "uptimeSeconds",
