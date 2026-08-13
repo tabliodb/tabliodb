@@ -27,6 +27,8 @@ type CommentNotificationDeliveryPayload = {
 export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BackgroundJobService.name);
   private readonly workerId = `${hostname()}:${process.pid}:${randomUUID()}`;
+  private currentTickPromise: Promise<void> | null = null;
+  private isShuttingDown = false;
   private timer: NodeJS.Timeout | null = null;
   private isTickRunning = false;
 
@@ -45,14 +47,19 @@ export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    this.isShuttingDown = false;
     this.scheduleTick(0);
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
+    this.isShuttingDown = true;
+
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
+
+    await this.waitForCurrentTick();
   }
 
   enqueueCommentNotificationDelivery(payload: CommentNotificationDeliveryPayload) {
@@ -69,19 +76,36 @@ export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   private scheduleTick(delayMs: number): void {
-    this.timer = setTimeout(() => void this.tick(), delayMs);
+    if (this.isShuttingDown) {
+      return;
+    }
+
+    this.timer = setTimeout(() => {
+      this.timer = null;
+
+      const tickPromise = this.tick();
+      this.currentTickPromise = tickPromise;
+
+      void tickPromise.finally(() => {
+        if (this.currentTickPromise === tickPromise) {
+          this.currentTickPromise = null;
+        }
+      });
+    }, delayMs);
     this.timer.unref?.();
   }
 
   private async tick(): Promise<void> {
     const { backgroundJobs } = this.configRepository.getEnv();
 
-    if (!backgroundJobs.enabled) {
+    if (!backgroundJobs.enabled || this.isShuttingDown) {
       return;
     }
 
     if (this.isTickRunning) {
-      this.scheduleTick(backgroundJobs.pollIntervalMs);
+      if (!this.isShuttingDown) {
+        this.scheduleTick(backgroundJobs.pollIntervalMs);
+      }
       return;
     }
 
@@ -103,7 +127,25 @@ export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(`Background job tick failed. ${formatErrorMessage(error)}`);
     } finally {
       this.isTickRunning = false;
-      this.scheduleTick(backgroundJobs.pollIntervalMs);
+
+      if (!this.isShuttingDown) {
+        this.scheduleTick(backgroundJobs.pollIntervalMs);
+      }
+    }
+  }
+
+  private async waitForCurrentTick(): Promise<void> {
+    const currentTickPromise = this.currentTickPromise;
+
+    if (!currentTickPromise) {
+      return;
+    }
+
+    const { backgroundJobs } = this.configRepository.getEnv();
+    const didTimeOut = await waitForPromiseOrTimeout(currentTickPromise, Math.max(0, backgroundJobs.shutdownTimeoutMs));
+
+    if (didTimeOut) {
+      this.logger.warn('Background job shutdown timed out while waiting for the active tick to finish.');
     }
   }
 
@@ -332,4 +374,29 @@ function serializeJobError(error: unknown): JsonValue {
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function waitForPromiseOrTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  if (timeoutMs <= 0) {
+    return true;
+  }
+
+  let timeout: NodeJS.Timeout | undefined;
+
+  try {
+    return await Promise.race([
+      promise.then(
+        () => false,
+        () => false,
+      ),
+      new Promise<boolean>((resolve) => {
+        timeout = setTimeout(() => resolve(true), timeoutMs);
+        timeout.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }

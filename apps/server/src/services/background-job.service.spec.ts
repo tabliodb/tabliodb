@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BackgroundJobType } from '../constants.js';
 import { BackgroundJobService } from './background-job.service.js';
 
@@ -17,6 +17,7 @@ describe(BackgroundJobService.name, () => {
         enabled: false,
         lockTtlMs: 120_000,
         pollIntervalMs: 2_500,
+        shutdownTimeoutMs: 15_000,
       },
       server: {
         webPublicUrl: 'https://app.tabliodb.test',
@@ -39,6 +40,7 @@ describe(BackgroundJobService.name, () => {
         enabled: false,
         lockTtlMs: 120_000,
         pollIntervalMs: 2_500,
+        shutdownTimeoutMs: 15_000,
       },
       server: {
         webPublicUrl: 'https://app.tabliodb.test',
@@ -52,6 +54,10 @@ describe(BackgroundJobService.name, () => {
       notificationRepository as never,
     );
   }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('enqueues comment notification delivery in the notifications queue', async () => {
     const service = createService();
@@ -152,6 +158,74 @@ describe(BackgroundJobService.name, () => {
           },
         ],
       }),
+    );
+  });
+
+  it('does not schedule another poll after shutdown starts during an active tick', async () => {
+    vi.useFakeTimers();
+    const service = createService();
+    let finishRequeue!: () => void;
+
+    configRepository.getEnv.mockReturnValue({
+      backgroundJobs: {
+        batchSize: 10,
+        enabled: true,
+        lockTtlMs: 120_000,
+        pollIntervalMs: 2_500,
+        shutdownTimeoutMs: 15_000,
+      },
+      server: {
+        webPublicUrl: 'https://app.tabliodb.test',
+      },
+    });
+    backgroundJobRepository.requeueExpiredRunningJobs.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishRequeue = resolve;
+      }),
+    );
+    backgroundJobRepository.claimNextBatch.mockResolvedValue([]);
+
+    service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const destroyPromise = service.onModuleDestroy();
+
+    finishRequeue();
+    await destroyPromise;
+
+    // Shutdown must prevent the tick finally-block from scheduling the next polling timer.
+    expect(vi.getTimerCount()).toBe(0);
+    expect(backgroundJobRepository.claimNextBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds shutdown waiting when the active tick does not finish', async () => {
+    vi.useFakeTimers();
+    const service = createService();
+    const warnSpy = vi.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
+
+    configRepository.getEnv.mockReturnValue({
+      backgroundJobs: {
+        batchSize: 10,
+        enabled: true,
+        lockTtlMs: 120_000,
+        pollIntervalMs: 2_500,
+        shutdownTimeoutMs: 250,
+      },
+      server: {
+        webPublicUrl: 'https://app.tabliodb.test',
+      },
+    });
+    backgroundJobRepository.requeueExpiredRunningJobs.mockReturnValue(new Promise(() => undefined));
+
+    service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const destroyPromise = service.onModuleDestroy();
+    await vi.advanceTimersByTimeAsync(250);
+
+    await expect(destroyPromise).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Background job shutdown timed out while waiting for the active tick to finish.',
     );
   });
 });

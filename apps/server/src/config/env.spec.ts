@@ -3,6 +3,7 @@ import { loadEnv } from './env.js';
 
 const managedEnvKeys = [
   'NODE_ENV',
+  'TABLIODB_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS',
   'TABLIODB_CONTENT_SECURITY_POLICY',
   'TABLIODB_CORS_ORIGINS',
   'TABLIODB_CSP_CONNECT_SOURCES',
@@ -78,5 +79,12 @@ describe(loadEnv.name, () => {
     process.env.TABLIODB_CONTENT_SECURITY_POLICY = 'false';
 
     expect(loadEnv().security.contentSecurityPolicy).toBe(false);
+  });
+
+  it('parses the background job shutdown timeout for graceful container stops', () => {
+    process.env.TABLIODB_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS = '7500';
+
+    // A bounded wait keeps SIGTERM graceful without letting a broken email/import dependency hang the container forever.
+    expect(loadEnv().backgroundJobs.shutdownTimeoutMs).toBe(7_500);
   });
 });

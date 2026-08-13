@@ -38,6 +38,7 @@ export type TabliodbEnv = {
     enabled: boolean;
     lockTtlMs: number;
     pollIntervalMs: number;
+    shutdownTimeoutMs: number;
   };
   storage: {
     localPath: string;
@@ -223,6 +224,7 @@ export function loadEnv(): TabliodbEnv {
       enabled: process.env.TABLIODB_BACKGROUND_JOBS_ENABLED !== 'false',
       lockTtlMs: numberFromEnv('TABLIODB_BACKGROUND_JOB_LOCK_TTL_MS', 120_000),
       pollIntervalMs: numberFromEnv('TABLIODB_BACKGROUND_JOB_POLL_INTERVAL_MS', 2_500),
+      shutdownTimeoutMs: numberFromEnv('TABLIODB_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS', 15_000),
     },
     storage: {
       localPath: path.resolve(process.env.TABLIODB_STORAGE_PATH || path.join(process.cwd(), 'data', 'uploads')),
