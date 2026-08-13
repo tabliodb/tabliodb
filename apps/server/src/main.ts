@@ -12,6 +12,7 @@ import { requestIdMiddleware } from './middleware/request-id.middleware.js';
 import { setupOpenApi } from './utils/openapi.js';
 import { StructuredLogger } from './utils/structured-logger.js';
 import type { TabliodbEnv } from './config/env.js';
+import { createDevelopmentCorsOptions, createProductionCorsOptions } from './utils/cors.js';
 
 const bootstrapLogger = new StructuredLogger();
 
@@ -29,12 +30,9 @@ async function bootstrap(logger: StructuredLogger = bootstrapLogger) {
   app.use(createHelmetMiddleware(security));
 
   if (config.isDevelopment()) {
-    app.enableCors({
-      credentials: true,
-      origin: true,
-    });
+    app.enableCors(createDevelopmentCorsOptions());
   } else {
-    configureProductionCors(app, security.corsOrigins);
+    app.enableCors(createProductionCorsOptions(security.corsOrigins));
   }
 
   setupOpenApi(app);
@@ -97,23 +95,6 @@ function createHelmetMiddleware(security: TabliodbEnv['security']) {
     crossOriginEmbedderPolicy: false,
     referrerPolicy: {
       policy: 'no-referrer',
-    },
-  });
-}
-
-function configureProductionCors(app: NestExpressApplication, allowedOrigins: string[]): void {
-  const origins = new Set(allowedOrigins);
-
-  app.enableCors({
-    credentials: true,
-    origin: (origin: string | undefined, callback: (error: Error | null, allowed?: boolean) => void) => {
-      if (!origin || origins.has(origin)) {
-        // Same-origin browser requests and server-to-server calls can omit Origin, so they should not be rejected by CORS.
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`Origin ${origin} is not allowed by TABLIODB_CORS_ORIGINS`), false);
     },
   });
 }
