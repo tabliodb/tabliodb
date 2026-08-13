@@ -22,6 +22,7 @@ export type TabliodbEnv = {
     persistDebounceMs: number;
     port: number;
     redisUrl?: string;
+    shutdownTimeoutMs: number;
   };
   auth: {
     cookieSecure: boolean;
@@ -186,6 +187,9 @@ export function loadEnv(): TabliodbEnv {
     persistDebounceMs: numberFromEnv('TABLIODB_REALTIME_PERSIST_DEBOUNCE_MS', 1_000),
     port: numberFromEnv('TABLIODB_REALTIME_PORT', 1234),
     redisUrl: process.env.TABLIODB_REALTIME_REDIS_URL || process.env.REDIS_URL || undefined,
+    // Hocuspocus destroy can involve socket close, document cleanup, Redis unsubscribe, and final database persistence.
+    // A bounded timeout lets Docker/Kubernetes stop gracefully without risking an indefinitely hanging SIGTERM.
+    shutdownTimeoutMs: numberFromEnv('TABLIODB_REALTIME_SHUTDOWN_TIMEOUT_MS', 15_000),
   };
 
   return {

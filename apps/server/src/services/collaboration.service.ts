@@ -31,6 +31,7 @@ import { MetricsService } from './metrics.service.js';
 export class CollaborationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CollaborationService.name);
   private readonly pendingDocumentStores = new Map<string, PendingDocumentStore>();
+  private isShuttingDown = false;
   private server?: Server;
 
   constructor(
@@ -47,6 +48,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    this.isShuttingDown = false;
     const realtimeRedisUrl = realtime.redisUrl;
     const extensions = [
       ...(realtimeRedisUrl
@@ -233,6 +235,8 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.isShuttingDown = true;
+
     if (!this.server && this.pendingDocumentStores.size === 0) {
       return;
     }
@@ -241,22 +245,10 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
       event: 'realtime.server_stopping',
       pendingDocumentStores: this.pendingDocumentStores.size,
     });
-    await this.flushPendingDocumentStores();
 
-    try {
-      await this.server?.destroy();
-    } catch (error) {
-      this.logger.error(
-        {
-          event: 'realtime.server_destroy_failed',
-          message: formatErrorMessage(error),
-        },
-        formatErrorStack(error),
-      );
-      throw error;
-    } finally {
-      this.server = undefined;
-    }
+    await this.flushPendingDocumentStoresWithTimeout('before_destroy');
+    await this.destroyRealtimeServerWithTimeout();
+    await this.flushPendingDocumentStoresWithTimeout('after_destroy');
   }
 
   private recordRealtimeConnectionOpened(documentName: string, socketId: string): void {
@@ -279,6 +271,18 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
       clearTimeout(existingStore.timer);
     }
 
+    const pendingStore: PendingDocumentStore = {
+      // Hocuspocus may reuse buffers internally, so the pending write keeps an owned copy of the newest document state.
+      state: new Uint8Array(state),
+    };
+
+    if (this.isShuttingDown) {
+      // During shutdown we keep the newest state pending without starting a debounce timer.
+      // The explicit final flush in onModuleDestroy owns persistence so SIGTERM cannot leave a stray timer behind.
+      this.pendingDocumentStores.set(diagramId, pendingStore);
+      return;
+    }
+
     const timer = setTimeout(
       () => {
         void this.flushPendingDocumentStore(diagramId);
@@ -288,10 +292,62 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
 
     timer.unref?.();
     this.pendingDocumentStores.set(diagramId, {
-      // Hocuspocus may reuse buffers internally, so the pending write keeps an owned copy of the newest document state.
-      state: new Uint8Array(state),
+      ...pendingStore,
       timer,
     });
+  }
+
+  private async flushPendingDocumentStoresWithTimeout(stage: 'before_destroy' | 'after_destroy'): Promise<void> {
+    if (this.pendingDocumentStores.size === 0) {
+      return;
+    }
+
+    const didTimeOut = await waitForPromiseOrTimeout(
+      this.flushPendingDocumentStores(),
+      this.getRealtimeShutdownTimeoutMs(),
+    );
+
+    if (didTimeOut) {
+      this.logger.warn({
+        event: 'realtime.document_flush_timeout',
+        pendingDocumentStores: this.pendingDocumentStores.size,
+        stage,
+      });
+    }
+  }
+
+  private async destroyRealtimeServerWithTimeout(): Promise<void> {
+    const server = this.server;
+
+    if (!server) {
+      return;
+    }
+
+    this.server = undefined;
+
+    try {
+      const didTimeOut = await waitForPromiseOrTimeout(server.destroy(), this.getRealtimeShutdownTimeoutMs());
+
+      if (didTimeOut) {
+        this.logger.warn({
+          event: 'realtime.server_destroy_timeout',
+        });
+      }
+    } catch (error) {
+      this.logger.error(
+        {
+          event: 'realtime.server_destroy_failed',
+          message: formatErrorMessage(error),
+        },
+        formatErrorStack(error),
+      );
+    }
+  }
+
+  private getRealtimeShutdownTimeoutMs(): number {
+    const { realtime } = this.configRepository.getEnv();
+
+    return Math.max(0, realtime.shutdownTimeoutMs);
   }
 
   private async flushPendingDocumentStores(): Promise<void> {
@@ -450,7 +506,7 @@ type CollaborationContext = {
 
 type PendingDocumentStore = {
   state: Uint8Array;
-  timer: NodeJS.Timeout;
+  timer?: NodeJS.Timeout;
 };
 
 function readCollaborationContext(value: unknown): CollaborationContext | null {
@@ -648,4 +704,29 @@ function readHeader(value: string | string[] | undefined): string | null {
 
 function urlSearchParamsToRecord(parameters: URLSearchParams): Record<string, string | undefined> {
   return Object.fromEntries(parameters.entries());
+}
+
+async function waitForPromiseOrTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  if (timeoutMs <= 0) {
+    // The operation has already been started by the caller; attach a rejection handler so an intentional immediate timeout
+    // does not become an unhandled rejection after shutdown has already continued.
+    void promise.catch(() => undefined);
+    return true;
+  }
+
+  let timeout: NodeJS.Timeout | undefined;
+
+  try {
+    return await Promise.race([
+      promise.then(() => false),
+      new Promise<boolean>((resolve) => {
+        timeout = setTimeout(() => resolve(true), timeoutMs);
+        timeout.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }

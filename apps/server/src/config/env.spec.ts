@@ -10,6 +10,7 @@ const managedEnvKeys = [
   'TABLIODB_PUBLIC_URL',
   'TABLIODB_REALTIME_PORT',
   'TABLIODB_REALTIME_PUBLIC_URL',
+  'TABLIODB_REALTIME_SHUTDOWN_TIMEOUT_MS',
   'TABLIODB_TRUST_PROXY',
   'TABLIODB_WEB_PUBLIC_URL',
 ] as const;
@@ -86,5 +87,12 @@ describe(loadEnv.name, () => {
 
     // A bounded wait keeps SIGTERM graceful without letting a broken email/import dependency hang the container forever.
     expect(loadEnv().backgroundJobs.shutdownTimeoutMs).toBe(7_500);
+  });
+
+  it('parses the realtime shutdown timeout for graceful websocket stops', () => {
+    process.env.TABLIODB_REALTIME_SHUTDOWN_TIMEOUT_MS = '9000';
+
+    // Realtime shutdown includes Hocuspocus socket cleanup and final document persistence, so it gets its own bound.
+    expect(loadEnv().realtime.shutdownTimeoutMs).toBe(9_000);
   });
 });

@@ -31,6 +31,7 @@ describe(CollaborationService.name, () => {
         enabled: true,
         persistDebounceMs: 1_000,
         port: 1234,
+        shutdownTimeoutMs: 15_000,
       },
     });
     collaborationRepository.storeDocument.mockResolvedValue(createStoredDocumentReceipt());
@@ -75,6 +76,87 @@ describe(CollaborationService.name, () => {
     expect(collaborationRepository.storeDocument).toHaveBeenCalledWith('diagram-id', state);
 
     await vi.runOnlyPendingTimersAsync();
+    expect(collaborationRepository.storeDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps shutdown-time realtime stores pending until the explicit final flush', async () => {
+    const state = new Uint8Array([6, 6, 6]);
+
+    service['isShuttingDown'] = true;
+    service['scheduleDocumentStore']('diagram-id', state);
+
+    await vi.runOnlyPendingTimersAsync();
+    expect(collaborationRepository.storeDocument).not.toHaveBeenCalled();
+
+    await service.onModuleDestroy();
+
+    expect(collaborationRepository.storeDocument).toHaveBeenCalledTimes(1);
+    expect(collaborationRepository.storeDocument).toHaveBeenCalledWith('diagram-id', state);
+  });
+
+  it('flushes realtime stores scheduled while the Hocuspocus server is being destroyed', async () => {
+    const state = new Uint8Array([5, 5, 5]);
+    const destroy = vi.fn().mockImplementation(() => {
+      // Hocuspocus can invoke the database store hook while documents are closed during destroy.
+      // Keeping this path covered prevents final socket-close persistence from being dropped.
+      service['scheduleDocumentStore']('diagram-id', state);
+      return Promise.resolve();
+    });
+
+    service['server'] = {
+      destroy,
+      hocuspocus: {
+        documents: new Map(),
+      },
+    } as never;
+
+    await service.onModuleDestroy();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(collaborationRepository.storeDocument).toHaveBeenCalledTimes(1);
+    expect(collaborationRepository.storeDocument).toHaveBeenCalledWith('diagram-id', state);
+  });
+
+  it('does not hang forever when realtime server destroy never resolves', async () => {
+    const destroy = vi.fn(() => new Promise<void>(() => undefined));
+
+    configRepository.getEnv.mockReturnValue({
+      realtime: {
+        enabled: true,
+        persistDebounceMs: 1_000,
+        port: 1234,
+        shutdownTimeoutMs: 25,
+      },
+    });
+    service['server'] = {
+      destroy,
+      hocuspocus: {
+        documents: new Map(),
+      },
+    } as never;
+
+    const destroyPromise = service.onModuleDestroy();
+    await vi.advanceTimersByTimeAsync(25);
+    await destroyPromise;
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs realtime server destroy failures without blocking pending store cleanup', async () => {
+    const destroy = vi.fn().mockRejectedValue(new Error('destroy failed'));
+    const state = new Uint8Array([4, 4, 4]);
+
+    service['server'] = {
+      destroy,
+      hocuspocus: {
+        documents: new Map(),
+      },
+    } as never;
+    service['scheduleDocumentStore']('diagram-id', state);
+
+    await service.onModuleDestroy();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
     expect(collaborationRepository.storeDocument).toHaveBeenCalledTimes(1);
   });
 
