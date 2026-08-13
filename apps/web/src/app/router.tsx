@@ -7,6 +7,7 @@ import { EditorLayout } from './layouts/EditorLayout';
 import { RootLayout } from './layouts/RootLayout';
 import { SystemLayout } from './layouts/SystemLayout';
 import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
+import type { RouteTitleContext } from './route-meta';
 import { adminSettingsLoader } from '@/features/admin/loaders/adminSettingsLoader';
 import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
 import { LoadingState } from '@/features/app/RouteStates';
@@ -14,7 +15,7 @@ import { loginLoader } from '@/features/auth/loaders/loginLoader';
 import { oidcCompleteLoader } from '@/features/auth/loaders/oidcCompleteLoader';
 import { passwordRecoveryLoader } from '@/features/auth/loaders/passwordRecoveryLoader';
 import { requireAuthenticated } from '@/features/auth/middleware/requireAuthenticated';
-import { editorLoader } from '@/features/editor/loaders/editorLoader';
+import { editorLoader, getEditorRouteTitle } from '@/features/editor/loaders/editorLoader';
 import { acceptInvitationLoader } from '@/features/invitations/loaders/acceptInvitationLoader';
 import { profileLoader } from '@/features/profile/loaders/profileLoader';
 import { requireSetupComplete } from '@/features/setup/middleware/requireSetupComplete';
@@ -48,6 +49,10 @@ const ProfilePage = lazy(() =>
 const PublicSharePage = lazy(() =>
   import('@/features/share/PublicSharePage').then((module) => ({ default: module.PublicSharePage })),
 );
+
+function getEditorDocumentTitle({ loaderData }: RouteTitleContext): string | undefined {
+  return getEditorRouteTitle(loaderData);
+}
 
 export const router = createBrowserRouter([
   {
@@ -117,6 +122,9 @@ export const router = createBrowserRouter([
           {
             element: <PublicSharePage />,
             path: routes.share.path,
+            handle: {
+              title: 'Shared Diagram',
+            },
           },
           {
             element: <AdminLayout />,
@@ -165,6 +173,9 @@ export const router = createBrowserRouter([
             errorElement: <RouteErrorBoundary />,
             loader: editorLoader,
             middleware: [requireSetupComplete, requireAuthenticated],
+            handle: {
+              title: getEditorDocumentTitle,
+            },
             children: [
               {
                 element: <EditorPage />,

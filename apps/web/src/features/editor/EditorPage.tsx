@@ -279,6 +279,11 @@ import { CommentBody } from './components/CommentBody';
 import { SchemaCanvas, type CanvasViewportRect, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
+import {
+  readLastOpenedEditorTarget,
+  writeLastOpenedEditorTarget,
+  type LastOpenedEditorTarget,
+} from './editor-route-memory';
 import { getDisplayTableColor } from './table-colors';
 
 const CommentComposer = lazy(() => import('./components/CommentComposer'));
@@ -677,17 +682,29 @@ export function EditorPage() {
   const organizationsQuery = useQuery(organizationsQueries.list({ limit: 50 }));
   const organizations = organizationsQuery.data?.items ?? [];
   const routeWorkspaceSlug = params.workspaceSlug ?? null;
+  const routeProjectId = params.projectId ?? null;
+  const routeDiagramId = params.diagramId ?? null;
+  const rememberedEditorTarget = useMemo(
+    () => readLastOpenedEditorTarget(),
+    [routeDiagramId, routeProjectId, routeWorkspaceSlug],
+  );
   const activeOrganization = useMemo(() => {
     if (organizations.length === 0) {
       return null;
     }
 
-    return (
-      organizations.find((organization) => matchesWorkspaceRoute(organization, routeWorkspaceSlug)) ??
-      organizations[0] ??
-      null
-    );
-  }, [organizations, routeWorkspaceSlug]);
+    if (routeWorkspaceSlug) {
+      return organizations.find((organization) => matchesWorkspaceRoute(organization, routeWorkspaceSlug)) ?? null;
+    }
+
+    if (rememberedEditorTarget) {
+      return (
+        organizations.find((organization) => matchesRememberedWorkspace(organization, rememberedEditorTarget)) ?? null
+      );
+    }
+
+    return null;
+  }, [organizations, rememberedEditorTarget, routeWorkspaceSlug]);
 
   const projectsQuery = useQuery(projectsQueries.listByOrganization(activeOrganization));
 
@@ -701,14 +718,24 @@ export function EditorPage() {
         )
       : projects;
   }, [projectSearchTerm, projects]);
-  const routeProjectId = params.projectId ?? null;
-  const routeDiagramId = params.diagramId ?? null;
-  const activeProject = projects.find((project) => project.id === routeProjectId) ?? projects[0] ?? null;
+  const activeProject = useMemo(() => {
+    if (!routeProjectId) {
+      return null;
+    }
+
+    return projects.find((project) => project.id === routeProjectId) ?? null;
+  }, [projects, routeProjectId]);
 
   const diagramsQuery = useQuery(diagramsQueries.listForProject(activeProject));
 
   const diagrams = diagramsQuery.data ?? [];
-  const activeDiagram = diagrams.find((diagram) => diagram.id === routeDiagramId) ?? diagrams[0] ?? null;
+  const activeDiagram = useMemo(() => {
+    if (!routeDiagramId) {
+      return null;
+    }
+
+    return diagrams.find((diagram) => diagram.id === routeDiagramId) ?? null;
+  }, [diagrams, routeDiagramId]);
   const currentUser = currentUserQuery.data ?? null;
   const canEditDiagram = activeProject
     ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate)
@@ -1476,37 +1503,80 @@ export function EditorPage() {
       return;
     }
 
-    if (
-      !routeWorkspaceSlug ||
-      !organizations.some((organization) => matchesWorkspaceRoute(organization, routeWorkspaceSlug))
-    ) {
-      const organization = organizations[0];
+    if (!routeWorkspaceSlug) {
+      const organization =
+        (rememberedEditorTarget
+          ? organizations.find((item) => matchesRememberedWorkspace(item, rememberedEditorTarget))
+          : null) ??
+        organizations[0] ??
+        null;
+
+      if (!organization) {
+        return;
+      }
+
       navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }), {
         replace: true,
       });
-    }
-  }, [navigate, organizations, organizationsQuery.isPending, routeWorkspaceSlug]);
 
-  useEffect(() => {
-    if (!activeOrganization) {
       return;
     }
 
-    if (projects.length > 0 && (!routeProjectId || !projects.some((project) => project.id === routeProjectId))) {
-      const project = projects[0];
-      navigate(routes.project.to({ projectId: project.id, workspaceSlug: getOrganizationSlug(activeOrganization) }), {
+    if (!organizations.some((organization) => matchesWorkspaceRoute(organization, routeWorkspaceSlug))) {
+      navigate(routes.home.to(), { replace: true });
+    }
+  }, [navigate, organizations, organizationsQuery.isPending, rememberedEditorTarget, routeWorkspaceSlug]);
+
+  useEffect(() => {
+    if (!activeOrganization || projectsQuery.isPending) {
+      return;
+    }
+
+    if (routeProjectId && !projects.some((project) => project.id === routeProjectId)) {
+      navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(activeOrganization) }), {
+        replace: true,
+      });
+
+      return;
+    }
+
+    if (!routeProjectId && projects.length > 0) {
+      const rememberedProject =
+        rememberedEditorTarget?.organizationId === activeOrganization.id
+          ? (projects.find((project) => project.id === rememberedEditorTarget.projectId) ?? null)
+          : null;
+      const project = rememberedProject ?? projects[0];
+
+      navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }), {
         replace: true,
       });
     }
-  }, [activeOrganization, navigate, projects, routeProjectId]);
+  }, [activeOrganization, navigate, projects, projectsQuery.isPending, rememberedEditorTarget, routeProjectId]);
 
   useEffect(() => {
-    if (
-      activeProject &&
-      diagrams.length > 0 &&
-      (!routeDiagramId || !diagrams.some((diagram) => diagram.id === routeDiagramId))
-    ) {
-      const diagram = diagrams[0];
+    if (!activeProject || diagramsQuery.isPending) {
+      return;
+    }
+
+    if (routeDiagramId && !diagrams.some((diagram) => diagram.id === routeDiagramId)) {
+      navigate(
+        routes.project.to({
+          projectId: activeProject.id,
+          workspaceSlug: getWorkspaceSlug(activeProject),
+        }),
+        { replace: true },
+      );
+
+      return;
+    }
+
+    if (!routeDiagramId && diagrams.length > 0) {
+      const rememberedDiagram =
+        rememberedEditorTarget?.projectId === activeProject.id
+          ? (diagrams.find((diagram) => diagram.id === rememberedEditorTarget.diagramId) ?? null)
+          : null;
+      const diagram = rememberedDiagram ?? diagrams[0];
+
       navigate(
         routes.diagram.to({
           diagramId: diagram.id,
@@ -1516,7 +1586,22 @@ export function EditorPage() {
         { replace: true },
       );
     }
-  }, [activeProject, diagrams, navigate, routeDiagramId]);
+  }, [activeProject, diagrams, diagramsQuery.isPending, navigate, rememberedEditorTarget, routeDiagramId]);
+
+  useEffect(() => {
+    if (!activeOrganization || !activeProject) {
+      return;
+    }
+
+    writeLastOpenedEditorTarget({
+      diagramId: activeDiagram?.id ?? null,
+      diagramName: activeDiagram?.name ?? null,
+      organizationId: activeOrganization.id,
+      projectId: activeProject.id,
+      projectName: activeProject.name,
+      workspaceSlug: getWorkspaceSlug(activeProject),
+    });
+  }, [activeDiagram?.id, activeDiagram?.name, activeOrganization, activeProject]);
 
   useEffect(() => {
     if (!latestSnapshot) {
@@ -2796,6 +2881,10 @@ function getOrganizationSlug(organization: OrganizationDto): string {
 
 function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: string | null): boolean {
   return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
+}
+
+function matchesRememberedWorkspace(organization: OrganizationDto, rememberedTarget: LastOpenedEditorTarget): boolean {
+  return organization.id === rememberedTarget.organizationId || organization.slug === rememberedTarget.workspaceSlug;
 }
 
 function createCanvasInsertionPosition(
