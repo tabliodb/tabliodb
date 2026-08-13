@@ -13,6 +13,10 @@ describe(CollaborationService.name, () => {
   const configRepository = {
     getEnv: vi.fn(),
   };
+  const metricsService = {
+    recordRealtimeConnectionClosed: vi.fn(),
+    recordRealtimeConnectionOpened: vi.fn(),
+  };
   const projectRepository = {
     getDiagramRole: vi.fn(),
   };
@@ -35,6 +39,7 @@ describe(CollaborationService.name, () => {
       authService as never,
       collaborationRepository as never,
       configRepository as never,
+      metricsService as never,
       projectRepository as never,
     );
   });
@@ -155,6 +160,20 @@ describe(CollaborationService.name, () => {
         'diagram-id',
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('records realtime connection metrics without depending on diagram ids in the metrics response', () => {
+    const socketId = 'socket-id';
+    const documentName = diagramDocumentName('diagram-id');
+
+    service['recordRealtimeConnectionOpened'](documentName, socketId);
+    service['recordRealtimeConnectionClosed'](socketId);
+
+    expect(metricsService.recordRealtimeConnectionOpened).toHaveBeenCalledWith({
+      roomName: documentName,
+      socketId,
+    });
+    expect(metricsService.recordRealtimeConnectionClosed).toHaveBeenCalledWith({ socketId });
   });
 });
 

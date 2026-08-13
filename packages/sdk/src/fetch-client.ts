@@ -49,6 +49,10 @@ export type ServerMemoryMetricsDtoOutput = {
   heapUsed: number;
   rss: number;
 };
+export type ServerRealtimeMetricsDtoOutput = {
+  activeConnections: number;
+  activeRooms: number;
+};
 export type ServerMetricsResponseDtoOutput = {
   generatedAt: string;
   http: {
@@ -73,6 +77,7 @@ export type ServerMetricsResponseDtoOutput = {
     pid: number;
     uptimeSeconds: number;
   };
+  realtime: ServerRealtimeMetricsDtoOutput;
   startedAt: string;
   window: {
     maxTrackedRoutes: number;

@@ -28,6 +28,8 @@ const overflowRoutePath = '[other]';
 export class MetricsService {
   private readonly startedAt = new Date();
   private readonly methods = new Map<string, number>();
+  private readonly realtimeRoomSockets = new Map<string, Set<string>>();
+  private readonly realtimeSocketRooms = new Map<string, string>();
   private readonly routes = new Map<string, MutableRouteMetrics>();
   private readonly statusGroups = {
     clientError: 0,
@@ -38,6 +40,46 @@ export class MetricsService {
   };
   private totalRequests = 0;
   private errorRequests = 0;
+
+  recordRealtimeConnectionOpened(input: { roomName: string; socketId: string }): void {
+    const socketId = input.socketId.trim();
+    const roomName = input.roomName.trim();
+
+    if (!socketId || !roomName) {
+      return;
+    }
+
+    // A recycled socket id should move rooms atomically so active connection counters never double count.
+    this.recordRealtimeConnectionClosed({ socketId });
+
+    const sockets = this.realtimeRoomSockets.get(roomName) ?? new Set<string>();
+    sockets.add(socketId);
+    this.realtimeRoomSockets.set(roomName, sockets);
+    this.realtimeSocketRooms.set(socketId, roomName);
+  }
+
+  recordRealtimeConnectionClosed(input: { socketId: string }): void {
+    const socketId = input.socketId.trim();
+
+    if (!socketId) {
+      return;
+    }
+
+    const roomName = this.realtimeSocketRooms.get(socketId);
+    if (!roomName) {
+      return;
+    }
+
+    this.realtimeSocketRooms.delete(socketId);
+
+    const sockets = this.realtimeRoomSockets.get(roomName);
+    sockets?.delete(socketId);
+
+    if (!sockets || sockets.size === 0) {
+      // Empty rooms are removed immediately so the metric reflects active collaboration rooms, not historical diagrams.
+      this.realtimeRoomSockets.delete(roomName);
+    }
+  }
 
   recordHttpRequest(input: HttpRequestMetricInput): void {
     const method = input.method.toUpperCase();
@@ -110,6 +152,11 @@ export class MetricsService {
         nodeVersion: process.version,
         pid: process.pid,
         uptimeSeconds: Math.floor(process.uptime()),
+      },
+      realtime: {
+        // Only aggregate realtime counters are exposed; document names/diagram ids stay out of operator-facing metrics.
+        activeConnections: this.realtimeSocketRooms.size,
+        activeRooms: this.realtimeRoomSockets.size,
       },
       startedAt: this.startedAt.toISOString(),
       window: {

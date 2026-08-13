@@ -25,6 +25,7 @@ import {
 } from '../repositories/collaboration.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
+import { MetricsService } from './metrics.service.js';
 
 @Injectable()
 export class CollaborationService implements OnModuleInit, OnModuleDestroy {
@@ -36,6 +37,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
     private readonly authService: AuthService,
     private readonly collaborationRepository: CollaborationRepository,
     private readonly configRepository: ConfigRepository,
+    private readonly metricsService: MetricsService,
     private readonly projectRepository: ProjectRepository,
   ) {}
 
@@ -179,6 +181,8 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
         }
       },
       onConnect: async ({ documentName, socketId }) => {
+        this.recordRealtimeConnectionOpened(documentName, socketId);
+
         this.logger.debug({
           documentName,
           event: 'realtime.connection_opened',
@@ -187,6 +191,8 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
       },
       onDisconnect: async ({ clientsCount, context, documentName, socketId }) => {
         const collaborationContext = readCollaborationContext(context);
+
+        this.recordRealtimeConnectionClosed(socketId);
 
         this.logger.debug({
           clientsCount,
@@ -251,6 +257,18 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.server = undefined;
     }
+  }
+
+  private recordRealtimeConnectionOpened(documentName: string, socketId: string): void {
+    this.metricsService.recordRealtimeConnectionOpened({
+      // MetricsService stores this only internally for aggregate room counts; the public metrics response never exposes it.
+      roomName: documentName,
+      socketId,
+    });
+  }
+
+  private recordRealtimeConnectionClosed(socketId: string): void {
+    this.metricsService.recordRealtimeConnectionClosed({ socketId });
   }
 
   private scheduleDocumentStore(diagramId: string, state: Uint8Array): void {

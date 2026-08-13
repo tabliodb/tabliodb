@@ -48,6 +48,13 @@ export const ServerHttpRouteMetricsSchema = z
   })
   .meta({ id: 'ServerHttpRouteMetricsDto' });
 
+export const ServerRealtimeMetricsSchema = z
+  .object({
+    activeConnections: z.number().int().min(0),
+    activeRooms: z.number().int().min(0),
+  })
+  .meta({ id: 'ServerRealtimeMetricsDto' });
+
 export const ServerMetricsResponseSchema = z
   .object({
     generatedAt: z.string(),
@@ -75,6 +82,7 @@ export const ServerMetricsResponseSchema = z
       pid: z.number().int().min(0),
       uptimeSeconds: z.number().int().min(0),
     }),
+    realtime: ServerRealtimeMetricsSchema,
     startedAt: z.string(),
     window: z.object({
       maxTrackedRoutes: z.number().int().min(1),

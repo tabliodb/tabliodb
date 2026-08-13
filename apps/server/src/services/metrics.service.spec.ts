@@ -36,4 +36,58 @@ describe(MetricsService.name, () => {
       }),
     );
   });
+
+  it('records active realtime connection and room counts without exposing room names', () => {
+    const service = new MetricsService();
+
+    service.recordRealtimeConnectionOpened({
+      roomName: 'diagram:private-diagram-id-a',
+      socketId: 'socket-1',
+    });
+    service.recordRealtimeConnectionOpened({
+      roomName: 'diagram:private-diagram-id-a',
+      socketId: 'socket-2',
+    });
+    service.recordRealtimeConnectionOpened({
+      roomName: 'diagram:private-diagram-id-b',
+      socketId: 'socket-3',
+    });
+
+    expect(service.getSnapshot().realtime).toEqual({
+      activeConnections: 3,
+      activeRooms: 2,
+    });
+
+    service.recordRealtimeConnectionClosed({ socketId: 'socket-1' });
+
+    expect(service.getSnapshot().realtime).toEqual({
+      activeConnections: 2,
+      activeRooms: 2,
+    });
+
+    service.recordRealtimeConnectionClosed({ socketId: 'socket-2' });
+
+    expect(service.getSnapshot().realtime).toEqual({
+      activeConnections: 1,
+      activeRooms: 1,
+    });
+  });
+
+  it('moves a recycled realtime socket id between rooms without double counting', () => {
+    const service = new MetricsService();
+
+    service.recordRealtimeConnectionOpened({
+      roomName: 'diagram:first-room',
+      socketId: 'socket-1',
+    });
+    service.recordRealtimeConnectionOpened({
+      roomName: 'diagram:second-room',
+      socketId: 'socket-1',
+    });
+
+    expect(service.getSnapshot().realtime).toEqual({
+      activeConnections: 1,
+      activeRooms: 1,
+    });
+  });
 });
