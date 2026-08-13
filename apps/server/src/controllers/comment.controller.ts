@@ -157,6 +157,7 @@ export class CommentController {
   }
 
   @Patch('threads/:threadId/read')
+  @RateLimit(RateLimitPreset.CommentReadStateWrite)
   @ApiParam({ name: 'threadId', type: String })
   @ApiOperation({ operationId: 'markCommentThreadRead' })
   @ZodResponse({ status: HttpStatus.OK, type: CommentThreadReadStateDto })

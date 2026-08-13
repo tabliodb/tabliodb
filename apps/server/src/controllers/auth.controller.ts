@@ -76,6 +76,7 @@ export class AuthController {
   }
 
   @Patch('me/profile')
+  @RateLimit(RateLimitPreset.CurrentUserWrite)
   @Authenticated()
   @ApiBody({ type: CurrentUserProfileUpdateDto })
   @ApiOperation({ operationId: 'updateCurrentUserProfile' })
@@ -122,6 +123,7 @@ export class AuthController {
   }
 
   @Patch('me/editor-preference')
+  @RateLimit(RateLimitPreset.EditorPreferenceWrite)
   @Authenticated()
   @ApiBody({ type: CurrentUserEditorPreferenceUpdateDto })
   @ApiOperation({ operationId: 'updateCurrentUserEditorPreference' })
@@ -161,6 +163,7 @@ export class AuthController {
   }
 
   @Delete('me/avatar')
+  @RateLimit(RateLimitPreset.CurrentUserWrite)
   @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ operationId: 'deleteCurrentUserAvatar' })
@@ -236,6 +239,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @RateLimit(RateLimitPreset.AuthLogout)
   @Authenticated({ allowTemporaryPassword: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ operationId: 'logout' })
