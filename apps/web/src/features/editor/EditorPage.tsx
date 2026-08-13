@@ -47,6 +47,8 @@ import {
   TabliodbApiError,
   TargetType2 as SdkShareLinkTargetType,
   type AuditLogDtoOutput,
+  type CurrentUserEditorPreferenceDtoOutput,
+  type CurrentUserEditorPreferenceUpdateDto,
   type DiagramShareLinkCreateDto,
   type DiagramShareLinkCreateResponseDtoOutput,
   type DiagramExportResponseDtoOutput,
@@ -185,7 +187,7 @@ import {
   LoadingState,
   getErrorMessage,
 } from '@/features/app/RouteStates';
-import { authQueries, useLogoutMutation } from '@/resources/auth';
+import { authQueries, useLogoutMutation, useUpdateCurrentUserEditorPreferenceMutation } from '@/resources/auth';
 import {
   defaultDiagramName,
   diagramsQueries,
@@ -279,16 +281,13 @@ import { CommentBody } from './components/CommentBody';
 import { SchemaCanvas, type CanvasViewportRect, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
-import {
-  readLastOpenedEditorTarget,
-  writeLastOpenedEditorTarget,
-  type LastOpenedEditorTarget,
-} from './editor-route-memory';
 import { getDisplayTableColor } from './table-colors';
 
 const CommentComposer = lazy(() => import('./components/CommentComposer'));
 
 type AuditLogDto = AuditLogDtoOutput;
+type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
+type CurrentUserEditorPreferenceUpdateDtoInput = CurrentUserEditorPreferenceUpdateDto;
 type DiagramExportResponseDto = DiagramExportResponseDtoOutput;
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type DiagramReviewAction = `${SdkDiagramReviewAction}`;
@@ -677,17 +676,17 @@ export function EditorPage() {
   const latestCommentTypingRef = useRef<AwarenessState['commentTyping']>(undefined);
   const latestAwarenessSentAtRef = useRef(0);
   const commentThreadOpenRequestIdRef = useRef(0);
+  const submittedEditorPreferenceKeyRef = useRef<string | null>(null);
 
   const currentUserQuery = useQuery(authQueries.me());
+  const editorPreferenceQuery = useQuery(authQueries.editorPreference());
+  const { mutate: updateEditorPreference } = useUpdateCurrentUserEditorPreferenceMutation();
   const organizationsQuery = useQuery(organizationsQueries.list({ limit: 50 }));
   const organizations = organizationsQuery.data?.items ?? [];
   const routeWorkspaceSlug = params.workspaceSlug ?? null;
   const routeProjectId = params.projectId ?? null;
   const routeDiagramId = params.diagramId ?? null;
-  const rememberedEditorTarget = useMemo(
-    () => readLastOpenedEditorTarget(),
-    [routeDiagramId, routeProjectId, routeWorkspaceSlug],
-  );
+  const rememberedEditorTarget = editorPreferenceQuery.data ?? null;
   const activeOrganization = useMemo(() => {
     if (organizations.length === 0) {
       return null;
@@ -1503,6 +1502,10 @@ export function EditorPage() {
       return;
     }
 
+    if (!routeWorkspaceSlug && editorPreferenceQuery.isPending) {
+      return;
+    }
+
     if (!routeWorkspaceSlug) {
       const organization =
         (rememberedEditorTarget
@@ -1525,10 +1528,21 @@ export function EditorPage() {
     if (!organizations.some((organization) => matchesWorkspaceRoute(organization, routeWorkspaceSlug))) {
       navigate(routes.home.to(), { replace: true });
     }
-  }, [navigate, organizations, organizationsQuery.isPending, rememberedEditorTarget, routeWorkspaceSlug]);
+  }, [
+    editorPreferenceQuery.isPending,
+    navigate,
+    organizations,
+    organizationsQuery.isPending,
+    rememberedEditorTarget,
+    routeWorkspaceSlug,
+  ]);
 
   useEffect(() => {
     if (!activeOrganization || projectsQuery.isPending) {
+      return;
+    }
+
+    if (!routeProjectId && editorPreferenceQuery.isPending) {
       return;
     }
 
@@ -1551,10 +1565,22 @@ export function EditorPage() {
         replace: true,
       });
     }
-  }, [activeOrganization, navigate, projects, projectsQuery.isPending, rememberedEditorTarget, routeProjectId]);
+  }, [
+    activeOrganization,
+    editorPreferenceQuery.isPending,
+    navigate,
+    projects,
+    projectsQuery.isPending,
+    rememberedEditorTarget,
+    routeProjectId,
+  ]);
 
   useEffect(() => {
     if (!activeProject || diagramsQuery.isPending) {
+      return;
+    }
+
+    if (!routeDiagramId && editorPreferenceQuery.isPending) {
       return;
     }
 
@@ -1586,22 +1612,75 @@ export function EditorPage() {
         { replace: true },
       );
     }
-  }, [activeProject, diagrams, diagramsQuery.isPending, navigate, rememberedEditorTarget, routeDiagramId]);
+  }, [
+    activeProject,
+    diagrams,
+    diagramsQuery.isPending,
+    editorPreferenceQuery.isPending,
+    navigate,
+    rememberedEditorTarget,
+    routeDiagramId,
+  ]);
 
   useEffect(() => {
-    if (!activeOrganization || !activeProject) {
+    if (!activeOrganization) {
       return;
     }
 
-    writeLastOpenedEditorTarget({
+    if (routeProjectId && !activeProject) {
+      return;
+    }
+
+    if (routeDiagramId && !activeDiagram) {
+      return;
+    }
+
+    const canPersistWorkspaceOnly =
+      !routeProjectId && !projectsQuery.isPending && projects.length === 0 && !activeProject;
+
+    if (!activeProject && !canPersistWorkspaceOnly) {
+      return;
+    }
+
+    const target: CurrentUserEditorPreferenceUpdateDtoInput = {
       diagramId: activeDiagram?.id ?? null,
-      diagramName: activeDiagram?.name ?? null,
       organizationId: activeOrganization.id,
-      projectId: activeProject.id,
-      projectName: activeProject.name,
-      workspaceSlug: getWorkspaceSlug(activeProject),
+      projectId: activeProject?.id ?? null,
+    };
+    const targetKey = createEditorPreferenceKey(target);
+    const currentKey = rememberedEditorTarget?.organizationId
+      ? createEditorPreferenceKey({
+          diagramId: rememberedEditorTarget.diagramId,
+          organizationId: rememberedEditorTarget.organizationId,
+          projectId: rememberedEditorTarget.projectId,
+        })
+      : null;
+
+    if (targetKey === currentKey || submittedEditorPreferenceKeyRef.current === targetKey) {
+      return;
+    }
+
+    submittedEditorPreferenceKeyRef.current = targetKey;
+    updateEditorPreference(target, {
+      onError: () => {
+        if (submittedEditorPreferenceKeyRef.current === targetKey) {
+          submittedEditorPreferenceKeyRef.current = null;
+        }
+      },
     });
-  }, [activeDiagram?.id, activeDiagram?.name, activeOrganization, activeProject]);
+  }, [
+    activeDiagram?.id,
+    activeOrganization?.id,
+    activeProject?.id,
+    projects.length,
+    projectsQuery.isPending,
+    rememberedEditorTarget?.diagramId,
+    rememberedEditorTarget?.organizationId,
+    rememberedEditorTarget?.projectId,
+    routeDiagramId,
+    routeProjectId,
+    updateEditorPreference,
+  ]);
 
   useEffect(() => {
     if (!latestSnapshot) {
@@ -2883,8 +2962,22 @@ function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: str
   return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
 }
 
-function matchesRememberedWorkspace(organization: OrganizationDto, rememberedTarget: LastOpenedEditorTarget): boolean {
-  return organization.id === rememberedTarget.organizationId || organization.slug === rememberedTarget.workspaceSlug;
+function matchesRememberedWorkspace(
+  organization: OrganizationDto,
+  rememberedTarget: CurrentUserEditorPreferenceDto,
+): boolean {
+  return Boolean(
+    rememberedTarget.organizationId &&
+    (organization.id === rememberedTarget.organizationId || organization.slug === rememberedTarget.workspaceSlug),
+  );
+}
+
+function createEditorPreferenceKey(target: {
+  diagramId?: string | null;
+  organizationId: string | null;
+  projectId?: string | null;
+}): string {
+  return [target.organizationId ?? '', target.projectId ?? '', target.diagramId ?? ''].join(':');
 }
 
 function createCanvasInsertionPosition(

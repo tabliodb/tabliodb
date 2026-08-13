@@ -24,6 +24,8 @@ import {
   ApiKeyListQueryDto,
   ApiKeyListResponseDto,
   ApiKeyRevokeResponseDto,
+  CurrentUserEditorPreferenceDto,
+  CurrentUserEditorPreferenceUpdateDto,
   CurrentUserPasswordUpdateDto,
   CurrentUserProfileUpdateDto,
   CurrentUserResponseDto,
@@ -46,6 +48,7 @@ import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
 import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { AuthService } from '../services/auth.service.js';
 import { AVATAR_MAX_BYTES, type UploadedAvatarFile } from '../services/file.service.js';
+import { UserPreferenceService } from '../services/user-preference.service.js';
 import { AuthType } from '../constants.js';
 import { clearAuthCookies, respondWithAuthCookies, setCsrfCookie } from '../utils/response.js';
 import type { AuthContext } from '../database.js';
@@ -54,7 +57,10 @@ import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly service: AuthService) {}
+  constructor(
+    private readonly service: AuthService,
+    private readonly userPreferenceService: UserPreferenceService,
+  ) {}
 
   @Get('me')
   @Authenticated({ allowTemporaryPassword: true })
@@ -105,6 +111,26 @@ export class AuthController {
     @Body() dto: CurrentUserTemporaryPasswordUpdateDto,
   ): Promise<CurrentUserResponseDto> {
     return this.service.updateTemporaryPassword(auth, dto);
+  }
+
+  @Get('me/editor-preference')
+  @Authenticated()
+  @ApiOperation({ operationId: 'getCurrentUserEditorPreference' })
+  @ZodResponse({ status: HttpStatus.OK, type: CurrentUserEditorPreferenceDto })
+  getCurrentUserEditorPreference(@Auth() auth: AuthContext): Promise<CurrentUserEditorPreferenceDto> {
+    return this.userPreferenceService.getEditorPreference(auth);
+  }
+
+  @Patch('me/editor-preference')
+  @Authenticated()
+  @ApiBody({ type: CurrentUserEditorPreferenceUpdateDto })
+  @ApiOperation({ operationId: 'updateCurrentUserEditorPreference' })
+  @ZodResponse({ status: HttpStatus.OK, type: CurrentUserEditorPreferenceDto })
+  updateCurrentUserEditorPreference(
+    @Auth() auth: AuthContext,
+    @Body() dto: CurrentUserEditorPreferenceUpdateDto,
+  ): Promise<CurrentUserEditorPreferenceDto> {
+    return this.userPreferenceService.updateEditorPreference(auth, dto);
   }
 
   @Post('me/avatar')

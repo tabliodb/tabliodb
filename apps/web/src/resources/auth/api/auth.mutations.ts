@@ -9,10 +9,12 @@ import {
   prepareSessionBinding,
   requestPasswordReset,
   startOidcLogin,
+  updateCurrentUserEditorPreference,
   updateCurrentUserPassword,
   updateCurrentUserProfile,
   updateCurrentUserTemporaryPassword,
   uploadCurrentUserAvatar,
+  type CurrentUserEditorPreferenceUpdateDto,
   type CurrentUserPasswordUpdateDto,
   type CurrentUserProfileUpdateDto,
   type CurrentUserTemporaryPasswordUpdateDto,
@@ -34,6 +36,8 @@ const updatePasswordMutationFn = (body: CurrentUserPasswordUpdateDto) =>
   updateCurrentUserPassword({ currentUserPasswordUpdateDto: body });
 const updateTemporaryPasswordMutationFn = (body: CurrentUserTemporaryPasswordUpdateDto) =>
   updateCurrentUserTemporaryPassword({ currentUserTemporaryPasswordUpdateDto: body });
+const updateEditorPreferenceMutationFn = (body: CurrentUserEditorPreferenceUpdateDto) =>
+  updateCurrentUserEditorPreference({ currentUserEditorPreferenceUpdateDto: body });
 const loginMutationFn = async (body: LoginCredentialDto) => {
   const sessionBinding = await prepareSessionBinding();
 
@@ -80,6 +84,9 @@ type UseUpdatePasswordMutationParams = {
 };
 type UseUpdateTemporaryPasswordMutationParams = {
   mutationConfig?: MutationConfig<typeof updateTemporaryPasswordMutationFn>;
+};
+type UseUpdateEditorPreferenceMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateEditorPreferenceMutationFn>;
 };
 type UseLoginMutationParams = {
   mutationConfig?: MutationConfig<typeof loginMutationFn>;
@@ -199,6 +206,18 @@ export function useUpdateCurrentUserTemporaryPasswordMutation(params: UseUpdateT
     onSuccess: (data, variables, onMutateResult, context) => {
       // Temporary-password completion happens inside the login surface; updating auth cache unlocks protected routes instantly.
       queryClient.setQueryData(authKeys.me(), data);
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useUpdateCurrentUserEditorPreferenceMutation(params: UseUpdateEditorPreferenceMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateEditorPreferenceMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Preference editor adalah state navigasi user-level; cache ditulis langsung agar redirect berikutnya memakai target terbaru.
+      queryClient.setQueryData(authKeys.editorPreference(), data);
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

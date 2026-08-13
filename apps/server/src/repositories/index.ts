@@ -20,6 +20,7 @@ import { SessionRepository } from './session.repository.js';
 import { SetupRepository } from './setup.repository.js';
 import { SnapshotRepository } from './snapshot.repository.js';
 import { TeamRepository } from './team.repository.js';
+import { UserPreferenceRepository } from './user-preference.repository.js';
 import { UserRepository } from './user.repository.js';
 
 export const repositories = [
@@ -45,5 +46,6 @@ export const repositories = [
   SetupRepository,
   SnapshotRepository,
   TeamRepository,
+  UserPreferenceRepository,
   UserRepository,
 ];

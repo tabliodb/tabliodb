@@ -1,15 +1,16 @@
 import { redirect, type LoaderFunctionArgs, type Params } from 'react-router';
 import {
   TabliodbApiError,
+  type CurrentUserEditorPreferenceDtoOutput,
   type OrganizationDtoOutput,
   type ProjectResponseDtoOutput,
 } from '@tabliodb/sdk';
 import { routes } from '@/app/routes';
 import { queryClient } from '@/lib/react-query';
+import { authQueries } from '@/resources/auth';
 import { diagramsQueries } from '@/resources/diagrams';
 import { organizationsQueries } from '@/resources/organizations';
 import { projectsQueries } from '@/resources/projects';
-import { readLastOpenedEditorTarget, type LastOpenedEditorTarget } from '../editor-route-memory';
 
 export type EditorLoaderData = {
   title?: string;
@@ -26,15 +27,16 @@ export function getEditorRouteTitle(loaderData: unknown): string | undefined {
 export async function editorLoader({ params }: LoaderFunctionArgs): Promise<EditorLoaderData> {
   try {
     const organizationList = await queryClient.ensureQueryData(organizationsQueries.list({ limit: 50 }));
+    const rememberedTarget = await queryClient.ensureQueryData(authQueries.editorPreference());
     const organizations = organizationList.items;
-    const rememberedTarget = readLastOpenedEditorTarget();
 
     if (organizations.length === 0) {
       return { title: 'Editor' };
     }
 
     const requestedOrganization = params.workspaceSlug
-      ? (organizations.find((organization) => matchesWorkspaceRoute(organization, params.workspaceSlug ?? null)) ?? null)
+      ? (organizations.find((organization) => matchesWorkspaceRoute(organization, params.workspaceSlug ?? null)) ??
+        null)
       : null;
     const rememberedOrganization = rememberedTarget
       ? (organizations.find((organization) => matchesRememberedWorkspace(organization, rememberedTarget)) ?? null)
@@ -127,9 +129,12 @@ function matchesWorkspaceRoute(organization: OrganizationDtoOutput, workspaceSlu
 
 function matchesRememberedWorkspace(
   organization: OrganizationDtoOutput,
-  rememberedTarget: LastOpenedEditorTarget,
+  rememberedTarget: CurrentUserEditorPreferenceDtoOutput,
 ): boolean {
-  return organization.id === rememberedTarget.organizationId || organization.slug === rememberedTarget.workspaceSlug;
+  return Boolean(
+    rememberedTarget.organizationId &&
+    (organization.id === rememberedTarget.organizationId || organization.slug === rememberedTarget.workspaceSlug),
+  );
 }
 
 function isWorkspaceRoute(params: Params<string>, workspaceSlug: string): boolean {
@@ -140,11 +145,6 @@ function isProjectRoute(params: Params<string>, workspaceSlug: string, projectId
   return params.workspaceSlug === workspaceSlug && params.projectId === projectId && !params.diagramId;
 }
 
-function isDiagramRoute(
-  params: Params<string>,
-  workspaceSlug: string,
-  projectId: string,
-  diagramId: string,
-): boolean {
+function isDiagramRoute(params: Params<string>, workspaceSlug: string, projectId: string, diagramId: string): boolean {
   return params.workspaceSlug === workspaceSlug && params.projectId === projectId && params.diagramId === diagramId;
 }

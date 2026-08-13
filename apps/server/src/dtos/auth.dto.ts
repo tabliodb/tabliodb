@@ -102,6 +102,27 @@ const CurrentUserTemporaryPasswordUpdateSchema = z
   })
   .meta({ id: 'CurrentUserTemporaryPasswordUpdateDto' });
 
+const CurrentUserEditorPreferenceSchema = z
+  .object({
+    diagramId: z.string().uuid().nullable(),
+    diagramName: z.string().nullable(),
+    organizationId: z.string().uuid().nullable(),
+    organizationName: z.string().nullable(),
+    projectId: z.string().uuid().nullable(),
+    projectName: z.string().nullable(),
+    updatedAt: DateTimeSchema.nullable(),
+    workspaceSlug: z.string().nullable(),
+  })
+  .meta({ id: 'CurrentUserEditorPreferenceDto' });
+
+const CurrentUserEditorPreferenceUpdateSchema = z
+  .object({
+    diagramId: z.string().uuid().nullable().optional(),
+    organizationId: z.string().uuid(),
+    projectId: z.string().uuid().nullable().optional(),
+  })
+  .meta({ id: 'CurrentUserEditorPreferenceUpdateDto' });
+
 const LoginResponseSchema = z
   .object({
     accessToken: z.string(),
@@ -195,6 +216,8 @@ export class CurrentUserResponseDto extends createZodDto(CurrentUserResponseSche
 export class CurrentUserProfileUpdateDto extends createZodDto(CurrentUserProfileUpdateSchema) {}
 export class CurrentUserPasswordUpdateDto extends createZodDto(CurrentUserPasswordUpdateSchema) {}
 export class CurrentUserTemporaryPasswordUpdateDto extends createZodDto(CurrentUserTemporaryPasswordUpdateSchema) {}
+export class CurrentUserEditorPreferenceDto extends createZodDto(CurrentUserEditorPreferenceSchema) {}
+export class CurrentUserEditorPreferenceUpdateDto extends createZodDto(CurrentUserEditorPreferenceUpdateSchema) {}
 export class ApiKeyCreateDto extends createZodDto(ApiKeyCreateSchema) {}
 export class ApiKeyCreateResponseDto extends createZodDto(ApiKeyCreateResponseSchema) {}
 export class ApiKeyListQueryDto extends createZodDto(ApiKeyListQuerySchema) {}

@@ -98,6 +98,21 @@ export type CurrentUserPasswordUpdateDto = {
 export type CurrentUserTemporaryPasswordUpdateDto = {
   password: string;
 };
+export type CurrentUserEditorPreferenceDtoOutput = {
+  diagramId: string | null;
+  diagramName: string | null;
+  organizationId: string | null;
+  organizationName: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  updatedAt: string | null;
+  workspaceSlug: string | null;
+};
+export type CurrentUserEditorPreferenceUpdateDto = {
+  diagramId?: string | null;
+  organizationId: string;
+  projectId?: string | null;
+};
 export type SessionBindingPublicKeyDto = {
   crv: Crv;
   ext?: boolean;
@@ -1672,6 +1687,38 @@ export function updateCurrentUserTemporaryPassword(
         ...opts,
         method: 'PATCH',
         body: currentUserTemporaryPasswordUpdateDto,
+      }),
+    ),
+  );
+}
+export function getCurrentUserEditorPreference(opts?: Oazapfts.RequestOpts) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: CurrentUserEditorPreferenceDtoOutput;
+    }>('/auth/me/editor-preference', {
+      ...opts,
+    }),
+  );
+}
+export function updateCurrentUserEditorPreference(
+  {
+    currentUserEditorPreferenceUpdateDto,
+  }: {
+    currentUserEditorPreferenceUpdateDto: CurrentUserEditorPreferenceUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: CurrentUserEditorPreferenceDtoOutput;
+    }>(
+      '/auth/me/editor-preference',
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: currentUserEditorPreferenceUpdateDto,
       }),
     ),
   );

@@ -42,6 +42,15 @@ export interface UserTable {
   deletedAt: NullableTimestamp;
 }
 
+export interface UserEditorPreferenceTable {
+  userId: string;
+  lastOpenedOrganizationId: NullableColumn<string>;
+  lastOpenedProjectId: NullableColumn<string>;
+  lastOpenedDiagramId: NullableColumn<string>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface FileTable {
   id: Generated<string>;
   ownerId: string;
@@ -419,6 +428,7 @@ export interface AuditLogTable {
 
 export interface DB {
   users: UserTable;
+  user_editor_preferences: UserEditorPreferenceTable;
   files: FileTable;
   file_variants: FileVariantTable;
   system_settings: SystemSettingTable;
