@@ -4,10 +4,15 @@ export type ApiEnvelope<T> = {
 };
 
 export type ApiErrorResponse = {
-  statusCode: number;
-  message: string;
+  code: string;
+  details?: string[];
   error?: string;
-  requestId?: string;
+  message: string;
+  method: string;
+  path: string;
+  requestId: string | null;
+  statusCode: number;
+  timestamp: string;
 };
 
 export type PaginationQuery = {

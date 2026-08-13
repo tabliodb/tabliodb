@@ -1,19 +1,8 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import type { ApiErrorResponse } from '@tabliodb/shared';
 import type { Request, Response } from 'express';
 import { TabliodbHeader } from '../constants.js';
 import { sanitizeRequestPath } from '../utils/request-path.js';
-
-type ApiErrorResponse = {
-  code: string;
-  details?: string[];
-  error: string;
-  message: string;
-  method: string;
-  path: string;
-  requestId: string | null;
-  statusCode: number;
-  timestamp: string;
-};
 
 type NormalizedException = {
   code: string;
@@ -84,15 +73,19 @@ function normalizeException(
   if (exceptionResponse && typeof exceptionResponse === 'object') {
     const response = exceptionResponse as {
       code?: unknown;
+      details?: unknown;
       error?: unknown;
       message?: unknown;
       statusCode?: unknown;
     };
-    const details = normalizeDetails(response.message);
+    const explicitDetails = normalizeDetails(response.details);
+    const messageDetails = normalizeDetails(response.message);
+    const details = explicitDetails.length > 0 ? explicitDetails : messageDetails;
     const message =
       status >= HttpStatus.INTERNAL_SERVER_ERROR
         ? getInternalServerErrorMessage()
         : (normalizeMessage(response.message) ??
+          normalizeMessage(response.details) ??
           normalizeMessage(response.error) ??
           getHttpStatusFallbackMessage(status));
 

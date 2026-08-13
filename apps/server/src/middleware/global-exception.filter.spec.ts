@@ -39,6 +39,31 @@ describe(GlobalExceptionFilter.name, () => {
     );
   });
 
+  it('preserves explicit validation details when the message is a short summary', () => {
+    const { host, response } = createHttpHost();
+    const filter = new GlobalExceptionFilter();
+
+    filter.catch(
+      new BadRequestException({
+        code: 'validation_failed',
+        details: ['Name must contain at least 3 characters', 'Slug may only contain letters and numbers'],
+        message: 'Some fields are invalid. Please review the form and try again.',
+      }),
+      host,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'validation_failed',
+        details: ['Name must contain at least 3 characters', 'Slug may only contain letters and numbers'],
+        message: 'Some fields are invalid. Please review the form and try again.',
+        requestId: 'request-id',
+        statusCode: 400,
+      }),
+    );
+  });
+
   it('hides internal exception details but keeps the request id', () => {
     const { host, response } = createHttpHost();
     const filter = new GlobalExceptionFilter();
