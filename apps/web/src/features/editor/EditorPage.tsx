@@ -4,12 +4,10 @@ import LOGO from '@/assets/logo.svg';
 import {
   diagramReviewRuleDefinitions,
   diagramReviewSignalCodes,
-  getDiagramModelIntegrityWarnings,
   getTableColumns,
   applyDiagramCommand,
   createDiagramEntityId,
   parseDiagramModel,
-  stringifyDiagramModel,
   type DatabaseDialect,
   type DatabaseIndex,
   type DatabaseTable,
@@ -18,8 +16,6 @@ import {
   type DiagramReviewSignalCode,
   type DiagramReviewSignal,
 } from '@tabliodb/schema-core';
-import { generateDiagramMarkdown } from '@tabliodb/docs';
-import { generateDiagramSvg } from '@tabliodb/render';
 import {
   OrganizationRole,
   Permission,
@@ -34,7 +30,6 @@ import {
   DefaultProjectRole as SdkDefaultProjectRole,
   Dialect as SdkDialect,
   DisabledRuleKeys as SdkDisabledRuleKeys,
-  Format as SdkExportFormat,
   Mode as SdkImportMode,
   Role as SdkOrganizationMemberRole,
   Role2 as SdkProjectMemberRole,
@@ -47,7 +42,6 @@ import {
   type CurrentUserEditorPreferenceUpdateDto,
   type DiagramShareLinkCreateDto,
   type DiagramShareLinkCreateResponseDtoOutput,
-  type DiagramExportResponseDtoOutput,
   type DiagramShareLinkDtoOutput,
   type DiagramResponseDtoOutput,
   type NotificationInboxItemDtoOutput,
@@ -65,7 +59,6 @@ import {
   type TeamResponseDtoOutput,
 } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
-import { generateCreateSchemaSqlWithWarnings, type SqlGenerationWarning } from '@tabliodb/sql';
 import {
   Badge,
   Button,
@@ -82,8 +75,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparatorItem,
-  FieldError,
   DropdownMenuTrigger,
+  FieldError,
   IconButton,
   Input,
   Select,
@@ -103,26 +96,18 @@ import {
   Check,
   ChevronDown,
   ChevronsUpDown,
-  Code2,
   Copy,
   Database,
-  Download,
-  FileImage,
-  FileJson,
   FileText,
-  FileUp,
   FileWarning,
   FolderPlus,
   History,
-  ImageDown,
   Loader2,
   LocateFixed,
   Link2,
   LogOut,
   Keyboard,
-  Map as MapIcon,
   MessageSquareText,
-  MoreHorizontal,
   Play,
   Plus,
   Save,
@@ -176,9 +161,7 @@ import { authQueries, useLogoutMutation, useUpdateCurrentUserEditorPreferenceMut
 import {
   defaultDiagramName,
   diagramsQueries,
-  type DiagramExportQuery,
   useCreateDiagramMutation,
-  useExportDiagramMutation,
   useImportDiagramMutation,
   useUpdateDiagramMutation,
 } from '@/resources/diagrams';
@@ -248,6 +231,7 @@ import {
   type EditorModelHistory,
 } from './model-history';
 import { CommentsDialog } from './components/CommentsDialog';
+import { EditorMoreActionsMenu } from './components/EditorMoreActionsMenu';
 import {
   ImportJsonDialog,
   ImportSqlDialog,
@@ -257,23 +241,17 @@ import {
 import { SchemaCanvas, type CanvasViewportRect, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { SnapshotHistoryDialog } from './components/SnapshotHistoryDialog';
+import { SqlPreviewDialog } from './components/SqlPreviewDialog';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
 import { UserAvatar, type AvatarIdentity } from './components/UserAvatar';
 import { formatDiagramDialect } from './diagram-formatters';
 import { getDisplayTableColor } from './table-colors';
-import {
-  copyTextToClipboard,
-  createExportFileStem,
-  createPngBlobFromSvg,
-  downloadBlobFile,
-  downloadTextFile,
-  toDiagramExportWarnings,
-} from './export-utils';
+import { copyTextToClipboard } from './export-utils';
+import { useDiagramExportActions } from './useDiagramExportActions';
 
 type AuditLogDto = AuditLogDtoOutput;
 type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
 type CurrentUserEditorPreferenceUpdateDtoInput = CurrentUserEditorPreferenceUpdateDto;
-type DiagramExportResponseDto = DiagramExportResponseDtoOutput;
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type NotificationInboxItemDto = NotificationInboxItemDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
@@ -289,7 +267,6 @@ type TeamMemberDto = TeamMemberDtoOutput;
 type TeamProjectAccessDto = TeamProjectAccessDtoOutput;
 type TeamProjectRole = `${SdkTeamProjectRole}`;
 type TeamResponseDto = TeamResponseDtoOutput;
-type DiagramExportFormat = 'tabliodb_json' | 'sql' | 'markdown' | 'svg';
 type WorkspaceDefaultProjectRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
 
 const sdkDialectByValue: Record<DatabaseDialect, SdkDialect> = {
@@ -340,13 +317,6 @@ const sdkTeamProjectRoleByValue: Record<TeamProjectRole, SdkTeamProjectRole> = {
 const sdkImportSourceByValue: Record<EditorImportSource, SdkImportSource> = {
   sql: SdkImportSource.Sql,
   tabliodb_json: SdkImportSource.TabliodbJson,
-};
-
-const sdkExportFormatByValue: Record<DiagramExportFormat, SdkExportFormat> = {
-  markdown: SdkExportFormat.Markdown,
-  sql: SdkExportFormat.Sql,
-  svg: SdkExportFormat.Svg,
-  tabliodb_json: SdkExportFormat.TabliodbJson,
 };
 
 type ShareLinkTarget = 'diagram' | 'snapshot';
@@ -551,7 +521,6 @@ export function EditorPage() {
   const navigate = useNavigate();
   const params = useParams();
   const queryClient = useQueryClient();
-  const [copiedSql, setCopiedSql] = useState(false);
   const [sqlPreviewOpen, setSqlPreviewOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -707,6 +676,14 @@ export function EditorPage() {
     ...shareLinksQueryOptions,
     // Share links hanya dibutuhkan ketika dialog dibuka; public sharing tidak ikut memperlambat editor utama.
     enabled: Boolean(activeDiagram) && shareLinksOpen && shareLinksQueryOptions.enabled !== false,
+  });
+  const diagramExportActions = useDiagramExportActions({
+    activeDiagramId: activeDiagram?.id ?? null,
+    diagramName: activeDiagram?.name,
+    model,
+    // Signature persisted disimpan di ref karena update-nya mengikuti lifecycle snapshot/import, bukan input form biasa.
+    persistedDraftSignature: persistedDraftSignatureRef.current,
+    projectName: activeProject?.name,
   });
 
   const snapshots = snapshotsQuery.data ?? emptySnapshots;
@@ -925,7 +902,6 @@ export function EditorPage() {
     },
   });
 
-  const exportDiagramMutation = useExportDiagramMutation();
   // Ignore dipisahkan dari mutasi snapshot/import karena aksi ini hanya mengubah visibility review signal yang sudah persist di server.
   const ignoreReviewSignalMutation = useIgnoreReviewSignalMutation();
   const importDiagramMutation = useImportDiagramMutation({
@@ -1662,153 +1638,8 @@ export function EditorPage() {
     );
   }, [model, selectedCommentTarget, selectedTableId]);
 
-  async function handleExportSql() {
-    if (!model) {
-      return;
-    }
-
-    const payload = await resolveDiagramExport(
-      {
-        dialect: sdkDialectByValue[model.dialect],
-        format: sdkExportFormatByValue.sql,
-      },
-      () => {
-        const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
-
-        return {
-          content: generatedSql.sql,
-          filename: `${getExportFileStem()}.${model.dialect}.sql`,
-          format: sdkExportFormatByValue.sql,
-          mediaType: 'application/sql',
-          warnings: toDiagramExportWarnings(generatedSql.warnings),
-        };
-      },
-    );
-
-    // Copy SQL selalu memakai payload final, baik dari server maupun fallback lokal saat ada perubahan yang belum tersimpan.
-    await navigator.clipboard.writeText(payload.content);
-    setCopiedSql(true);
-    window.setTimeout(() => setCopiedSql(false), 1600);
-  }
-
-  async function handleDownloadSql() {
-    if (!model) {
-      return;
-    }
-
-    const payload = await resolveDiagramExport(
-      {
-        dialect: sdkDialectByValue[model.dialect],
-        format: sdkExportFormatByValue.sql,
-      },
-      () => {
-        const generatedSql = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
-
-        return {
-          content: generatedSql.sql,
-          filename: `${getExportFileStem()}.${model.dialect}.sql`,
-          format: sdkExportFormatByValue.sql,
-          mediaType: 'application/sql',
-          warnings: toDiagramExportWarnings(generatedSql.warnings),
-        };
-      },
-    );
-
-    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
-  }
-
-  async function handleExportJson() {
-    if (!model) {
-      return;
-    }
-
-    const payload = await resolveDiagramExport({ format: sdkExportFormatByValue.tabliodb_json }, () => ({
-      content: `${stringifyDiagramModel(model)}\n`,
-      filename: `${getExportFileStem()}.tabliodb.json`,
-      format: sdkExportFormatByValue.tabliodb_json,
-      mediaType: 'application/json',
-      warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
-    }));
-
-    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
-  }
-
-  async function handleExportMarkdown() {
-    if (!model) {
-      return;
-    }
-
-    const payload = await resolveDiagramExport({ format: sdkExportFormatByValue.markdown }, () => ({
-      content: generateDiagramMarkdown(model),
-      filename: `${getExportFileStem()}.schema.md`,
-      format: sdkExportFormatByValue.markdown,
-      mediaType: 'text/markdown',
-      warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
-    }));
-
-    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
-  }
-
-  async function handleExportSvg() {
-    if (!model) {
-      return;
-    }
-
-    const payload = await resolveDiagramExport({ format: sdkExportFormatByValue.svg }, () => ({
-      content: generateDiagramSvg(model),
-      filename: `${getExportFileStem()}.diagram.svg`,
-      format: sdkExportFormatByValue.svg,
-      mediaType: 'image/svg+xml',
-      warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
-    }));
-
-    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
-  }
-
-  async function resolveDiagramExport(
-    query: DiagramExportQuery,
-    createLocalPayload: () => DiagramExportResponseDto,
-  ): Promise<DiagramExportResponseDto> {
-    if (model && activeDiagram && isCurrentDraftPersisted(model)) {
-      try {
-        // Draft yang sudah tersimpan memakai endpoint resmi supaya UI export dan SDK publik berbagi kontrak yang sama.
-        return await exportDiagramMutation.mutateAsync({
-          diagramId: activeDiagram.id,
-          query,
-        });
-      } catch (error) {
-        toast.warning({
-          description: `Server export failed, so Tabliodb used the current local draft instead. ${getErrorMessage(error)}`,
-          title: 'Using local export',
-        });
-      }
-    }
-
-    // Draft lokal yang belum tersimpan harus tetap mengekspor persis diagram yang sedang dilihat user di canvas.
-    return createLocalPayload();
-  }
-
   function isCurrentDraftPersisted(currentModel: DiagramModel): boolean {
     return persistedDraftSignatureRef.current === createDiagramModelSignature(currentModel);
-  }
-  async function handleExportPng() {
-    if (!model) {
-      return;
-    }
-
-    try {
-      const svg = generateDiagramSvg(model);
-      const pngBlob = await createPngBlobFromSvg(svg);
-
-      // PNG dibuat dari SVG yang sama supaya export image punya visual dan bounds yang konsisten.
-      downloadBlobFile(`${getExportFileStem()}.diagram.png`, pngBlob);
-    } catch (error) {
-      console.error(error);
-      toast.danger({
-        description: 'Please try exporting SVG instead.',
-        title: 'PNG export failed',
-      });
-    }
   }
 
   async function handleImportDraftModel(importRequest: EditorImportRequest) {
@@ -1827,10 +1658,6 @@ export function EditorPage() {
       },
       diagramId: activeDiagram.id,
     });
-  }
-
-  function getExportFileStem() {
-    return createExportFileStem(activeProject?.name, activeDiagram?.name ?? model?.metadata.name);
   }
 
   function handleAddTable(tableName?: string) {
@@ -2129,7 +1956,7 @@ export function EditorPage() {
 
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
   const selectedColumnId = selectedCommentTarget?.targetType === 'column' ? selectedCommentTarget.targetId : null;
-  const sqlPreview = generateCreateSchemaSqlWithWarnings(model, { dialect: model.dialect });
+  const sqlPreview = diagramExportActions.sqlPreview;
   // Expanded sidebars share one comfortable width so table controls do not collapse into cramped rows.
   const expandedSidebarWidth = 'var(--tabliodb-sidebar-width)';
   const collapsedSidebarWidth = '44px';
@@ -2409,99 +2236,33 @@ export function EditorPage() {
             <Play className="size-4" />
             <span className="hidden xl:inline">SQL</span>
           </Button>
-          <DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button aria-label="More actions" size="icon" type="button" variant="secondary">
-                    {/* Trigger menu sekunder juga dibuat direct button supaya tidak ada wrapper non-interaktif yang mengambil focus dari DropdownMenu. */}
-                    <MoreHorizontal aria-hidden="true" className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent>More actions</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent align="end">
-              {canEditDiagram ? (
-                <>
-                  <DropdownMenuItem disabled={!canUndoModelChange} onSelect={handleUndoModelChange}>
-                    <Undo2 className="size-4" />
-                    Undo last edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled={!canRedoModelChange} onSelect={handleRedoModelChange}>
-                    <Redo2 className="size-4" />
-                    Redo last edit
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparatorItem />
-                </>
-              ) : null}
-              <DropdownMenuItem onSelect={() => setFitSignal((value) => value + 1)}>
-                <LocateFixed className="size-4" />
-                Fit diagram
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setMinimapToggleSignal((value) => value + 1)}>
-                <MapIcon className="size-4" />
-                Toggle minimap
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setKeyboardShortcutsOpen(true)}>
-                <Keyboard className="size-4" />
-                Keyboard shortcuts
-              </DropdownMenuItem>
-              {canEditDiagram ? (
-                <>
-                  <DropdownMenuItem onSelect={() => setShareLinksOpen(true)}>
-                    <Share2 className="size-4" />
-                    Share read-only link
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={importDiagramMutation.isPending}
-                    onSelect={() => {
-                      importDiagramMutation.reset();
-                      setImportJsonOpen(true);
-                    }}
-                  >
-                    <FileUp className="size-4" />
-                    Import Tabliodb JSON
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={importDiagramMutation.isPending}
-                    onSelect={() => {
-                      importDiagramMutation.reset();
-                      setImportSqlOpen(true);
-                    }}
-                  >
-                    <Code2 className="size-4" />
-                    Import SQL DDL
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-              <DropdownMenuSeparatorItem />
-              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportSql()}>
-                <Copy className="size-4" />
-                Copy SQL
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleDownloadSql()}>
-                <Download className="size-4" />
-                Download SQL
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportJson()}>
-                <FileJson className="size-4" />
-                Export Tabliodb JSON
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportMarkdown()}>
-                <FileText className="size-4" />
-                Export Markdown docs
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={exportDiagramMutation.isPending} onSelect={() => void handleExportSvg()}>
-                <FileImage className="size-4" />
-                Export SVG diagram
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void handleExportPng()}>
-                <ImageDown className="size-4" />
-                Export PNG diagram
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <EditorMoreActionsMenu
+            canEdit={canEditDiagram}
+            canRedo={canRedoModelChange}
+            canUndo={canUndoModelChange}
+            isExporting={diagramExportActions.isExporting}
+            isImporting={importDiagramMutation.isPending}
+            onCopySql={diagramExportActions.copySql}
+            onDownloadSql={diagramExportActions.downloadSql}
+            onExportJson={diagramExportActions.exportJson}
+            onExportMarkdown={diagramExportActions.exportMarkdown}
+            onExportPng={diagramExportActions.exportPng}
+            onExportSvg={diagramExportActions.exportSvg}
+            onFitDiagram={() => setFitSignal((value) => value + 1)}
+            onImportJson={() => {
+              importDiagramMutation.reset();
+              setImportJsonOpen(true);
+            }}
+            onImportSql={() => {
+              importDiagramMutation.reset();
+              setImportSqlOpen(true);
+            }}
+            onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
+            onRedo={handleRedoModelChange}
+            onShareReadOnlyLink={() => setShareLinksOpen(true)}
+            onToggleMinimap={() => setMinimapToggleSignal((value) => value + 1)}
+            onUndo={handleUndoModelChange}
+          />
           <UserAccountMenu
             canOpenAdmin={canManageWorkspace}
             isLoggingOut={logoutMutation.isPending}
@@ -2514,10 +2275,10 @@ export function EditorPage() {
       </header>
 
       <SqlPreviewDialog
-        copied={copiedSql}
+        copied={diagramExportActions.copiedSql}
         dialect={model.dialect}
-        onCopy={() => void handleExportSql()}
-        onDownload={() => void handleDownloadSql()}
+        onCopy={() => void diagramExportActions.copySql()}
+        onDownload={() => void diagramExportActions.downloadSql()}
         onOpenChange={setSqlPreviewOpen}
         open={sqlPreviewOpen}
         sql={sqlPreview.sql}
@@ -4172,82 +3933,6 @@ function TableDocsMetric({ label, value }: { label: string; value: number }) {
       <div className="text-[11px] font-extrabold uppercase text-[rgb(var(--tabliodb-ink-muted))]">{label}</div>
       <div className="mt-1 text-xl font-black text-[rgb(var(--tabliodb-ink))]">{value}</div>
     </div>
-  );
-}
-
-function SqlPreviewDialog({
-  copied,
-  dialect,
-  onCopy,
-  onDownload,
-  onOpenChange,
-  open,
-  sql,
-  warnings,
-}: {
-  copied: boolean;
-  dialect: DatabaseDialect;
-  onCopy: () => void;
-  onDownload: () => void;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  sql: string;
-  warnings: SqlGenerationWarning[];
-}) {
-  return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="w-[min(94vw,920px)]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Code2 className="size-5 text-[rgb(var(--tabliodb-sky-text))]" />
-            SQL preview
-          </DialogTitle>
-          <DialogDescription>
-            Review generated {formatDiagramDialect(dialect)} schema SQL before copying it into your database workflow.
-          </DialogDescription>
-        </DialogHeader>
-
-        <DialogBody className="grid gap-4">
-          {warnings.length > 0 ? (
-            <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
-              <div className="mb-2 flex items-center gap-2 text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
-                <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
-                Dialect warnings
-              </div>
-              <ul className="grid gap-1.5">
-                {warnings.map((warning) => (
-                  <li className="leading-5" key={warning.message}>
-                    {warning.message}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : (
-            <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-primary-text))]">
-              SQL is ready for {formatDiagramDialect(dialect)} with no compatibility warnings.
-            </section>
-          )}
-
-          <pre className="tabliodb-scrollbar max-h-[52dvh] overflow-auto rounded-[18px] border-2 border-[rgb(var(--tabliodb-ink))] bg-[rgb(var(--tabliodb-ink))] p-4 text-[12px] font-semibold leading-5 text-white shadow-[0_4px_0_rgb(var(--tabliodb-border-strong))]">
-            <code>{sql}</code>
-          </pre>
-        </DialogBody>
-
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
-            Close
-          </Button>
-          <Button onClick={onDownload} type="button" variant="secondary">
-            <Download className="size-4" />
-            Download .sql
-          </Button>
-          <Button onClick={onCopy} type="button" variant="sky">
-            <Copy className="size-4" />
-            {copied ? 'Copied' : 'Copy SQL'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
