@@ -18,10 +18,12 @@ export function LoadingState({ message = 'Loading workspace' }: { message?: stri
 }
 
 export function ErrorState({
+  actions,
   error,
   onRetry,
   title = 'Application error',
 }: {
+  actions?: ReactNode;
   error: unknown;
   onRetry: () => void;
   title?: string;
@@ -34,10 +36,13 @@ export function ErrorState({
           <h1 className="text-sm font-extrabold">{title}</h1>
         </div>
         <p className="mb-4 text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">{getErrorMessage(error)}</p>
-        <Button className="gap-2" onClick={onRetry} variant="secondary">
-          <RefreshCw className="size-4" />
-          Retry
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button className="gap-2" onClick={onRetry} variant="secondary">
+            <RefreshCw className="size-4" />
+            Retry
+          </Button>
+          {actions}
+        </div>
       </Surface>
     </main>
   );
