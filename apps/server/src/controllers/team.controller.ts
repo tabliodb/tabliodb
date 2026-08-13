@@ -21,6 +21,8 @@ import {
   TeamUpdateDto,
 } from '../dtos/team.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { TeamService } from '../services/team.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
@@ -40,6 +42,7 @@ export class TeamController {
   }
 
   @Post()
+  @RateLimit(RateLimitPreset.TeamWrite)
   @ApiBody({ type: TeamCreateDto })
   @ApiOperation({ operationId: 'createTeam' })
   @ZodResponse({ status: HttpStatus.CREATED, type: TeamResponseDto })
@@ -48,6 +51,7 @@ export class TeamController {
   }
 
   @Patch(':teamId')
+  @RateLimit(RateLimitPreset.TeamWrite)
   @ApiParam({ name: 'teamId', type: String })
   @ApiBody({ type: TeamUpdateDto })
   @ApiOperation({ operationId: 'updateTeam' })
@@ -57,6 +61,7 @@ export class TeamController {
   }
 
   @Delete(':teamId')
+  @RateLimit(RateLimitPreset.TeamWrite)
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'teamId', type: String })
   @ApiOperation({ operationId: 'archiveTeam' })
@@ -79,6 +84,7 @@ export class TeamController {
   }
 
   @Post(':teamId/members')
+  @RateLimit(RateLimitPreset.TeamWrite)
   @ApiParam({ name: 'teamId', type: String })
   @ApiBody({ type: TeamMemberCreateDto })
   @ApiOperation({ operationId: 'addTeamMember' })
@@ -92,6 +98,7 @@ export class TeamController {
   }
 
   @Delete(':teamId/members/:userId')
+  @RateLimit(RateLimitPreset.TeamWrite)
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'teamId', type: String })
   @ApiParam({ name: 'userId', type: String })
@@ -119,6 +126,7 @@ export class TeamController {
   }
 
   @Post(':teamId/projects')
+  @RateLimit(RateLimitPreset.TeamWrite)
   @ApiParam({ name: 'teamId', type: String })
   @ApiBody({ type: TeamProjectAccessUpsertDto })
   @ApiOperation({ operationId: 'upsertTeamProjectAccess' })
@@ -132,6 +140,7 @@ export class TeamController {
   }
 
   @Delete(':teamId/projects/:projectId')
+  @RateLimit(RateLimitPreset.TeamWrite)
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'teamId', type: String })
   @ApiParam({ name: 'projectId', type: String })

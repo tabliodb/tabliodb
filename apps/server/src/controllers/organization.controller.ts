@@ -19,6 +19,8 @@ import {
 } from '../dtos/organization.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { OrganizationService } from '../services/organization.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
@@ -29,6 +31,7 @@ export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
 
   @Post()
+  @RateLimit(RateLimitPreset.OrganizationWrite)
   @ApiBody({ type: OrganizationCreateDto })
   @ApiOperation({ operationId: 'createOrganization' })
   @ZodResponse({ status: HttpStatus.CREATED, type: OrganizationDto })
@@ -61,6 +64,7 @@ export class OrganizationController {
   }
 
   @Patch(':organizationId/settings')
+  @RateLimit(RateLimitPreset.OrganizationWrite)
   @RequirePermission(Permission.OrganizationManage, { key: 'organizationId', source: 'param', type: 'organization' })
   @ApiParam({ name: 'organizationId', type: String })
   @ApiBody({ type: OrganizationSettingsUpdateDto })
@@ -89,6 +93,7 @@ export class OrganizationController {
   }
 
   @Patch(':organizationId/members/:userId')
+  @RateLimit(RateLimitPreset.OrganizationWrite)
   @RequirePermission(Permission.OrganizationManage, { key: 'organizationId', source: 'param', type: 'organization' })
   @ApiParam({ name: 'organizationId', type: String })
   @ApiParam({ name: 'userId', type: String })
@@ -105,6 +110,7 @@ export class OrganizationController {
   }
 
   @Delete(':organizationId/members/:userId')
+  @RateLimit(RateLimitPreset.OrganizationWrite)
   @RequirePermission(Permission.OrganizationManage, { key: 'organizationId', source: 'param', type: 'organization' })
   @ApiParam({ name: 'organizationId', type: String })
   @ApiParam({ name: 'userId', type: String })

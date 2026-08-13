@@ -36,6 +36,7 @@ export class DiagramController {
   ) {}
 
   @Post()
+  @RateLimit(RateLimitPreset.DiagramWrite)
   @RequirePermission(Permission.DiagramCreate, { key: 'projectId', source: 'body', type: 'project' })
   @ApiBody({ type: DiagramCreateDto })
   @ApiOperation({ operationId: 'createDiagram' })
@@ -45,6 +46,7 @@ export class DiagramController {
   }
 
   @Patch(':diagramId')
+  @RateLimit(RateLimitPreset.DiagramWrite)
   @RequirePermission(Permission.DiagramUpdate, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
   @ApiBody({ type: DiagramUpdateDto })

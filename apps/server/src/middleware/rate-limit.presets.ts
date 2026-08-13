@@ -26,10 +26,20 @@ export const RateLimitPreset = {
   DiagramExport: { key: 'diagrams:export', limit: 60, windowMs: 60_000 },
   DiagramImport: { key: 'diagrams:import', limit: 10, windowMs: 15 * 60_000 },
   DiagramReviewAction: { key: 'diagrams:review-action', limit: 30, windowMs: 60_000 },
+  // Diagram metadata writes are throttled separately from snapshots because they create or rename resources rather than persist canvas state.
+  DiagramWrite: { key: 'diagrams:write', limit: 40, windowMs: 60_000 },
+  // Organization writes affect global access boundaries, so they use a longer window than ordinary editor actions.
+  OrganizationWrite: { key: 'organizations:write', limit: 30, windowMs: 15 * 60_000 },
+  // Project writes include member changes; one bucket keeps access-management bursts bounded per user/API key.
+  ProjectWrite: { key: 'projects:write', limit: 40, windowMs: 60_000 },
   PublicShareRead: { key: 'public-share-link', limit: 120, windowMs: 60_000 },
+  // Review signal writes can create noisy audit/history churn, so they are throttled even though permission checks still own authorization.
+  ReviewSignalWrite: { key: 'review-signals:write', limit: 30, windowMs: 60_000 },
   ShareLinkWrite: { key: 'share-links:write', limit: 20, windowMs: 15 * 60_000 },
   SnapshotCreate: { key: 'snapshots:create', limit: 20, windowMs: 60_000 },
   SnapshotRestore: { key: 'snapshots:restore', limit: 10, windowMs: 15 * 60_000 },
+  // Team writes change indirect project access, so they share one conservative bucket across team/member/project-access mutations.
+  TeamWrite: { key: 'teams:write', limit: 30, windowMs: 15 * 60_000 },
 
   // Admin user lifecycle perlu throttle karena aksi ini bisa memengaruhi akses banyak orang.
   UserPasswordReset: { key: 'users:password-reset', limit: 20, windowMs: 15 * 60_000 },

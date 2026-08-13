@@ -12,6 +12,8 @@ import {
 } from '../dtos/review-signal.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { ReviewSignalService } from '../services/review-signal.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
 
@@ -46,6 +48,7 @@ export class ReviewSignalController {
   }
 
   @Patch('project/:projectId/settings')
+  @RateLimit(RateLimitPreset.ReviewSignalWrite)
   @RequirePermission(Permission.ProjectUpdate, { key: 'projectId', source: 'param', type: 'project' })
   @ApiParam({ name: 'projectId', type: String })
   @ApiBody({ type: ReviewSignalSettingsDto })
@@ -69,6 +72,7 @@ export class ReviewSignalController {
   }
 
   @Patch('diagram/:diagramId/settings')
+  @RateLimit(RateLimitPreset.ReviewSignalWrite)
   @RequirePermission(Permission.DiagramUpdate, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
   @ApiBody({ type: ReviewSignalSettingsDto })
@@ -83,6 +87,7 @@ export class ReviewSignalController {
   }
 
   @Post(':signalId/ignore')
+  @RateLimit(RateLimitPreset.ReviewSignalWrite)
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'signalId', type: String })
   @ApiOperation({ operationId: 'ignoreReviewSignal' })
@@ -92,6 +97,7 @@ export class ReviewSignalController {
   }
 
   @Post(':signalId/unignore')
+  @RateLimit(RateLimitPreset.ReviewSignalWrite)
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'signalId', type: String })
   @ApiOperation({ operationId: 'unignoreReviewSignal' })

@@ -20,6 +20,8 @@ import {
 } from '../dtos/project.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { RequirePermission } from '../middleware/permission.guard.js';
+import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
+import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { DiagramService } from '../services/diagram.service.js';
 import { ProjectService } from '../services/project.service.js';
 import { ApiPaginationQuery } from '../utils/openapi-decorators.js';
@@ -44,6 +46,7 @@ export class ProjectController {
   }
 
   @Post()
+  @RateLimit(RateLimitPreset.ProjectWrite)
   @RequirePermission(Permission.ProjectCreate, { key: 'organizationId', source: 'body', type: 'organization' })
   @ApiBody({ type: ProjectCreateDto })
   @ApiOperation({ operationId: 'createProject' })
@@ -53,6 +56,7 @@ export class ProjectController {
   }
 
   @Patch(':projectId')
+  @RateLimit(RateLimitPreset.ProjectWrite)
   @RequirePermission(Permission.ProjectUpdate, { key: 'projectId', source: 'param', type: 'project' })
   @ApiParam({ name: 'projectId', type: String })
   @ApiBody({ type: ProjectUpdateDto })
@@ -63,6 +67,7 @@ export class ProjectController {
   }
 
   @Delete(':projectId')
+  @RateLimit(RateLimitPreset.ProjectWrite)
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.ProjectDelete, { key: 'projectId', source: 'param', type: 'project' })
   @ApiParam({ name: 'projectId', type: String })
@@ -87,6 +92,7 @@ export class ProjectController {
   }
 
   @Post(':projectId/members')
+  @RateLimit(RateLimitPreset.ProjectWrite)
   @RequirePermission(Permission.ProjectMemberManage, { key: 'projectId', source: 'param', type: 'project' })
   @ApiParam({ name: 'projectId', type: String })
   @ApiBody({ type: ProjectMemberCreateDto })
@@ -101,6 +107,7 @@ export class ProjectController {
   }
 
   @Patch(':projectId/members/:userId')
+  @RateLimit(RateLimitPreset.ProjectWrite)
   @RequirePermission(Permission.ProjectMemberManage, { key: 'projectId', source: 'param', type: 'project' })
   @ApiParam({ name: 'projectId', type: String })
   @ApiParam({ name: 'userId', type: String })
@@ -117,6 +124,7 @@ export class ProjectController {
   }
 
   @Delete(':projectId/members/:userId')
+  @RateLimit(RateLimitPreset.ProjectWrite)
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.ProjectMemberManage, { key: 'projectId', source: 'param', type: 'project' })
   @ApiParam({ name: 'projectId', type: String })
