@@ -17,6 +17,7 @@ import { Check, Code2, Copy, FileWarning, History, Loader2, RotateCcw } from 'lu
 import { useEffect, useState } from 'react';
 import { getErrorMessage } from '@/features/app/RouteStates';
 import { snapshotsQueries } from '@/resources/snapshots';
+import { formatDiagramDialect } from '../diagram-formatters';
 
 type SnapshotResponseDto = SnapshotResponseDtoOutput;
 type SnapshotDiffResponseDto = SnapshotDiffResponseDtoOutput;
@@ -376,26 +377,6 @@ function getSnapshotDiffTotal(diff: SnapshotDiffResponseDto): number {
     Number(diff.metadataChanged) +
     Number(diff.schemaVersionChanged)
   );
-}
-
-function formatDiagramDialect(dialect: DatabaseDialect): string {
-  if (dialect === 'postgresql') {
-    return 'PostgreSQL';
-  }
-
-  if (dialect === 'mysql') {
-    return 'MySQL';
-  }
-
-  if (dialect === 'mariadb') {
-    return 'MariaDB';
-  }
-
-  if (dialect === 'sqlite') {
-    return 'SQLite';
-  }
-
-  return 'SQL Server';
 }
 
 function formatDateTime(value: string): string {

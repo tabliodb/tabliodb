@@ -15,7 +15,6 @@ import {
   type DatabaseTable,
   type DiagramEntityKind,
   type DiagramModel,
-  type DiagramModelIntegrityWarning,
   type DiagramReviewSignalCode,
   type DiagramReviewSignal,
 } from '@tabliodb/schema-core';
@@ -66,12 +65,7 @@ import {
   type TeamResponseDtoOutput,
 } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
-import {
-  generateCreateSchemaSqlWithWarnings,
-  parseCreateSchemaSql,
-  type SqlGenerationWarning,
-  type SqlImportWarning,
-} from '@tabliodb/sql';
+import { generateCreateSchemaSqlWithWarnings, type SqlGenerationWarning } from '@tabliodb/sql';
 import {
   Badge,
   Button,
@@ -156,7 +150,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
   type ComponentType,
   type ReactNode,
   type SVGProps,
@@ -255,12 +248,27 @@ import {
   type EditorModelHistory,
 } from './model-history';
 import { CommentsDialog } from './components/CommentsDialog';
+import {
+  ImportJsonDialog,
+  ImportSqlDialog,
+  type EditorImportRequest,
+  type EditorImportSource,
+} from './components/ImportDialogs';
 import { SchemaCanvas, type CanvasViewportRect, type RemoteCanvasCursor } from './components/SchemaCanvas';
 import { SchemaInspector } from './components/SchemaInspector';
 import { SnapshotHistoryDialog } from './components/SnapshotHistoryDialog';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
 import { UserAvatar, type AvatarIdentity } from './components/UserAvatar';
+import { formatDiagramDialect } from './diagram-formatters';
 import { getDisplayTableColor } from './table-colors';
+import {
+  copyTextToClipboard,
+  createExportFileStem,
+  createPngBlobFromSvg,
+  downloadBlobFile,
+  downloadTextFile,
+  toDiagramExportWarnings,
+} from './export-utils';
 
 type AuditLogDto = AuditLogDtoOutput;
 type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
@@ -282,7 +290,6 @@ type TeamProjectAccessDto = TeamProjectAccessDtoOutput;
 type TeamProjectRole = `${SdkTeamProjectRole}`;
 type TeamResponseDto = TeamResponseDtoOutput;
 type DiagramExportFormat = 'tabliodb_json' | 'sql' | 'markdown' | 'svg';
-type EditorImportSource = 'tabliodb_json' | 'sql';
 type WorkspaceDefaultProjectRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
 
 const sdkDialectByValue: Record<DatabaseDialect, SdkDialect> = {
@@ -375,12 +382,6 @@ const addTableFormSchema = z.object({
 
 type AddTableFormState = z.infer<typeof addTableFormSchema>;
 
-const importJsonFormSchema = z.object({
-  json: z.string().trim().min(1, 'Paste exported Tabliodb JSON or upload a .json file.'),
-});
-
-type ImportJsonFormState = z.infer<typeof importJsonFormSchema>;
-
 const diagramDialectOptions = [
   'postgresql',
   'mysql',
@@ -388,13 +389,6 @@ const diagramDialectOptions = [
   'mariadb',
   'sqlserver',
 ] as const satisfies readonly DatabaseDialect[];
-
-const importSqlFormSchema = z.object({
-  dialect: z.enum(diagramDialectOptions),
-  sql: z.string().trim().min(1, 'Paste SQL DDL or upload a .sql file.'),
-});
-
-type ImportSqlFormState = z.infer<typeof importSqlFormSchema>;
 
 const shareLinkExpiryOptions = ['never', '7', '30'] as const;
 
@@ -405,12 +399,6 @@ const shareLinkFormSchema = z.object({
 });
 
 type ShareLinkFormState = z.infer<typeof shareLinkFormSchema>;
-
-type EditorImportRequest = {
-  content: string;
-  dialect?: DatabaseDialect;
-  source: EditorImportSource;
-};
 
 type EditorConfirmAction =
   | {
@@ -431,16 +419,6 @@ type SnapshotRealtimeGuard = {
   description: string;
   detail: string;
   title: string;
-};
-
-type DiagramExportWarningInput = {
-  code: string;
-  message: string;
-  statement?: string;
-  target?: {
-    id: string;
-    type: string;
-  };
 };
 
 const projectFormSchema = z.object({
@@ -4273,444 +4251,6 @@ function SqlPreviewDialog({
   );
 }
 
-function ImportJsonDialog({
-  currentDiagramName,
-  disabled,
-  importError,
-  isImporting,
-  onImport,
-  onOpenChange,
-  open,
-}: {
-  currentDiagramName: string;
-  disabled: boolean;
-  importError: Error | null;
-  isImporting: boolean;
-  onImport: (input: EditorImportRequest) => Promise<void>;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-}) {
-  const form = useForm<ImportJsonFormState>({
-    defaultValues: {
-      json: '',
-    },
-    mode: 'onChange',
-    resolver: zodResolver(importJsonFormSchema),
-  });
-  const { errors } = form.formState;
-  const rawJson = form.watch('json');
-  const preview = useMemo(() => parseImportJsonDraft(rawJson), [rawJson]);
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (nextOpen && disabled) {
-      return;
-    }
-
-    onOpenChange(nextOpen);
-
-    if (!nextOpen) {
-      form.reset({ json: '' });
-    }
-  }
-
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    const content = await file.text();
-
-    // File upload hanya mengisi textarea; validasi dan preview tetap melalui jalur paste yang sama.
-    form.setValue('json', content, { shouldDirty: true, shouldValidate: true });
-    event.currentTarget.value = '';
-  }
-
-  async function handleSubmit() {
-    if (preview.status !== 'valid') {
-      form.setError('json', {
-        message: preview.status === 'invalid' ? preview.error : 'Paste exported Tabliodb JSON or upload a .json file.',
-        type: 'manual',
-      });
-      return;
-    }
-
-    try {
-      // Server menerima konten mentah agar jalur UI identik dengan jalur SDK/API untuk import file JSON.
-      await onImport({
-        content: rawJson,
-        source: 'tabliodb_json',
-      });
-      handleOpenChange(false);
-    } catch {
-      // Error mutation ditampilkan dari prop importError, jadi catch ini hanya menjaga dialog tetap terbuka untuk koreksi user.
-    }
-  }
-
-  return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogContent className="w-[min(94vw,820px)]">
-        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileUp className="size-5 text-[rgb(var(--tabliodb-primary-text))]" />
-              Import Tabliodb JSON
-            </DialogTitle>
-            <DialogDescription>
-              Replace the current draft for {currentDiagramName}. Create a snapshot after import when the result looks
-              right.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogBody className="grid gap-4">
-            <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-[20px] border-2 border-dashed border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] px-4 py-5 text-center text-[13px] font-extrabold text-[rgb(var(--tabliodb-primary-text))] transition hover:bg-[rgb(var(--tabliodb-primary-soft-hover))]">
-              <FileJson className="size-6" />
-              Upload exported .tabliodb.json
-              <span className="text-[12px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                or paste the file contents below
-              </span>
-              <input
-                accept=".json,application/json"
-                className="sr-only"
-                disabled={disabled}
-                onChange={handleFileChange}
-                type="file"
-              />
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                JSON
-              </span>
-              <ControlledTextarea
-                aria-invalid={Boolean(errors.json) || preview.status === 'invalid'}
-                className="tabliodb-scrollbar min-h-64 w-full resize-y rounded-[18px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-3 font-mono text-[12px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:font-sans placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
-                control={form.control}
-                disabled={disabled}
-                name="json"
-                placeholder='{"schemaVersion":1,"dialect":"postgresql","tables":{...}}'
-              />
-              <FieldError>{errors.json?.message}</FieldError>
-            </label>
-
-            <ImportJsonPreview preview={preview} />
-
-            {importError ? (
-              <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                {getErrorMessage(importError)}
-              </section>
-            ) : null}
-          </DialogBody>
-
-          <DialogFooter>
-            <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
-              Cancel
-            </Button>
-            <Button disabled={disabled || isImporting || preview.status !== 'valid'} type="submit">
-              {isImporting ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}
-              Apply import
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ImportJsonPreview({ preview }: { preview: ImportJsonDraftPreview }) {
-  if (preview.status === 'empty') {
-    return (
-      <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-        Waiting for a Tabliodb JSON document.
-      </section>
-    );
-  }
-
-  if (preview.status === 'invalid') {
-    return (
-      <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-danger-text))]">
-        {preview.error}
-      </section>
-    );
-  }
-
-  const model = preview.model;
-
-  return (
-    <section className="grid gap-3 rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="green">{formatDiagramDialect(model.dialect)}</Badge>
-        <Badge>{Object.keys(model.tables).length} tables</Badge>
-        <Badge>{Object.keys(model.relationships).length} relationships</Badge>
-        <Badge>{Object.keys(model.indexes).length} indexes</Badge>
-        <Badge>{Object.keys(model.enums).length} enums</Badge>
-      </div>
-      <div>
-        <div className="text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{model.metadata.name}</div>
-        <div className="text-[12px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-          This import will replace the current unsaved draft model.
-        </div>
-      </div>
-      {preview.warnings.length > 0 ? (
-        <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
-          <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
-            <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
-            Import warnings
-          </div>
-          <ul className="grid gap-1">
-            {preview.warnings.slice(0, 6).map((warning) => (
-              <li key={`${warning.code}:${warning.target?.id ?? warning.message}`}>{warning.message}</li>
-            ))}
-          </ul>
-          {preview.warnings.length > 6 ? (
-            <div className="mt-2">+{preview.warnings.length - 6} more warnings</div>
-          ) : null}
-        </div>
-      ) : (
-        <div className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-primary-text))]">
-          JSON is valid and no unresolved references were found.
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ImportSqlDialog({
-  currentDiagramName,
-  defaultDialect,
-  disabled,
-  importError,
-  isImporting,
-  onImport,
-  onOpenChange,
-  open,
-}: {
-  currentDiagramName: string;
-  defaultDialect: DatabaseDialect;
-  disabled: boolean;
-  importError: Error | null;
-  isImporting: boolean;
-  onImport: (input: EditorImportRequest) => Promise<void>;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-}) {
-  const form = useForm<ImportSqlFormState>({
-    defaultValues: {
-      dialect: defaultDialect,
-      sql: '',
-    },
-    mode: 'onChange',
-    resolver: zodResolver(importSqlFormSchema),
-  });
-  const { errors } = form.formState;
-  const rawSql = form.watch('sql');
-  const dialect = form.watch('dialect');
-  const preview = useMemo(
-    () => parseImportSqlDraft(rawSql, dialect, currentDiagramName),
-    [currentDiagramName, dialect, rawSql],
-  );
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (nextOpen && disabled) {
-      return;
-    }
-
-    onOpenChange(nextOpen);
-
-    if (nextOpen) {
-      form.reset({ dialect: defaultDialect, sql: '' });
-    }
-
-    if (!nextOpen) {
-      form.reset({ dialect: defaultDialect, sql: '' });
-    }
-  }
-
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    const content = await file.text();
-
-    // Upload .sql hanya mengisi textarea supaya paste dan file tetap memakai validator serta preview yang sama.
-    form.setValue('sql', content, { shouldDirty: true, shouldValidate: true });
-    event.currentTarget.value = '';
-  }
-
-  async function handleSubmit() {
-    if (preview.status !== 'valid') {
-      form.setError('sql', {
-        message: preview.status === 'invalid' ? preview.error : 'Paste SQL DDL or upload a .sql file.',
-        type: 'manual',
-      });
-      return;
-    }
-
-    try {
-      // Dialect ikut dikirim supaya parser backend tidak menebak-nebak sintaks DDL yang ditempel user.
-      await onImport({
-        content: rawSql,
-        dialect,
-        source: 'sql',
-      });
-      handleOpenChange(false);
-    } catch {
-      // Error mutation ditampilkan di bawah preview dan dialog tetap terbuka agar user bisa memperbaiki SQL.
-    }
-  }
-
-  return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogContent className="w-[min(94vw,860px)]">
-        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Code2 className="size-5 text-[rgb(var(--tabliodb-sky-text))]" />
-              Import SQL DDL
-            </DialogTitle>
-            <DialogDescription>
-              Parse CREATE statements into an editable draft for {currentDiagramName}. Snapshot after reviewing the
-              imported diagram.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogBody className="grid gap-4">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-end">
-              <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-[20px] border-2 border-dashed border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-4 py-5 text-center text-[13px] font-extrabold text-[rgb(var(--tabliodb-sky-text))] transition hover:bg-[rgb(var(--tabliodb-sky-soft-hover))]">
-                <FileText className="size-6" />
-                Upload .sql DDL
-                <span className="text-[12px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  or paste CREATE statements below
-                </span>
-                <input
-                  accept=".sql,.txt,text/plain,application/sql"
-                  className="sr-only"
-                  disabled={disabled}
-                  onChange={handleFileChange}
-                  type="file"
-                />
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Source dialect
-                </span>
-                <ControlledSelect
-                  className={selectClassName}
-                  control={form.control}
-                  disabled={disabled}
-                  name="dialect"
-                  options={diagramDialectOptions.map((option) => ({
-                    label: formatDiagramDialect(option),
-                    value: option,
-                  }))}
-                />
-                <FieldError>{errors.dialect?.message}</FieldError>
-              </label>
-            </div>
-
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                SQL DDL
-              </span>
-              <ControlledTextarea
-                aria-invalid={Boolean(errors.sql) || preview.status === 'invalid'}
-                className="tabliodb-scrollbar min-h-64 w-full resize-y rounded-[18px] border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-3 font-mono text-[12px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:font-sans placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
-                control={form.control}
-                disabled={disabled}
-                name="sql"
-                placeholder={'CREATE TABLE users (\n  id UUID PRIMARY KEY,\n  email VARCHAR(190) NOT NULL UNIQUE\n);'}
-              />
-              <FieldError>{errors.sql?.message}</FieldError>
-            </label>
-
-            <ImportSqlPreview preview={preview} />
-
-            {importError ? (
-              <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                {getErrorMessage(importError)}
-              </section>
-            ) : null}
-          </DialogBody>
-
-          <DialogFooter>
-            <Button onClick={() => handleOpenChange(false)} type="button" variant="secondary">
-              Cancel
-            </Button>
-            <Button disabled={disabled || isImporting || preview.status !== 'valid'} type="submit" variant="sky">
-              {isImporting ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}
-              Apply SQL import
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ImportSqlPreview({ preview }: { preview: ImportSqlDraftPreview }) {
-  if (preview.status === 'empty') {
-    return (
-      <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-        Waiting for SQL DDL.
-      </section>
-    );
-  }
-
-  if (preview.status === 'invalid') {
-    return (
-      <section className="rounded-[18px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-4 text-[13px] font-bold text-[rgb(var(--tabliodb-danger-text))]">
-        {preview.error}
-      </section>
-    );
-  }
-
-  const model = preview.model;
-
-  return (
-    <section className="grid gap-3 rounded-[18px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="blue">{formatDiagramDialect(model.dialect)}</Badge>
-        <Badge>{Object.keys(model.tables).length} tables</Badge>
-        <Badge>{Object.keys(model.relationships).length} relationships</Badge>
-        <Badge>{Object.keys(model.indexes).length} indexes</Badge>
-        <Badge>{Object.keys(model.enums).length} enums</Badge>
-      </div>
-      <div>
-        <div className="text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{model.metadata.name}</div>
-        <div className="text-[12px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-          SQL import is intentionally conservative; unsupported statements are reported instead of silently pretending
-          they were modeled.
-        </div>
-      </div>
-      {preview.warnings.length > 0 ? (
-        <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-[12px] font-bold text-[rgb(var(--tabliodb-gold-text))]">
-          <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">
-            <FileWarning className="size-4 text-[rgb(var(--tabliodb-gold-text))]" />
-            Import warnings
-          </div>
-          <ul className="grid gap-1">
-            {preview.warnings.slice(0, 8).map((warning) => (
-              <li key={`${warning.code}:${warning.message}`}>{warning.message}</li>
-            ))}
-          </ul>
-          {preview.warnings.length > 8 ? (
-            <div className="mt-2">+{preview.warnings.length - 8} more warnings</div>
-          ) : null}
-        </div>
-      ) : (
-        <div className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
-          SQL parsed into an editable diagram with no import warnings.
-        </div>
-      )}
-    </section>
-  );
-}
-
 function CreateWorkspaceDialog({
   onCreated,
   onOpenChange,
@@ -6976,16 +6516,6 @@ function formatProjectRole(role: ProjectRoleValue): string {
   }[role];
 }
 
-function formatDiagramDialect(dialect: DatabaseDialect): string {
-  return {
-    mariadb: 'MariaDB',
-    mysql: 'MySQL',
-    postgresql: 'PostgreSQL',
-    sqlite: 'SQLite',
-    sqlserver: 'SQL Server',
-  }[dialect];
-}
-
 function formatOrganizationRole(role: OrganizationRoleValue): string {
   return {
     [OrganizationRole.Admin]: 'Admin',
@@ -7879,123 +7409,6 @@ function AddTableDialog({
   );
 }
 
-type ImportJsonDraftPreview =
-  | {
-      status: 'empty';
-      warnings: [];
-    }
-  | {
-      error: string;
-      status: 'invalid';
-      warnings: [];
-    }
-  | {
-      model: DiagramModel;
-      status: 'valid';
-      warnings: DiagramModelIntegrityWarning[];
-    };
-
-type ImportSqlDraftPreview =
-  | {
-      status: 'empty';
-      warnings: [];
-    }
-  | {
-      error: string;
-      status: 'invalid';
-      warnings: [];
-    }
-  | {
-      model: DiagramModel;
-      status: 'valid';
-      warnings: Array<DiagramModelIntegrityWarning | SqlImportWarning>;
-    };
-
-function parseImportJsonDraft(value: string): ImportJsonDraftPreview {
-  const trimmedValue = value.trim();
-
-  if (!trimmedValue) {
-    return { status: 'empty', warnings: [] };
-  }
-
-  try {
-    const parsedValue = JSON.parse(trimmedValue) as unknown;
-    const model = parseDiagramModel(parsedValue);
-
-    return {
-      model,
-      status: 'valid',
-      warnings: getDiagramModelIntegrityWarnings(model),
-    };
-  } catch (error) {
-    return {
-      error: getImportJsonErrorMessage(error),
-      status: 'invalid',
-      warnings: [],
-    };
-  }
-}
-
-function getImportJsonErrorMessage(error: unknown): string {
-  if (error instanceof SyntaxError) {
-    return `JSON is not valid: ${error.message}`;
-  }
-
-  if (error instanceof z.ZodError) {
-    const firstIssue = error.issues[0];
-
-    return firstIssue
-      ? `JSON does not match Tabliodb schema: ${firstIssue.message}`
-      : 'JSON does not match Tabliodb schema.';
-  }
-
-  return 'JSON could not be imported.';
-}
-
-function parseImportSqlDraft(value: string, dialect: DatabaseDialect, diagramName: string): ImportSqlDraftPreview {
-  const trimmedValue = value.trim();
-
-  if (!trimmedValue) {
-    return { status: 'empty', warnings: [] };
-  }
-
-  try {
-    const result = parseCreateSchemaSql(trimmedValue, {
-      dialect,
-      diagramName: `${diagramName} import`,
-    });
-    const model = parseDiagramModel(result.model);
-
-    return {
-      model,
-      status: 'valid',
-      warnings: [...result.warnings, ...getDiagramModelIntegrityWarnings(model)],
-    };
-  } catch (error) {
-    return {
-      error: getImportSqlErrorMessage(error),
-      status: 'invalid',
-      warnings: [],
-    };
-  }
-}
-
-function getImportSqlErrorMessage(error: unknown): string {
-  if (error instanceof z.ZodError) {
-    const firstIssue = error.issues[0];
-
-    return firstIssue
-      ? `SQL produced an invalid Tabliodb model: ${firstIssue.message}`
-      : 'SQL produced an invalid Tabliodb model.';
-  }
-
-  if (error instanceof Error) {
-    return `SQL could not be imported: ${error.message}`;
-  }
-
-  return 'SQL could not be imported.';
-}
-
 function createTableDocsMarkdown(model: DiagramModel, table: DatabaseTable): string {
   const columns = getTableColumns(model, table.id);
   const indexes = getDocsTableIndexes(model, table);
@@ -8108,20 +7521,6 @@ function escapeMarkdownCell(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, '<br />');
 }
 
-function toDiagramExportWarnings(warnings: readonly DiagramExportWarningInput[]): DiagramExportResponseDto['warnings'] {
-  return warnings.map((warning) => ({
-    code: warning.code,
-    message: warning.message,
-    statement: warning.statement,
-    target: warning.target
-      ? {
-          id: warning.target.id,
-          type: warning.target.type,
-        }
-      : undefined,
-  }));
-}
-
 const reviewSignalTargetTypes = [
   'table',
   'column',
@@ -8165,108 +7564,6 @@ function isReviewSignalTargetType(value: string): value is DiagramEntityKind {
 
 function isReviewSignalSeverity(value: string): value is DiagramReviewSignal['severity'] {
   return (reviewSignalSeverities as readonly string[]).includes(value);
-}
-
-async function copyTextToClipboard(value: string): Promise<void> {
-  // Clipboard API sengaja dibungkus supaya dialog share dan export bisa memakai perilaku browser yang sama.
-  await navigator.clipboard.writeText(value);
-}
-
-function downloadTextFile(fileName: string, content: string, mimeType: string) {
-  downloadBlobFile(fileName, new Blob([content], { type: mimeType }));
-}
-
-function downloadBlobFile(fileName: string, blob: Blob) {
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-
-  // Anchor sementara tetap paling kompatibel untuk download client-side tanpa menambah dependency.
-  link.href = objectUrl;
-  link.download = fileName;
-  link.rel = 'noopener';
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(objectUrl);
-}
-
-async function createPngBlobFromSvg(svg: string): Promise<Blob> {
-  const { height, width } = readSvgSize(svg);
-  const image = new Image();
-  const objectUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error('SVG image could not be decoded for PNG export.'));
-      image.src = objectUrl;
-    });
-
-    const canvas = document.createElement('canvas');
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.ceil(width * pixelRatio);
-    canvas.height = Math.ceil(height * pixelRatio);
-
-    const context = canvas.getContext('2d');
-
-    if (!context) {
-      throw new Error('Canvas is not available for PNG export.');
-    }
-
-    // Scaling the context keeps text and relationship strokes crisp on high-density displays without huge files.
-    context.scale(pixelRatio, pixelRatio);
-    context.drawImage(image, 0, 0, width, height);
-
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-
-        reject(new Error('PNG export produced an empty blob.'));
-      }, 'image/png');
-    });
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
-function readSvgSize(svg: string): { height: number; width: number } {
-  const document = new DOMParser().parseFromString(svg, 'image/svg+xml');
-  const svgElement = document.documentElement;
-  const width = Number(svgElement.getAttribute('width'));
-  const height = Number(svgElement.getAttribute('height'));
-
-  if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
-    return { height, width };
-  }
-
-  const viewBox = svgElement.getAttribute('viewBox')?.split(/\s+/).map(Number) ?? [];
-  const viewBoxWidth = viewBox[2];
-  const viewBoxHeight = viewBox[3];
-
-  // Renderer always emits width/height, but viewBox fallback keeps the browser helper resilient to future SVG sources.
-  return {
-    height: Number.isFinite(viewBoxHeight) && viewBoxHeight > 0 ? viewBoxHeight : 720,
-    width: Number.isFinite(viewBoxWidth) && viewBoxWidth > 0 ? viewBoxWidth : 1280,
-  };
-}
-
-function createExportFileStem(projectName?: string, diagramName?: string): string {
-  const parts = ['tabliodb', toFileSlug(projectName), toFileSlug(diagramName)].filter(Boolean);
-
-  return parts.join('-') || 'tabliodb-diagram';
-}
-
-function toFileSlug(value?: string): string {
-  return (value ?? '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
 }
 
 function isUnauthorized(error: unknown): boolean {
