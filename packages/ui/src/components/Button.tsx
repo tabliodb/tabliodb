@@ -29,7 +29,8 @@ export const buttonVariants = cva(
         secondary:
           'border border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))] hover:bg-[rgb(var(--tabliodb-surface-raised))] active:shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]',
         sky: 'border border-[rgb(var(--tabliodb-sky))] bg-[rgb(var(--tabliodb-sky))] text-white [text-shadow:var(--tabliodb-solid-text-shadow)] shadow-[0_3px_0_rgb(var(--tabliodb-sky-shadow))] hover:bg-[rgb(var(--tabliodb-sky-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-sky-shadow))]',
-        soft: 'border border-transparent bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] hover:bg-[rgb(var(--tabliodb-primary-soft-hover))]',
+        soft:
+          'border border-[rgb(var(--tabliodb-primary-border))] bg-white text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))] hover:bg-[rgb(var(--tabliodb-primary-soft-hover))] active:shadow-[0_1px_0_rgb(var(--tabliodb-primary-border))]',
       },
     },
   },

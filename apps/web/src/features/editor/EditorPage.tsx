@@ -9438,7 +9438,7 @@ function CollaborationPresence({
     >
       <div
         className={cn(
-          'hidden h-8 items-center gap-2 rounded-full border px-2 py-1 transition sm:flex',
+          'hidden h-8 items-center gap-2 rounded-full border-2 bg-white px-2.5 py-1 transition sm:flex',
           statusMeta.containerClassName,
         )}
       >
@@ -9451,7 +9451,12 @@ function CollaborationPresence({
               )}
             />
           ) : null}
-          <span className={cn('relative inline-flex size-2.5 rounded-full', statusMeta.dotClassName)} />
+          <span
+            className={cn(
+              'relative inline-flex size-2.5 rounded-full ring-2 ring-[rgb(var(--tabliodb-surface-raised))]',
+              statusMeta.dotClassName,
+            )}
+          />
         </span>
         <span className="max-w-24 truncate text-xs font-extrabold">{statusMeta.label}</span>
         {visibleCollaborators.length > 0 ? (
@@ -9492,7 +9497,7 @@ function getCollaborationStatusMeta(
   if (status.connection === 'authentication_failed') {
     return {
       containerClassName:
-        'border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] text-[rgb(var(--tabliodb-danger-text))]',
+        'border-[rgb(var(--tabliodb-danger-border))] text-[rgb(var(--tabliodb-danger-text))] shadow-[0_2px_0_rgb(var(--tabliodb-danger-border))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-danger))]',
       label: 'Auth failed',
       pulse: false,
@@ -9506,7 +9511,7 @@ function getCollaborationStatusMeta(
   if (saveState.snapshotSavePending) {
     return {
       containerClassName:
-        'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+        'border-[rgb(var(--tabliodb-sky-border))] text-[rgb(var(--tabliodb-sky-text))] shadow-[0_2px_0_rgb(var(--tabliodb-sky-border))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
       label: 'Saving',
       pulse: true,
@@ -9520,7 +9525,7 @@ function getCollaborationStatusMeta(
   if (status.connection === 'connecting') {
     return {
       containerClassName:
-        'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+        'border-[rgb(var(--tabliodb-sky-border))] text-[rgb(var(--tabliodb-sky-text))] shadow-[0_2px_0_rgb(var(--tabliodb-sky-border))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
       label: 'Connecting',
       pulse: true,
@@ -9534,7 +9539,7 @@ function getCollaborationStatusMeta(
   if (status.connection === 'disconnected') {
     return {
       containerClassName:
-        'border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] text-[rgb(var(--tabliodb-gold-text))]',
+        'border-[rgb(var(--tabliodb-gold-border))] text-[rgb(var(--tabliodb-gold-text))] shadow-[0_2px_0_rgb(var(--tabliodb-gold-border))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-gold))]',
       label: 'Reconnecting',
       pulse: true,
@@ -9548,7 +9553,7 @@ function getCollaborationStatusMeta(
   if (status.connection === 'connected' && (!status.synced || status.unsyncedChanges > 0)) {
     return {
       containerClassName:
-        'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+        'border-[rgb(var(--tabliodb-sky-border))] text-[rgb(var(--tabliodb-sky-text))] shadow-[0_2px_0_rgb(var(--tabliodb-sky-border))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
       label: 'Syncing',
       pulse: true,
@@ -9562,7 +9567,7 @@ function getCollaborationStatusMeta(
   if (status.connection === 'connected' && status.pendingPersistence) {
     return {
       containerClassName:
-        'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+        'border-[rgb(var(--tabliodb-sky-border))] text-[rgb(var(--tabliodb-sky-text))] shadow-[0_2px_0_rgb(var(--tabliodb-sky-border))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-sky))]',
       label: 'Saving',
       pulse: true,
@@ -9576,7 +9581,7 @@ function getCollaborationStatusMeta(
   if (status.connection === 'connected') {
     return {
       containerClassName:
-        'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))]',
+        'border-[rgb(var(--tabliodb-primary-border))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]',
       dotClassName: 'bg-[rgb(var(--tabliodb-primary))]',
       label: status.persistedAt || saveState.draftPersisted ? 'Saved' : 'Live',
       pulse: collaboratorCount > 0,
@@ -9591,7 +9596,7 @@ function getCollaborationStatusMeta(
 
   return {
     containerClassName:
-      'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink-muted))]',
+      'border-[rgb(var(--tabliodb-border-strong))] text-[rgb(var(--tabliodb-ink-muted))] shadow-[0_2px_0_rgb(var(--tabliodb-border))]',
     dotClassName: 'bg-[rgb(var(--tabliodb-ink-subtle))]',
     label: 'Realtime',
     pulse: false,

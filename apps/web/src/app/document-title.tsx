@@ -4,7 +4,7 @@ import type { AppRouteHandle } from './route-meta';
 
 const appConfig = {
   name: 'TablioDB',
-  titleSeparator: ' = ',
+  titleSeparator: ' - ',
 } as const;
 
 export function DocumentTitle() {
