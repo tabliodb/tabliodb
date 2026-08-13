@@ -24,8 +24,10 @@ const publicRoutes = new Set([
 
 const currentUserScopedRoutes = new Set([
   'AuthController.deleteCurrentUserAvatar',
+  'AuthController.getCurrentUserEditorPreference',
   'AuthController.getCurrentUser',
   'AuthController.logout',
+  'AuthController.updateCurrentUserEditorPreference',
   'AuthController.updateCurrentUserPassword',
   'AuthController.updateCurrentUserProfile',
   'AuthController.updateCurrentUserTemporaryPassword',
