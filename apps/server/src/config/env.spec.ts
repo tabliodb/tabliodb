@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadEnv } from './env.js';
 
 const managedEnvKeys = [
+  'DATABASE_URL',
   'NODE_ENV',
   'TABLIODB_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS',
   'TABLIODB_CONTENT_SECURITY_POLICY',
@@ -11,10 +12,13 @@ const managedEnvKeys = [
   'TABLIODB_REALTIME_PORT',
   'TABLIODB_REALTIME_PUBLIC_URL',
   'TABLIODB_REALTIME_SHUTDOWN_TIMEOUT_MS',
+  'TABLIODB_SECRET_KEY',
   'TABLIODB_TRUST_PROXY',
   'TABLIODB_WEB_PUBLIC_URL',
 ] as const;
 
+const validProductionSecretKey = 'production-secret-key-with-at-least-32-chars';
+const validProductionDatabaseUrl = 'postgres://tabliodb:production-db-password@database:5432/tabliodb';
 const originalEnv = new Map<string, string | undefined>();
 
 describe(loadEnv.name, () => {
@@ -41,6 +45,8 @@ describe(loadEnv.name, () => {
 
   it('builds production CORS and CSP sources from public URLs plus explicit allowlists', () => {
     process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = validProductionDatabaseUrl;
+    process.env.TABLIODB_SECRET_KEY = validProductionSecretKey;
     process.env.TABLIODB_PUBLIC_URL = 'https://api.example.com';
     process.env.TABLIODB_WEB_PUBLIC_URL = 'https://app.example.com/workspace';
     process.env.TABLIODB_REALTIME_PORT = '9443';
@@ -63,6 +69,41 @@ describe(loadEnv.name, () => {
       'https://metrics.example.com',
       'wss://presence.example.com',
     ]);
+  });
+
+  it('rejects production startup without an encryption secret', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = validProductionDatabaseUrl;
+
+    // Encrypted OIDC/SMTP settings depend on this key, so production must fail before accepting traffic.
+    expect(() => loadEnv()).toThrow('TABLIODB_SECRET_KEY is required');
+  });
+
+  it('rejects production startup with the example encryption secret', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = validProductionDatabaseUrl;
+    process.env.TABLIODB_SECRET_KEY = 'change-this-secret-key-before-production';
+
+    // Example values are intentionally easy to spot, but the app still blocks them in case the env file is copied as-is.
+    expect(() => loadEnv()).toThrow('example value');
+  });
+
+  it('rejects production startup with a short encryption secret', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = validProductionDatabaseUrl;
+    process.env.TABLIODB_SECRET_KEY = 'too-short';
+
+    // Short passphrases are hashed to 32 bytes technically, but the original entropy is still too weak for production.
+    expect(() => loadEnv()).toThrow('at least 32 characters');
+  });
+
+  it('rejects production startup with an example database password', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = 'postgres://tabliodb:tabliodb-change-me@database:5432/tabliodb';
+    process.env.TABLIODB_SECRET_KEY = validProductionSecretKey;
+
+    // Compose examples can show placeholders, but the runtime must not silently accept them as production credentials.
+    expect(() => loadEnv()).toThrow('example database password');
   });
 
   it('parses trusted proxy values for common reverse proxy deployments', () => {

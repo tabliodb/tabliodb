@@ -52,6 +52,18 @@ export type TabliodbEnv = {
   };
 };
 
+const productionSecretKeyMinLength = 32;
+const unsafeProductionSecretKeys = new Set([
+  'change-this-secret-key-before-production',
+  'local-development-secret-key',
+  'tabliodb-local-development-secret-key',
+]);
+const unsafeProductionDatabasePasswords = new Set([
+  'postgres',
+  'tabliodb-change-me',
+  'change-this-password-before-production',
+]);
+
 function findUp(filename: string, startDirectory: string): string | null {
   let currentDirectory = startDirectory;
 
@@ -151,6 +163,41 @@ function realtimeWebSocketOrigin(publicUrl: string, realtimePort: number): strin
   }
 }
 
+function getDatabasePassword(databaseUrl: string): string | null {
+  try {
+    const parsedUrl = new URL(databaseUrl);
+    return parsedUrl.password ? decodeURIComponent(parsedUrl.password) : null;
+  } catch {
+    return null;
+  }
+}
+
+function assertProductionEnvIsSafe(env: Pick<TabliodbEnv, 'database' | 'secrets'>): void {
+  if (process.env.NODE_ENV !== 'production') {
+    return;
+  }
+
+  const encryptionKey = env.secrets.encryptionKey?.trim();
+
+  if (!encryptionKey) {
+    throw new Error('TABLIODB_SECRET_KEY is required when NODE_ENV=production.');
+  }
+
+  if (unsafeProductionSecretKeys.has(encryptionKey)) {
+    throw new Error('TABLIODB_SECRET_KEY still uses an example value. Generate a unique production secret first.');
+  }
+
+  if (encryptionKey.length < productionSecretKeyMinLength) {
+    throw new Error('TABLIODB_SECRET_KEY must be at least 32 characters when NODE_ENV=production.');
+  }
+
+  const databasePassword = getDatabasePassword(env.database.url);
+
+  if (databasePassword && unsafeProductionDatabasePasswords.has(databasePassword)) {
+    throw new Error('DATABASE_URL still uses an example database password. Set a unique POSTGRES_PASSWORD first.');
+  }
+}
+
 function trustProxyFromEnv(): boolean | number | string {
   const raw = process.env.TABLIODB_TRUST_PROXY?.trim();
 
@@ -192,7 +239,7 @@ export function loadEnv(): TabliodbEnv {
     shutdownTimeoutMs: numberFromEnv('TABLIODB_REALTIME_SHUTDOWN_TIMEOUT_MS', 15_000),
   };
 
-  return {
+  const env = {
     server,
     database: {
       url: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/tabliodb',
@@ -242,4 +289,10 @@ export function loadEnv(): TabliodbEnv {
         (process.env.TABLIODB_METRICS_ENABLED !== 'false' && process.env.NODE_ENV !== 'production'),
     },
   };
+
+  // Production should fail before Nest opens a port when secret placeholders are still present.
+  // This catches the most common self-hosting mistake: copying example env values and assuming they are safe enough.
+  assertProductionEnvIsSafe(env);
+
+  return env;
 }
