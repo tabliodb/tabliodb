@@ -49,7 +49,17 @@ describe(RateLimitGuard.name, () => {
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(HttpException);
+    await expect(guard.canActivate(context)).rejects.toMatchObject({
+      response: {
+        code: 'rate_limited',
+        details: ['Retry after 60 seconds.'],
+        message: 'Too many requests. Try again in 60 seconds.',
+      },
+    });
+    expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Limit', '2');
+    expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Remaining', '1');
+    expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Remaining', '0');
+    expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Reset', '60');
     expect(response.setHeader).toHaveBeenCalledWith('Retry-After', '60');
   });
 
@@ -87,6 +97,10 @@ describe(RateLimitGuard.name, () => {
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(HttpException);
 
     expect(redisService.incrementFixedWindow).toHaveBeenCalledWith('rate-limit:comments:write:user:user-a', 60_000);
+    expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Limit', '2');
+    expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Remaining', '1');
+    expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Remaining', '0');
+    expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Reset', '60');
     expect(response.setHeader).toHaveBeenCalledWith('Retry-After', '60');
   });
 });

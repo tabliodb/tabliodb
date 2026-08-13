@@ -74,12 +74,14 @@ export class RateLimitGuard implements CanActivate {
     this.pruneExpiredBuckets(options.now);
 
     if (!bucket || options.now >= bucket.resetAt) {
+      const resetAt = options.now + options.windowMs;
+
       this.buckets.set(options.bucketKey, {
         count: 1,
-        resetAt: options.now + options.windowMs,
+        resetAt,
       });
 
-      return true;
+      return this.assertBucketAllowsRequest({ count: 1, resetAt }, options.limit, options.response);
     }
 
     if (bucket.count >= options.limit) {
@@ -92,10 +94,16 @@ export class RateLimitGuard implements CanActivate {
 
     bucket.count += 1;
 
-    return true;
+    return this.assertBucketAllowsRequest(
+      { count: bucket.count, resetAt: bucket.resetAt },
+      options.limit,
+      options.response,
+    );
   }
 
   private assertBucketAllowsRequest(hit: FixedWindowHit, limit: number, response: Response): boolean {
+    this.writeRateLimitHeaders(hit, limit, response);
+
     if (hit.count <= limit) {
       return true;
     }
@@ -105,11 +113,22 @@ export class RateLimitGuard implements CanActivate {
     response.setHeader('Retry-After', String(retryAfterSeconds));
     throw new HttpException(
       {
+        code: 'rate_limited',
+        details: [`Retry after ${retryAfterSeconds} seconds.`],
         message: `Too many requests. Try again in ${retryAfterSeconds} seconds.`,
         statusCode: HttpStatus.TOO_MANY_REQUESTS,
       },
       HttpStatus.TOO_MANY_REQUESTS,
     );
+  }
+
+  private writeRateLimitHeaders(hit: FixedWindowHit, limit: number, response: Response): void {
+    const resetAfterSeconds = Math.max(1, Math.ceil((hit.resetAt - Date.now()) / 1000));
+
+    // Standard RateLimit-* headers give SDKs, browser UI, and self-host diagnostics enough data to back off gracefully.
+    response.setHeader('RateLimit-Limit', String(limit));
+    response.setHeader('RateLimit-Remaining', String(Math.max(0, limit - hit.count)));
+    response.setHeader('RateLimit-Reset', String(resetAfterSeconds));
   }
 
   private pruneExpiredBuckets(now: number) {
