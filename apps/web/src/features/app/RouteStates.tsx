@@ -2,6 +2,7 @@ import { TabliodbApiError, getTabliodbApiErrorMessage, getTabliodbApiErrorReques
 import { Button, Surface, cn } from '@tabliodb/ui';
 import { AlertCircle, Inbox, Loader2, RefreshCw } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
+import { isRouteErrorResponse } from 'react-router';
 
 type StateIcon = ComponentType<{ className?: string }>;
 
@@ -120,16 +121,23 @@ export function EmptyState({
 
 export function getErrorMessage(error: unknown): string {
   if (error instanceof TabliodbApiError) {
-    const apiMessage = getTabliodbApiErrorMessage(error);
-    const message = apiMessage ?? getHttpStatusFallbackMessage(error.status);
-    const requestId = getTabliodbApiErrorRequestId(error);
+    return appendRequestIdForServerError(
+      getBestHttpErrorMessage(error.status, getTabliodbApiErrorMessage(error)),
+      error.status,
+      getTabliodbApiErrorRequestId(error),
+    );
+  }
 
-    if (requestId && error.status >= 500) {
-      // Request id is most useful on server-side failures, where the user cannot fix the issue from the current form.
-      return `${message} Request id: ${requestId}.`;
-    }
-
-    return message;
+  if (isRouteErrorResponse(error)) {
+    // React Router converts thrown Response objects into ErrorResponse instances; read their data before falling back to status text.
+    return appendRequestIdForServerError(
+      getBestHttpErrorMessage(
+        error.status,
+        getErrorEnvelopeMessage(error.data) ?? normalizeErrorText(error.statusText),
+      ),
+      error.status,
+      getErrorEnvelopeRequestId(error.data),
+    );
   }
 
   if (error instanceof Error) {
@@ -147,10 +155,108 @@ export function getErrorMessage(error: unknown): string {
 
 function extractHttpStatusFromMessage(message: string): number | null {
   const normalizedMessage = message.trim();
-  const statusMatch = /^(?:error:\s*)?(\d{3})$/i.exec(normalizedMessage);
+  const statusMatch = /^(?:error:\s*)?(?:http\s*)?(?:status\s*)?([1-5]\d{2})(?:\s*[:\-]?\s*[a-z ]+)?$/i.exec(
+    normalizedMessage,
+  );
 
-  // Some client adapters surface only "Error: 404"; the UI should still show a useful product message.
+  // Some client adapters surface only "Error: 404" or "HTTP 403 Forbidden"; the UI should still show a useful product message.
   return statusMatch ? Number(statusMatch[1]) : null;
+}
+
+function appendRequestIdForServerError(message: string, status: number, requestId: string | null): string {
+  if (requestId && status >= 500) {
+    // Request id is most useful on server-side failures, where the user cannot fix the issue from the current form.
+    return `${message} Request id: ${requestId}.`;
+  }
+
+  return message;
+}
+
+function getBestHttpErrorMessage(status: number, rawMessage: string | null): string {
+  const message = normalizeErrorText(rawMessage);
+
+  if (!message || isGenericHttpStatusMessage(status, message)) {
+    return getHttpStatusFallbackMessage(status);
+  }
+
+  return message;
+}
+
+function getErrorEnvelopeMessage(data: unknown): string | null {
+  if (!data || typeof data !== 'object') {
+    return normalizeErrorText(data);
+  }
+
+  const envelope = data as {
+    details?: unknown;
+    error?: unknown;
+    message?: unknown;
+  };
+
+  // Backend validation can send either `message` or `details`; both are user-facing, unlike raw stack/error titles.
+  return (
+    normalizeErrorText(envelope.message) ?? normalizeErrorText(envelope.details) ?? normalizeErrorText(envelope.error)
+  );
+}
+
+function getErrorEnvelopeRequestId(data: unknown): string | null {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  const requestId = (data as { requestId?: unknown }).requestId;
+
+  return typeof requestId === 'string' && requestId.trim() ? requestId.trim() : null;
+}
+
+function normalizeErrorText(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return value.trim() || null;
+  }
+
+  if (Array.isArray(value)) {
+    const messages = value.map((item) => normalizeErrorText(item)).filter((item): item is string => Boolean(item));
+
+    return messages.length > 0 ? messages.join(' ') : null;
+  }
+
+  if (value instanceof Error) {
+    return value.message.trim() || null;
+  }
+
+  return null;
+}
+
+function isGenericHttpStatusMessage(status: number, message: string): boolean {
+  const normalizedMessage = message
+    .trim()
+    .toLowerCase()
+    .replace(/^error:\s*/, '')
+    .replace(/[.]+$/, '');
+  const statusText = getGenericHttpStatusText(status);
+
+  return (
+    normalizedMessage === String(status) ||
+    normalizedMessage === `http ${status}` ||
+    normalizedMessage === `status ${status}` ||
+    normalizedMessage === statusText ||
+    normalizedMessage === `${status} ${statusText}`
+  );
+}
+
+function getGenericHttpStatusText(status: number): string {
+  const statusTexts: Record<number, string> = {
+    400: 'bad request',
+    401: 'unauthorized',
+    403: 'forbidden',
+    404: 'not found',
+    409: 'conflict',
+    422: 'unprocessable entity',
+    429: 'too many requests',
+    500: 'internal server error',
+  };
+
+  return statusTexts[status] ?? 'error';
 }
 
 function getHttpStatusFallbackMessage(status: number): string {
