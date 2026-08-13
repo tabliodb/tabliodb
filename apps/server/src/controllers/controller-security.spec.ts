@@ -7,7 +7,6 @@ import { controllers } from './index.js';
 
 const publicRoutes = new Set([
   'AppController.getHealth',
-  'AppController.getMetrics',
   'AuthController.completeOidcLogin',
   'AuthController.confirmPasswordReset',
   'AuthController.getOidcLoginProvider',
@@ -39,6 +38,7 @@ const currentUserScopedRoutes = new Set([
 ]);
 
 const servicePermissionRoutes = new Set([
+  'AppController.getMetrics',
   'CommentController.deleteComment',
   'CommentController.getCommentReplies',
   'CommentController.getThreadComments',

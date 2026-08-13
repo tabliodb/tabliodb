@@ -1,7 +1,10 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Permission } from '@tabliodb/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuthContext } from '../database.js';
 import { ServerService } from './server.service.js';
 
 describe(ServerService.name, () => {
@@ -16,6 +19,9 @@ describe(ServerService.name, () => {
   };
   const redisService = {
     ping: vi.fn(),
+  };
+  const userRepository = {
+    getInstanceRole: vi.fn(),
   };
 
   let storageRoot: string;
@@ -76,12 +82,14 @@ describe(ServerService.name, () => {
       },
     });
     redisService.ping.mockResolvedValue(undefined);
+    userRepository.getInstanceRole.mockResolvedValue({ role: 'owner' });
 
     return new ServerService(
       configRepository as never,
       databaseRepository as never,
       metricsService as never,
       redisService as never,
+      userRepository as never,
     );
   }
 
@@ -149,21 +157,63 @@ describe(ServerService.name, () => {
     expect(health.dependencies.storage.message).not.toContain(blockedStoragePath);
   });
 
-  it('returns metrics when the optional endpoint is enabled', () => {
+  it('returns metrics for instance managers when the optional endpoint is enabled', async () => {
     const service = createService({ metricsEnabled: true });
 
-    expect(service.getMetrics()).toMatchObject({
+    await expect(service.getMetrics(createAuth())).resolves.toMatchObject({
       http: {
         totalRequests: 0,
       },
     });
     expect(metricsService.getSnapshot).toHaveBeenCalledTimes(1);
+    expect(userRepository.getInstanceRole).toHaveBeenCalledWith('user-id');
   });
 
-  it('hides metrics when the optional endpoint is disabled', () => {
+  it('hides metrics before checking admin role when the optional endpoint is disabled', async () => {
     const service = createService({ metricsEnabled: false });
 
-    expect(() => service.getMetrics()).toThrow('Metrics endpoint is disabled');
+    await expect(service.getMetrics(createAuth())).rejects.toBeInstanceOf(NotFoundException);
+    expect(metricsService.getSnapshot).not.toHaveBeenCalled();
+    expect(userRepository.getInstanceRole).not.toHaveBeenCalled();
+  });
+
+  it('rejects metrics for authenticated non-admin users', async () => {
+    const service = createService({ metricsEnabled: true });
+
+    userRepository.getInstanceRole.mockResolvedValue(undefined);
+
+    await expect(service.getMetrics(createAuth())).rejects.toBeInstanceOf(ForbiddenException);
+    expect(metricsService.getSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('rejects metrics for low-scope API keys before checking instance role', async () => {
+    const service = createService({ metricsEnabled: true });
+
+    await expect(
+      service.getMetrics(
+        createAuth({
+          apiKey: {
+            id: 'api-key-id',
+            permissions: [Permission.ProjectRead],
+          },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(userRepository.getInstanceRole).not.toHaveBeenCalled();
     expect(metricsService.getSnapshot).not.toHaveBeenCalled();
   });
 });
+
+function createAuth(overrides: Partial<AuthContext> = {}): AuthContext {
+  return {
+    user: {
+      avatarUrl: null,
+      cursorColor: '#58cc02',
+      email: 'owner@tabliodb.local',
+      id: 'user-id',
+      name: 'Tabliodb Owner',
+      passwordChangeRequired: false,
+    },
+    ...overrides,
+  };
+}

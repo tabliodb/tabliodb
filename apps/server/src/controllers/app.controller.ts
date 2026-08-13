@@ -2,7 +2,9 @@ import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
+import type { AuthContext } from '../database.js';
 import { ServerHealthResponseDto, ServerMetricsResponseDto } from '../dtos/server.dto.js';
+import { Auth, Authenticated } from '../middleware/auth.guard.js';
 import { ServerService } from '../services/server.service.js';
 
 @ApiTags('server')
@@ -23,9 +25,10 @@ export class AppController {
   }
 
   @Get('metrics')
+  @Authenticated()
   @ApiOperation({ operationId: 'getServerMetrics' })
   @ZodResponse({ status: HttpStatus.OK, type: ServerMetricsResponseDto })
-  getMetrics() {
-    return this.service.getMetrics();
+  getMetrics(@Auth() auth: AuthContext) {
+    return this.service.getMetrics(auth);
   }
 }

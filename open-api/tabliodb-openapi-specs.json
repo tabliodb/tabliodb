@@ -39,6 +39,17 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
         "summary": "",
         "tags": [
           "server"

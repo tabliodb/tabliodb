@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Permission, isGranted } from '@tabliodb/shared';
 import { constants as fsConstants } from 'node:fs';
 import { access, mkdir, stat } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
+import type { AuthContext } from '../database.js';
 import type { ServerHealthResponse, ServerMetricsResponse } from '../dtos/server.dto.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { DatabaseRepository } from '../repositories/database.repository.js';
+import { UserRepository } from '../repositories/user.repository.js';
 import { MetricsService } from './metrics.service.js';
 import { RedisService } from './redis.service.js';
 
@@ -17,6 +20,7 @@ export class ServerService {
     private readonly databaseRepository: DatabaseRepository,
     private readonly metricsService: MetricsService,
     private readonly redisService: RedisService,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async getHealth(): Promise<ServerHealthResponse> {
@@ -47,12 +51,26 @@ export class ServerService {
     };
   }
 
-  getMetrics(): ServerMetricsResponse {
+  async getMetrics(auth: AuthContext): Promise<ServerMetricsResponse> {
     if (!this.configRepository.getEnv().metrics.enabled) {
       throw new NotFoundException('Metrics endpoint is disabled');
     }
 
+    await this.requireInstanceManager(auth);
+
     return this.metricsService.getSnapshot();
+  }
+
+  private async requireInstanceManager(auth: AuthContext): Promise<void> {
+    if (auth.apiKey && !isGranted({ current: auth.apiKey.permissions, requested: [Permission.OrganizationManage] })) {
+      // Metrics expose process and route behavior, so API keys must be intentionally scoped for instance administration.
+      throw new ForbiddenException(`${Permission.OrganizationManage} API key scope is required`);
+    }
+
+    const instanceMember = await this.userRepository.getInstanceRole(auth.user.id);
+    if (!instanceMember) {
+      throw new ForbiddenException('Instance admin access is required');
+    }
   }
 
   private async checkDependency(task: () => Promise<void>): Promise<DependencyHealth> {
