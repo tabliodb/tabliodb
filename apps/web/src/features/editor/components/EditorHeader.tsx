@@ -278,7 +278,6 @@ export function EditorHeader({
           onExportMarkdown={onExportMarkdown}
           onExportPng={onExportPng}
           onExportSvg={onExportSvg}
-          onFitDiagram={onFitDiagram}
           onImportJson={onImportJson}
           onImportSql={onImportSql}
           onOpenKeyboardShortcuts={onOpenKeyboardShortcuts}

@@ -19,7 +19,6 @@ import {
   FileUp,
   ImageDown,
   Keyboard,
-  LocateFixed,
   MoreHorizontal,
   Redo2,
   Share2,
@@ -40,7 +39,6 @@ export function EditorMoreActionsMenu({
   onExportMarkdown,
   onExportPng,
   onExportSvg,
-  onFitDiagram,
   onImportJson,
   onImportSql,
   onOpenKeyboardShortcuts,
@@ -59,7 +57,6 @@ export function EditorMoreActionsMenu({
   onExportMarkdown: MenuAction;
   onExportPng: MenuAction;
   onExportSvg: MenuAction;
-  onFitDiagram: MenuAction;
   onImportJson: MenuAction;
   onImportSql: MenuAction;
   onOpenKeyboardShortcuts: MenuAction;
@@ -94,10 +91,7 @@ export function EditorMoreActionsMenu({
             <DropdownMenuSeparatorItem />
           </>
         ) : null}
-        <DropdownMenuItem onSelect={() => void onFitDiagram()}>
-          <LocateFixed className="size-4" />
-          Fit diagram
-        </DropdownMenuItem>
+
         <DropdownMenuItem onSelect={() => void onOpenKeyboardShortcuts()}>
           <Keyboard className="size-4" />
           Keyboard shortcuts
