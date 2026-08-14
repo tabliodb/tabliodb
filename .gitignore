@@ -16,3 +16,4 @@ e2e/test-results
 packages/*/src/**/*.d.ts
 *.tsbuildinfo
 *.log
+apps/server/data
