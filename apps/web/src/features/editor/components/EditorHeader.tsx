@@ -284,7 +284,6 @@ export function EditorHeader({
           onOpenKeyboardShortcuts={onOpenKeyboardShortcuts}
           onRedo={onRedo}
           onShareReadOnlyLink={onOpenShareLinks}
-          onToggleMinimap={onToggleMinimap}
           onUndo={onUndo}
         />
       </div>

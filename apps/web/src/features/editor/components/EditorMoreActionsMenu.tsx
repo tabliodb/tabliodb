@@ -46,7 +46,6 @@ export function EditorMoreActionsMenu({
   onOpenKeyboardShortcuts,
   onRedo,
   onShareReadOnlyLink,
-  onToggleMinimap,
   onUndo,
 }: {
   canEdit: boolean;
@@ -66,7 +65,6 @@ export function EditorMoreActionsMenu({
   onOpenKeyboardShortcuts: MenuAction;
   onRedo: MenuAction;
   onShareReadOnlyLink: MenuAction;
-  onToggleMinimap: MenuAction;
   onUndo: MenuAction;
 }) {
   return (
