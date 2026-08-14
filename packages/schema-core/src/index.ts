@@ -192,6 +192,14 @@ export type DiagramModelIntegrityWarning = {
   };
 };
 
+export type DiagramModelMigrationReport = {
+  fromVersion: number | null;
+  migrated: boolean;
+  model: DiagramModel;
+  repaired: boolean;
+  toVersion: number;
+};
+
 export type DiagramReviewSignalSeverity = 'info' | 'warning' | 'error';
 
 export const diagramReviewSignalCodes = [
@@ -996,15 +1004,56 @@ export function applyDiagramCommand(
 }
 
 export function parseDiagramModel(value: unknown): DiagramModel {
-  return DiagramModelSchema.parse(value);
+  return migrateDiagramModel(value);
 }
 
 export function serializeDiagramModel(model: DiagramModel): DiagramModel {
-  return DiagramModelSchema.parse(model);
+  return migrateDiagramModel(model);
+}
+
+export function migrateDiagramModel(value: unknown): DiagramModel {
+  return migrateDiagramModelWithReport(value).model;
+}
+
+export function migrateDiagramModelWithReport(value: unknown): DiagramModelMigrationReport {
+  const fromVersion = readDiagramSchemaVersion(value);
+
+  if (fromVersion !== null && fromVersion > currentDiagramSchemaVersion) {
+    throw new DiagramCommandError(
+      `Diagram schema version ${fromVersion} is newer than supported version ${currentDiagramSchemaVersion}`,
+    );
+  }
+
+  const parsedModel = DiagramModelSchema.parse(value);
+  const migratedModel = runDiagramModelMigrations(parsedModel);
+
+  return {
+    fromVersion,
+    migrated: fromVersion === null || fromVersion !== migratedModel.schemaVersion,
+    model: migratedModel,
+    repaired: false,
+    toVersion: migratedModel.schemaVersion,
+  };
+}
+
+export function repairDiagramModel(value: unknown): DiagramModel {
+  return repairDiagramModelWithReport(value).model;
+}
+
+export function repairDiagramModelWithReport(value: unknown): DiagramModelMigrationReport {
+  const migration = migrateDiagramModelWithReport(value);
+  const repairedModel = normalizeDiagramModel(migration.model);
+
+  return {
+    ...migration,
+    model: repairedModel,
+    repaired: !areDiagramModelsStructurallyEqual(repairedModel, migration.model),
+    toVersion: repairedModel.schemaVersion,
+  };
 }
 
 export function normalizeDiagramModel(model: DiagramModel): DiagramModel {
-  const parsedModel = serializeDiagramModel(model);
+  const parsedModel = migrateDiagramModel(model);
   const canonicalTables = canonicalizeEntityRecord(parsedModel.tables, mergeDuplicateTableEntity);
   const canonicalColumns = canonicalizeEntityRecord(parsedModel.columns);
   const canonicalIndexes = canonicalizeEntityRecord(parsedModel.indexes);
@@ -1078,6 +1127,30 @@ export function normalizeDiagramModel(model: DiagramModel): DiagramModel {
         tables,
       })
     : parsedModel;
+}
+
+function readDiagramSchemaVersion(value: unknown): number | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const schemaVersion = (value as { schemaVersion?: unknown }).schemaVersion;
+
+  return typeof schemaVersion === 'number' && Number.isInteger(schemaVersion) && schemaVersion > 0
+    ? schemaVersion
+    : null;
+}
+
+function runDiagramModelMigrations(model: DiagramModel): DiagramModel {
+  // Version 1 is the first canonical model; future migrations should be added here instead of scattering compatibility fixes across app/server/web.
+  return DiagramModelSchema.parse({
+    ...model,
+    schemaVersion: currentDiagramSchemaVersion,
+  });
+}
+
+function areDiagramModelsStructurallyEqual(left: DiagramModel, right: DiagramModel): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function canonicalizeEntityRecord<T extends { id: string }>(

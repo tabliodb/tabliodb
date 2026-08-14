@@ -3,7 +3,7 @@ import {
   createEmptyDiagramModel,
   decodeDiagramModelFromYjsUpdate,
   normalizeDiagramModel,
-  parseDiagramModel,
+  repairDiagramModel,
   serializeDiagramModel,
   type DatabaseDialect,
   type DiagramModel,
@@ -203,7 +203,7 @@ export class DiagramShareLinkService {
       throw new NotFoundException('Snapshot not found');
     }
 
-    return serializeDiagramModel(normalizeDiagramModel(parseDiagramModel(shareLink.snapshotModel)));
+    return serializeDiagramModel(repairDiagramModel(shareLink.snapshotModel));
   }
 
   private serializeShareLink(shareLink: DiagramShareLinkRecord): DiagramShareLinkDto {

@@ -7,14 +7,18 @@ import {
   createEmptyDiagramModel,
   createSequentialDiagramIdFactory,
   createStarterDiagramModel,
+  currentDiagramSchemaVersion,
   decodeDiagramModelFromYjsUpdate,
   encodeDiagramModelAsYjsUpdate,
   getDiagramModelIntegrityWarnings,
   getDiagramReviewSignals,
   getTableColumns,
   hasDiagramModelInYjsDocument,
+  migrateDiagramModelWithReport,
   normalizeDiagramModel,
+  parseDiagramModel,
   readDiagramModelFromYjsDocument,
+  repairDiagramModelWithReport,
   serializeDiagramModel,
   writeDiagramModelToYjsDocument,
   yjsCollections,
@@ -104,6 +108,65 @@ describe('schema-core diagram commands', () => {
 
     expect(update.byteLength).toBeGreaterThan(0);
     expect(decodeDiagramModelFromYjsUpdate(update)).toEqual(serializeDiagramModel(model));
+  });
+
+  it('migrates legacy diagram payloads without schemaVersion to the current model version', () => {
+    const model = createEmptyDiagramModel('Legacy import test');
+    const legacyPayload = serializeDiagramModel(model) as Partial<ReturnType<typeof serializeDiagramModel>>;
+    delete legacyPayload.schemaVersion;
+
+    const migration = migrateDiagramModelWithReport(legacyPayload);
+
+    // Old exports/prototype snapshots can miss schemaVersion; the migration boundary upgrades them before web/server logic touches the model.
+    expect(migration.fromVersion).toBeNull();
+    expect(migration.migrated).toBe(true);
+    expect(migration.repaired).toBe(false);
+    expect(migration.toVersion).toBe(currentDiagramSchemaVersion);
+    expect(migration.model.schemaVersion).toBe(currentDiagramSchemaVersion);
+    expect(parseDiagramModel(legacyPayload).schemaVersion).toBe(currentDiagramSchemaVersion);
+  });
+
+  it('repairs damaged legacy payloads through the import and restore boundary helper', () => {
+    const model = applyDiagramCommand(
+      createEmptyDiagramModel('Legacy repair test'),
+      {
+        columns: [
+          { id: 'legacy-id', name: 'id', nullable: false, primaryKey: true, type: { family: 'uuid' } },
+          { id: 'legacy-name', name: 'name', nullable: false, type: { family: 'varchar', length: 120 } },
+        ],
+        name: 'legacy_users',
+        tableId: 'legacy-users',
+        type: 'table.create',
+      },
+      { now: fixedNow },
+    );
+    const damagedPayload = {
+      ...serializeDiagramModel(model),
+      columns: {},
+      schemaVersion: undefined,
+    };
+
+    const repair = repairDiagramModelWithReport(damagedPayload);
+
+    // Repair keeps the table selectable/editable even when the persisted JSON lost column entities.
+    expect(repair.migrated).toBe(true);
+    expect(repair.repaired).toBe(true);
+    expect(getTableColumns(repair.model, 'legacy-users').map((column) => column.name)).toEqual(['id', 'new_column']);
+    expect(repair.model.columns['legacy-id']).toMatchObject({
+      nullable: false,
+      primaryKey: true,
+      type: { family: 'uuid' },
+    });
+  });
+
+  it('rejects future diagram schema versions until an explicit migration exists', () => {
+    const futurePayload = {
+      ...serializeDiagramModel(createEmptyDiagramModel('Future model test')),
+      schemaVersion: currentDiagramSchemaVersion + 1,
+    };
+
+    // A self-host instance should fail loudly on unsupported future snapshots instead of silently rewriting data it cannot understand.
+    expect(() => migrateDiagramModelWithReport(futurePayload)).toThrow(DiagramCommandError);
   });
 
   it('normalizes tables whose column order references missing column entities', () => {

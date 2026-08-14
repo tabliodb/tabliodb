@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  DiagramCommandError,
   getDiagramModelIntegrityWarnings,
-  parseDiagramModel,
+  repairDiagramModel,
   type DatabaseDialect,
   type DiagramModel,
   type DiagramModelIntegrityWarning,
@@ -538,7 +539,7 @@ function parseImportJsonDraft(value: string): ImportJsonDraftPreview {
 
   try {
     const parsedValue = JSON.parse(trimmedValue) as unknown;
-    const model = parseDiagramModel(parsedValue);
+    const model = repairDiagramModel(parsedValue);
 
     return {
       model,
@@ -567,6 +568,10 @@ function getImportJsonErrorMessage(error: unknown): string {
       : 'JSON does not match Tabliodb schema.';
   }
 
+  if (error instanceof DiagramCommandError) {
+    return error.message;
+  }
+
   return 'JSON could not be imported.';
 }
 
@@ -582,7 +587,7 @@ function parseImportSqlDraft(value: string, dialect: DatabaseDialect, diagramNam
       dialect,
       diagramName: `${diagramName} import`,
     });
-    const model = parseDiagramModel(result.model);
+    const model = repairDiagramModel(result.model);
 
     return {
       model,

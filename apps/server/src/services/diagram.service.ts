@@ -8,7 +8,7 @@ import {
   getDiagramModelIntegrityWarnings,
   getDiagramReviewSignals,
   normalizeDiagramModel,
-  parseDiagramModel,
+  repairDiagramModel,
   serializeDiagramModel,
   stringifyDiagramModel,
   type DatabaseDialect,
@@ -283,9 +283,12 @@ export class DiagramService {
     }
 
     try {
+      const model = repairDiagramModel(JSON.parse(dto.content));
+
       return {
-        model: parseDiagramModel(JSON.parse(dto.content)),
-        warnings: [],
+        model,
+        // JSON import may be structurally valid but still risky; surface warnings instead of letting the editor discover them later.
+        warnings: getDiagramModelIntegrityWarnings(model).map(normalizeTransferWarning),
       };
     } catch {
       throw new BadRequestException('Import content is not a valid Tabliodb JSON diagram');
