@@ -19,7 +19,6 @@ import {
   Mode as SdkImportMode,
   Source as SdkImportSource,
   TabliodbApiError,
-  type CurrentUserEditorPreferenceDtoOutput,
   type CurrentUserEditorPreferenceUpdateDto,
   type DiagramResponseDtoOutput,
   type OrganizationDtoOutput,
@@ -65,7 +64,7 @@ import { projectsQueries } from '@/resources/projects';
 import { notificationQueries } from '@/resources/notifications';
 import { commentQueries } from '@/resources/comments';
 import { snapshotsQueries, useCreateSnapshotMutation, useRestoreSnapshotMutation } from '@/resources/snapshots';
-import { reviewSignalKeys, reviewSignalQueries, useIgnoreReviewSignalMutation } from '@/resources/review-signals';
+import { reviewSignalQueries, useIgnoreReviewSignalMutation } from '@/resources/review-signals';
 import {
   shareLinkQueries,
   useCreateDiagramShareLinkMutation,
@@ -121,15 +120,21 @@ import { SqlPreviewDialog } from './components/SqlPreviewDialog';
 import { TableDocsDialog } from './components/TableDocsDialog';
 import { formatDiagramDialect } from './diagram-formatters';
 import { sdkDialectByValue, toDatabaseDialect } from './diagram-sdk-mappers';
+import {
+  createEditorPreferenceKey,
+  getOrganizationSlug,
+  getWorkspaceSlug,
+  matchesRememberedWorkspace,
+  matchesWorkspaceRoute,
+} from './editor-route-guards';
 import { selectClassName } from './editor-form-styles';
 import { copyTextToClipboard } from './export-utils';
 import { getSnapshotRealtimeGuard } from './snapshot-realtime-guard';
 import { useDiagramExportActions } from './useDiagramExportActions';
 import { useEditorModelHistory } from './useEditorModelHistory';
-import { getOrganizationSlug, getWorkspaceSlug, useEditorRouteActions } from './useEditorRouteActions';
+import { useEditorRouteActions } from './useEditorRouteActions';
 import { useEditorSelection } from './useEditorSelection';
 
-type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
 type CurrentUserEditorPreferenceUpdateDtoInput = CurrentUserEditorPreferenceUpdateDto;
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
@@ -481,7 +486,6 @@ export function EditorPage() {
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshotModel);
         setModel(snapshotModel);
         syncModelToCollaboration(snapshotModel);
-        queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
   });
@@ -500,7 +504,6 @@ export function EditorPage() {
         clearSelection();
         resetModelHistory();
         setSnapshotHistoryOpen(false);
-        queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
   });
@@ -521,7 +524,6 @@ export function EditorPage() {
         syncModelToCollaboration(importedModel);
         clearSelection();
         resetModelHistory();
-        queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
     },
   });
@@ -2013,28 +2015,6 @@ function getEditorOverlayOffsetPx({
     expandedWidthPx + 16,
     Math.max(editorCollapsedSidebarWidthPx + 12, viewportWidth - minVisibleSpacePx),
   );
-}
-
-function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: string | null): boolean {
-  return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
-}
-
-function matchesRememberedWorkspace(
-  organization: OrganizationDto,
-  rememberedTarget: CurrentUserEditorPreferenceDto,
-): boolean {
-  return Boolean(
-    rememberedTarget.organizationId &&
-    (organization.id === rememberedTarget.organizationId || organization.slug === rememberedTarget.workspaceSlug),
-  );
-}
-
-function createEditorPreferenceKey(target: {
-  diagramId?: string | null;
-  organizationId: string | null;
-  projectId?: string | null;
-}): string {
-  return [target.organizationId ?? '', target.projectId ?? '', target.diagramId ?? ''].join(':');
 }
 
 function createCanvasInsertionPosition(

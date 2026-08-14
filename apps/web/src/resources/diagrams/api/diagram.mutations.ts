@@ -14,6 +14,7 @@ import {
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { commentKeys } from '@/resources/comments';
+import { reviewSignalKeys } from '@/resources/review-signals';
 import { diagramsKeys, type DiagramExportQuery } from './diagram.keys';
 
 const createDiagramMutationFn = (body: DiagramCreateDto) => createDiagram({ diagramCreateDto: body });
@@ -94,6 +95,7 @@ export function useImportDiagramMutation(params: UseImportDiagramMutationParams 
         (current) => (current ?? []).map((diagram) => (diagram.id === data.diagram.id ? data.diagram : diagram)),
       );
       queryClient.invalidateQueries({ queryKey: diagramsKeys.all });
+      queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

@@ -1,16 +1,17 @@
 import { redirect, type LoaderFunctionArgs, type Params } from 'react-router';
-import {
-  TabliodbApiError,
-  type CurrentUserEditorPreferenceDtoOutput,
-  type OrganizationDtoOutput,
-  type ProjectResponseDtoOutput,
-} from '@tabliodb/sdk';
+import { TabliodbApiError } from '@tabliodb/sdk';
 import { routes } from '@/app/routes';
 import { queryClient } from '@/lib/react-query';
 import { authQueries } from '@/resources/auth';
 import { diagramsQueries } from '@/resources/diagrams';
 import { organizationsQueries } from '@/resources/organizations';
 import { projectsQueries } from '@/resources/projects';
+import {
+  getOrganizationSlug,
+  getWorkspaceSlug,
+  matchesRememberedWorkspace,
+  matchesWorkspaceRoute,
+} from '../editor-route-guards';
 
 export type EditorLoaderData = {
   title?: string;
@@ -113,28 +114,6 @@ export async function editorLoader({ params }: LoaderFunctionArgs): Promise<Edit
 
 function isEditorLoaderData(loaderData: unknown): loaderData is EditorLoaderData {
   return Boolean(loaderData && typeof loaderData === 'object' && 'title' in loaderData);
-}
-
-function getWorkspaceSlug(project: ProjectResponseDtoOutput): string {
-  return project.organizationSlug || project.organizationId;
-}
-
-function getOrganizationSlug(organization: OrganizationDtoOutput): string {
-  return organization.slug || organization.id;
-}
-
-function matchesWorkspaceRoute(organization: OrganizationDtoOutput, workspaceSlug: string | null): boolean {
-  return Boolean(workspaceSlug && (organization.slug === workspaceSlug || organization.id === workspaceSlug));
-}
-
-function matchesRememberedWorkspace(
-  organization: OrganizationDtoOutput,
-  rememberedTarget: CurrentUserEditorPreferenceDtoOutput,
-): boolean {
-  return Boolean(
-    rememberedTarget.organizationId &&
-    (organization.id === rememberedTarget.organizationId || organization.slug === rememberedTarget.workspaceSlug),
-  );
 }
 
 function isWorkspaceRoute(params: Params<string>, workspaceSlug: string): boolean {

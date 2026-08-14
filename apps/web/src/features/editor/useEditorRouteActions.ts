@@ -3,6 +3,7 @@ import type { OrganizationDtoOutput, ProjectResponseDtoOutput } from '@tabliodb/
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import type { NavigateFunction } from 'react-router';
 import { routes } from '@/app/routes';
+import { getOrganizationSlug, getWorkspaceSlug } from './editor-route-guards';
 
 type OrganizationDto = OrganizationDtoOutput;
 type ProjectResponseDto = ProjectResponseDtoOutput;
@@ -133,14 +134,6 @@ export function useEditorRouteActions({
     goToWorkspace,
     resetDraft,
   };
-}
-
-export function getWorkspaceSlug(project: ProjectResponseDto): string {
-  return project.organizationSlug || project.organizationId;
-}
-
-export function getOrganizationSlug(organization: OrganizationDto): string {
-  return organization.slug || organization.id;
 }
 
 function createNavigateOptions(replace: boolean | undefined) {
