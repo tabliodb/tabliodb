@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import LOGO from '@/assets/logo.svg';
 import {
   applyDiagramCommand,
   createDiagramEntityId,
@@ -10,7 +9,6 @@ import {
 } from '@tabliodb/schema-core';
 import {
   Permission,
-  ProjectRole,
   isGranted,
   permissionsForOrganizationRole,
   permissionsForProjectRole,
@@ -30,24 +28,15 @@ import {
   type SnapshotResponseDtoOutput,
 } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
-import { Badge, Button, IconButton, Surface, toast } from '@tabliodb/ui';
+import { Button, IconButton, Surface, toast } from '@tabliodb/ui';
 import {
   Building2,
   FileText,
   FolderPlus,
-  History,
-  Keyboard,
-  LocateFixed,
-  Loader2,
-  MessageSquareText,
-  Play,
   Plus,
-  Save,
   StickyNote,
   UsersRound,
-  Redo2,
   RotateCcw,
-  Undo2,
   PanelRight,
   PanelLeft,
 } from 'lucide-react';
@@ -106,7 +95,6 @@ import {
   createRemoteCommentTypingPresenceList,
   idleCollaborationStatus,
 } from './collaboration-awareness';
-import { CollaborationPresence } from './collaboration-status';
 import {
   createDiagramModelSignature,
   createEmptyEditorModelHistory,
@@ -118,18 +106,14 @@ import {
 import { AddTableDialog } from './components/AddTableDialog';
 import { CommentsDialog } from './components/CommentsDialog';
 import { DiagramTablesSidebar } from './components/DiagramTablesSidebar';
-import { DiagramSettingsDialog } from './components/DiagramSettingsDialog';
-import { NotificationInboxMenu, UserAccountMenu, type NotificationInboxItem } from './components/EditorHeaderMenus';
-import { EditorMoreActionsMenu } from './components/EditorMoreActionsMenu';
+import { EditorHeader } from './components/EditorHeader';
+import type { NotificationInboxItem } from './components/EditorHeaderMenus';
 import {
   EditorConfirmDialog,
   KeyboardShortcutsDialog,
   type EditorConfirmAction,
 } from './components/EditorShellDialogs';
-import { ProjectSettingsDialog } from './components/ProjectSettingsDialog';
 import { CreateDiagramDialog, CreateProjectDialog, CreateWorkspaceDialog } from './components/WorkspaceShellDialogs';
-import { WorkspaceProjectSwitcher } from './components/WorkspaceProjectSwitcher';
-import { WorkspaceSettingsDialog } from './components/WorkspaceSettingsDialog';
 import {
   ImportJsonDialog,
   ImportSqlDialog,
@@ -162,7 +146,6 @@ const sdkImportSourceByValue: Record<EditorImportSource, SdkImportSource> = {
   tabliodb_json: SdkImportSource.TabliodbJson,
 };
 
-const projectRoleOptions = [ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
 const reviewSignalPageQuery = { limit: 50 } as const;
 const notificationInboxPageQuery = { limit: 8 } as const;
 const emptyNotifications: NotificationInboxItem[] = [];
@@ -1659,226 +1642,133 @@ export function EditorPage() {
 
   return (
     <main className="flex h-screen flex-col bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
-      <header className="flex h-(--tabliodb-header-height) shrink-0 items-center gap-2 border-b border-[rgb(var(--tabliodb-border))] bg-white px-2 sm:gap-3 sm:px-4">
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-          <div className="flex h-9 w-32 shrink-0 items-center overflow-hidden max-[560px]:w-9">
-            <img src={LOGO} alt="Tabliodb" className="h-9 w-32 max-w-none" />
-          </div>
-          <WorkspaceProjectSwitcher
-            activeDiagram={activeDiagram}
-            activeOrganization={activeOrganization}
-            activeProject={activeProject}
-            canCreateDiagram={canCreateDiagram}
-            canCreateProject={canCreateProject}
-            diagrams={diagrams}
-            onCreateDiagram={() => setCreateDiagramOpen(true)}
-            onCreateProject={() => setCreateProjectOpen(true)}
-            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
-            onDiagramSelect={(diagram) => {
-              modelRef.current = null;
-              snapshotRecoveryModelRef.current = null;
-              persistedDraftSignatureRef.current = null;
-              setModel(null);
-              setSelectedTableId(null);
-              setSelectedCommentTarget(null);
-              navigate(
-                routes.diagram.to({
-                  diagramId: diagram.id,
-                  projectId: activeProject.id,
-                  workspaceSlug: getWorkspaceSlug(activeProject),
-                }),
-              );
-            }}
-            onOrganizationSelect={(organization) => {
-              modelRef.current = null;
-              snapshotRecoveryModelRef.current = null;
-              persistedDraftSignatureRef.current = null;
-              setModel(null);
-              setSelectedTableId(null);
-              setSelectedCommentTarget(null);
-              setProjectSearchTerm('');
-              navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
-            }}
-            onProjectSearchChange={setProjectSearchTerm}
-            onProjectSelect={(project) => {
-              modelRef.current = null;
-              snapshotRecoveryModelRef.current = null;
-              persistedDraftSignatureRef.current = null;
-              setModel(null);
-              setSelectedTableId(null);
-              setSelectedCommentTarget(null);
-              navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
-            }}
-            organizations={organizations}
-            projectSearchTerm={projectSearchTerm}
-            projects={filteredProjects}
-          />
-        </div>
-        {/* Aksi sekunder tetap tersedia di More menu, lalu disembunyikan bertahap di header supaya identitas project tidak terdesak. */}
-        <div className="tabliodb-scrollbar flex min-w-0 max-w-[64vw] shrink-0 items-center gap-1 overflow-x-auto py-1 max-[700px]:max-w-[58vw]">
-          <Badge className="hidden md:inline-flex" variant={canEditDiagram ? 'green' : 'yellow'}>
-            {formatProjectRole(activeProject.projectRole)}
-          </Badge>
-          {canEditDiagram ? (
-            <div className="hidden items-center gap-1 xl:flex">
-              <IconButton
-                disabled={!canUndoModelChange}
-                icon={Undo2}
-                label="Undo last edit"
-                onClick={handleUndoModelChange}
-              />
-              <IconButton
-                disabled={!canRedoModelChange}
-                icon={Redo2}
-                label="Redo last edit"
-                onClick={handleRedoModelChange}
-              />
-            </div>
-          ) : null}
-          <CollaborationPresence
-            collaborators={collaborators}
-            draftPersisted={currentDraftPersisted}
-            latestSnapshot={latestSnapshot}
-            snapshotSavePending={saveSnapshotMutation.isPending}
-            status={collaborationStatus}
-          />
-          {canCommentDiagram ? (
-            <div className="relative">
-              <IconButton icon={MessageSquareText} label="Comments" onClick={() => setCommentsOpen(true)} />
-              {openCommentThreadCount > 0 ? (
-                <span className="pointer-events-none absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[rgb(var(--tabliodb-red))] px-1 text-[9px] font-extrabold leading-4 text-white [text-shadow:var(--tabliodb-solid-text-shadow)]">
-                  {openCommentThreadCount > 99 ? '99+' : openCommentThreadCount}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          <NotificationInboxMenu
-            error={notificationInboxQuery.error}
-            hasNextPage={Boolean(notificationInboxQuery.data?.nextCursor)}
-            isLoading={notificationInboxQuery.isPending}
-            notifications={inboxNotifications}
-            onOpenChange={setNotificationsOpen}
-            onRetry={() => void notificationInboxQuery.refetch()}
-            onSelect={handleNotificationOpen}
-            open={notificationsOpen}
-            unreadCount={unreadNotificationCount}
-          />
-          <IconButton
-            className="hidden lg:inline-flex"
-            disabled={snapshotsQuery.isPending}
-            icon={History}
-            label="Snapshot history"
-            onClick={() => setSnapshotHistoryOpen(true)}
-          />
-          <IconButton
-            className="hidden xl:inline-flex"
-            icon={LocateFixed}
-            label="Fit diagram"
-            onClick={() => setFitSignal((value) => value + 1)}
-          />
-          <IconButton
-            className="hidden 2xl:inline-flex"
-            icon={Keyboard}
-            label="Keyboard shortcuts"
-            onClick={() => setKeyboardShortcutsOpen(true)}
-          />
-          {activeProject ? (
-            <>
-              {canManageWorkspace ? (
-                <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
-              ) : null}
-              {canManageProject ? (
-                <ProjectSettingsDialog
-                  onArchived={() => {
-                    modelRef.current = null;
-                    snapshotRecoveryModelRef.current = null;
-                    persistedDraftSignatureRef.current = null;
-                    setModel(null);
-                    setSelectedTableId(null);
-                    setSelectedCommentTarget(null);
-                    navigate(routes.home.to(), { replace: true });
-                  }}
-                  project={activeProject}
-                />
-              ) : null}
-              {canEditDiagram ? (
-                <DiagramSettingsDialog
-                  canEdit={canEditDiagram}
-                  diagram={activeDiagram}
-                  model={model}
-                  onUpdated={(diagram) => {
-                    setModel((current) => {
-                      if (!current) {
-                        return current;
-                      }
+      <EditorHeader
+        activeDiagram={activeDiagram}
+        activeOrganization={activeOrganization}
+        activeProject={activeProject}
+        canCommentDiagram={canCommentDiagram}
+        canCreateDiagram={canCreateDiagram}
+        canCreateProject={canCreateProject}
+        canCreateSnapshot={canCreateSnapshot}
+        canEditDiagram={canEditDiagram}
+        canManageProject={canManageProject}
+        canManageWorkspace={canManageWorkspace}
+        canRedoModelChange={canRedoModelChange}
+        canUndoModelChange={canUndoModelChange}
+        collaborationStatus={collaborationStatus}
+        collaborators={collaborators}
+        currentDraftPersisted={currentDraftPersisted}
+        currentUser={currentUser}
+        diagrams={diagrams}
+        filteredProjects={filteredProjects}
+        importDiagramPending={importDiagramMutation.isPending}
+        isExporting={diagramExportActions.isExporting}
+        latestSnapshot={latestSnapshot}
+        logoutPending={logoutMutation.isPending}
+        model={model}
+        notificationError={notificationInboxQuery.error}
+        notificationHasNextPage={Boolean(notificationInboxQuery.data?.nextCursor)}
+        notificationIsLoading={notificationInboxQuery.isPending}
+        notifications={inboxNotifications}
+        notificationsOpen={notificationsOpen}
+        onAdmin={() => navigate(routes.adminUsers.to())}
+        onCopySql={diagramExportActions.copySql}
+        onCreateDiagram={() => setCreateDiagramOpen(true)}
+        onCreateProject={() => setCreateProjectOpen(true)}
+        onCreateSnapshot={() => handleSaveSnapshot()}
+        onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+        onDiagramSelect={(diagram) => {
+          modelRef.current = null;
+          snapshotRecoveryModelRef.current = null;
+          persistedDraftSignatureRef.current = null;
+          setModel(null);
+          setSelectedTableId(null);
+          setSelectedCommentTarget(null);
+          navigate(
+            routes.diagram.to({
+              diagramId: diagram.id,
+              projectId: activeProject.id,
+              workspaceSlug: getWorkspaceSlug(activeProject),
+            }),
+          );
+        }}
+        onDiagramUpdated={(diagram) => {
+          setModel((current) => {
+            if (!current) {
+              return current;
+            }
 
-                      const nextModel = updateLiveModelFromDiagram(current, diagram, modelRef);
-                      snapshotRecoveryModelRef.current = nextModel;
+            const nextModel = updateLiveModelFromDiagram(current, diagram, modelRef);
+            snapshotRecoveryModelRef.current = nextModel;
 
-                      syncModelToCollaboration(nextModel);
+            syncModelToCollaboration(nextModel);
 
-                      return nextModel;
-                    });
-                  }}
-                />
-              ) : null}
-            </>
-          ) : null}
-          {canCreateSnapshot ? (
-            <Button
-              className="gap-2 px-3"
-              disabled={saveSnapshotMutation.isPending}
-              onClick={() => handleSaveSnapshot()}
-            >
-              {saveSnapshotMutation.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Save className="size-4" />
-              )}
-              <span className="hidden xl:inline">Snapshot</span>
-            </Button>
-          ) : null}
-          <Button className="gap-2 px-3" onClick={() => setSqlPreviewOpen(true)} variant="sky">
-            <Play className="size-4" />
-            <span className="hidden xl:inline">SQL</span>
-          </Button>
-          <EditorMoreActionsMenu
-            canEdit={canEditDiagram}
-            canRedo={canRedoModelChange}
-            canUndo={canUndoModelChange}
-            isExporting={diagramExportActions.isExporting}
-            isImporting={importDiagramMutation.isPending}
-            onCopySql={diagramExportActions.copySql}
-            onDownloadSql={diagramExportActions.downloadSql}
-            onExportJson={diagramExportActions.exportJson}
-            onExportMarkdown={diagramExportActions.exportMarkdown}
-            onExportPng={diagramExportActions.exportPng}
-            onExportSvg={diagramExportActions.exportSvg}
-            onFitDiagram={() => setFitSignal((value) => value + 1)}
-            onImportJson={() => {
-              importDiagramMutation.reset();
-              setImportJsonOpen(true);
-            }}
-            onImportSql={() => {
-              importDiagramMutation.reset();
-              setImportSqlOpen(true);
-            }}
-            onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
-            onRedo={handleRedoModelChange}
-            onShareReadOnlyLink={() => setShareLinksOpen(true)}
-            onToggleMinimap={() => setMinimapToggleSignal((value) => value + 1)}
-            onUndo={handleUndoModelChange}
-          />
-          <UserAccountMenu
-            canOpenAdmin={canManageWorkspace}
-            isLoggingOut={logoutMutation.isPending}
-            onAdmin={() => navigate(routes.adminUsers.to())}
-            onLogout={() => logoutMutation.mutate(undefined)}
-            onProfile={() => navigate(routes.profile.to())}
-            user={currentUser}
-          />
-        </div>
-      </header>
+            return nextModel;
+          });
+        }}
+        onDownloadSql={diagramExportActions.downloadSql}
+        onExportJson={diagramExportActions.exportJson}
+        onExportMarkdown={diagramExportActions.exportMarkdown}
+        onExportPng={diagramExportActions.exportPng}
+        onExportSvg={diagramExportActions.exportSvg}
+        onFitDiagram={() => setFitSignal((value) => value + 1)}
+        onImportJson={() => {
+          importDiagramMutation.reset();
+          setImportJsonOpen(true);
+        }}
+        onImportSql={() => {
+          importDiagramMutation.reset();
+          setImportSqlOpen(true);
+        }}
+        onNotificationOpenChange={setNotificationsOpen}
+        onNotificationRetry={() => void notificationInboxQuery.refetch()}
+        onNotificationSelect={handleNotificationOpen}
+        onOpenComments={() => setCommentsOpen(true)}
+        onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
+        onOpenProfile={() => navigate(routes.profile.to())}
+        onOpenShareLinks={() => setShareLinksOpen(true)}
+        onOpenSnapshotHistory={() => setSnapshotHistoryOpen(true)}
+        onOpenSqlPreview={() => setSqlPreviewOpen(true)}
+        onOrganizationSelect={(organization) => {
+          modelRef.current = null;
+          snapshotRecoveryModelRef.current = null;
+          persistedDraftSignatureRef.current = null;
+          setModel(null);
+          setSelectedTableId(null);
+          setSelectedCommentTarget(null);
+          setProjectSearchTerm('');
+          navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+        }}
+        onProjectArchived={() => {
+          modelRef.current = null;
+          snapshotRecoveryModelRef.current = null;
+          persistedDraftSignatureRef.current = null;
+          setModel(null);
+          setSelectedTableId(null);
+          setSelectedCommentTarget(null);
+          navigate(routes.home.to(), { replace: true });
+        }}
+        onProjectSearchChange={setProjectSearchTerm}
+        onProjectSelect={(project) => {
+          modelRef.current = null;
+          snapshotRecoveryModelRef.current = null;
+          persistedDraftSignatureRef.current = null;
+          setModel(null);
+          setSelectedTableId(null);
+          setSelectedCommentTarget(null);
+          navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+        }}
+        onRedo={handleRedoModelChange}
+        onToggleMinimap={() => setMinimapToggleSignal((value) => value + 1)}
+        onUndo={handleUndoModelChange}
+        onUserLogout={() => logoutMutation.mutate(undefined)}
+        openCommentThreadCount={openCommentThreadCount}
+        organizations={organizations}
+        projectSearchTerm={projectSearchTerm}
+        snapshotHistoryLoading={snapshotsQuery.isPending}
+        snapshotSavePending={saveSnapshotMutation.isPending}
+        unreadNotificationCount={unreadNotificationCount}
+      />
 
       <SqlPreviewDialog
         copied={diagramExportActions.copiedSql}
@@ -2374,15 +2264,6 @@ function SidebarRail({
       <IconButton size="lg" icon={icon} label={label} onClick={onClick} variant="ghost" />
     </div>
   );
-}
-
-function formatProjectRole(role: ProjectRoleValue): string {
-  return {
-    [ProjectRole.Commenter]: 'Commenter',
-    [ProjectRole.Editor]: 'Editor',
-    [ProjectRole.Owner]: 'Owner',
-    [ProjectRole.Viewer]: 'Viewer',
-  }[role];
 }
 
 function EditorEmptyAccessState({
