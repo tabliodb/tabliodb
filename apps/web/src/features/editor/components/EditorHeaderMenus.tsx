@@ -175,12 +175,6 @@ export function UserAccountMenu({
         >
           {/* Header hanya menampilkan identitas ringkas; detail account tetap ada di menu agar ruang toolbar tidak terasa penuh. */}
           <UserAvatar className="size-8 rounded-full text-[11px]" user={user} />
-          <span className="hidden min-w-0 lg:block">
-            <span className="block truncate text-[12px] font-extrabold leading-4">{user.name}</span>
-            <span className="block truncate text-[11px] font-bold leading-4 text-[rgb(var(--tabliodb-ink-muted))]">
-              {user.email}
-            </span>
-          </span>
           <ChevronsUpDown className="hidden size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))] sm:block" />
         </button>
       </DropdownMenuTrigger>
