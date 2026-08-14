@@ -126,6 +126,7 @@ import { copyTextToClipboard } from './export-utils';
 import { getSnapshotRealtimeGuard } from './snapshot-realtime-guard';
 import { useDiagramExportActions } from './useDiagramExportActions';
 import { useEditorModelHistory } from './useEditorModelHistory';
+import { getOrganizationSlug, getWorkspaceSlug, useEditorRouteActions } from './useEditorRouteActions';
 import { useEditorSelection } from './useEditorSelection';
 
 type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
@@ -198,6 +199,15 @@ export function EditorPage() {
     setSelectedCommentTarget,
     setSelectedTableId,
   } = useEditorSelection();
+  const editorRouteActions = useEditorRouteActions({
+    clearSelection,
+    modelRef,
+    navigate,
+    persistedDraftSignatureRef,
+    setModel,
+    setProjectSearchTerm,
+    snapshotRecoveryModelRef,
+  });
   const [editorConfirmAction, setEditorConfirmAction] = useState<EditorConfirmAction | null>(null);
   const [editorViewportWidth, setEditorViewportWidth] = useState(getEditorViewportWidth);
   const editorResizeFrameRef = useRef<number | null>(null);
@@ -545,12 +555,7 @@ export function EditorPage() {
   const logoutMutation = useLogoutMutation({
     mutationConfig: {
       onSuccess: () => {
-        modelRef.current = null;
-        snapshotRecoveryModelRef.current = null;
-        persistedDraftSignatureRef.current = null;
-        setModel(null);
-        clearSelection();
-        navigate(routes.login.to(), { replace: true });
+        editorRouteActions.goLogin({ replace: true });
       },
     },
   });
@@ -841,25 +846,22 @@ export function EditorPage() {
         return;
       }
 
-      modelRef.current = null;
-      snapshotRecoveryModelRef.current = null;
-      persistedDraftSignatureRef.current = null;
-      setModel(null);
       setSelectedTableId(null);
       setSelectedCommentTarget(target);
       setCommentsOpen(false);
-      navigate(
-        routes.diagram.to({
+      editorRouteActions.goToDiagram(
+        {
           diagramId: notification.diagram.id,
           projectId: notification.project.id,
           workspaceSlug: notification.project.organizationSlug || notification.project.organizationId,
-        }),
+        },
+        { clearSelection: false },
       );
     },
     [
       activeDiagram?.id,
       activeProject?.id,
-      navigate,
+      editorRouteActions,
       requestCommentThreadOpen,
       setSelectedCommentTarget,
       setSelectedTableId,
@@ -1432,7 +1434,7 @@ export function EditorPage() {
           <CreateWorkspaceDialog
             onCreated={(organization) => {
               setCreateWorkspaceOpen(false);
-              navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+              editorRouteActions.goToWorkspace(organization);
             }}
             onOpenChange={setCreateWorkspaceOpen}
             open={createWorkspaceOpen}
@@ -1471,7 +1473,7 @@ export function EditorPage() {
           canCreateProject ? (
             <CreateProjectDialog
               onCreated={(project) => {
-                navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+                editorRouteActions.goToProject(project);
               }}
               organizationId={activeOrganization.id}
               trigger={
@@ -1503,17 +1505,11 @@ export function EditorPage() {
             <CreateDiagramDialog
               defaultDialect="postgresql"
               onCreated={(diagram) => {
-                modelRef.current = null;
-                snapshotRecoveryModelRef.current = null;
-                persistedDraftSignatureRef.current = null;
-                setModel(null);
-                navigate(
-                  routes.diagram.to({
-                    diagramId: diagram.id,
-                    projectId: activeProject.id,
-                    workspaceSlug: getWorkspaceSlug(activeProject),
-                  }),
-                );
+                editorRouteActions.goToDiagram({
+                  diagramId: diagram.id,
+                  projectId: activeProject.id,
+                  workspaceSlug: getWorkspaceSlug(activeProject),
+                });
               }}
               projectId={activeProject.id}
               trigger={
@@ -1614,25 +1610,18 @@ export function EditorPage() {
         notificationIsLoading={notificationInboxQuery.isPending}
         notifications={inboxNotifications}
         notificationsOpen={notificationsOpen}
-        onAdmin={() => navigate(routes.adminUsers.to())}
+        onAdmin={editorRouteActions.goToAdminUsers}
         onCopySql={diagramExportActions.copySql}
         onCreateDiagram={() => setCreateDiagramOpen(true)}
         onCreateProject={() => setCreateProjectOpen(true)}
         onCreateSnapshot={() => handleSaveSnapshot()}
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         onDiagramSelect={(diagram) => {
-          modelRef.current = null;
-          snapshotRecoveryModelRef.current = null;
-          persistedDraftSignatureRef.current = null;
-          setModel(null);
-          clearSelection();
-          navigate(
-            routes.diagram.to({
-              diagramId: diagram.id,
-              projectId: activeProject.id,
-              workspaceSlug: getWorkspaceSlug(activeProject),
-            }),
-          );
+          editorRouteActions.goToDiagram({
+            diagramId: diagram.id,
+            projectId: activeProject.id,
+            workspaceSlug: getWorkspaceSlug(activeProject),
+          });
         }}
         onDiagramUpdated={(diagram) => {
           setModel((current) => {
@@ -1667,35 +1656,19 @@ export function EditorPage() {
         onNotificationSelect={handleNotificationOpen}
         onOpenComments={() => setCommentsOpen(true)}
         onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
-        onOpenProfile={() => navigate(routes.profile.to())}
+        onOpenProfile={editorRouteActions.goToProfile}
         onOpenShareLinks={() => setShareLinksOpen(true)}
         onOpenSnapshotHistory={() => setSnapshotHistoryOpen(true)}
         onOpenSqlPreview={() => setSqlPreviewOpen(true)}
         onOrganizationSelect={(organization) => {
-          modelRef.current = null;
-          snapshotRecoveryModelRef.current = null;
-          persistedDraftSignatureRef.current = null;
-          setModel(null);
-          clearSelection();
-          setProjectSearchTerm('');
-          navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+          editorRouteActions.goToWorkspace(organization, { clearProjectSearch: true });
         }}
         onProjectArchived={() => {
-          modelRef.current = null;
-          snapshotRecoveryModelRef.current = null;
-          persistedDraftSignatureRef.current = null;
-          setModel(null);
-          clearSelection();
-          navigate(routes.home.to(), { replace: true });
+          editorRouteActions.goHome({ replace: true });
         }}
         onProjectSearchChange={setProjectSearchTerm}
         onProjectSelect={(project) => {
-          modelRef.current = null;
-          snapshotRecoveryModelRef.current = null;
-          persistedDraftSignatureRef.current = null;
-          setModel(null);
-          clearSelection();
-          navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+          editorRouteActions.goToProject(project);
         }}
         onRedo={handleRedoModelChange}
         onToggleMinimap={() => setMinimapToggleSignal((value) => value + 1)}
@@ -1871,14 +1844,8 @@ export function EditorPage() {
 
       <CreateWorkspaceDialog
         onCreated={(organization) => {
-          modelRef.current = null;
-          snapshotRecoveryModelRef.current = null;
-          persistedDraftSignatureRef.current = null;
-          setModel(null);
-          clearSelection();
-          setProjectSearchTerm('');
           setCreateWorkspaceOpen(false);
-          navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
+          editorRouteActions.goToWorkspace(organization, { clearProjectSearch: true });
         }}
         onOpenChange={setCreateWorkspaceOpen}
         open={createWorkspaceOpen}
@@ -1888,13 +1855,8 @@ export function EditorPage() {
       {canCreateProject ? (
         <CreateProjectDialog
           onCreated={(project) => {
-            modelRef.current = null;
-            snapshotRecoveryModelRef.current = null;
-            persistedDraftSignatureRef.current = null;
-            setModel(null);
-            clearSelection();
             setCreateProjectOpen(false);
-            navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
+            editorRouteActions.goToProject(project);
           }}
           onOpenChange={setCreateProjectOpen}
           open={createProjectOpen}
@@ -1907,19 +1869,12 @@ export function EditorPage() {
         <CreateDiagramDialog
           defaultDialect={model.dialect}
           onCreated={(diagram) => {
-            modelRef.current = null;
-            snapshotRecoveryModelRef.current = null;
-            persistedDraftSignatureRef.current = null;
-            setModel(null);
-            clearSelection();
             setCreateDiagramOpen(false);
-            navigate(
-              routes.diagram.to({
-                diagramId: diagram.id,
-                projectId: activeProject.id,
-                workspaceSlug: getWorkspaceSlug(activeProject),
-              }),
-            );
+            editorRouteActions.goToDiagram({
+              diagramId: diagram.id,
+              projectId: activeProject.id,
+              workspaceSlug: getWorkspaceSlug(activeProject),
+            });
           }}
           onOpenChange={setCreateDiagramOpen}
           open={createDiagramOpen}
@@ -2058,14 +2013,6 @@ function getEditorOverlayOffsetPx({
     expandedWidthPx + 16,
     Math.max(editorCollapsedSidebarWidthPx + 12, viewportWidth - minVisibleSpacePx),
   );
-}
-
-function getWorkspaceSlug(project: ProjectResponseDto): string {
-  return project.organizationSlug || project.organizationId;
-}
-
-function getOrganizationSlug(organization: OrganizationDto): string {
-  return organization.slug || organization.id;
 }
 
 function matchesWorkspaceRoute(organization: OrganizationDto, workspaceSlug: string | null): boolean {
