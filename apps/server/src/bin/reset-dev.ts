@@ -1,5 +1,9 @@
 import { Kysely, sql } from 'kysely';
 import { loadEnv } from '../config/env.js';
+import {
+  assertDatabaseMigrationSucceeded,
+  createDatabaseMigrationSummary,
+} from '../repositories/database-migration-report.js';
 import { DatabaseRepository } from '../repositories/database.repository.js';
 import type { DB } from '../schema/index.js';
 import { getKyselyConfig } from '../utils/database.js';
@@ -23,15 +27,18 @@ try {
   console.log('Running migrations...');
 
   const result = await repository.migrateToLatest();
-  for (const item of result.results ?? []) {
-    console.log(`${item.status}: ${item.migrationName}`);
+  const summary = createDatabaseMigrationSummary(result);
+
+  for (const line of summary.lines) {
+    console.log(line);
   }
 
-  if (result.error) {
-    // Reset should fail loudly if migration fails; otherwise devs may keep testing against a half-created schema.
-    throw result.error;
+  if (summary.noop) {
+    // This is unlikely after a schema drop, but keeping the output path shared prevents reset/migrate CLI behavior from drifting.
+    console.log('No pending migrations.');
   }
 
+  assertDatabaseMigrationSucceeded(summary);
   console.log('Development database reset complete.');
 } finally {
   await db.destroy();

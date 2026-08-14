@@ -1,5 +1,9 @@
 import { Kysely } from 'kysely';
 import { loadEnv } from '../config/env.js';
+import {
+  assertDatabaseMigrationSucceeded,
+  createDatabaseMigrationSummary,
+} from '../repositories/database-migration-report.js';
 import { DatabaseRepository } from '../repositories/database.repository.js';
 import { getKyselyConfig } from '../utils/database.js';
 import type { DB } from '../schema/index.js';
@@ -10,14 +14,18 @@ const repository = new DatabaseRepository(db);
 
 try {
   const result = await repository.migrateToLatest();
-  for (const item of result.results ?? []) {
-    console.log(`${item.status}: ${item.migrationName}`);
+  const summary = createDatabaseMigrationSummary(result);
+
+  for (const line of summary.lines) {
+    console.log(line);
   }
 
-  if (result.error) {
-    // Migration failures must fail the CLI so local setup and CI do not continue with a half-created schema.
-    throw result.error;
+  if (summary.noop) {
+    // A second db:migrate should be explicit for self-hosters and CI logs: the schema is already at the latest known version.
+    console.log('No pending migrations.');
   }
+
+  assertDatabaseMigrationSucceeded(summary);
 } finally {
   await db.destroy();
 }
