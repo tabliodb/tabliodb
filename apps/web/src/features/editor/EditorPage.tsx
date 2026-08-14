@@ -2,18 +2,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import LOGO from '@/assets/logo.svg';
 import {
-  diagramReviewRuleDefinitions,
-  diagramReviewSignalCodes,
   getTableColumns,
   applyDiagramCommand,
   createDiagramEntityId,
   parseDiagramModel,
-  type DatabaseDialect,
   type DatabaseIndex,
   type DatabaseTable,
   type DiagramEntityKind,
   type DiagramModel,
-  type DiagramReviewSignalCode,
   type DiagramReviewSignal,
 } from '@tabliodb/schema-core';
 import {
@@ -28,8 +24,6 @@ import {
 } from '@tabliodb/shared';
 import {
   DefaultProjectRole as SdkDefaultProjectRole,
-  Dialect as SdkDialect,
-  DisabledRuleKeys as SdkDisabledRuleKeys,
   Mode as SdkImportMode,
   Role as SdkOrganizationMemberRole,
   Role2 as SdkProjectMemberRole,
@@ -50,9 +44,7 @@ import {
   type OrganizationSettingsDtoOutput,
   type ProjectMemberDtoOutput,
   type ProjectResponseDtoOutput,
-  type ReviewSignalEffectiveSettingsDtoOutput,
   type ReviewSignalResponseDtoOutput,
-  type ReviewSignalSettingsDto,
   type SnapshotResponseDtoOutput,
   type TeamMemberDtoOutput,
   type TeamProjectAccessDtoOutput,
@@ -62,7 +54,6 @@ import type { AwarenessState } from '@tabliodb/shared';
 import {
   Badge,
   Button,
-  Checkbox,
   Dialog,
   DialogBody,
   DialogContent,
@@ -114,7 +105,6 @@ import {
   Settings,
   Share2,
   ShieldCheck,
-  SlidersHorizontal,
   StickyNote,
   Trash2,
   UserPlus,
@@ -138,7 +128,7 @@ import {
   type ReactNode,
   type SVGProps,
 } from 'react';
-import { Controller, useForm, type Control, type FieldValues, type Path } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { routes } from '@/app/routes';
@@ -157,7 +147,7 @@ import {
   getErrorMessage,
 } from '@/features/app/RouteStates';
 import { authQueries, useLogoutMutation, useUpdateCurrentUserEditorPreferenceMutation } from '@/resources/auth';
-import { diagramsQueries, useImportDiagramMutation, useUpdateDiagramMutation } from '@/resources/diagrams';
+import { diagramsQueries, useImportDiagramMutation } from '@/resources/diagrams';
 import {
   organizationsQueries,
   useRemoveOrganizationMemberMutation,
@@ -189,7 +179,6 @@ import {
   reviewSignalKeys,
   reviewSignalQueries,
   useIgnoreReviewSignalMutation,
-  useUpdateDiagramReviewSignalSettingsMutation,
   useUpdateProjectReviewSignalSettingsMutation,
 } from '@/resources/review-signals';
 import {
@@ -223,6 +212,7 @@ import {
   type EditorModelHistory,
 } from './model-history';
 import { CommentsDialog } from './components/CommentsDialog';
+import { DiagramSettingsDialog } from './components/DiagramSettingsDialog';
 import { EditorMoreActionsMenu } from './components/EditorMoreActionsMenu';
 import { CreateDiagramDialog, CreateProjectDialog, CreateWorkspaceDialog } from './components/WorkspaceShellDialogs';
 import { WorkspaceProjectSwitcher } from './components/WorkspaceProjectSwitcher';
@@ -239,8 +229,17 @@ import { SqlPreviewDialog } from './components/SqlPreviewDialog';
 import { TableStructureSidebar } from './components/TableStructureSidebar';
 import { UserAvatar, type AvatarIdentity } from './components/UserAvatar';
 import { formatDiagramDialect } from './diagram-formatters';
+import { sdkDialectByValue, toDatabaseDialect } from './diagram-sdk-mappers';
+import { selectClassName } from './editor-form-styles';
 import { getDisplayTableColor } from './table-colors';
 import { copyTextToClipboard } from './export-utils';
+import {
+  ReviewSignalSettingsFields,
+  getReviewSignalSettingsDefaults,
+  reviewSignalSettingsFormSchema,
+  toReviewSignalSettingsDto,
+  type ReviewSignalSettingsFormState,
+} from './review-signal-settings';
 import { getSnapshotRealtimeGuard, type SnapshotRealtimeGuard } from './snapshot-realtime-guard';
 import { useDiagramExportActions } from './useDiagramExportActions';
 
@@ -254,7 +253,6 @@ type OrganizationMemberDto = OrganizationMemberDtoOutput;
 type OrganizationSettingsDto = OrganizationSettingsDtoOutput;
 type ProjectMemberDto = ProjectMemberDtoOutput;
 type ProjectResponseDto = ProjectResponseDtoOutput;
-type ReviewSignalEffectiveSettingsDto = ReviewSignalEffectiveSettingsDtoOutput;
 type ReviewSignalResponseDto = ReviewSignalResponseDtoOutput;
 type SnapshotResponseDto = SnapshotResponseDtoOutput;
 type DiagramShareLinkDto = DiagramShareLinkDtoOutput;
@@ -263,25 +261,6 @@ type TeamProjectAccessDto = TeamProjectAccessDtoOutput;
 type TeamProjectRole = `${SdkTeamProjectRole}`;
 type TeamResponseDto = TeamResponseDtoOutput;
 type WorkspaceDefaultProjectRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
-
-const sdkDialectByValue: Record<DatabaseDialect, SdkDialect> = {
-  mariadb: SdkDialect.Mariadb,
-  mysql: SdkDialect.Mysql,
-  postgresql: SdkDialect.Postgresql,
-  sqlite: SdkDialect.Sqlite,
-  sqlserver: SdkDialect.Sqlserver,
-};
-
-const sdkDisabledRuleKeyByValue: Record<DiagramReviewSignalCode, SdkDisabledRuleKeys> = {
-  duplicate_column_name: SdkDisabledRuleKeys.DuplicateColumnName,
-  duplicate_table_name: SdkDisabledRuleKeys.DuplicateTableName,
-  email_column_not_unique: SdkDisabledRuleKeys.EmailColumnNotUnique,
-  foreign_key_missing_index: SdkDisabledRuleKeys.ForeignKeyMissingIndex,
-  money_column_uses_float: SdkDisabledRuleKeys.MoneyColumnUsesFloat,
-  relationship_column_type_mismatch: SdkDisabledRuleKeys.RelationshipColumnTypeMismatch,
-  table_missing_primary_key: SdkDisabledRuleKeys.TableMissingPrimaryKey,
-  unused_enum: SdkDisabledRuleKeys.UnusedEnum,
-};
 
 const sdkDefaultProjectRoleByValue: Record<WorkspaceDefaultProjectRole, SdkDefaultProjectRole> = {
   [ProjectRole.Commenter]: SdkDefaultProjectRole.Commenter,
@@ -321,10 +300,6 @@ const sdkShareLinkTargetTypeByValue: Record<ShareLinkTarget, SdkShareLinkTargetT
   snapshot: SdkShareLinkTargetType.Snapshot,
 };
 
-function toDatabaseDialect(dialect: DatabaseDialect | SdkDialect): DatabaseDialect {
-  return dialect as DatabaseDialect;
-}
-
 function toProjectRoleValue(role: ProjectRoleValue | SdkProjectMemberRole | SdkTeamProjectRole): ProjectRoleValue {
   return role as ProjectRoleValue;
 }
@@ -337,23 +312,11 @@ function toWorkspaceDefaultProjectRole(role: SdkDefaultProjectRole): WorkspaceDe
   return role as unknown as WorkspaceDefaultProjectRole;
 }
 
-function toDiagramReviewSignalCode(ruleKey: DiagramReviewSignalCode | SdkDisabledRuleKeys): DiagramReviewSignalCode {
-  return ruleKey as DiagramReviewSignalCode;
-}
-
 const addTableFormSchema = z.object({
   tableName: z.string().trim().max(64, 'Keep the table name under 64 characters.'),
 });
 
 type AddTableFormState = z.infer<typeof addTableFormSchema>;
-
-const diagramDialectOptions = [
-  'postgresql',
-  'mysql',
-  'sqlite',
-  'mariadb',
-  'sqlserver',
-] as const satisfies readonly DatabaseDialect[];
 
 const shareLinkExpiryOptions = ['never', '7', '30'] as const;
 
@@ -386,20 +349,6 @@ const projectFormSchema = z.object({
 });
 
 type ProjectFormState = z.infer<typeof projectFormSchema>;
-
-const diagramSettingsFormSchema = z.object({
-  dialect: z.enum(diagramDialectOptions),
-  disabledRuleKeys: z.array(z.enum(diagramReviewSignalCodes)),
-  name: z.string().trim().min(1, 'Diagram name is required.').max(80, 'Keep the name under 80 characters.'),
-});
-
-type DiagramSettingsFormState = z.infer<typeof diagramSettingsFormSchema>;
-
-const reviewSignalSettingsFormSchema = z.object({
-  disabledRuleKeys: z.array(z.enum(diagramReviewSignalCodes)),
-});
-
-type ReviewSignalSettingsFormState = z.infer<typeof reviewSignalSettingsFormSchema>;
 
 const workspaceDefaultRoleOptions = ['none', ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
 
@@ -484,9 +433,6 @@ const idleCollaborationStatus: DiagramCollaborationStatus = {
   synced: false,
   unsyncedChanges: 0,
 };
-
-const selectClassName =
-  'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50';
 
 const editorMobileBreakpointPx = 640;
 const editorTabletBreakpointPx = 900;
@@ -4951,287 +4897,6 @@ function ProjectSettingsDialog({ onArchived, project }: { onArchived: () => void
       </DialogContent>
     </Dialog>
   );
-}
-
-function DiagramSettingsDialog({
-  canEdit,
-  diagram,
-  model,
-  onUpdated,
-}: {
-  canEdit: boolean;
-  diagram: DiagramResponseDto;
-  model: DiagramModel;
-  onUpdated: (diagram: DiagramResponseDto) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const form = useForm<DiagramSettingsFormState>({
-    defaultValues: getDiagramSettingsDefaults(diagram),
-    mode: 'onBlur',
-    resolver: zodResolver(diagramSettingsFormSchema),
-  });
-  const { errors } = form.formState;
-  const diagramReviewSettingsQueryOptions = reviewSignalQueries.diagramSettings(diagram.id);
-  const diagramReviewSettingsQuery = useQuery({
-    ...diagramReviewSettingsQueryOptions,
-    // Diagram settings dialog adalah fetch boundary untuk lint override, sama seperti settings lain yang tidak dibutuhkan saat canvas idle.
-    enabled: open && diagramReviewSettingsQueryOptions.enabled !== false,
-  });
-  const updateDiagramMutation = useUpdateDiagramMutation();
-  const updateDiagramReviewSettingsMutation = useUpdateDiagramReviewSignalSettingsMutation();
-  const isPending = updateDiagramMutation.isPending || updateDiagramReviewSettingsMutation.isPending;
-  const hasUnsavedDialectChange = model.dialect !== diagram.dialect;
-
-  useEffect(() => {
-    if (open) {
-      form.reset(getDiagramSettingsDefaults(diagram, diagramReviewSettingsQuery.data));
-      updateDiagramMutation.reset();
-      updateDiagramReviewSettingsMutation.reset();
-    }
-  }, [diagram, diagramReviewSettingsQuery.data, form, open]);
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen && isPending) {
-      return;
-    }
-
-    setOpen(nextOpen);
-
-    if (!nextOpen) {
-      form.reset(getDiagramSettingsDefaults(diagram, diagramReviewSettingsQuery.data));
-      updateDiagramMutation.reset();
-      updateDiagramReviewSettingsMutation.reset();
-    }
-  }
-
-  async function handleSubmit(values: DiagramSettingsFormState) {
-    if (!canEdit) {
-      return;
-    }
-
-    const updatedDiagram = await updateDiagramMutation.mutateAsync({
-      body: {
-        dialect: sdkDialectByValue[values.dialect],
-        name: values.name,
-      },
-      diagramId: diagram.id,
-    });
-    const updatedReviewSettings = await updateDiagramReviewSettingsMutation.mutateAsync({
-      diagramId: diagram.id,
-      settings: toReviewSignalSettingsDto(values),
-    });
-
-    // Kedua endpoint disubmit sebagai satu intent UI supaya rename/dialect dan lint override tidak terasa seperti dua konfigurasi terpisah.
-    form.reset(getDiagramSettingsDefaults(updatedDiagram, updatedReviewSettings));
-    onUpdated(updatedDiagram);
-    setOpen(false);
-  }
-
-  return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogTrigger asChild>
-        <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="ghost" />
-      </DialogTrigger>
-      <DialogContent className="w-[min(94vw,520px)]">
-        <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
-          <DialogHeader>
-            <DialogTitle>Diagram settings</DialogTitle>
-            <DialogDescription>
-              Rename the active diagram and choose the SQL dialect for generated output.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogBody>
-            <div className="grid gap-4">
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Diagram name
-                </span>
-                <ControlledInput
-                  autoFocus
-                  aria-invalid={Boolean(errors.name)}
-                  control={form.control}
-                  disabled={isPending || !canEdit}
-                  name="name"
-                />
-                <FieldError>{errors.name?.message}</FieldError>
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  SQL dialect
-                </span>
-                <ControlledSelect
-                  className={selectClassName}
-                  control={form.control}
-                  disabled={isPending || !canEdit}
-                  name="dialect"
-                  options={diagramDialectOptions.map((dialect) => ({
-                    label: formatDiagramDialect(dialect),
-                    value: dialect,
-                  }))}
-                />
-                <FieldError>{errors.dialect?.message}</FieldError>
-              </label>
-
-              <section className="rounded-(--tabliodb-radius-lg) border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
-                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h3 className="text-sm font-extrabold">Review rule overrides</h3>
-                    <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Disable extra rules for this diagram only.
-                    </p>
-                  </div>
-                  <Badge variant="blue">{diagramReviewSettingsQuery.isPending ? 'Loading' : 'Diagram'}</Badge>
-                </div>
-                <ReviewSignalSettingsFields
-                  control={form.control}
-                  disabled={isPending || diagramReviewSettingsQuery.isFetching || !canEdit}
-                  inheritedDisabledRuleKeys={diagramReviewSettingsQuery.data?.project.disabledRuleKeys}
-                />
-              </section>
-
-              {!canEdit ? (
-                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-gold-text))]">
-                  Your project role can view this diagram but cannot update diagram settings.
-                </div>
-              ) : null}
-
-              {hasUnsavedDialectChange ? (
-                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-sky-text))]">
-                  The open snapshot uses {formatDiagramDialect(model.dialect)} while the diagram record uses{' '}
-                  {formatDiagramDialect(diagram.dialect)}.
-                </div>
-              ) : null}
-
-              {updateDiagramMutation.error || updateDiagramReviewSettingsMutation.error ? (
-                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(updateDiagramMutation.error ?? updateDiagramReviewSettingsMutation.error)}
-                </div>
-              ) : null}
-            </div>
-          </DialogBody>
-
-          <DialogFooter>
-            <Button disabled={isPending} onClick={() => handleOpenChange(false)} type="button" variant="secondary">
-              Cancel
-            </Button>
-            <Button disabled={isPending || !canEdit} type="submit">
-              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Save diagram
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ReviewSignalSettingsFields<
-  TFieldValues extends FieldValues & { disabledRuleKeys: DiagramReviewSignalCode[] },
->({
-  control,
-  disabled,
-  inheritedDisabledRuleKeys = [],
-}: {
-  control: Control<TFieldValues>;
-  disabled: boolean;
-  inheritedDisabledRuleKeys?: DiagramReviewSignalCode[];
-}) {
-  const inheritedDisabledRules = new Set(inheritedDisabledRuleKeys);
-
-  return (
-    <div className="grid gap-2">
-      {diagramReviewRuleDefinitions.map((rule) => (
-        <Controller
-          control={control}
-          key={rule.code}
-          name={'disabledRuleKeys' as Path<TFieldValues>}
-          render={({ field }) => {
-            const disabledRuleKeys = Array.isArray(field.value) ? (field.value as DiagramReviewSignalCode[]) : [];
-            const isInherited = inheritedDisabledRules.has(rule.code);
-            const isChecked = isInherited || disabledRuleKeys.includes(rule.code);
-
-            return (
-              <label
-                className={cn(
-                  'flex cursor-pointer items-start gap-3 rounded-(--tabliodb-radius-md) border-2 bg-white p-3 transition',
-                  isChecked
-                    ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
-                    : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
-                  (disabled || isInherited) && 'cursor-not-allowed opacity-75',
-                )}
-              >
-                <Checkbox
-                  checked={isChecked}
-                  disabled={disabled || isInherited}
-                  onCheckedChange={(checked) => {
-                    const nextRuleKeys = new Set(disabledRuleKeys);
-
-                    // Project inherited rules are displayed as checked in diagram settings, but only diagram-owned keys are written.
-                    if (checked === true) {
-                      nextRuleKeys.add(rule.code);
-                    } else {
-                      nextRuleKeys.delete(rule.code);
-                    }
-
-                    field.onChange(Array.from(nextRuleKeys));
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{rule.title}</span>
-                    <Badge variant={isInherited ? 'blue' : getReviewRuleBadgeVariant(rule.severity)}>
-                      {isInherited ? 'Inherited' : rule.severity}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                    {rule.description}
-                  </p>
-                </div>
-              </label>
-            );
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function getReviewRuleBadgeVariant(severity: DiagramReviewSignal['severity']): 'blue' | 'green' | 'neutral' | 'yellow' {
-  if (severity === 'error') {
-    return 'blue';
-  }
-
-  if (severity === 'warning') {
-    return 'yellow';
-  }
-
-  return 'neutral';
-}
-
-function getDiagramSettingsDefaults(
-  diagram: DiagramResponseDto,
-  reviewSettings?: ReviewSignalEffectiveSettingsDto,
-): DiagramSettingsFormState {
-  return {
-    dialect: toDatabaseDialect(diagram.dialect),
-    disabledRuleKeys: reviewSettings?.diagram.disabledRuleKeys.map(toDiagramReviewSignalCode) ?? [],
-    name: diagram.name,
-  };
-}
-
-function getReviewSignalSettingsDefaults(settings?: ReviewSignalSettingsDto): ReviewSignalSettingsFormState {
-  return {
-    disabledRuleKeys: settings?.disabledRuleKeys?.map(toDiagramReviewSignalCode) ?? [],
-  };
-}
-
-function toReviewSignalSettingsDto(values: ReviewSignalSettingsFormState): ReviewSignalSettingsDto {
-  return {
-    // Duplicate keys can happen if a custom script mutates form state; normalizing here keeps payloads deterministic.
-    disabledRuleKeys: Array.from(new Set(values.disabledRuleKeys)).map((ruleKey) => sdkDisabledRuleKeyByValue[ruleKey]),
-  };
 }
 
 function getProjectFormDefaults(project: ProjectResponseDto): ProjectFormState {
