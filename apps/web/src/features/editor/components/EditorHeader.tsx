@@ -7,7 +7,7 @@ import type {
   SnapshotResponseDtoOutput,
 } from '@tabliodb/sdk';
 import { Badge, Button, IconButton } from '@tabliodb/ui';
-import { History, Keyboard, LocateFixed, Loader2, MessageSquareText, Play, Redo2, Save, Undo2 } from 'lucide-react';
+import { History, LocateFixed, Loader2, MessageSquareText, Play, Redo2, Save, Undo2 } from 'lucide-react';
 import LOGO from '@/assets/logo.svg';
 import type { DiagramCollaborationStatus } from '@/features/collaboration/collaboration-client';
 import { CollaborationPresence, type CollaboratorPresence } from '../collaboration-status';
@@ -235,12 +235,7 @@ export function EditorHeader({
           onClick={onOpenSnapshotHistory}
         />
         <IconButton className="hidden xl:inline-flex" icon={LocateFixed} label="Fit diagram" onClick={onFitDiagram} />
-        <IconButton
-          className="hidden 2xl:inline-flex"
-          icon={Keyboard}
-          label="Keyboard shortcuts"
-          onClick={onOpenKeyboardShortcuts}
-        />
+
         {canManageWorkspace ? (
           <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
         ) : null}
