@@ -263,6 +263,14 @@ export function EditorHeader({
           <Play className="size-4" />
           <span className="hidden xl:inline">SQL</span>
         </Button>
+        <UserAccountMenu
+          canOpenAdmin={canManageWorkspace}
+          isLoggingOut={logoutPending}
+          onAdmin={onAdmin}
+          onLogout={onUserLogout}
+          onProfile={onOpenProfile}
+          user={currentUser}
+        />
         <EditorMoreActionsMenu
           canEdit={canEditDiagram}
           canRedo={canRedoModelChange}
@@ -283,14 +291,6 @@ export function EditorHeader({
           onShareReadOnlyLink={onOpenShareLinks}
           onToggleMinimap={onToggleMinimap}
           onUndo={onUndo}
-        />
-        <UserAccountMenu
-          canOpenAdmin={canManageWorkspace}
-          isLoggingOut={logoutPending}
-          onAdmin={onAdmin}
-          onLogout={onUserLogout}
-          onProfile={onOpenProfile}
-          user={currentUser}
         />
       </div>
     </header>
