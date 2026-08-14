@@ -84,8 +84,8 @@ import {
   normalizeEditorDiagramModel,
   shouldKeepLocalDiagramModelOverRealtime,
 } from './diagram-model';
-import { getCommentTargetTableId, isCommentTargetAvailable } from './comments/comment-targets';
-import type { CommentThreadOpenRequest, EditorCommentTarget } from './comments/types';
+import { getCommentTargetTableId } from './comments/comment-targets';
+import type { EditorCommentTarget } from './comments/types';
 import {
   areCommentTypingStatesEqual,
   areRemoteAwarenessStatesEqual,
@@ -126,6 +126,7 @@ import { copyTextToClipboard } from './export-utils';
 import { getSnapshotRealtimeGuard } from './snapshot-realtime-guard';
 import { useDiagramExportActions } from './useDiagramExportActions';
 import { useEditorModelHistory } from './useEditorModelHistory';
+import { useEditorSelection } from './useEditorSelection';
 
 type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
 type CurrentUserEditorPreferenceUpdateDtoInput = CurrentUserEditorPreferenceUpdateDto;
@@ -182,11 +183,21 @@ export function EditorPage() {
   const loadedSnapshotIdRef = useRef<string | null>(null);
   const canvasViewportRef = useRef<CanvasViewportRect | null>(null);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
-  const [selectedCommentTarget, setSelectedCommentTarget] = useState<EditorCommentTarget | null>(null);
-  const selectedTableIdRef = useRef<string | null>(null);
-  const selectedCommentTargetRef = useRef<EditorCommentTarget | null>(null);
-  const [commentThreadOpenRequest, setCommentThreadOpenRequest] = useState<CommentThreadOpenRequest | null>(null);
+  const {
+    applyRemoteSelectionFallback,
+    clearSelection,
+    commentThreadOpenRequest,
+    reconcileModelSelection,
+    repairInvalidCommentTarget,
+    requestCommentThreadOpen,
+    selectedCommentTarget,
+    selectedCommentTargetRef,
+    selectedTableId,
+    selectedTableIdRef,
+    selectTable,
+    setSelectedCommentTarget,
+    setSelectedTableId,
+  } = useEditorSelection();
   const [editorConfirmAction, setEditorConfirmAction] = useState<EditorConfirmAction | null>(null);
   const [editorViewportWidth, setEditorViewportWidth] = useState(getEditorViewportWidth);
   const editorResizeFrameRef = useRef<number | null>(null);
@@ -199,7 +210,6 @@ export function EditorPage() {
   const latestCursorRef = useRef<AwarenessState['cursor']>(undefined);
   const latestCommentTypingRef = useRef<AwarenessState['commentTyping']>(undefined);
   const latestAwarenessSentAtRef = useRef(0);
-  const commentThreadOpenRequestIdRef = useRef(0);
   const submittedEditorPreferenceKeyRef = useRef<string | null>(null);
 
   const currentUserQuery = useQuery(authQueries.me());
@@ -352,14 +362,6 @@ export function EditorPage() {
     () => createRemoteCommentTypingPresenceList(remoteAwarenessStates, currentUser?.id ?? null),
     [currentUser?.id, remoteAwarenessStates],
   );
-  useEffect(() => {
-    selectedTableIdRef.current = selectedTableId;
-  }, [selectedTableId]);
-
-  useEffect(() => {
-    selectedCommentTargetRef.current = selectedCommentTarget;
-  }, [selectedCommentTarget]);
-
   const syncModelToCollaboration = useCallback(
     (nextModel: DiagramModel, previousModel: DiagramModel | null = null) => {
       if (!canEditDiagram) {
@@ -402,48 +404,16 @@ export function EditorPage() {
     [canEditDiagram],
   );
 
-  const reconcileModelSelection = useCallback((nextModel: DiagramModel) => {
-    setSelectedTableId((currentTableId) => {
-      const nextTableId = currentTableId && nextModel.tables[currentTableId] ? currentTableId : null;
-
-      // Realtime callbacks read refs instead of render-time closure values, so reconciliation keeps both state layers aligned.
-      selectedTableIdRef.current = nextTableId;
-
-      return nextTableId;
-    });
-    setSelectedCommentTarget((currentTarget) => {
-      const nextTarget = currentTarget && isCommentTargetAvailable(nextModel, currentTarget) ? currentTarget : null;
-
-      selectedCommentTargetRef.current = nextTarget;
-
-      return nextTarget;
-    });
-  }, []);
-
   const applyRemoteSelectionConflict = useCallback(
     (conflict: NonNullable<ReturnType<typeof createRemoteSelectionConflict>>) => {
-      const fallbackTarget = conflict.fallbackTarget;
-
-      if (fallbackTarget?.targetType === 'table' && fallbackTarget.targetId) {
-        const nextTarget = { targetId: fallbackTarget.targetId, targetType: 'table' } satisfies EditorCommentTarget;
-
-        selectedTableIdRef.current = fallbackTarget.targetId;
-        selectedCommentTargetRef.current = nextTarget;
-        setSelectedTableId(fallbackTarget.targetId);
-        setSelectedCommentTarget(nextTarget);
-      } else {
-        selectedTableIdRef.current = null;
-        selectedCommentTargetRef.current = null;
-        setSelectedTableId(null);
-        setSelectedCommentTarget(null);
-      }
+      applyRemoteSelectionFallback(conflict.fallbackTarget);
 
       toast.warning({
         description: conflict.description,
         title: conflict.title,
       });
     },
-    [],
+    [applyRemoteSelectionFallback],
   );
 
   const handleUndoModelChange = useCallback(() => {
@@ -517,8 +487,7 @@ export function EditorPage() {
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshotModel);
         setModel(snapshotModel);
         syncModelToCollaboration(snapshotModel);
-        setSelectedTableId(null);
-        setSelectedCommentTarget(null);
+        clearSelection();
         resetModelHistory();
         setSnapshotHistoryOpen(false);
         queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
@@ -540,8 +509,7 @@ export function EditorPage() {
         persistedDraftSignatureRef.current = createDiagramModelSignature(importedModel);
         setModel(importedModel);
         syncModelToCollaboration(importedModel);
-        setSelectedTableId(null);
-        setSelectedCommentTarget(null);
+        clearSelection();
         resetModelHistory();
         queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       },
@@ -581,8 +549,7 @@ export function EditorPage() {
         snapshotRecoveryModelRef.current = null;
         persistedDraftSignatureRef.current = null;
         setModel(null);
-        setSelectedTableId(null);
-        setSelectedCommentTarget(null);
+        clearSelection();
         navigate(routes.login.to(), { replace: true });
       },
     },
@@ -632,15 +599,17 @@ export function EditorPage() {
     canvasViewportRef.current = viewport;
   }, []);
 
-  const handleSelectedTableChange = useCallback((tableId: string | null) => {
-    setSelectedTableId(tableId);
-    setSelectedCommentTarget(tableId ? { targetId: tableId, targetType: 'table' } : null);
+  const handleSelectedTableChange = useCallback(
+    (tableId: string | null) => {
+      selectTable(tableId);
 
-    if (tableId) {
-      // Selecting a table promotes the left sidebar into structure-edit mode, even if the user hid it earlier.
-      setLeftSidebarOpen(true);
-    }
-  }, []);
+      if (tableId) {
+        // Selecting a table promotes the left sidebar into structure-edit mode, even if the user hid it earlier.
+        setLeftSidebarOpen(true);
+      }
+    },
+    [selectTable],
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -831,27 +800,25 @@ export function EditorPage() {
     [publishAwareness],
   );
 
-  const handleCommentMarkerOpen = useCallback((target: EditorCommentTarget) => {
-    if (!modelRef.current) {
-      return;
-    }
+  const handleCommentMarkerOpen = useCallback(
+    (target: EditorCommentTarget) => {
+      if (!modelRef.current) {
+        return;
+      }
 
-    const tableId = getCommentTargetTableId(modelRef.current, target);
+      const tableId = getCommentTargetTableId(modelRef.current, target);
 
-    if (tableId) {
-      setSelectedTableId(tableId);
-      setLeftSidebarOpen(true);
-    }
+      if (tableId) {
+        setSelectedTableId(tableId);
+        setLeftSidebarOpen(true);
+      }
 
-    setSelectedCommentTarget(target);
-    setCommentsOpen(true);
-    // Request id membuat dialog bisa membedakan klik marker berulang pada target yang sama.
-    commentThreadOpenRequestIdRef.current += 1;
-    setCommentThreadOpenRequest({
-      requestId: commentThreadOpenRequestIdRef.current,
-      target,
-    });
-  }, []);
+      setSelectedCommentTarget(target);
+      setCommentsOpen(true);
+      requestCommentThreadOpen(target);
+    },
+    [requestCommentThreadOpen, setSelectedCommentTarget, setSelectedTableId],
+  );
 
   const handleNotificationOpen = useCallback(
     (notification: NotificationInboxItem) => {
@@ -870,12 +837,7 @@ export function EditorPage() {
 
         setSelectedCommentTarget(target);
         setCommentsOpen(true);
-        // Sama seperti marker canvas, request id membuat klik notification berulang tetap membuka thread terbaru.
-        commentThreadOpenRequestIdRef.current += 1;
-        setCommentThreadOpenRequest({
-          requestId: commentThreadOpenRequestIdRef.current,
-          target,
-        });
+        requestCommentThreadOpen(target);
         return;
       }
 
@@ -894,7 +856,14 @@ export function EditorPage() {
         }),
       );
     },
-    [activeDiagram?.id, activeProject?.id, navigate],
+    [
+      activeDiagram?.id,
+      activeProject?.id,
+      navigate,
+      requestCommentThreadOpen,
+      setSelectedCommentTarget,
+      setSelectedTableId,
+    ],
   );
 
   useEffect(() => {
@@ -1230,10 +1199,9 @@ export function EditorPage() {
       // Refresh dari snapshot lama yang rusak langsung memperbaiki realtime draft supaya sidebar dan canvas membaca model yang sama.
       syncModelToCollaboration(snapshotModel);
     }
-    setSelectedTableId(null);
-    setSelectedCommentTarget(null);
+    clearSelection();
     resetModelHistory();
-  }, [latestSnapshot, resetModelHistory, syncModelToCollaboration]);
+  }, [clearSelection, latestSnapshot, resetModelHistory, syncModelToCollaboration]);
 
   useEffect(() => {
     if (!activeDiagram || snapshotsQuery.isPending || snapshotsQuery.data === undefined || latestSnapshot) {
@@ -1247,21 +1215,17 @@ export function EditorPage() {
     snapshotRecoveryModelRef.current = seedModel;
     persistedDraftSignatureRef.current = null;
     setModel(seedModel);
-    setSelectedTableId(null);
-    setSelectedCommentTarget(null);
+    clearSelection();
     resetModelHistory();
-  }, [activeDiagram, latestSnapshot, resetModelHistory, snapshotsQuery.data, snapshotsQuery.isPending]);
+  }, [activeDiagram, clearSelection, latestSnapshot, resetModelHistory, snapshotsQuery.data, snapshotsQuery.isPending]);
 
   useEffect(() => {
-    if (!model || !selectedCommentTarget || isCommentTargetAvailable(model, selectedCommentTarget)) {
+    if (!model) {
       return;
     }
 
-    // Target komentar mengikuti entity yang benar-benar masih ada, sehingga import/delete tidak meninggalkan anchor stale.
-    setSelectedCommentTarget(
-      selectedTableId && model.tables[selectedTableId] ? { targetId: selectedTableId, targetType: 'table' } : null,
-    );
-  }, [model, selectedCommentTarget, selectedTableId]);
+    repairInvalidCommentTarget(model);
+  }, [model, repairInvalidCommentTarget]);
 
   function isCurrentDraftPersisted(currentModel: DiagramModel): boolean {
     return persistedDraftSignatureRef.current === createDiagramModelSignature(currentModel);
@@ -1299,9 +1263,8 @@ export function EditorPage() {
     const nextTableId = Object.keys(nextModel.tables).find((tableId) => !model.tables[tableId]) ?? null;
 
     handleModelChange(nextModel);
-    setSelectedTableId(nextTableId);
     // Table baru langsung menjadi target komentar aktif agar review pertama jatuh ke entity yang baru dibuat.
-    setSelectedCommentTarget(nextTableId ? { targetId: nextTableId, targetType: 'table' } : null);
+    selectTable(nextTableId);
   }
 
   function handleAddNote() {
@@ -1415,8 +1378,7 @@ export function EditorPage() {
         );
 
         if (selectedTableId === action.tableId) {
-          setSelectedTableId(null);
-          setSelectedCommentTarget(null);
+          clearSelection();
         }
       }
 
@@ -1663,8 +1625,7 @@ export function EditorPage() {
           snapshotRecoveryModelRef.current = null;
           persistedDraftSignatureRef.current = null;
           setModel(null);
-          setSelectedTableId(null);
-          setSelectedCommentTarget(null);
+          clearSelection();
           navigate(
             routes.diagram.to({
               diagramId: diagram.id,
@@ -1715,8 +1676,7 @@ export function EditorPage() {
           snapshotRecoveryModelRef.current = null;
           persistedDraftSignatureRef.current = null;
           setModel(null);
-          setSelectedTableId(null);
-          setSelectedCommentTarget(null);
+          clearSelection();
           setProjectSearchTerm('');
           navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
         }}
@@ -1725,8 +1685,7 @@ export function EditorPage() {
           snapshotRecoveryModelRef.current = null;
           persistedDraftSignatureRef.current = null;
           setModel(null);
-          setSelectedTableId(null);
-          setSelectedCommentTarget(null);
+          clearSelection();
           navigate(routes.home.to(), { replace: true });
         }}
         onProjectSearchChange={setProjectSearchTerm}
@@ -1735,8 +1694,7 @@ export function EditorPage() {
           snapshotRecoveryModelRef.current = null;
           persistedDraftSignatureRef.current = null;
           setModel(null);
-          setSelectedTableId(null);
-          setSelectedCommentTarget(null);
+          clearSelection();
           navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
         }}
         onRedo={handleRedoModelChange}
@@ -1917,8 +1875,7 @@ export function EditorPage() {
           snapshotRecoveryModelRef.current = null;
           persistedDraftSignatureRef.current = null;
           setModel(null);
-          setSelectedTableId(null);
-          setSelectedCommentTarget(null);
+          clearSelection();
           setProjectSearchTerm('');
           setCreateWorkspaceOpen(false);
           navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }));
@@ -1935,8 +1892,7 @@ export function EditorPage() {
             snapshotRecoveryModelRef.current = null;
             persistedDraftSignatureRef.current = null;
             setModel(null);
-            setSelectedTableId(null);
-            setSelectedCommentTarget(null);
+            clearSelection();
             setCreateProjectOpen(false);
             navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }));
           }}
@@ -1955,8 +1911,7 @@ export function EditorPage() {
             snapshotRecoveryModelRef.current = null;
             persistedDraftSignatureRef.current = null;
             setModel(null);
-            setSelectedTableId(null);
-            setSelectedCommentTarget(null);
+            clearSelection();
             setCreateDiagramOpen(false);
             navigate(
               routes.diagram.to({
