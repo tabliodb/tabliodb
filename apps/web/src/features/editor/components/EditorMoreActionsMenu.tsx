@@ -20,7 +20,6 @@ import {
   ImageDown,
   Keyboard,
   LocateFixed,
-  Map as MapIcon,
   MoreHorizontal,
   Redo2,
   Share2,
@@ -100,10 +99,6 @@ export function EditorMoreActionsMenu({
         <DropdownMenuItem onSelect={() => void onFitDiagram()}>
           <LocateFixed className="size-4" />
           Fit diagram
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => void onToggleMinimap()}>
-          <MapIcon className="size-4" />
-          Toggle minimap
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void onOpenKeyboardShortcuts()}>
           <Keyboard className="size-4" />
