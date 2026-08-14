@@ -95,14 +95,7 @@ import {
   createRemoteCommentTypingPresenceList,
   idleCollaborationStatus,
 } from './collaboration-awareness';
-import {
-  createDiagramModelSignature,
-  createEmptyEditorModelHistory,
-  redoLocalModelChange,
-  recordLocalModelChange,
-  undoLocalModelChange,
-  type EditorModelHistory,
-} from './model-history';
+import { createDiagramModelSignature } from './model-history';
 import { AddTableDialog } from './components/AddTableDialog';
 import { CommentsDialog } from './components/CommentsDialog';
 import { DiagramTablesSidebar } from './components/DiagramTablesSidebar';
@@ -132,6 +125,7 @@ import { selectClassName } from './editor-form-styles';
 import { copyTextToClipboard } from './export-utils';
 import { getSnapshotRealtimeGuard } from './snapshot-realtime-guard';
 import { useDiagramExportActions } from './useDiagramExportActions';
+import { useEditorModelHistory } from './useEditorModelHistory';
 
 type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
 type CurrentUserEditorPreferenceUpdateDtoInput = CurrentUserEditorPreferenceUpdateDto;
@@ -176,11 +170,17 @@ export function EditorPage() {
   const [model, setModel] = useState<DiagramModel | null>(null);
   const modelRef = useRef<DiagramModel | null>(null);
   const snapshotRecoveryModelRef = useRef<DiagramModel | null>(null);
-  const modelHistoryRef = useRef<EditorModelHistory>(createEmptyEditorModelHistory());
+  const {
+    canRedo: canRedoModelChange,
+    canUndo: canUndoModelChange,
+    redo: redoModelHistory,
+    record: recordModelHistory,
+    reset: resetModelHistory,
+    undo: undoModelHistory,
+  } = useEditorModelHistory();
   const persistedDraftSignatureRef = useRef<string | null>(null);
   const loadedSnapshotIdRef = useRef<string | null>(null);
   const canvasViewportRef = useRef<CanvasViewportRect | null>(null);
-  const [modelHistoryRevision, setModelHistoryRevision] = useState(0);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedCommentTarget, setSelectedCommentTarget] = useState<EditorCommentTarget | null>(null);
@@ -352,11 +352,6 @@ export function EditorPage() {
     () => createRemoteCommentTypingPresenceList(remoteAwarenessStates, currentUser?.id ?? null),
     [currentUser?.id, remoteAwarenessStates],
   );
-  const [canUndoModelChange, canRedoModelChange] = useMemo(
-    () => [modelHistoryRef.current.past.length > 0, modelHistoryRef.current.future.length > 0] as const,
-    [modelHistoryRevision],
-  );
-
   useEffect(() => {
     selectedTableIdRef.current = selectedTableId;
   }, [selectedTableId]);
@@ -407,11 +402,6 @@ export function EditorPage() {
     [canEditDiagram],
   );
 
-  const resetModelHistory = useCallback(() => {
-    modelHistoryRef.current = createEmptyEditorModelHistory();
-    setModelHistoryRevision((revision) => revision + 1);
-  }, []);
-
   const reconcileModelSelection = useCallback((nextModel: DiagramModel) => {
     setSelectedTableId((currentTableId) => {
       const nextTableId = currentTableId && nextModel.tables[currentTableId] ? currentTableId : null;
@@ -461,40 +451,36 @@ export function EditorPage() {
       return;
     }
 
-    const result = undoLocalModelChange(modelHistoryRef.current, modelRef.current);
+    const nextModel = undoModelHistory(modelRef.current);
 
-    if (!result) {
+    if (!nextModel) {
       return;
     }
 
-    modelHistoryRef.current = result.history;
-    modelRef.current = result.model;
-    snapshotRecoveryModelRef.current = result.model;
-    setModel(result.model);
-    syncModelToCollaboration(result.model);
-    reconcileModelSelection(result.model);
-    setModelHistoryRevision((revision) => revision + 1);
-  }, [canEditDiagram, reconcileModelSelection, syncModelToCollaboration]);
+    modelRef.current = nextModel;
+    snapshotRecoveryModelRef.current = nextModel;
+    setModel(nextModel);
+    syncModelToCollaboration(nextModel);
+    reconcileModelSelection(nextModel);
+  }, [canEditDiagram, reconcileModelSelection, syncModelToCollaboration, undoModelHistory]);
 
   const handleRedoModelChange = useCallback(() => {
     if (!canEditDiagram) {
       return;
     }
 
-    const result = redoLocalModelChange(modelHistoryRef.current, modelRef.current);
+    const nextModel = redoModelHistory(modelRef.current);
 
-    if (!result) {
+    if (!nextModel) {
       return;
     }
 
-    modelHistoryRef.current = result.history;
-    modelRef.current = result.model;
-    snapshotRecoveryModelRef.current = result.model;
-    setModel(result.model);
-    syncModelToCollaboration(result.model);
-    reconcileModelSelection(result.model);
-    setModelHistoryRevision((revision) => revision + 1);
-  }, [canEditDiagram, reconcileModelSelection, syncModelToCollaboration]);
+    modelRef.current = nextModel;
+    snapshotRecoveryModelRef.current = nextModel;
+    setModel(nextModel);
+    syncModelToCollaboration(nextModel);
+    reconcileModelSelection(nextModel);
+  }, [canEditDiagram, reconcileModelSelection, redoModelHistory, syncModelToCollaboration]);
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -611,12 +597,7 @@ export function EditorPage() {
       const safeNextModel = normalizeEditorDiagramModel(nextModel);
       const currentModel = modelRef.current;
 
-      const localHistory = recordLocalModelChange(modelHistoryRef.current, currentModel, safeNextModel);
-
-      if (localHistory.changed) {
-        modelHistoryRef.current = localHistory.history;
-        setModelHistoryRevision((revision) => revision + 1);
-      }
+      recordModelHistory(currentModel, safeNextModel);
 
       // Keep the latest draft model synchronously available for snapshot clicks that happen immediately after an input blur.
       modelRef.current = safeNextModel;
@@ -624,7 +605,7 @@ export function EditorPage() {
       setModel(safeNextModel);
       syncModelToCollaboration(safeNextModel, currentModel);
     },
-    [canEditDiagram, syncModelToCollaboration],
+    [canEditDiagram, recordModelHistory, syncModelToCollaboration],
   );
 
   useEffect(() => {
