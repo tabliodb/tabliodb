@@ -8,21 +8,11 @@ import {
   type DiagramReviewSignal,
 } from '@tabliodb/schema-core';
 import {
-  Permission,
-  isGranted,
-  permissionsForOrganizationRole,
-  permissionsForProjectRole,
-  type OrganizationRoleValue,
-  type ProjectRoleValue,
-} from '@tabliodb/shared';
-import {
   Mode as SdkImportMode,
   Source as SdkImportSource,
   TabliodbApiError,
   type CurrentUserEditorPreferenceUpdateDto,
   type DiagramResponseDtoOutput,
-  type OrganizationDtoOutput,
-  type ProjectResponseDtoOutput,
   type ReviewSignalResponseDtoOutput,
   type SnapshotResponseDtoOutput,
 } from '@tabliodb/sdk';
@@ -131,14 +121,19 @@ import { selectClassName } from './editor-form-styles';
 import { copyTextToClipboard } from './export-utils';
 import { getSnapshotRealtimeGuard } from './snapshot-realtime-guard';
 import { useDiagramExportActions } from './useDiagramExportActions';
+import {
+  useEditorActiveDiagram,
+  useEditorActiveOrganization,
+  useEditorActiveProject,
+  useEditorPermissionFlags,
+  useFilteredEditorProjects,
+} from './useEditorActiveTarget';
 import { useEditorModelHistory } from './useEditorModelHistory';
 import { useEditorRouteActions } from './useEditorRouteActions';
 import { useEditorSelection } from './useEditorSelection';
 
 type CurrentUserEditorPreferenceUpdateDtoInput = CurrentUserEditorPreferenceUpdateDto;
 type DiagramResponseDto = DiagramResponseDtoOutput;
-type OrganizationDto = OrganizationDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
 type ReviewSignalResponseDto = ReviewSignalResponseDtoOutput;
 type SnapshotResponseDto = SnapshotResponseDtoOutput;
 
@@ -236,76 +231,41 @@ export function EditorPage() {
   const routeProjectId = params.projectId ?? null;
   const routeDiagramId = params.diagramId ?? null;
   const rememberedEditorTarget = editorPreferenceQuery.data ?? null;
-  const activeOrganization = useMemo(() => {
-    if (organizations.length === 0) {
-      return null;
-    }
-
-    if (routeWorkspaceSlug) {
-      return organizations.find((organization) => matchesWorkspaceRoute(organization, routeWorkspaceSlug)) ?? null;
-    }
-
-    if (rememberedEditorTarget) {
-      return (
-        organizations.find((organization) => matchesRememberedWorkspace(organization, rememberedEditorTarget)) ?? null
-      );
-    }
-
-    return null;
-  }, [organizations, rememberedEditorTarget, routeWorkspaceSlug]);
+  const activeOrganization = useEditorActiveOrganization({
+    organizations,
+    rememberedEditorTarget,
+    routeWorkspaceSlug,
+  });
 
   const projectsQuery = useQuery(projectsQueries.listByOrganization(activeOrganization));
-
   const projects = projectsQuery.data ?? [];
-  const filteredProjects = useMemo(() => {
-    const search = projectSearchTerm.trim().toLowerCase();
-
-    return search
-      ? projects.filter((project) =>
-          [project.name, project.slug, project.description ?? ''].some((value) => value.toLowerCase().includes(search)),
-        )
-      : projects;
-  }, [projectSearchTerm, projects]);
-  const activeProject = useMemo(() => {
-    if (!routeProjectId) {
-      return null;
-    }
-
-    return projects.find((project) => project.id === routeProjectId) ?? null;
-  }, [projects, routeProjectId]);
-
+  const filteredProjects = useFilteredEditorProjects({
+    projectSearchTerm,
+    projects,
+  });
+  const activeProject = useEditorActiveProject({
+    projects,
+    routeProjectId,
+  });
   const diagramsQuery = useQuery(diagramsQueries.listForProject(activeProject));
-
   const diagrams = diagramsQuery.data ?? [];
-  const activeDiagram = useMemo(() => {
-    if (!routeDiagramId) {
-      return null;
-    }
-
-    return diagrams.find((diagram) => diagram.id === routeDiagramId) ?? null;
-  }, [diagrams, routeDiagramId]);
+  const activeDiagram = useEditorActiveDiagram({
+    diagrams,
+    routeDiagramId,
+  });
+  const {
+    canCommentDiagram,
+    canCreateDiagram,
+    canCreateProject,
+    canCreateSnapshot,
+    canEditDiagram,
+    canManageProject,
+    canManageWorkspace,
+  } = useEditorPermissionFlags({
+    activeOrganization,
+    activeProject,
+  });
   const currentUser = currentUserQuery.data ?? null;
-  const canEditDiagram = activeProject
-    ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate)
-    : false;
-  const canCreateSnapshot = activeProject
-    ? hasProjectPermission(activeProject.projectRole, Permission.SnapshotCreate)
-    : false;
-  const canCommentDiagram = activeProject
-    ? hasProjectPermission(activeProject.projectRole, Permission.DiagramComment)
-    : false;
-  const canManageWorkspace = activeOrganization
-    ? hasOrganizationPermission(activeOrganization.role, Permission.OrganizationManage)
-    : false;
-  const canCreateProject = activeOrganization
-    ? hasOrganizationPermission(activeOrganization.role, Permission.ProjectCreate)
-    : false;
-  const canCreateDiagram = activeProject
-    ? hasProjectPermission(activeProject.projectRole, Permission.DiagramCreate)
-    : false;
-  const canManageProject = activeProject
-    ? hasProjectPermission(activeProject.projectRole, Permission.ProjectUpdate)
-    : false;
 
   const snapshotsQuery = useQuery(
     snapshotsQueries.listOrCreateInitial(activeDiagram, activeProject, (diagram) =>
@@ -2161,20 +2121,6 @@ function EditorEmptyAccessState({
       </Surface>
     </main>
   );
-}
-
-function hasOrganizationPermission(role: OrganizationRoleValue, permission: Permission): boolean {
-  return isGranted({
-    current: permissionsForOrganizationRole(role),
-    requested: [permission],
-  });
-}
-
-function hasProjectPermission(role: ProjectRoleValue, permission: Permission): boolean {
-  return isGranted({
-    current: permissionsForProjectRole(role),
-    requested: [permission],
-  });
 }
 
 const reviewSignalTargetTypes = [
