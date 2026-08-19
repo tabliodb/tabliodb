@@ -84,7 +84,6 @@ export function EditorHeader({
   onProjectSearchChange,
   onProjectSelect,
   onRedo,
-  onToggleMinimap,
   onUndo,
   onUserLogout,
   openCommentThreadCount,

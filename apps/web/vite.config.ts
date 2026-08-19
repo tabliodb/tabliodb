@@ -51,6 +51,7 @@ export default defineConfig({
         secure: false,
       },
     },
+    port: 3000,
   },
   test: {
     environment: 'happy-dom',
