@@ -46,7 +46,7 @@ const DiagramShareLinkCreateResponseSchema = z
   .object({
     shareLink: DiagramShareLinkSchema,
     token: z.string(),
-    url: z.string().url(),
+    url: z.url(),
   })
   .meta({ id: 'DiagramShareLinkCreateResponseDto' });
 
