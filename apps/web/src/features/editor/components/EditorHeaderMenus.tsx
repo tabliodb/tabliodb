@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
   cn,
 } from '@tabliodb/ui';
-import { AtSign, Bell, ChevronsUpDown, LogOut, Reply, ShieldCheck, UserRound } from 'lucide-react';
+import { AtSign, Bell, ChevronsUpDown, LogOut, Reply, UserRound, Wrench } from 'lucide-react';
 import { EmptyState, InlineErrorState, InlineLoadingState } from '@/features/app/RouteStates';
 import { formatCommentTargetType } from '../comments/comment-targets';
 import { UserAvatar, type AvatarIdentity } from './UserAvatar';
@@ -193,8 +193,8 @@ export function UserAccountMenu({
         </DropdownMenuItem>
         {canOpenAdmin ? (
           <DropdownMenuItem onSelect={onAdmin}>
-            <ShieldCheck className="size-4" />
-            Admin users
+            <Wrench className="size-4" />
+            Administration
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparatorItem />
