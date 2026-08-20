@@ -1572,7 +1572,7 @@ export function EditorPage() {
         notificationIsLoading={notificationInboxQuery.isPending}
         notifications={inboxNotifications}
         notificationsOpen={notificationsOpen}
-        onAdmin={editorRouteActions.goToAdminUsers}
+        onAdmin={editorRouteActions.goToAdminSettings}
         onCopySql={diagramExportActions.copySql}
         onCreateDiagram={() => setCreateDiagramOpen(true)}
         onCreateProject={() => setCreateProjectOpen(true)}
