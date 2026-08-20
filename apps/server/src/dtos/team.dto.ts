@@ -69,7 +69,7 @@ const TeamMemberSchema = z
 
 const TeamMemberCreateSchema = z
   .object({
-    email: z.string().email(),
+    email: z.email(),
   })
   .meta({ id: 'TeamMemberCreateDto' });
 
