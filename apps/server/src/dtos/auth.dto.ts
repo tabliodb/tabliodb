@@ -144,7 +144,7 @@ const ApiKeySchema = z
   .object({
     createdAt: DateTimeSchema,
     expiresAt: DateTimeSchema.nullable(),
-    id: z.string().uuid(),
+    id: z.uuid(),
     lastUsedAt: DateTimeSchema.nullable(),
     name: z.string(),
     permissions: z.array(z.enum(Permission)),
