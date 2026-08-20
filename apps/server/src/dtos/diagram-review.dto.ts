@@ -8,8 +8,8 @@ const DiagramReviewActionSchema = z.enum(['commented', 'approved', 'changes_requ
 const DiagramReviewActorSchema = z.object({
   avatarUrl: z.string().nullable(),
   cursorColor: z.string(),
-  email: z.string().email(),
-  id: z.string().uuid(),
+  email: z.email(),
+  id: z.uuid(),
   name: z.string(),
 });
 
@@ -17,14 +17,14 @@ const DiagramReviewEventSchema = z
   .object({
     action: DiagramReviewActionSchema,
     createdAt: DateTimeSchema,
-    createdById: z.string().uuid(),
-    diagramId: z.string().uuid(),
-    id: z.string().uuid(),
+    createdById: z.uuid(),
+    diagramId: z.uuid(),
+    id: z.uuid(),
     message: z.string().nullable(),
     nextStatus: DiagramReviewStatusSchema,
     previousStatus: DiagramReviewStatusSchema,
     reviewer: DiagramReviewActorSchema,
-    snapshotId: z.string().uuid().nullable(),
+    snapshotId: z.uuid().nullable(),
   })
   .meta({ id: 'DiagramReviewEventDto' });
 
