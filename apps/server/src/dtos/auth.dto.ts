@@ -104,11 +104,11 @@ const CurrentUserTemporaryPasswordUpdateSchema = z
 
 const CurrentUserEditorPreferenceSchema = z
   .object({
-    diagramId: z.string().uuid().nullable(),
+    diagramId: z.uuid().nullable(),
     diagramName: z.string().nullable(),
-    organizationId: z.string().uuid().nullable(),
+    organizationId: z.uuid().nullable(),
     organizationName: z.string().nullable(),
-    projectId: z.string().uuid().nullable(),
+    projectId: z.uuid().nullable(),
     projectName: z.string().nullable(),
     updatedAt: DateTimeSchema.nullable(),
     workspaceSlug: z.string().nullable(),
