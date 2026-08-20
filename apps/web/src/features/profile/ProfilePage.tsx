@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { Badge, Button, FieldError, Input, Surface, cn } from '@tabliodb/ui';
+import { Button, FieldError, Input, Surface, cn } from '@tabliodb/ui';
 import { Camera, Check, ImageUp, Loader2, Palette, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -141,7 +141,6 @@ export function ProfilePage() {
             Manage your visible identity and realtime collaboration cursor.
           </p>
         </div>
-        <Badge variant={saved ? 'green' : 'blue'}>{saved ? 'Saved' : 'Ready'}</Badge>
       </section>
 
       <form className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]" onSubmit={form.handleSubmit(handleSubmit)}>
