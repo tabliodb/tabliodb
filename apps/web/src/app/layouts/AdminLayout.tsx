@@ -1,10 +1,11 @@
 import { Suspense } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { Button } from '@tabliodb/ui';
-import { Database, LayoutDashboard, LogOut, Settings, UserRound, UsersRound } from 'lucide-react';
+import { LayoutDashboard, LogOut, Settings, UserRound, UsersRound } from 'lucide-react';
 import { routes } from '@/app/routes';
 import { LoadingState } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
+import LOGO from '@/assets/logo.svg';
 
 export function AdminLayout() {
   const navigate = useNavigate();
@@ -21,12 +22,11 @@ export function AdminLayout() {
     <main className="grid min-h-screen bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))] lg:grid-cols-[264px_minmax(0,1fr)]">
       <aside className="border-b-2 border-[rgb(var(--tabliodb-border))] bg-white lg:border-b-0 lg:border-r-2">
         <div className="flex h-16 items-center gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] px-5">
-          <div className="grid size-9 place-items-center rounded-2xl bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-            <Database className="size-5" />
+          <div className="flex h-9 w-32 shrink-0 items-center overflow-hidden">
+            <img src={LOGO} alt="Tabliodb" className="h-9 w-32 max-w-none" />
           </div>
           <div className="min-w-0">
-            <div className="truncate text-base font-extrabold">Tabliodb</div>
-            <div className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Admin console</div>
+            <div className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Admin</div>
           </div>
         </div>
         <nav className="grid gap-2 p-4">
