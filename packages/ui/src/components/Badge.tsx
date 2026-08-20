@@ -19,8 +19,7 @@ export const badgeVariants = cva(
           'border-[rgb(var(--tabliodb-lavender-border))] bg-[rgb(var(--tabliodb-lavender-soft))] text-[rgb(var(--tabliodb-lavender-text))]',
         yellow:
           'border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] text-[rgb(var(--tabliodb-gold-text))]',
-        greenFilled:
-          'border-[rgb(var(--tabliodb-green-border))] bg-[rgb(var(--tabliodb-green-soft))] text-[rgb(var(--tabliodb-green-text))]',
+        greenFilled: 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary))] text-white',
       },
     },
   },
