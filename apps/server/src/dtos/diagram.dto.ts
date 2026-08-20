@@ -23,8 +23,8 @@ const DiagramUpdateSchema = z
 
 const DiagramResponseSchema = z
   .object({
-    id: z.string().uuid(),
-    projectId: z.string().uuid(),
+    id: z.uuid(),
+    projectId: z.uuid(),
     name: z.string(),
     dialect: DatabaseDialectSchema,
     status: DiagramStatusSchema,
