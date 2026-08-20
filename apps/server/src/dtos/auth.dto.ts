@@ -178,7 +178,7 @@ const ApiKeyListResponseSchema = z
 
 const ApiKeyRevokeResponseSchema = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     revoked: z.boolean(),
   })
   .meta({ id: 'ApiKeyRevokeResponseDto' });
