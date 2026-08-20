@@ -129,74 +129,6 @@ export function WorkspaceProjectSwitcher({
           </div>
         </div>
 
-        <DropdownMenuSeparatorItem />
-
-        <div className="px-2 py-1.5">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Projects
-            </div>
-            {canCreateProject ? (
-              <Button
-                onClick={(event) => {
-                  event.preventDefault();
-                  setOpen(false);
-                  // Dialog project tetap dimiliki parent karena parent yang tahu workspace aktif dan invalidasi query setelah create.
-                  onCreateProject();
-                }}
-                size="sm"
-                variant="soft"
-              >
-                <FolderPlus className="size-3.5" />
-                Project
-              </Button>
-            ) : null}
-          </div>
-          <div className="relative mb-2">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
-            <Input
-              className="h-9 pl-9 text-[13px]"
-              onChange={(event) => onProjectSearchChange(event.target.value)}
-              onKeyDown={(event) => event.stopPropagation()}
-              placeholder="Search projects"
-              value={projectSearchTerm}
-            />
-          </div>
-          {projects.length === 0 ? (
-            <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-              No matching projects
-            </div>
-          ) : (
-            <div className="tabliodb-scrollbar grid max-h-52 gap-1 overflow-y-auto pr-1">
-              {projects.map((project) => {
-                const isActive = project.id === activeProject.id;
-
-                return (
-                  <DropdownMenuItem
-                    className="justify-between"
-                    key={project.id}
-                    onSelect={() => {
-                      if (!isActive) {
-                        onProjectSelect(project);
-                      }
-
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-extrabold">{project.name}</span>
-                      <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                        {project.slug}
-                      </span>
-                    </span>
-                    {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
-                  </DropdownMenuItem>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
         {diagrams.length > 0 || canCreateDiagram ? (
           <>
             <DropdownMenuSeparatorItem />
@@ -210,7 +142,7 @@ export function WorkspaceProjectSwitcher({
                     onClick={(event) => {
                       event.preventDefault();
                       setOpen(false);
-                      // Create diagram dipicu eksplisit agar switch project tidak pernah ikut membuat data tanpa niat user.
+                      // Diagram is the primary database-design document, so this action stays above folder/project management.
                       onCreateDiagram();
                     }}
                     size="sm"
@@ -255,6 +187,79 @@ export function WorkspaceProjectSwitcher({
             </div>
           </>
         ) : null}
+
+        <DropdownMenuSeparatorItem />
+
+        <div className="px-2 py-1.5">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Project folders
+              </div>
+              <p className="text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-subtle))]">
+                Organize related diagrams
+              </p>
+            </div>
+            {canCreateProject ? (
+              <Button
+                onClick={(event) => {
+                  event.preventDefault();
+                  setOpen(false);
+                  // Project remains available as an organization folder, but it is no longer the first mental step.
+                  onCreateProject();
+                }}
+                size="sm"
+                variant="soft"
+              >
+                <FolderPlus className="size-3.5" />
+                Folder
+              </Button>
+            ) : null}
+          </div>
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+            <Input
+              className="h-9 pl-9 text-[13px]"
+              onChange={(event) => onProjectSearchChange(event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
+              placeholder="Search folders"
+              value={projectSearchTerm}
+            />
+          </div>
+          {projects.length === 0 ? (
+            <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              No matching folders
+            </div>
+          ) : (
+            <div className="tabliodb-scrollbar grid max-h-52 gap-1 overflow-y-auto pr-1">
+              {projects.map((project) => {
+                const isActive = project.id === activeProject.id;
+
+                return (
+                  <DropdownMenuItem
+                    className="justify-between"
+                    key={project.id}
+                    onSelect={() => {
+                      if (!isActive) {
+                        onProjectSelect(project);
+                      }
+
+                      setOpen(false);
+                    }}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-extrabold">{project.name}</span>
+                      <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                        {project.slug}
+                      </span>
+                    </span>
+                    {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                  </DropdownMenuItem>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
