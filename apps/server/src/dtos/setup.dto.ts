@@ -96,10 +96,10 @@ const SmtpSettingsUpdateSchema = z
 
 const SetupCreateSchema = z
   .object({
-    ownerEmail: z.string().email(),
+    ownerEmail: z.email(),
     ownerName: z.string().min(1),
     ownerPassword: z.string().min(8),
-    publicUrl: z.string().url().optional(),
+    publicUrl: z.url().optional(),
     sessionBinding: SessionBindingSchema.optional(),
     workspaceName: z.string().min(1),
   })
