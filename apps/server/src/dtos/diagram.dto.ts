@@ -7,7 +7,7 @@ const DiagramStatusSchema = z.enum(['draft', 'reviewed', 'approved', 'changes_re
 
 const DiagramCreateSchema = z
   .object({
-    projectId: z.string().uuid(),
+    projectId: z.uuid(),
     name: z.string().min(1),
     dialect: DatabaseDialectSchema.default('postgresql'),
   })
