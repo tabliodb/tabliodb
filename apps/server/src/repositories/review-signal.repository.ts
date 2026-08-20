@@ -94,18 +94,18 @@ export class ReviewSignalRepository {
   async getSettingsForDiagram(diagramId: string) {
     const row = await this.db
       .selectFrom('diagrams')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
       .select(['diagrams.reviewSettings as diagramSettings', 'projects.reviewSettings as projectSettings'])
       .where('diagrams.id', '=', diagramId)
       .where('diagrams.archivedAt', 'is', null)
-      .where('projects.archivedAt', 'is', null)
+      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
       .executeTakeFirst();
 
     if (!row) {
       return undefined;
     }
 
-    const project = parseDiagramReviewSettings(row.projectSettings);
+    const project = row.projectSettings ? parseDiagramReviewSettings(row.projectSettings) : { disabledRuleKeys: [] };
     const diagram = parseDiagramReviewSettings(row.diagramSettings);
 
     return {

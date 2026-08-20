@@ -160,16 +160,14 @@ function isOrganizationManager(organization: OrganizationDto): boolean {
 
 export function WorkspaceSettingsDialog({
   organization,
-  project,
 }: {
   organization: OrganizationDto;
-  project: ProjectResponseDto;
 }) {
   const [open, setOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const canManageWorkspace = isOrganizationManager(organization);
   const form = useForm<WorkspaceSettingsFormState>({
-    defaultValues: getWorkspaceSettingsDefaults(project),
+    defaultValues: getWorkspaceSettingsDefaults(organization),
     mode: 'onBlur',
     resolver: zodResolver(workspaceSettingsFormSchema),
   });
@@ -198,24 +196,24 @@ export function WorkspaceSettingsDialog({
   const { errors: selectedTeamErrors } = selectedTeamForm.formState;
   const { errors: teamMemberErrors } = teamMemberForm.formState;
   const { errors: teamProjectAccessErrors } = teamProjectAccessForm.formState;
-  const settingsQueryOptions = organizationsQueries.settings(project.organizationId);
+  const settingsQueryOptions = organizationsQueries.settings(organization.id);
   const settingsQuery = useQuery({
     ...settingsQueryOptions,
     // Workspace settings tidak perlu di-fetch sebelum user membuka dialog, jadi modal menjadi fetch boundary.
     enabled: open && settingsQueryOptions.enabled !== false,
   });
-  const auditLogsQueryOptions = organizationsQueries.auditLogs(project.organizationId, workspaceAuditLogQuery);
+  const auditLogsQueryOptions = organizationsQueries.auditLogs(organization.id, workspaceAuditLogQuery);
   const auditLogsQuery = useQuery({
     ...auditLogsQueryOptions,
     enabled: open && canManageWorkspace && auditLogsQueryOptions.enabled !== false,
   });
-  const membersQueryOptions = organizationsQueries.members(project.organizationId, workspaceMemberPageQuery);
+  const membersQueryOptions = organizationsQueries.members(organization.id, workspaceMemberPageQuery);
   const membersQuery = useQuery({
     ...membersQueryOptions,
     // Workspace members are admin-only data, so the dialog becomes the fetch boundary just like audit logs.
     enabled: open && canManageWorkspace && membersQueryOptions.enabled !== false,
   });
-  const teamsQueryOptions = teamsQueries.list({ ...teamPageQuery, organizationId: project.organizationId });
+  const teamsQueryOptions = teamsQueries.list({ ...teamPageQuery, organizationId: organization.id });
   const teamsQuery = useQuery({
     ...teamsQueryOptions,
     // Teams are workspace-admin data and are only needed in the settings dialog.
@@ -239,7 +237,7 @@ export function WorkspaceSettingsDialog({
       selectedTeamProjectAccessesQueryOptions.enabled !== false,
   });
   const teamProjectOptionsQuery = useQuery({
-    ...projectsQueries.list({ limit: 50, organizationId: project.organizationId }),
+    ...projectsQueries.list({ limit: 50, organizationId: organization.id }),
     // Project options are used only when granting a team access to a project.
     enabled: open && canManageWorkspace,
   });
@@ -259,7 +257,7 @@ export function WorkspaceSettingsDialog({
     mutationConfig: {
       onSuccess: (settings) => {
         // Response server menjadi source of truth karena slug bisa berubah mengikuti nama workspace.
-        form.reset(getWorkspaceSettingsDefaults(project, settings));
+        form.reset(getWorkspaceSettingsDefaults(organization, settings));
       },
     },
   });
@@ -317,7 +315,7 @@ export function WorkspaceSettingsDialog({
 
   useEffect(() => {
     if (open) {
-      form.reset(getWorkspaceSettingsDefaults(project, settingsQuery.data));
+      form.reset(getWorkspaceSettingsDefaults(organization, settingsQuery.data));
       updateSettingsMutation.reset();
       updateMemberMutation.reset();
       removeMemberMutation.reset();
@@ -329,7 +327,7 @@ export function WorkspaceSettingsDialog({
       upsertTeamProjectAccessMutation.reset();
       removeTeamProjectAccessMutation.reset();
     }
-  }, [form, open, project, settingsQuery.data]);
+  }, [form, open, organization, settingsQuery.data]);
 
   useEffect(() => {
     if (!open) {
@@ -353,7 +351,7 @@ export function WorkspaceSettingsDialog({
     setOpen(nextOpen);
 
     if (!nextOpen) {
-      form.reset(getWorkspaceSettingsDefaults(project, settingsQuery.data));
+      form.reset(getWorkspaceSettingsDefaults(organization, settingsQuery.data));
       updateSettingsMutation.reset();
       updateMemberMutation.reset();
       removeMemberMutation.reset();
@@ -384,7 +382,7 @@ export function WorkspaceSettingsDialog({
           values.defaultProjectRole === 'none' ? null : sdkDefaultProjectRoleByValue[values.defaultProjectRole],
         name: values.name,
       },
-      organizationId: project.organizationId,
+      organizationId: organization.id,
     });
   }
 
@@ -395,14 +393,14 @@ export function WorkspaceSettingsDialog({
 
     updateMemberMutation.mutate({
       body: { role: sdkOrganizationMemberRoleByValue[role] },
-      organizationId: project.organizationId,
+      organizationId: organization.id,
       userId: member.userId,
     });
   }
 
   function handleRemoveWorkspaceMember(member: OrganizationMemberDto) {
     removeMemberMutation.mutate({
-      organizationId: project.organizationId,
+      organizationId: organization.id,
       userId: member.userId,
     });
   }
@@ -415,13 +413,13 @@ export function WorkspaceSettingsDialog({
     createTeamMutation.mutate({
       description: toOptionalDescription(values.description),
       name: values.name,
-      organizationId: project.organizationId,
+      organizationId: organization.id,
     });
   }
 
   function handleArchiveTeam(team: TeamResponseDto) {
     archiveTeamMutation.mutate({
-      organizationId: project.organizationId,
+      organizationId: organization.id,
       teamId: team.id,
     });
   }
@@ -449,7 +447,7 @@ export function WorkspaceSettingsDialog({
       body: {
         email: values.email,
       },
-      organizationId: project.organizationId,
+      organizationId: organization.id,
       teamId: selectedTeam.id,
     });
   }
@@ -460,7 +458,7 @@ export function WorkspaceSettingsDialog({
     }
 
     removeTeamMemberMutation.mutate({
-      organizationId: project.organizationId,
+      organizationId: organization.id,
       teamId: selectedTeam.id,
       userId: member.userId,
     });
@@ -476,7 +474,7 @@ export function WorkspaceSettingsDialog({
         projectId: values.projectId,
         role: sdkTeamProjectRoleByValue[values.role as TeamProjectRole],
       },
-      organizationId: project.organizationId,
+      organizationId: organization.id,
       teamId: selectedTeam.id,
     });
   }
@@ -487,7 +485,7 @@ export function WorkspaceSettingsDialog({
     }
 
     removeTeamProjectAccessMutation.mutate({
-      organizationId: project.organizationId,
+      organizationId: organization.id,
       projectId: access.projectId,
       teamId: selectedTeam.id,
     });
@@ -503,7 +501,7 @@ export function WorkspaceSettingsDialog({
         projectId: access.projectId,
         role: sdkTeamProjectRoleByValue[role],
       },
-      organizationId: project.organizationId,
+      organizationId: organization.id,
       teamId: selectedTeam.id,
     });
   }
@@ -1044,7 +1042,7 @@ export function WorkspaceSettingsDialog({
 }
 
 function getWorkspaceSettingsDefaults(
-  project: ProjectResponseDto,
+  organization: OrganizationDto,
   settings?: OrganizationSettingsDto,
 ): WorkspaceSettingsFormState {
   return {
@@ -1052,7 +1050,7 @@ function getWorkspaceSettingsDefaults(
     defaultProjectRole: settings?.defaultProjectRole
       ? toWorkspaceDefaultProjectRole(settings.defaultProjectRole)
       : 'none',
-    name: settings?.name ?? project.organizationName,
+    name: settings?.name ?? organization.name,
   };
 }
 

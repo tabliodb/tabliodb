@@ -92,7 +92,7 @@ export class DiagramReviewService {
     scope: {
       id: string;
       organizationId: string;
-      projectId: string;
+      projectId: string | null;
       status: DiagramReviewStatus;
     },
     eventId: string,

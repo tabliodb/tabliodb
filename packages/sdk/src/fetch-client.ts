@@ -389,13 +389,15 @@ export type DiagramShareLinkRevokeResponseDtoOutput = {
   successful: boolean;
 };
 export type DiagramCreateDto = {
-  projectId: string;
+  organizationId: string;
+  projectId?: string | null;
   name: string;
   dialect?: Dialect;
 };
 export type DiagramResponseDtoOutput = {
   id: string;
-  projectId: string;
+  organizationId: string;
+  projectId: string | null;
   name: string;
   dialect: Dialect;
   status: Status4;
@@ -405,6 +407,11 @@ export type DiagramResponseDtoOutput = {
 export type WorkspaceDiagramCreateDto = {
   name: string;
   dialect?: Dialect;
+};
+export type DiagramListResponseDtoOutput = {
+  items: DiagramResponseDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
 };
 export type DiagramUpdateDto = {
   name?: string;
@@ -722,7 +729,7 @@ export type NotificationInboxItemDtoOutput = {
     organizationName: string;
     organizationSlug: string;
     slug: string;
-  };
+  } | null;
   thread: {
     id: string;
     status: Status6;
@@ -731,6 +738,11 @@ export type NotificationInboxItemDtoOutput = {
     updatedAt: string;
   };
   type: Type2;
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+  };
 };
 export type NotificationInboxListResponseDtoOutput = {
   items: NotificationInboxItemDtoOutput[];
@@ -876,11 +888,6 @@ export type ProjectMemberUpdateDto = {
 export type ProjectMemberRemoveResponseDtoOutput = {
   successful: boolean;
 };
-export type DiagramListResponseDtoOutput = {
-  items: DiagramResponseDtoOutput[];
-  nextCursor: string | null;
-  totalCount: number;
-};
 export type PublicDiagramShareSnapshotDtoOutput = {
   id: string;
   version: number;
@@ -893,7 +900,7 @@ export type PublicDiagramShareResponseDtoOutput = {
     dialect: Dialect;
     name: string;
     organizationName: string;
-    projectName: string;
+    projectName: string | null;
   };
   model: {
     schemaVersion: number;
@@ -2432,6 +2439,35 @@ export function createWorkspaceDiagram(
         method: 'POST',
         body: workspaceDiagramCreateDto,
       }),
+    ),
+  );
+}
+export function getWorkspaceDiagrams(
+  {
+    cursor,
+    limit,
+    organizationId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    organizationId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramListResponseDtoOutput;
+    }>(
+      `/diagrams/workspace/${encodeURIComponent(organizationId)}${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
     ),
   );
 }

@@ -120,17 +120,20 @@ export function useEditorPermissionFlags({
     () => ({
       canCommentDiagram: activeProject
         ? hasProjectPermission(activeProject.projectRole, Permission.DiagramComment)
-        : false,
+        : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramComment)),
       canCreateDiagram: activeProject
         ? hasProjectPermission(activeProject.projectRole, Permission.DiagramCreate)
-        : false,
+        : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramCreate)),
       canCreateProject: activeOrganization
         ? hasOrganizationPermission(activeOrganization.role, Permission.ProjectCreate)
         : false,
       canCreateSnapshot: activeProject
         ? hasProjectPermission(activeProject.projectRole, Permission.SnapshotCreate)
-        : false,
-      canEditDiagram: activeProject ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate) : false,
+        : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.SnapshotCreate)),
+      // Root diagrams are controlled by workspace permissions; foldered diagrams still use folder/project permissions.
+      canEditDiagram: activeProject
+        ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate)
+        : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramUpdate)),
       canManageProject: activeProject
         ? hasProjectPermission(activeProject.projectRole, Permission.ProjectUpdate)
         : false,

@@ -244,14 +244,10 @@ export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
 
   private createCommentNotificationUrl(delivery: CommentNotificationDeliveryContext): string {
     const baseUrl = this.configRepository.getEnv().server.webPublicUrl;
-    const path = [
-      'workspaces',
-      delivery.organizationSlug,
-      'projects',
-      delivery.projectId,
-      'diagrams',
-      delivery.diagramId,
-    ]
+    const pathSegments = delivery.projectId
+      ? ['workspaces', delivery.organizationSlug, 'projects', delivery.projectId, 'diagrams', delivery.diagramId]
+      : ['workspaces', delivery.organizationSlug, 'diagrams', delivery.diagramId];
+    const path = pathSegments
       .map((segment) => encodeURIComponent(segment))
       .join('/');
     const url = new URL(`/${path}`, baseUrl);
@@ -304,11 +300,12 @@ function createCommentNotificationText(
   url: string,
 ): string {
   const action = source === 'comment.updated' ? 'updated a comment' : 'left a comment';
+  const locationLabel = createCommentNotificationLocation(delivery);
 
   return [
     `Hi ${recipient.name},`,
     '',
-    `${delivery.actorName} ${createCommentNotificationReason(recipient)} and ${action} in ${delivery.projectName} / ${delivery.diagramName}.`,
+    `${delivery.actorName} ${createCommentNotificationReason(recipient)} and ${action} in ${locationLabel}.`,
     '',
     truncateCommentBody(delivery.commentBodyText),
     '',
@@ -323,15 +320,21 @@ function createCommentNotificationHtml(
   url: string,
 ): string {
   const action = source === 'comment.updated' ? 'updated a comment' : 'left a comment';
+  const locationLabel = createCommentNotificationLocation(delivery);
 
   return [
     '<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#2f3542">',
     `<p>Hi ${escapeHtml(recipient.name)},</p>`,
-    `<p><strong>${escapeHtml(delivery.actorName)}</strong> ${escapeHtml(createCommentNotificationReason(recipient))} and ${escapeHtml(action)} in <strong>${escapeHtml(delivery.projectName)} / ${escapeHtml(delivery.diagramName)}</strong>.</p>`,
+    `<p><strong>${escapeHtml(delivery.actorName)}</strong> ${escapeHtml(createCommentNotificationReason(recipient))} and ${escapeHtml(action)} in <strong>${escapeHtml(locationLabel)}</strong>.</p>`,
     `<blockquote style="border-left:4px solid #58cc02;margin:16px 0;padding:8px 12px;color:#4b5563;background:#f7fee7">${escapeHtml(truncateCommentBody(delivery.commentBodyText))}</blockquote>`,
     `<p><a href="${escapeHtml(url)}" style="display:inline-block;background:#58cc02;color:#ffffff;text-decoration:none;font-weight:700;padding:10px 16px;border-radius:10px">Open comment</a></p>`,
     '</div>',
   ].join('');
+}
+
+function createCommentNotificationLocation(delivery: CommentNotificationDeliveryContext): string {
+  // Root diagrams have no project/folder, so notification copy falls back to workspace / diagram.
+  return `${delivery.projectName ?? delivery.organizationName} / ${delivery.diagramName}`;
 }
 
 function createCommentNotificationReason(recipient: CommentNotificationDeliveryRecipient): string {

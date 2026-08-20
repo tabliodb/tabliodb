@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { ProjectRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
@@ -44,6 +44,7 @@ const diagram = {
   dialect: 'postgresql',
   id: '33333333-3333-4333-8333-333333333333',
   name: 'Main schema',
+  organizationId: organization.id,
   projectId: project.id,
   slug: null,
   status: 'draft',
@@ -198,15 +199,29 @@ describe(UserPreferenceService.name, () => {
     });
   });
 
-  it('rejects a diagram target without a project target', async () => {
+  it('stores a root workspace diagram target without a project target', async () => {
+    userPreferenceRepository.upsertEditorPreference.mockResolvedValue({
+      ...preferenceRow,
+      lastOpenedProjectId: null,
+    });
+
     await expect(
       service.updateEditorPreference(auth, {
         diagramId: diagram.id,
         organizationId: organization.id,
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toMatchObject({
+      diagramId: diagram.id,
+      organizationId: organization.id,
+      projectId: null,
+    });
 
-    expect(userPreferenceRepository.upsertEditorPreference).not.toHaveBeenCalled();
+    expect(projectRepository.getByIdForUser).not.toHaveBeenCalled();
+    expect(userPreferenceRepository.upsertEditorPreference).toHaveBeenCalledWith('user-id', {
+      lastOpenedDiagramId: diagram.id,
+      lastOpenedOrganizationId: organization.id,
+      lastOpenedProjectId: null,
+    });
   });
 
   it('rejects project targets that do not belong to the selected workspace', async () => {

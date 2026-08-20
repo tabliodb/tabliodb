@@ -116,6 +116,7 @@ function NotificationInboxMenuItem({
   const Icon = notification.type === 'mention' ? AtSign : Reply;
   const targetLabel = formatCommentTargetType(notification.thread.targetType);
   const actionLabel = notification.type === 'mention' ? 'mentioned you' : 'replied to you';
+  const locationLabel = notification.project?.name ?? notification.workspace.name;
 
   return (
     <DropdownMenuItem
@@ -143,8 +144,7 @@ function NotificationInboxMenuItem({
           {notification.comment.bodyText || 'No preview available.'}
         </span>
         <span className="mt-1 block truncate text-[11px] font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
-          {notification.project.name} / {notification.diagram.name} / {targetLabel} /{' '}
-          {formatDateTime(notification.createdAt)}
+          {locationLabel} / {notification.diagram.name} / {targetLabel} / {formatDateTime(notification.createdAt)}
         </span>
       </span>
     </DropdownMenuItem>

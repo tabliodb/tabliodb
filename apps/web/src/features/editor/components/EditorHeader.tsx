@@ -93,7 +93,7 @@ export function EditorHeader({
 }: {
   activeDiagram: DiagramResponseDto;
   activeOrganization: OrganizationDto;
-  activeProject: ProjectResponseDto;
+  activeProject: ProjectResponseDto | null;
   canCommentDiagram: boolean;
   canCreateDiagram: boolean;
   canCreateProject: boolean;
@@ -184,7 +184,7 @@ export function EditorHeader({
       {/* Header hanya menerima callback dari parent; route reset, mutation reset, dan model sync tetap berada di EditorPage sebagai orchestration boundary. */}
       <div className="tabliodb-scrollbar flex min-w-0 max-w-[64vw] shrink-0 items-center gap-1 overflow-x-auto py-1 max-[700px]:max-w-[58vw]">
         <Badge className="hidden md:inline-flex" variant={canEditDiagram ? 'green' : 'yellow'}>
-          {formatProjectRole(activeProject.projectRole)}
+          {activeProject ? formatProjectRole(activeProject.projectRole) : 'Workspace'}
         </Badge>
         {canEditDiagram ? (
           <div className="hidden items-center gap-1 xl:flex">
@@ -229,10 +229,10 @@ export function EditorHeader({
         />
         <IconButton className="hidden xl:inline-flex" icon={LocateFixed} label="Fit diagram" onClick={onFitDiagram} />
 
-        {canManageWorkspace ? (
-          <WorkspaceSettingsDialog organization={activeOrganization} project={activeProject} />
+        {canManageWorkspace ? <WorkspaceSettingsDialog organization={activeOrganization} /> : null}
+        {canManageProject && activeProject ? (
+          <ProjectSettingsDialog onArchived={onProjectArchived} project={activeProject} />
         ) : null}
-        {canManageProject ? <ProjectSettingsDialog onArchived={onProjectArchived} project={activeProject} /> : null}
         {canEditDiagram ? (
           <DiagramSettingsDialog
             canEdit={canEditDiagram}

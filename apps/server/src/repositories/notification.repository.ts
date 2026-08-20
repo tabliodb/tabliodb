@@ -44,9 +44,9 @@ export type NotificationInboxRow = {
   parentAuthorName: string | null;
   parentCommentBodyText: string | null;
   parentCommentId: string | null;
-  projectId: string;
-  projectName: string;
-  projectSlug: string;
+  projectId: string | null;
+  projectName: string | null;
+  projectSlug: string | null;
   threadId: string;
   threadStatus: 'open' | 'resolved';
   threadTargetId: string | null;
@@ -86,8 +86,8 @@ export type CommentNotificationDeliveryContext = {
   diagramName: string;
   organizationName: string;
   organizationSlug: string;
-  projectId: string;
-  projectName: string;
+  projectId: string | null;
+  projectName: string | null;
   threadId: string;
   recipients: CommentNotificationDeliveryRecipient[];
 };
@@ -155,13 +155,15 @@ export class NotificationRepository {
       INNER JOIN comments ON comments.id = comment_mentions.comment_id
       INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-      INNER JOIN projects ON projects.id = diagrams.project_id
+      LEFT JOIN projects ON projects.id = diagrams.project_id
+      INNER JOIN organizations ON organizations.id = diagrams.organization_id
       INNER JOIN users ON users.id = comment_mentions.mentioned_user_id
       WHERE comment_mentions.comment_id = ${options.commentId}
         AND comment_mentions.mentioned_user_id <> ${options.actorId}
         AND comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND projects.archived_at IS NULL
+        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND organizations.archived_at IS NULL
         AND users.deleted_at IS NULL
         AND ${this.createProjectAccessExistsSql(sql.ref('comment_mentions.mentioned_user_id'))}
     `.execute(this.db);
@@ -171,7 +173,8 @@ export class NotificationRepository {
       INNER JOIN comments parent_comments ON parent_comments.id = comments.parent_comment_id
       INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-      INNER JOIN projects ON projects.id = diagrams.project_id
+      LEFT JOIN projects ON projects.id = diagrams.project_id
+      INNER JOIN organizations ON organizations.id = diagrams.organization_id
       INNER JOIN users ON users.id = parent_comments.created_by_id
       WHERE comments.id = ${options.commentId}
         AND comments.created_by_id = ${options.actorId}
@@ -179,7 +182,8 @@ export class NotificationRepository {
         AND comments.deleted_at IS NULL
         AND parent_comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND projects.archived_at IS NULL
+        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND organizations.archived_at IS NULL
         AND users.deleted_at IS NULL
         AND ${this.createProjectAccessExistsSql(sql.ref('parent_comments.created_by_id'))}
     `.execute(this.db);
@@ -203,7 +207,7 @@ export class NotificationRepository {
         comment_threads.id AS "threadId",
         diagrams.id AS "diagramId",
         diagrams.name AS "diagramName",
-        projects.id AS "projectId",
+        diagrams.project_id AS "projectId",
         projects.name AS "projectName",
         organizations.name AS "organizationName",
         organizations.slug AS "organizationSlug",
@@ -213,13 +217,14 @@ export class NotificationRepository {
       INNER JOIN users ON users.id = comments.created_by_id
       INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-      INNER JOIN projects ON projects.id = diagrams.project_id
-      INNER JOIN organizations ON organizations.id = projects.organization_id
+      LEFT JOIN projects ON projects.id = diagrams.project_id
+      INNER JOIN organizations ON organizations.id = diagrams.organization_id
       WHERE comments.id = ${options.commentId}
         AND comments.created_by_id = ${options.actorId}
         AND comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND projects.archived_at IS NULL
+        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND organizations.archived_at IS NULL
         AND users.deleted_at IS NULL
     `.execute(this.db);
     const context = contextResult.rows[0] ?? null;
@@ -240,13 +245,15 @@ export class NotificationRepository {
         INNER JOIN comments ON comments.id = comment_mentions.comment_id
         INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
         INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-        INNER JOIN projects ON projects.id = diagrams.project_id
+        LEFT JOIN projects ON projects.id = diagrams.project_id
+        INNER JOIN organizations ON organizations.id = diagrams.organization_id
         INNER JOIN users recipient_users ON recipient_users.id = comment_mentions.mentioned_user_id
         WHERE comment_mentions.comment_id = ${options.commentId}
           AND comment_mentions.mentioned_user_id <> ${options.actorId}
           AND comments.deleted_at IS NULL
           AND diagrams.archived_at IS NULL
-          AND projects.archived_at IS NULL
+          AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+          AND organizations.archived_at IS NULL
           AND recipient_users.deleted_at IS NULL
           AND ${this.createProjectAccessExistsSql(sql.ref('comment_mentions.mentioned_user_id'))}
         UNION ALL
@@ -259,7 +266,8 @@ export class NotificationRepository {
         INNER JOIN comments parent_comments ON parent_comments.id = comments.parent_comment_id
         INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
         INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-        INNER JOIN projects ON projects.id = diagrams.project_id
+        LEFT JOIN projects ON projects.id = diagrams.project_id
+        INNER JOIN organizations ON organizations.id = diagrams.organization_id
         INNER JOIN users parent_users ON parent_users.id = parent_comments.created_by_id
         WHERE comments.id = ${options.commentId}
           AND comments.created_by_id = ${options.actorId}
@@ -267,7 +275,8 @@ export class NotificationRepository {
           AND comments.deleted_at IS NULL
           AND parent_comments.deleted_at IS NULL
           AND diagrams.archived_at IS NULL
-          AND projects.archived_at IS NULL
+          AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+          AND organizations.archived_at IS NULL
           AND parent_users.deleted_at IS NULL
           AND ${this.createProjectAccessExistsSql(sql.ref('parent_comments.created_by_id'))}
           AND NOT EXISTS (
@@ -303,7 +312,8 @@ export class NotificationRepository {
         AND comments.created_by_id <> ${userId}
         AND comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND projects.archived_at IS NULL
+        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND organizations.archived_at IS NULL
         AND ${this.createProjectAccessExistsSql(userId)}
     `;
   }
@@ -326,7 +336,8 @@ export class NotificationRepository {
         AND comments.deleted_at IS NULL
         AND parent_comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND projects.archived_at IS NULL
+        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND organizations.archived_at IS NULL
         AND ${this.createProjectAccessExistsSql(userId)}
         AND NOT EXISTS (
           SELECT 1
@@ -339,7 +350,7 @@ export class NotificationRepository {
 
   private createCommonInboxSelectSql() {
     return sql`
-        projects.id AS "projectId",
+        diagrams.project_id AS "projectId",
         projects.name AS "projectName",
         projects.slug AS "projectSlug",
         organizations.id AS "organizationId",
@@ -404,8 +415,8 @@ export class NotificationRepository {
       INNER JOIN users ON users.id = comments.created_by_id
       INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-      INNER JOIN projects ON projects.id = diagrams.project_id
-      INNER JOIN organizations ON organizations.id = projects.organization_id
+      LEFT JOIN projects ON projects.id = diagrams.project_id
+      INNER JOIN organizations ON organizations.id = diagrams.organization_id
       LEFT JOIN comment_thread_reads ON comment_thread_reads.thread_id = comment_threads.id
         AND comment_thread_reads.user_id = ${userId}
       LEFT JOIN comments parent_comments ON parent_comments.id = comments.parent_comment_id
@@ -416,7 +427,17 @@ export class NotificationRepository {
   private createProjectAccessExistsSql(userId: string | ReturnType<typeof sql.ref>) {
     return sql`
       (
-        EXISTS (
+        (
+          diagrams.project_id IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM organization_members access_root_organization_members
+            WHERE access_root_organization_members.organization_id = diagrams.organization_id
+              AND access_root_organization_members.user_id = ${userId}
+              AND access_root_organization_members.status = 'active'
+          )
+        )
+        OR EXISTS (
           SELECT 1
           FROM project_members access_project_members
           WHERE access_project_members.project_id = projects.id
@@ -430,6 +451,17 @@ export class NotificationRepository {
           WHERE project_team_access.project_id = projects.id
             AND team_members.user_id = ${userId}
             AND teams.archived_at IS NULL
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM organization_members access_manager_organization_members
+          WHERE access_manager_organization_members.organization_id = diagrams.organization_id
+            AND access_manager_organization_members.user_id = ${userId}
+            AND access_manager_organization_members.status = 'active'
+            AND (
+              access_manager_organization_members.role IN ('owner', 'admin')
+              OR organizations.default_project_role IN ('editor', 'commenter', 'viewer')
+            )
         )
       )
     `;

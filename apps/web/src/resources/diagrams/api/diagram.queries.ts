@@ -3,11 +3,13 @@ import {
   getDiagramReviewEvents,
   getDiagramReviewSummary,
   getProjectDiagrams,
+  getWorkspaceDiagrams,
   type DiagramExportResponseDtoOutput,
   type DiagramListResponseDtoOutput,
   type DiagramReviewEventListResponseDtoOutput,
   type DiagramReviewSummaryDtoOutput,
   type DiagramResponseDtoOutput,
+  type OrganizationDtoOutput,
   type ProjectResponseDtoOutput,
 } from '@tabliodb/sdk';
 import type { PaginationQuery } from '@tabliodb/shared';
@@ -25,9 +27,16 @@ type DiagramsQueries = {
     projectId: string,
     query?: PaginationQuery,
   ) => AppQueryOptions<DiagramListResponseDtoOutput, ReturnType<typeof diagramsKeys.listByProject>>;
+  listByWorkspace: (
+    organizationId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<DiagramListResponseDtoOutput, ReturnType<typeof diagramsKeys.listByWorkspace>>;
   listForProject: (
     project: ProjectResponseDtoOutput | null,
   ) => AppQueryOptions<DiagramResponseDtoOutput[], ReturnType<typeof diagramsKeys.listItemsByProject>>;
+  listForWorkspace: (
+    organization: OrganizationDtoOutput | null,
+  ) => AppQueryOptions<DiagramResponseDtoOutput[], ReturnType<typeof diagramsKeys.listItemsByWorkspace>>;
   reviewEvents: (
     diagramId: string,
     query?: PaginationQuery,
@@ -52,11 +61,25 @@ export const diagramsQueries: DiagramsQueries = {
       queryKey: diagramsKeys.listByProject(projectId, query),
     }),
 
+  listByWorkspace: (organizationId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(organizationId),
+      queryFn: () => getWorkspaceDiagrams({ organizationId, ...query }),
+      queryKey: diagramsKeys.listByWorkspace(organizationId, query),
+    }),
+
   listForProject: (project: ProjectResponseDtoOutput | null) =>
     appQueryOptions({
       enabled: Boolean(project?.id),
       queryFn: () => listDiagramsForProject(project),
       queryKey: diagramsKeys.listItemsByProject(project?.id ?? 'missing-project'),
+    }),
+
+  listForWorkspace: (organization: OrganizationDtoOutput | null) =>
+    appQueryOptions({
+      enabled: Boolean(organization?.id),
+      queryFn: () => listDiagramsForWorkspace(organization),
+      queryKey: diagramsKeys.listItemsByWorkspace(organization?.id ?? 'missing-workspace'),
     }),
 
   reviewEvents: (diagramId: string, query: PaginationQuery = {}) =>
@@ -82,5 +105,18 @@ async function listDiagramsForProject(project: ProjectResponseDtoOutput | null):
   const diagrams = await getProjectDiagrams({ limit: 50, projectId: project.id });
 
   // Diagram creation is an editor action, not a fetch side effect; empty projects render a CTA instead.
+  return diagrams.items;
+}
+
+async function listDiagramsForWorkspace(
+  organization: OrganizationDtoOutput | null,
+): Promise<DiagramResponseDtoOutput[]> {
+  if (!organization) {
+    return [];
+  }
+
+  const diagrams = await getWorkspaceDiagrams({ limit: 50, organizationId: organization.id });
+
+  // Workspace listing is the canonical diagram-first feed; folders are just optional metadata on each item.
   return diagrams.items;
 }

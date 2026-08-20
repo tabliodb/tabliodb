@@ -239,7 +239,19 @@ export function EditorPage() {
     projects,
     routeProjectId,
   });
-  const diagramsQuery = useQuery(diagramsQueries.listForProject(activeProject));
+  const projectDiagramsQueryOptions = diagramsQueries.listForProject(activeProject);
+  const workspaceDiagramsQueryOptions = diagramsQueries.listForWorkspace(activeOrganization);
+  const projectDiagramsQuery = useQuery({
+    ...projectDiagramsQueryOptions,
+    // Project query is only active on folder routes; workspace routes use the root diagram feed instead.
+    enabled: Boolean(activeProject) && projectDiagramsQueryOptions.enabled !== false,
+  });
+  const workspaceDiagramsQuery = useQuery({
+    ...workspaceDiagramsQueryOptions,
+    // Keeping both hooks mounted preserves hook order while avoiding duplicate diagram fetches.
+    enabled: !activeProject && workspaceDiagramsQueryOptions.enabled !== false,
+  });
+  const diagramsQuery = activeProject ? projectDiagramsQuery : workspaceDiagramsQuery;
   const diagrams = diagramsQuery.data ?? [];
   const activeDiagram = useEditorActiveDiagram({
     diagrams,
@@ -786,7 +798,9 @@ export function EditorPage() {
         targetType: notification.thread.targetType,
       };
 
-      if (activeProject?.id === notification.project.id && activeDiagram?.id === notification.diagram.id) {
+      const notificationProjectId = notification.project?.id ?? null;
+
+      if ((activeProject?.id ?? null) === notificationProjectId && activeDiagram?.id === notification.diagram.id) {
         const tableId = modelRef.current ? getCommentTargetTableId(modelRef.current, target) : null;
 
         if (tableId) {
@@ -806,8 +820,8 @@ export function EditorPage() {
       editorRouteActions.goToDiagram(
         {
           diagramId: notification.diagram.id,
-          projectId: notification.project.id,
-          workspaceSlug: notification.project.organizationSlug || notification.project.organizationId,
+          projectId: notificationProjectId,
+          workspaceSlug: notification.workspace.slug || notification.workspace.id,
         },
         { clearSelection: false },
       );
@@ -985,41 +999,21 @@ export function EditorPage() {
       return;
     }
 
-    if (!routeProjectId && editorPreferenceQuery.isPending) {
-      return;
-    }
-
     if (routeProjectId && !projects.some((project) => project.id === routeProjectId)) {
       navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(activeOrganization) }), {
-        replace: true,
-      });
-
-      return;
-    }
-
-    if (!routeProjectId && projects.length > 0) {
-      const rememberedProject =
-        rememberedEditorTarget?.organizationId === activeOrganization.id
-          ? (projects.find((project) => project.id === rememberedEditorTarget.projectId) ?? null)
-          : null;
-      const project = rememberedProject ?? projects[0];
-
-      navigate(routes.project.to({ projectId: project.id, workspaceSlug: getWorkspaceSlug(project) }), {
         replace: true,
       });
     }
   }, [
     activeOrganization,
-    editorPreferenceQuery.isPending,
     navigate,
     projects,
     projectsQuery.isPending,
-    rememberedEditorTarget,
     routeProjectId,
   ]);
 
   useEffect(() => {
-    if (!activeProject || diagramsQuery.isPending) {
+    if (!activeOrganization || diagramsQuery.isPending) {
       return;
     }
 
@@ -1029,10 +1023,12 @@ export function EditorPage() {
 
     if (routeDiagramId && !diagrams.some((diagram) => diagram.id === routeDiagramId)) {
       navigate(
-        routes.project.to({
-          projectId: activeProject.id,
-          workspaceSlug: getWorkspaceSlug(activeProject),
-        }),
+        activeProject
+          ? routes.project.to({
+              projectId: activeProject.id,
+              workspaceSlug: getOrganizationSlug(activeOrganization),
+            })
+          : routes.workspace.to({ workspaceSlug: getOrganizationSlug(activeOrganization) }),
         { replace: true },
       );
 
@@ -1041,21 +1037,27 @@ export function EditorPage() {
 
     if (!routeDiagramId && diagrams.length > 0) {
       const rememberedDiagram =
-        rememberedEditorTarget?.projectId === activeProject.id
+        rememberedEditorTarget?.organizationId === activeOrganization.id
           ? (diagrams.find((diagram) => diagram.id === rememberedEditorTarget.diagramId) ?? null)
           : null;
       const diagram = rememberedDiagram ?? diagrams[0];
 
       navigate(
-        routes.diagram.to({
-          diagramId: diagram.id,
-          projectId: activeProject.id,
-          workspaceSlug: getWorkspaceSlug(activeProject),
-        }),
+        diagram.projectId
+          ? routes.diagram.to({
+              diagramId: diagram.id,
+              projectId: diagram.projectId,
+              workspaceSlug: getOrganizationSlug(activeOrganization),
+            })
+          : routes.workspaceDiagram.to({
+              diagramId: diagram.id,
+              workspaceSlug: getOrganizationSlug(activeOrganization),
+            }),
         { replace: true },
       );
     }
   }, [
+    activeOrganization,
     activeProject,
     diagrams,
     diagramsQuery.isPending,
@@ -1078,17 +1080,11 @@ export function EditorPage() {
       return;
     }
 
-    const canPersistWorkspaceOnly =
-      !routeProjectId && !projectsQuery.isPending && projects.length === 0 && !activeProject;
-
-    if (!activeProject && !canPersistWorkspaceOnly) {
-      return;
-    }
-
     const target: CurrentUserEditorPreferenceUpdateDtoInput = {
       diagramId: activeDiagram?.id ?? null,
       organizationId: activeOrganization.id,
-      projectId: activeProject?.id ?? null,
+      // Root diagrams persist with projectId null; foldered diagrams persist their owning folder id.
+      projectId: activeDiagram?.projectId ?? activeProject?.id ?? null,
     };
     const targetKey = createEditorPreferenceKey(target);
     const currentKey = rememberedEditorTarget?.organizationId
@@ -1412,19 +1408,19 @@ export function EditorPage() {
     currentUserQuery.isPending ||
     organizationsQuery.isPending ||
     Boolean(activeOrganization && projectsQuery.isPending) ||
-    Boolean(activeProject && diagramsQuery.isPending) ||
+    Boolean(activeOrganization && diagramsQuery.isPending) ||
     Boolean(activeDiagram && snapshotsQuery.isPending) ||
-    Boolean(activeProject && activeDiagram && !model);
+    Boolean(activeDiagram && !model);
 
   if (isLoadingWorkspace) {
     return <LoadingState message="Loading diagram workspace" />;
   }
 
-  if (!projectsQuery.isPending && activeOrganization && projects.length === 0) {
+  if (!diagramsQuery.isPending && activeOrganization && diagrams.length === 0) {
     return (
       <EditorEmptyAccessState
         action={
-          canCreateProject ? (
+          canCreateDiagram ? (
             <CreateDiagramDialog
               defaultDialect="postgresql"
               onCreated={(diagram) => {
@@ -1446,55 +1442,18 @@ export function EditorPage() {
           ) : undefined
         }
         description={
-          canCreateProject
-            ? 'Create the first database diagram in this workspace. Tabliodb will organize it automatically so you can start designing right away.'
-            : 'Your account is in this workspace, but an owner or admin has not connected you to a project or team yet.'
-        }
-        icon={canCreateProject ? FileText : UsersRound}
-        onRetry={() => void queryClient.invalidateQueries()}
-        title={canCreateProject ? 'No diagrams yet' : 'Waiting for project access'}
-      />
-    );
-  }
-
-  if (!diagramsQuery.isPending && activeProject && diagrams.length === 0) {
-    return (
-      <EditorEmptyAccessState
-        action={
-          canCreateDiagram ? (
-            <CreateDiagramDialog
-              defaultDialect="postgresql"
-              onCreated={(diagram) => {
-                editorRouteActions.goToDiagram({
-                  diagramId: diagram.id,
-                  projectId: activeProject.id,
-                  workspaceSlug: getWorkspaceSlug(activeProject),
-                });
-              }}
-              organizationId={activeProject.organizationId}
-              projectId={activeProject.id}
-              trigger={
-                <Button className="gap-2">
-                  <FileText className="size-4" />
-                  Create diagram
-                </Button>
-              }
-            />
-          ) : undefined
-        }
-        description={
           canCreateDiagram
-            ? 'This project is ready. Create the first diagram and choose the database dialect before drawing tables.'
-            : 'Your project role can view assigned diagrams, but there is no diagram available for this project yet.'
+            ? 'Create the first database diagram in this workspace. Folders are optional and can be used later when the list grows.'
+            : 'Your account can open this workspace, but it does not have diagram access yet.'
         }
-        icon={FileText}
+        icon={canCreateDiagram ? FileText : UsersRound}
         onRetry={() => void queryClient.invalidateQueries()}
         title={canCreateDiagram ? 'No diagrams yet' : 'No diagram access yet'}
       />
     );
   }
 
-  if (!currentUser || !activeOrganization || !activeProject || !activeDiagram || !model) {
+  if (!currentUser || !activeOrganization || !activeDiagram || !model) {
     return <LoadingState message="Preparing editor" />;
   }
 
@@ -1579,8 +1538,8 @@ export function EditorPage() {
         onDiagramSelect={(diagram) => {
           editorRouteActions.goToDiagram({
             diagramId: diagram.id,
-            projectId: activeProject.id,
-            workspaceSlug: getWorkspaceSlug(activeProject),
+            projectId: diagram.projectId,
+            workspaceSlug: getOrganizationSlug(activeOrganization),
           });
         }}
         onDiagramUpdated={(diagram) => {
@@ -1795,7 +1754,7 @@ export function EditorPage() {
         onOpenChange={setCommentsOpen}
         onTypingChange={handleCommentTypingChange}
         open={commentsOpen}
-        projectId={activeProject.id}
+        projectId={activeDiagram.projectId}
         remoteTypingPresences={remoteCommentTypingPresences}
         selectedCommentTarget={selectedCommentTarget}
         selectedTableId={selectedTable?.id ?? null}
@@ -1832,14 +1791,14 @@ export function EditorPage() {
             setCreateDiagramOpen(false);
             editorRouteActions.goToDiagram({
               diagramId: diagram.id,
-              projectId: activeProject.id,
-              workspaceSlug: getWorkspaceSlug(activeProject),
+              projectId: diagram.projectId,
+              workspaceSlug: getOrganizationSlug(activeOrganization),
             });
           }}
           onOpenChange={setCreateDiagramOpen}
           open={createDiagramOpen}
           organizationId={activeOrganization.id}
-          projectId={activeProject.id}
+          projectId={activeProject?.id ?? null}
           trigger={null}
         />
       ) : null}

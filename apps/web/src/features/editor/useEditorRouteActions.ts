@@ -100,13 +100,19 @@ export function useEditorRouteActions({
     (
       target: {
         diagramId: string;
-        projectId: string;
+        projectId: string | null;
         workspaceSlug: string;
       },
       { replace, ...resetOptions }: EditorRouteActionOptions = {},
     ) => {
       resetDraft(resetOptions);
-      navigate(routes.diagram.to(target), createNavigateOptions(replace));
+      // Root diagrams use the workspace route; foldered diagrams keep the legacy project route for deep links.
+      navigate(
+        target.projectId
+          ? routes.diagram.to({ diagramId: target.diagramId, projectId: target.projectId, workspaceSlug: target.workspaceSlug })
+          : routes.workspaceDiagram.to({ diagramId: target.diagramId, workspaceSlug: target.workspaceSlug }),
+        createNavigateOptions(replace),
+      );
     },
     [navigate, resetDraft],
   );

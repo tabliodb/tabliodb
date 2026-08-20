@@ -55,11 +55,8 @@ export function useCreateDiagramMutation(params: UseCreateDiagramMutationParams 
     mutationFn: createDiagramMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Diagram selector dan editor route bergantung pada list per project, jadi creation langsung terlihat tanpa menunggu reload.
-      queryClient.setQueryData<DiagramResponseDtoOutput[]>(
-        diagramsKeys.listItemsByProject(data.projectId),
-        (current) => [data, ...(current ?? []).filter((diagram) => diagram.id !== data.id)],
-      );
+      // Diagram selector utama membaca list workspace; project cache hanya dipatch jika diagram memang berada di folder.
+      patchDiagramListCache(data);
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
@@ -71,11 +68,8 @@ export function useCreateWorkspaceDiagramMutation(params: UseCreateWorkspaceDiag
     mutationFn: createWorkspaceDiagramMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Workspace-level create may auto-create the backing General folder, so project and diagram lists must refresh together.
-      queryClient.setQueryData<DiagramResponseDtoOutput[]>(
-        diagramsKeys.listItemsByProject(data.projectId),
-        (current) => [data, ...(current ?? []).filter((diagram) => diagram.id !== data.id)],
-      );
+      // Workspace-level create produces a root diagram, so the workspace list is the authoritative optimistic cache.
+      patchDiagramListCache(data);
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
@@ -88,10 +82,8 @@ export function useUpdateDiagramMutation(params: UseUpdateDiagramMutationParams 
     mutationFn: updateDiagramMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Diagram list feeds the active editor header, so successful metadata changes are patched into every cached page.
-      queryClient.setQueryData<DiagramResponseDtoOutput[]>(diagramsKeys.listItemsByProject(data.projectId), (current) =>
-        (current ?? []).map((diagram) => (diagram.id === data.id ? data : diagram)),
-      );
+      // Diagram list feeds the active editor header, so successful metadata changes are patched into workspace/folder caches.
+      patchDiagramListCache(data, 'replace');
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
@@ -119,15 +111,33 @@ export function useImportDiagramMutation(params: UseImportDiagramMutationParams 
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Import replace mutates the draft document and diagram metadata, so related list/export caches must be refreshed.
-      queryClient.setQueryData<DiagramResponseDtoOutput[]>(
-        diagramsKeys.listItemsByProject(data.diagram.projectId),
-        (current) => (current ?? []).map((diagram) => (diagram.id === data.diagram.id ? data.diagram : diagram)),
-      );
+      patchDiagramListCache(data.diagram, 'replace');
       queryClient.invalidateQueries({ queryKey: diagramsKeys.all });
       queryClient.invalidateQueries({ queryKey: reviewSignalKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
+}
+
+function patchDiagramListCache(data: DiagramResponseDtoOutput, mode: 'prepend' | 'replace' = 'prepend') {
+  const patchList = (current: DiagramResponseDtoOutput[] | undefined) => {
+    const items = (current ?? []).filter((diagram) => diagram.id !== data.id);
+
+    return mode === 'replace' ? [...items, data].sort(byUpdatedAtDesc) : [data, ...items];
+  };
+
+  queryClient.setQueryData<DiagramResponseDtoOutput[]>(
+    diagramsKeys.listItemsByWorkspace(data.organizationId),
+    patchList,
+  );
+
+  if (data.projectId) {
+    queryClient.setQueryData<DiagramResponseDtoOutput[]>(diagramsKeys.listItemsByProject(data.projectId), patchList);
+  }
+}
+
+function byUpdatedAtDesc(left: DiagramResponseDtoOutput, right: DiagramResponseDtoOutput) {
+  return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
 }
 
 type UseCreateDiagramReviewActionMutationParams = {

@@ -42,7 +42,7 @@ async function seedDevelopmentData(tx: Transaction<DB>) {
   const owner = await upsertSeedOwner(tx);
   const organization = await upsertSeedOrganization(tx, owner.id);
   const project = await upsertSeedProject(tx, owner.id, organization.id);
-  const diagram = await upsertSeedDiagram(tx, owner.id, project.id);
+  const diagram = await upsertSeedDiagram(tx, owner.id, organization.id, project.id);
   const snapshotVersion = await ensureInitialDiagramState(tx, {
     createdById: owner.id,
     diagramId: diagram.id,
@@ -253,7 +253,7 @@ async function upsertSeedProject(tx: Transaction<DB>, ownerId: string, organizat
   return project;
 }
 
-async function upsertSeedDiagram(tx: Transaction<DB>, ownerId: string, projectId: string) {
+async function upsertSeedDiagram(tx: Transaction<DB>, ownerId: string, organizationId: string, projectId: string) {
   const slug = slugify(seedDiagramName);
   const existingDiagram = await tx
     .selectFrom('diagrams')
@@ -271,6 +271,7 @@ async function upsertSeedDiagram(tx: Transaction<DB>, ownerId: string, projectId
         createdById: ownerId,
         dialect: 'postgresql',
         name: seedDiagramName,
+        organizationId,
         projectId,
         reviewSettings: defaultDiagramReviewSettings,
         slug,

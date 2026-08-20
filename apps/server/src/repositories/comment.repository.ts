@@ -121,7 +121,7 @@ export class CommentRepository {
     return this.db
       .selectFrom('comment_threads')
       .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
       .select([
         'comment_threads.id',
         'comment_threads.diagramId',
@@ -134,9 +134,11 @@ export class CommentRepository {
         'comment_threads.createdAt',
         'comment_threads.updatedAt',
         'diagrams.projectId',
-        'projects.organizationId',
+        'diagrams.organizationId',
       ])
       .where('comment_threads.id', '=', threadId)
+      .where('diagrams.archivedAt', 'is', null)
+      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
       .executeTakeFirst();
   }
 
@@ -155,7 +157,7 @@ export class CommentRepository {
       .selectFrom('comments')
       .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
       .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
       .select([
         'comments.id',
         'comments.threadId',
@@ -164,10 +166,12 @@ export class CommentRepository {
         'comments.deletedAt',
         'comment_threads.diagramId',
         'diagrams.projectId',
-        'projects.organizationId',
+        'diagrams.organizationId',
       ])
       .where('comments.id', '=', commentId)
       .where('comments.deletedAt', 'is', null)
+      .where('diagrams.archivedAt', 'is', null)
+      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
       .executeTakeFirst();
   }
 
@@ -177,17 +181,19 @@ export class CommentRepository {
         .selectFrom('comments')
         .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
         .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
-        .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+        .leftJoin('projects', 'projects.id', 'diagrams.projectId')
         .select([
           'comments.id',
           'comments.threadId',
           'comments.deletedAt',
           'comment_threads.diagramId',
           'diagrams.projectId',
-          'projects.organizationId',
+          'diagrams.organizationId',
         ])
         // Replies to deleted tombstones still need to be readable so the nested tree does not collapse.
         .where('comments.id', '=', commentId)
+        .where('diagrams.archivedAt', 'is', null)
+        .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
         .executeTakeFirst()
     );
   }
@@ -281,25 +287,32 @@ export class CommentRepository {
 
   getMentionableUsersForDiagram(diagramId: string) {
     return sql<{ email: string; name: string; userId: string }>`
-      WITH diagram_project AS (
-        SELECT diagrams.project_id
+      WITH diagram_scope AS (
+        SELECT diagrams.organization_id, diagrams.project_id
         FROM diagrams
-        INNER JOIN projects ON projects.id = diagrams.project_id
+        LEFT JOIN projects ON projects.id = diagrams.project_id
         WHERE diagrams.id = ${diagramId}
           AND diagrams.archived_at IS NULL
-          AND projects.archived_at IS NULL
+          AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
       ),
       project_users AS (
         SELECT project_members.user_id
         FROM project_members
-        INNER JOIN diagram_project ON diagram_project.project_id = project_members.project_id
+        INNER JOIN diagram_scope ON diagram_scope.project_id = project_members.project_id
         UNION
         SELECT team_members.user_id
         FROM project_team_access
-        INNER JOIN diagram_project ON diagram_project.project_id = project_team_access.project_id
+        INNER JOIN diagram_scope ON diagram_scope.project_id = project_team_access.project_id
         INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
         INNER JOIN teams ON teams.id = project_team_access.team_id
         WHERE teams.archived_at IS NULL
+        UNION
+        -- Root diagrams live directly in a workspace, so mention candidates come from active workspace members.
+        SELECT organization_members.user_id
+        FROM organization_members
+        INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
+        WHERE diagram_scope.project_id IS NULL
+          AND organization_members.status = 'active'
       )
       SELECT DISTINCT
         users.id AS "userId",

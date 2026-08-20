@@ -244,7 +244,8 @@ export interface ApiKeyTable {
 
 export interface DiagramTable {
   id: Generated<string>;
-  projectId: string;
+  organizationId: string;
+  projectId: NullableColumn<string>;
   name: string;
   slug: NullableColumn<string>;
   dialect: Defaulted<string>;

@@ -191,6 +191,10 @@ export const router = createBrowserRouter([
               },
               {
                 element: <EditorPage />,
+                path: routes.workspaceDiagram.path,
+              },
+              {
+                element: <EditorPage />,
                 path: routes.diagram.path,
               },
             ],

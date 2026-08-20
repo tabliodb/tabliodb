@@ -10,6 +10,10 @@ type DiagramParams = ProjectParams & {
   diagramId: string;
 };
 
+type WorkspaceDiagramParams = WorkspaceParams & {
+  diagramId: string;
+};
+
 type InvitationParams = {
   token: string;
 };
@@ -98,5 +102,10 @@ export const routes = {
     path: '/workspaces/:workspaceSlug/projects/:projectId/diagrams/:diagramId',
     to: ({ diagramId, projectId, workspaceSlug }: DiagramParams) =>
       `/workspaces/${encodePathSegment(workspaceSlug)}/projects/${encodePathSegment(projectId)}/diagrams/${encodePathSegment(diagramId)}`,
+  },
+  workspaceDiagram: {
+    path: '/workspaces/:workspaceSlug/diagrams/:diagramId',
+    to: ({ diagramId, workspaceSlug }: WorkspaceDiagramParams) =>
+      `/workspaces/${encodePathSegment(workspaceSlug)}/diagrams/${encodePathSegment(diagramId)}`,
   },
 } as const;

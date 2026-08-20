@@ -112,7 +112,7 @@ export function CommentsDialog({
   onTypingChange: (typing: AwarenessState['commentTyping']) => void;
   open: boolean;
   openRequest: CommentThreadOpenRequest | null;
-  projectId: string;
+  projectId: string | null;
   remoteTypingPresences: CommentTypingPresence[];
   selectedCommentTarget: EditorCommentTarget | null;
   selectedTableId: string | null;
@@ -171,11 +171,11 @@ export function CommentsDialog({
     // Read receipt hanya diambil untuk thread yang sedang dibuka agar dialog tidak melakukan request tambahan untuk semua thread.
     enabled: open && Boolean(activeThread) && threadReadStateQueryOptions.enabled !== false,
   });
-  const mentionMembersQueryOptions = projectsQueries.members(projectId, projectMemberPageQuery);
+  const mentionMembersQueryOptions = projectsQueries.members(projectId ?? '', projectMemberPageQuery);
   const mentionMembersQuery = useQuery({
     ...mentionMembersQueryOptions,
-    // Mention suggestions memakai project members dan baru dibutuhkan ketika dialog komentar dibuka.
-    enabled: open && mentionMembersQueryOptions.enabled !== false,
+    // Root diagrams do not have project members; a diagram-scoped mention endpoint will fill this gap cleanly later.
+    enabled: open && Boolean(projectId) && mentionMembersQueryOptions.enabled !== false,
   });
   const rootComments = rootCommentsQuery.data?.items ?? emptyComments;
   const visibleTypingPresences = useMemo(

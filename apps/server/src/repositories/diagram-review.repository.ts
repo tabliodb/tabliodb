@@ -19,17 +19,17 @@ export class DiagramReviewRepository {
   getDiagramReviewScope(diagramId: string) {
     return this.db
       .selectFrom('diagrams')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
       .select([
         'diagrams.id',
         'diagrams.projectId',
         'diagrams.currentSnapshotId',
         'diagrams.status',
-        'projects.organizationId',
+        'diagrams.organizationId',
       ])
       .where('diagrams.id', '=', diagramId)
       .where('diagrams.archivedAt', 'is', null)
-      .where('projects.archivedAt', 'is', null)
+      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
       .executeTakeFirst();
   }
 
@@ -42,17 +42,17 @@ export class DiagramReviewRepository {
     return this.db.transaction().execute(async (tx) => {
       const current = await tx
         .selectFrom('diagrams')
-        .innerJoin('projects', 'projects.id', 'diagrams.projectId')
+        .leftJoin('projects', 'projects.id', 'diagrams.projectId')
         .select([
           'diagrams.id',
           'diagrams.projectId',
           'diagrams.currentSnapshotId',
           'diagrams.status',
-          'projects.organizationId',
+          'diagrams.organizationId',
         ])
         .where('diagrams.id', '=', options.diagramId)
         .where('diagrams.archivedAt', 'is', null)
-        .where('projects.archivedAt', 'is', null)
+        .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
         .executeTakeFirstOrThrow();
       const now = new Date();
       const nextStatus = getNextDiagramReviewStatus(current.status, options.action);

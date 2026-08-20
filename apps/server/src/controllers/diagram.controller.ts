@@ -9,6 +9,8 @@ import {
   DiagramExportResponseDto,
   DiagramImportDto,
   DiagramImportResponseDto,
+  DiagramListQueryDto,
+  DiagramListResponseDto,
   DiagramResponseDto,
   DiagramUpdateDto,
   WorkspaceDiagramCreateDto,
@@ -38,7 +40,7 @@ export class DiagramController {
 
   @Post()
   @RateLimit(RateLimitPreset.DiagramWrite)
-  @RequirePermission(Permission.DiagramCreate, { key: 'projectId', source: 'body', type: 'project' })
+  @RequirePermission(Permission.DiagramCreate, { key: 'organizationId', source: 'body', type: 'organization' })
   @ApiBody({ type: DiagramCreateDto })
   @ApiOperation({ operationId: 'createDiagram' })
   @ZodResponse({ status: HttpStatus.CREATED, type: DiagramResponseDto })
@@ -48,7 +50,7 @@ export class DiagramController {
 
   @Post('workspace/:organizationId')
   @RateLimit(RateLimitPreset.DiagramWrite)
-  @RequirePermission(Permission.ProjectCreate, { key: 'organizationId', source: 'param', type: 'organization' })
+  @RequirePermission(Permission.DiagramCreate, { key: 'organizationId', source: 'param', type: 'organization' })
   @ApiParam({ name: 'organizationId', type: String })
   @ApiBody({ type: WorkspaceDiagramCreateDto })
   @ApiOperation({ operationId: 'createWorkspaceDiagram' })
@@ -59,6 +61,20 @@ export class DiagramController {
     @Body() dto: WorkspaceDiagramCreateDto,
   ) {
     return this.service.createInOrganization(auth, organizationId, dto);
+  }
+
+  @Get('workspace/:organizationId')
+  @RequirePermission(Permission.DiagramRead, { key: 'organizationId', source: 'param', type: 'organization' })
+  @ApiParam({ name: 'organizationId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getWorkspaceDiagrams' })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramListResponseDto })
+  getWorkspaceDiagrams(
+    @Auth() auth: AuthContext,
+    @Param('organizationId') organizationId: string,
+    @Query() query: DiagramListQueryDto,
+  ) {
+    return this.service.getByOrganization(auth, organizationId, query);
   }
 
   @Patch(':diagramId')

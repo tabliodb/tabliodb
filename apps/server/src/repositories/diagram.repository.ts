@@ -36,7 +36,7 @@ export class DiagramRepository {
     const offset = decodeOffsetCursor(options.cursor);
     const rows = await this.db
       .selectFrom('diagrams')
-      .select(['id', 'projectId', 'name', 'dialect', 'status', 'createdAt', 'updatedAt'])
+      .select(['id', 'organizationId', 'projectId', 'name', 'dialect', 'status', 'createdAt', 'updatedAt'])
       .where('projectId', '=', projectId)
       .where('archivedAt', 'is', null)
       .orderBy('updatedAt', 'desc')
@@ -55,6 +55,45 @@ export class DiagramRepository {
       items: rows.slice(0, options.limit).map((row) => ({
         ...row,
         // Database menyimpan dialect sebagai text; DTO/SDK mengeksposnya sebagai union dialect canonical.
+        dialect: row.dialect as DatabaseDialect,
+      })),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
+  }
+
+  async getByOrganization(organizationId: string, options: DiagramListOptions & { projectId?: string | null }) {
+    const offset = decodeOffsetCursor(options.cursor);
+    let query = this.db
+      .selectFrom('diagrams')
+      .select(['id', 'organizationId', 'projectId', 'name', 'dialect', 'status', 'createdAt', 'updatedAt'])
+      .where('organizationId', '=', organizationId)
+      .where('archivedAt', 'is', null)
+      .orderBy('updatedAt', 'desc')
+      .limit(options.limit + 1)
+      .offset(offset);
+    let countQuery = this.db
+      .selectFrom('diagrams')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('organizationId', '=', organizationId)
+      .where('archivedAt', 'is', null);
+
+    if (options.projectId !== undefined) {
+      // A null projectId means "root diagrams"; an omitted projectId means "all diagrams in this workspace".
+      query = options.projectId === null ? query.where('projectId', 'is', null) : query.where('projectId', '=', options.projectId);
+      countQuery =
+        options.projectId === null
+          ? countQuery.where('projectId', 'is', null)
+          : countQuery.where('projectId', '=', options.projectId);
+    }
+
+    const rows = await query.execute();
+    const totalRow = await countQuery.executeTakeFirstOrThrow();
+
+    return {
+      // Workspace-level listing is the primary diagram browser; pagination keeps large self-hosted instances predictable.
+      items: rows.slice(0, options.limit).map((row) => ({
+        ...row,
         dialect: row.dialect as DatabaseDialect,
       })),
       nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,

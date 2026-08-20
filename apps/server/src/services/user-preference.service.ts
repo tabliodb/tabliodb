@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthContext } from '../database.js';
 import { CurrentUserEditorPreferenceDto, CurrentUserEditorPreferenceUpdateDto } from '../dtos/auth.dto.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
@@ -90,16 +90,12 @@ export class UserPreferenceService {
       projectId: string | null;
     },
   ): Promise<ResolvedEditorPreferenceTarget | null> {
-    if (input.diagramId && !input.projectId) {
-      throw new BadRequestException('diagramId requires projectId');
-    }
-
     const organization = await this.organizationRepository.getSettingsForUser(auth.user.id, input.organizationId);
     if (!organization) {
       return null;
     }
 
-    if (!input.projectId) {
+    if (!input.projectId && !input.diagramId) {
       return {
         diagram: null,
         organization,
@@ -107,8 +103,10 @@ export class UserPreferenceService {
       };
     }
 
-    const project = await this.projectRepository.getByIdForUser(auth.user.id, input.projectId);
-    if (!project || project.organizationId !== organization.id) {
+    const project = input.projectId
+      ? ((await this.projectRepository.getByIdForUser(auth.user.id, input.projectId)) ?? null)
+      : null;
+    if (input.projectId && (!project || project.organizationId !== organization.id)) {
       return null;
     }
 
@@ -125,13 +123,18 @@ export class UserPreferenceService {
       this.projectRepository.getDiagramRole(auth.user.id, input.diagramId),
     ]);
 
-    if (!diagram || !diagramRole || diagram.projectId !== project.id) {
+    if (!diagram || !diagramRole || diagram.organizationId !== organization.id) {
+      return null;
+    }
+
+    if (input.projectId && diagram.projectId !== input.projectId) {
       return null;
     }
 
     return {
       diagram,
       organization,
+      // Root diagrams intentionally persist a null project so the next visit can route workspace -> diagram directly.
       project,
     };
   }

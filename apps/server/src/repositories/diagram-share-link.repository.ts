@@ -33,8 +33,8 @@ export type DiagramShareLinkAccessContext = {
   diagramName: string;
   organizationId: string;
   organizationName: string;
-  projectId: string;
-  projectName: string;
+  projectId: string | null;
+  projectName: string | null;
 };
 
 export type PublicDiagramShareLinkRecord = DiagramShareLinkRecord &
@@ -71,20 +71,20 @@ export class DiagramShareLinkRepository {
   async getDiagramAccessContext(diagramId: string): Promise<DiagramShareLinkAccessContext | undefined> {
     return this.db
       .selectFrom('diagrams')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
-      .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
+      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
+      .innerJoin('organizations', 'organizations.id', 'diagrams.organizationId')
       .select([
         'diagrams.id as diagramId',
         'diagrams.name as diagramName',
         'diagrams.dialect',
-        'projects.id as projectId',
+        'diagrams.projectId',
         'projects.name as projectName',
         'organizations.id as organizationId',
         'organizations.name as organizationName',
       ])
       .where('diagrams.id', '=', diagramId)
       .where('diagrams.archivedAt', 'is', null)
-      .where('projects.archivedAt', 'is', null)
+      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
       .where('organizations.archivedAt', 'is', null)
       .executeTakeFirst();
   }
@@ -115,13 +115,13 @@ export class DiagramShareLinkRepository {
   async getActiveByTokenHash(tokenHash: Buffer): Promise<PublicDiagramShareLinkRecord | undefined> {
     const row = await this.baseShareLinkQuery()
       .innerJoin('diagrams', 'diagrams.id', 'diagram_share_links.diagramId')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
-      .innerJoin('organizations', 'organizations.id', 'projects.organizationId')
+      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
+      .innerJoin('organizations', 'organizations.id', 'diagrams.organizationId')
       .leftJoin('diagram_snapshots', 'diagram_snapshots.id', 'diagram_share_links.snapshotId')
       .select([
         'diagrams.name as diagramName',
         'diagrams.dialect',
-        'projects.id as projectId',
+        'diagrams.projectId',
         'projects.name as projectName',
         'organizations.id as organizationId',
         'organizations.name as organizationName',
@@ -136,7 +136,7 @@ export class DiagramShareLinkRepository {
         eb.or([eb('diagram_share_links.expiresAt', 'is', null), eb('diagram_share_links.expiresAt', '>', new Date())]),
       )
       .where('diagrams.archivedAt', 'is', null)
-      .where('projects.archivedAt', 'is', null)
+      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
       .where('organizations.archivedAt', 'is', null)
       .executeTakeFirst();
 

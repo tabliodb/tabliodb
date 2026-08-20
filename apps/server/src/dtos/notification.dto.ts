@@ -33,6 +33,12 @@ const NotificationProjectSchema = z.object({
   slug: z.string(),
 });
 
+const NotificationWorkspaceSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  slug: z.string(),
+});
+
 const NotificationDiagramSchema = z.object({
   dialect: DatabaseDialectSchema,
   id: z.uuid(),
@@ -81,9 +87,10 @@ const NotificationInboxItemSchema = z
     id: z.string(),
     isUnread: z.boolean(),
     parentComment: NotificationParentCommentSchema,
-    project: NotificationProjectSchema,
+    project: NotificationProjectSchema.nullable(),
     thread: NotificationThreadSchema,
     type: z.enum(['mention', 'reply']),
+    workspace: NotificationWorkspaceSchema,
   })
   .meta({ id: 'NotificationInboxItemDto' });
 

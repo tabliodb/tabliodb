@@ -8,7 +8,6 @@ import { organizationsQueries } from '@/resources/organizations';
 import { projectsQueries } from '@/resources/projects';
 import {
   getOrganizationSlug,
-  getWorkspaceSlug,
   matchesRememberedWorkspace,
   matchesWorkspaceRoute,
 } from '../editor-route-guards';
@@ -53,52 +52,56 @@ export async function editorLoader({ params }: LoaderFunctionArgs): Promise<Edit
       throw redirect(routes.workspace.to({ workspaceSlug: organizationSlug }));
     }
 
-    const rememberedProject =
-      rememberedTarget && rememberedTarget.organizationId === activeOrganization.id
-        ? (projects.find((project) => project.id === rememberedTarget.projectId) ?? null)
-        : null;
-    const activeProject = requestedProject ?? (!params.projectId ? (rememberedProject ?? projects[0] ?? null) : null);
-
-    if (!activeProject) {
-      if (!isWorkspaceRoute(params, organizationSlug)) {
-        throw redirect(routes.workspace.to({ workspaceSlug: organizationSlug }));
-      }
-
-      return { title: activeOrganization.name };
-    }
-
-    const workspaceSlug = getWorkspaceSlug(activeProject);
-    const diagrams = await queryClient.ensureQueryData(diagramsQueries.listForProject(activeProject));
+    const activeProject = requestedProject;
+    const diagrams = await queryClient.ensureQueryData(diagramsQueries.listForWorkspace(activeOrganization));
     const requestedDiagram = params.diagramId
       ? (diagrams.find((diagram) => diagram.id === params.diagramId) ?? null)
       : null;
 
     if (params.diagramId && !requestedDiagram) {
-      throw redirect(routes.project.to({ projectId: activeProject.id, workspaceSlug }));
+      throw redirect(
+        activeProject
+          ? routes.project.to({ projectId: activeProject.id, workspaceSlug: organizationSlug })
+          : routes.workspace.to({ workspaceSlug: organizationSlug }),
+      );
+    }
+
+    if (activeProject && requestedDiagram && requestedDiagram.projectId !== activeProject.id) {
+      // A project route may only open diagrams inside that folder; root diagrams use the workspace diagram route.
+      throw redirect(routes.workspaceDiagram.to({ diagramId: requestedDiagram.id, workspaceSlug: organizationSlug }));
     }
 
     const rememberedDiagram =
-      rememberedTarget && rememberedTarget.projectId === activeProject.id
+      rememberedTarget && rememberedTarget.organizationId === activeOrganization.id
         ? (diagrams.find((diagram) => diagram.id === rememberedTarget.diagramId) ?? null)
         : null;
     const activeDiagram = requestedDiagram ?? (!params.diagramId ? (rememberedDiagram ?? diagrams[0] ?? null) : null);
 
     if (!activeDiagram) {
-      if (!isProjectRoute(params, workspaceSlug, activeProject.id)) {
-        throw redirect(routes.project.to({ projectId: activeProject.id, workspaceSlug }));
+      if (activeProject && !isProjectRoute(params, organizationSlug, activeProject.id)) {
+        throw redirect(routes.project.to({ projectId: activeProject.id, workspaceSlug: organizationSlug }));
       }
 
-      return { title: activeProject.name };
+      if (!activeProject && !isWorkspaceRoute(params, organizationSlug)) {
+        throw redirect(routes.workspace.to({ workspaceSlug: organizationSlug }));
+      }
+
+      return { title: activeProject?.name ?? activeOrganization.name };
     }
 
-    if (!isDiagramRoute(params, workspaceSlug, activeProject.id, activeDiagram.id)) {
+    if (!isDiagramRoute(params, organizationSlug, activeDiagram.projectId, activeDiagram.id)) {
       // The editor URL is canonicalized to the exact diagram so refreshes, sharing browser history, and document title agree.
       throw redirect(
-        routes.diagram.to({
-          diagramId: activeDiagram.id,
-          projectId: activeProject.id,
-          workspaceSlug,
-        }),
+        activeDiagram.projectId
+          ? routes.diagram.to({
+              diagramId: activeDiagram.id,
+              projectId: activeDiagram.projectId,
+              workspaceSlug: organizationSlug,
+            })
+          : routes.workspaceDiagram.to({
+              diagramId: activeDiagram.id,
+              workspaceSlug: organizationSlug,
+            }),
       );
     }
 
@@ -125,6 +128,13 @@ function isProjectRoute(params: Params<string>, workspaceSlug: string, projectId
   return params.workspaceSlug === workspaceSlug && params.projectId === projectId && !params.diagramId;
 }
 
-function isDiagramRoute(params: Params<string>, workspaceSlug: string, projectId: string, diagramId: string): boolean {
-  return params.workspaceSlug === workspaceSlug && params.projectId === projectId && params.diagramId === diagramId;
+function isDiagramRoute(
+  params: Params<string>,
+  workspaceSlug: string,
+  projectId: string | null,
+  diagramId: string,
+): boolean {
+  return projectId
+    ? params.workspaceSlug === workspaceSlug && params.projectId === projectId && params.diagramId === diagramId
+    : params.workspaceSlug === workspaceSlug && !params.projectId && params.diagramId === diagramId;
 }

@@ -416,6 +416,8 @@ export function CreateDiagramDialog({
       await createDiagramMutation.mutateAsync({
         dialect: sdkDialectByValue[values.dialect],
         name: values.name,
+        // Diagram tetap milik workspace walau diletakkan di folder tertentu.
+        organizationId: organizationId!,
         projectId,
       });
     } catch {

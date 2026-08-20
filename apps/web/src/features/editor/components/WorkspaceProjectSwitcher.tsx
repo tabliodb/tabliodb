@@ -45,7 +45,7 @@ export function WorkspaceProjectSwitcher({
 }: {
   activeDiagram: DiagramResponseDto;
   activeOrganization: OrganizationDto;
-  activeProject: ProjectResponseDto;
+  activeProject: ProjectResponseDto | null;
   canCreateDiagram: boolean;
   canCreateProject: boolean;
   diagrams: DiagramResponseDto[];
@@ -185,7 +185,7 @@ function DiagramNavigator({
   projects,
 }: {
   activeDiagram: DiagramResponseDto;
-  activeProject: ProjectResponseDto;
+  activeProject: ProjectResponseDto | null;
   canCreateDiagram: boolean;
   canCreateProject: boolean;
   diagrams: DiagramResponseDto[];
@@ -249,7 +249,7 @@ function DiagramNavigator({
           <span className="min-w-0">
             <span className="block truncate text-[14px] font-extrabold leading-5">{activeDiagram.name}</span>
             <span className="block truncate text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-              {activeProject.name} / {activeDiagram.dialect}
+              {activeProject?.name ?? 'Workspace'} / {activeDiagram.dialect}
             </span>
           </span>
           <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
@@ -288,7 +288,7 @@ function DiagramNavigator({
                   <div className="min-w-0">
                     <h2 className="truncate text-[13px] font-black">My diagrams</h2>
                     <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Folder: {activeProject.name}
+                      {activeProject ? `Folder: ${activeProject.name}` : 'All diagrams in this workspace'}
                     </p>
                   </div>
                   <Badge className="shrink-0" variant="green">
@@ -391,7 +391,7 @@ function DiagramNavigator({
                 ) : (
                   <div className="grid gap-1">
                     {filteredProjects.map((project) => {
-                      const isActive = project.id === activeProject.id;
+                      const isActive = project.id === activeProject?.id;
 
                       return (
                         <button

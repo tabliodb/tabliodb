@@ -58,9 +58,31 @@ const rolePermissions: Record<ProjectRoleValue, Permission[]> = {
 
 const organizationRolePermissions: Record<OrganizationRoleValue, Permission[]> = {
   [OrganizationRole.Owner]: [Permission.All],
-  [OrganizationRole.Admin]: [Permission.OrganizationRead, Permission.OrganizationManage, Permission.ProjectCreate],
-  [OrganizationRole.Member]: [Permission.OrganizationRead, Permission.ProjectCreate],
-  [OrganizationRole.Guest]: [Permission.OrganizationRead],
+  // Root diagrams are workspace-owned documents, so workspace roles need direct diagram permissions without a folder grant.
+  [OrganizationRole.Admin]: [
+    Permission.OrganizationRead,
+    Permission.OrganizationManage,
+    Permission.ProjectCreate,
+    Permission.DiagramCreate,
+    Permission.DiagramRead,
+    Permission.DiagramUpdate,
+    Permission.DiagramDelete,
+    Permission.DiagramComment,
+    Permission.SnapshotCreate,
+    Permission.SnapshotRead,
+  ],
+  [OrganizationRole.Member]: [
+    Permission.OrganizationRead,
+    Permission.ProjectCreate,
+    Permission.DiagramCreate,
+    Permission.DiagramRead,
+    Permission.DiagramUpdate,
+    Permission.DiagramDelete,
+    Permission.DiagramComment,
+    Permission.SnapshotCreate,
+    Permission.SnapshotRead,
+  ],
+  [OrganizationRole.Guest]: [Permission.OrganizationRead, Permission.DiagramRead, Permission.SnapshotRead],
 };
 
 export function permissionsForOrganizationRole(role: OrganizationRoleValue): Permission[] {

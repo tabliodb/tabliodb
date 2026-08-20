@@ -96,14 +96,17 @@ export class NotificationService {
       id: item.id,
       isUnread: item.isUnread,
       parentComment,
-      project: {
-        id: item.projectId,
-        name: item.projectName,
-        organizationId: item.organizationId,
-        organizationName: item.organizationName,
-        organizationSlug: item.organizationSlug,
-        slug: item.projectSlug,
-      },
+      project:
+        item.projectId && item.projectName && item.projectSlug
+          ? {
+              id: item.projectId,
+              name: item.projectName,
+              organizationId: item.organizationId,
+              organizationName: item.organizationName,
+              organizationSlug: item.organizationSlug,
+              slug: item.projectSlug,
+            }
+          : null,
       thread: {
         id: item.threadId,
         status: item.threadStatus,
@@ -112,6 +115,11 @@ export class NotificationService {
         updatedAt: toIsoDateTime(item.threadUpdatedAt),
       },
       type: item.type as NotificationInboxItemKind,
+      workspace: {
+        id: item.organizationId,
+        name: item.organizationName,
+        slug: item.organizationSlug,
+      },
     };
   }
 

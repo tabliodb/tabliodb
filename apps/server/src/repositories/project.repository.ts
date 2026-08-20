@@ -279,14 +279,43 @@ export class ProjectRepository {
   async getDiagramRole(userId: string, diagramId: string) {
     const diagram = await this.db
       .selectFrom('diagrams')
-      .innerJoin('projects', 'projects.id', 'diagrams.projectId')
-      .select('diagrams.projectId')
+      .select(['diagrams.organizationId', 'diagrams.projectId'])
       .where('diagrams.id', '=', diagramId)
-      .where('projects.archivedAt', 'is', null)
       .where('diagrams.archivedAt', 'is', null)
       .executeTakeFirst();
 
-    return diagram ? this.getProjectRole(userId, diagram.projectId) : undefined;
+    if (!diagram) {
+      return undefined;
+    }
+
+    if (diagram.projectId) {
+      return this.getProjectRole(userId, diagram.projectId);
+    }
+
+    const membership = await this.db
+      .selectFrom('organization_members')
+      .innerJoin('organizations', 'organizations.id', 'organization_members.organizationId')
+      .select('organization_members.role')
+      .where('organization_members.userId', '=', userId)
+      .where('organization_members.organizationId', '=', diagram.organizationId)
+      .where('organization_members.status', '=', 'active')
+      .where('organizations.archivedAt', 'is', null)
+      .executeTakeFirst();
+
+    if (!membership) {
+      return undefined;
+    }
+
+    // Root diagrams are workspace documents; project-like roles keep downstream permission checks unchanged.
+    const roleByOrganizationRole: Record<string, ProjectRole | null> = {
+      admin: ProjectRole.Owner,
+      guest: ProjectRole.Viewer,
+      member: ProjectRole.Editor,
+      owner: ProjectRole.Owner,
+    };
+    const role = roleByOrganizationRole[membership.role] ?? null;
+
+    return role ? { role } : undefined;
   }
 
   async update(userId: string, projectId: string, dto: { description?: string | null; name?: string }) {
