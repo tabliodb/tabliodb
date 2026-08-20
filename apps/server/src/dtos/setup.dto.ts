@@ -35,7 +35,7 @@ const InstanceAuthSettingsUpdateSchema = z
 const OidcProviderSettingsSchema = z
   .object({
     autoCreateUsers: z.boolean(),
-    autoJoinOrganizationId: z.string().uuid().nullable(),
+    autoJoinOrganizationId: z.uuid().nullable(),
     autoJoinOrganizationRole: OidcAutoJoinOrganizationRoleSchema.nullable(),
     buttonLabel: z.string(),
     clientId: z.string().nullable(),
