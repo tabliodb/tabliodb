@@ -35,7 +35,7 @@ const NotificationProjectSchema = z.object({
 
 const NotificationDiagramSchema = z.object({
   dialect: DatabaseDialectSchema,
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string(),
 });
 
