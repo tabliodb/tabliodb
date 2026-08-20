@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { Button } from '@tabliodb/ui';
-import { Database, LayoutDashboard, LogOut, Settings, ShieldCheck, UserRound, UsersRound } from 'lucide-react';
+import { Database, LayoutDashboard, LogOut, Settings, UserRound, UsersRound } from 'lucide-react';
 import { routes } from '@/app/routes';
 import { LoadingState } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
@@ -52,10 +52,6 @@ export function AdminLayout() {
           <div>
             <h1 className="text-base font-extrabold">Admin</h1>
             <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Instance management</p>
-          </div>
-          <div className="hidden items-center gap-2 rounded-full border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] px-3 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-primary-text))] sm:flex">
-            <ShieldCheck className="size-4" />
-            Protected
           </div>
         </header>
         <Suspense fallback={<LoadingState />}>
