@@ -107,7 +107,7 @@ const TeamProjectAccessSchema = z
 
 const TeamProjectAccessUpsertSchema = z
   .object({
-    projectId: z.string().uuid(),
+    projectId: z.uuid(),
     role: TeamProjectRoleSchema.default(ProjectRole.Viewer),
   })
   .meta({ id: 'TeamProjectAccessUpsertDto' });
