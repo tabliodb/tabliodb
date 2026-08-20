@@ -7,7 +7,6 @@ import { FileService } from '../services/file.service.js';
 
 @ApiTags('files')
 @Controller('files')
-@Authenticated()
 export class FileController {
   constructor(private readonly fileService: FileService) {}
 

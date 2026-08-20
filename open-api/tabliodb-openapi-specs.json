@@ -2031,15 +2031,6 @@
           },
           {
             "api-key": []
-          },
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          },
-          {
-            "api-key": []
           }
         ],
         "summary": "",
