@@ -64,8 +64,8 @@ export function useEditorRouteActions({
     [navigate, resetDraft],
   );
 
-  const goToAdminUsers = useCallback(() => {
-    navigate(routes.adminUsers.to());
+  const goToAdminSettings = useCallback(() => {
+    navigate(routes.adminSettings.to());
   }, [navigate]);
 
   const goToProfile = useCallback(() => {
@@ -127,7 +127,7 @@ export function useEditorRouteActions({
   return {
     goHome,
     goLogin,
-    goToAdminUsers,
+    goToAdminSettings,
     goToDiagram,
     goToProfile,
     goToProject,
