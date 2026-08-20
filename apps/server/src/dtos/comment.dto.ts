@@ -84,7 +84,7 @@ const CommentResponseSchema = z
 const CommentThreadCreateSchema = z
   .object({
     bodyJson: CommentLexicalDocumentSchema,
-    diagramId: z.string().uuid(),
+    diagramId: z.uuid(),
     targetId: z.string().nullable(),
     targetType: CommentTargetTypeSchema,
   })
