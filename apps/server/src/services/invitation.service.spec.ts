@@ -64,13 +64,15 @@ describe(InvitationService.name, () => {
     getActiveById: vi.fn(),
     getByIdForUser: vi.fn(),
     getFirstForUser: vi.fn(),
+    getRole: vi.fn(),
   };
   const projectRepository = {
     getByIdForUser: vi.fn(),
+    getDiagramRole: vi.fn(),
+    getProjectRole: vi.fn(),
   };
   const userRepository = {
     getAnyByEmail: vi.fn(),
-    getInstanceRole: vi.fn(),
   };
 
   let service: InvitationService;
@@ -111,8 +113,8 @@ describe(InvitationService.name, () => {
       id: 'organization-id',
       name: 'Default Workspace',
     });
+    organizationRepository.getRole.mockResolvedValue({ role: OrganizationRole.Owner });
     userRepository.getAnyByEmail.mockResolvedValue(undefined);
-    userRepository.getInstanceRole.mockResolvedValue({ role: 'owner' });
   });
 
   afterEach(() => {

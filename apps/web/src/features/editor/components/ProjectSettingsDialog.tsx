@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { Permission, ProjectRole, isGranted, permissionsForProjectRole, type ProjectRoleValue } from '@tabliodb/shared';
 import {
-  Role3 as SdkProjectMemberRole,
+  Role5 as SdkProjectMemberRole,
   type ProjectMemberDtoOutput,
   type ProjectResponseDtoOutput,
 } from '@tabliodb/sdk';

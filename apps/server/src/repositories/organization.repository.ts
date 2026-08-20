@@ -67,6 +67,8 @@ export class OrganizationRepository {
       .innerJoin('organization_members', 'organization_members.organizationId', 'organizations.id')
       .selectAll('organizations')
       .where('organization_members.userId', '=', userId)
+      .where('organization_members.status', '=', 'active')
+      .where('organizations.archivedAt', 'is', null)
       .orderBy('organizations.createdAt', 'asc')
       .executeTakeFirst();
   }
@@ -77,7 +79,9 @@ export class OrganizationRepository {
       .innerJoin('organization_members', 'organization_members.organizationId', 'organizations.id')
       .selectAll('organizations')
       .where('organization_members.userId', '=', userId)
+      .where('organization_members.status', '=', 'active')
       .where('organizations.id', '=', organizationId)
+      .where('organizations.archivedAt', 'is', null)
       .executeTakeFirst();
   }
 
@@ -245,11 +249,38 @@ export class OrganizationRepository {
   }
 
   async removeMember(organizationId: string, userId: string): Promise<boolean> {
-    const result = await this.db
-      .deleteFrom('organization_members')
-      .where('organizationId', '=', organizationId)
-      .where('userId', '=', userId)
-      .executeTakeFirst();
+    const result = await this.db.transaction().execute(async (tx) => {
+      await sql`
+        DELETE FROM diagram_members
+        USING diagrams
+        WHERE diagram_members.diagram_id = diagrams.id
+          AND diagrams.organization_id = ${organizationId}
+          AND diagram_members.user_id = ${userId}
+      `.execute(tx);
+
+      await sql`
+        DELETE FROM project_members
+        USING projects
+        WHERE project_members.project_id = projects.id
+          AND projects.organization_id = ${organizationId}
+          AND project_members.user_id = ${userId}
+      `.execute(tx);
+
+      await sql`
+        DELETE FROM team_members
+        USING teams
+        WHERE team_members.team_id = teams.id
+          AND teams.organization_id = ${organizationId}
+          AND team_members.user_id = ${userId}
+      `.execute(tx);
+
+      // Workspace membership is the tenant boundary; direct lower-scope grants are removed before the membership row.
+      return tx
+        .deleteFrom('organization_members')
+        .where('organizationId', '=', organizationId)
+        .where('userId', '=', userId)
+        .executeTakeFirst();
+    });
 
     return Number(result.numDeletedRows) > 0;
   }
@@ -269,7 +300,7 @@ export class OrganizationRepository {
   async addMemberIfAbsent(options: {
     createdById?: string | null;
     organizationId: string;
-    role: OrganizationRole.Member | OrganizationRole.Guest;
+    role: OrganizationRole.Admin | OrganizationRole.Member | OrganizationRole.Guest;
     userId: string;
   }) {
     const organization = await this.getActiveById(options.organizationId);

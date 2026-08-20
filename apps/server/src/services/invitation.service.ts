@@ -5,7 +5,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import {
+  OrganizationRole,
+  Permission,
+  ProjectRole,
+  isGranted,
+  permissionsForOrganizationRole,
+  permissionsForProjectRole,
+} from '@tabliodb/shared';
 import { SALT_ROUNDS } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import {
@@ -42,8 +49,6 @@ export class InvitationService {
   ) {}
 
   async create(auth: AuthContext, dto: InvitationCreateDto): Promise<InvitationCreateResponseDto> {
-    await this.requireInstanceManager(auth);
-
     const email = dto.email.trim().toLowerCase();
     const existingUser = await this.userRepository.getAnyByEmail(email);
     if (existingUser) {
@@ -60,6 +65,11 @@ export class InvitationService {
     if (diagram && diagram.organizationId !== organization.id) {
       throw new BadRequestException('Diagram does not belong to the selected organization');
     }
+    await this.requireInviteTargetPermission(auth, {
+      diagramId: diagram?.id ?? null,
+      organizationId: organization.id,
+      projectId: project?.id ?? null,
+    });
 
     const token = this.cryptoRepository.randomBytesAsText(32);
     const invitation = await this.invitationRepository.create({
@@ -172,16 +182,63 @@ export class InvitationService {
     }
   }
 
-  private async requireInstanceManager(auth: AuthContext): Promise<void> {
-    const instanceMember = await this.userRepository.getInstanceRole(auth.user.id);
+  getCookieSecureDefault(): boolean {
+    return this.authService.getCookieSecureDefault();
+  }
 
-    if (!instanceMember) {
-      throw new ForbiddenException('Instance admin access is required');
+  private async requireInviteTargetPermission(
+    auth: AuthContext,
+    target: { diagramId: string | null; organizationId: string; projectId: string | null },
+  ): Promise<void> {
+    if (target.diagramId) {
+      this.assertApiKeyScope(auth, Permission.DiagramMemberManage);
+      const role = await this.projectRepository.getDiagramRole(auth.user.id, target.diagramId);
+      this.assertProjectPermission(role?.role ?? null, Permission.DiagramMemberManage);
+      return;
+    }
+
+    if (target.projectId) {
+      this.assertApiKeyScope(auth, Permission.ProjectMemberManage);
+      const role = await this.projectRepository.getProjectRole(auth.user.id, target.projectId);
+      this.assertProjectPermission(role?.role ?? null, Permission.ProjectMemberManage);
+      return;
+    }
+
+    this.assertApiKeyScope(auth, Permission.OrganizationManage);
+    const role = await this.organizationRepository.getRole(auth.user.id, target.organizationId);
+    if (
+      !role ||
+      !isGranted({
+        current: permissionsForOrganizationRole(role.role as OrganizationRole),
+        requested: [Permission.OrganizationManage],
+      })
+    ) {
+      // Workspace invite follows workspace-admin permission instead of instance-admin permission.
+      throw new ForbiddenException(`${Permission.OrganizationManage} permission is required`);
     }
   }
 
-  getCookieSecureDefault(): boolean {
-    return this.authService.getCookieSecureDefault();
+  private assertProjectPermission(role: ProjectRole | null, permission: Permission): void {
+    if (
+      !role ||
+      !isGranted({
+        current: permissionsForProjectRole(role),
+        requested: [permission],
+      })
+    ) {
+      throw new ForbiddenException(`${permission} permission is required`);
+    }
+  }
+
+  private assertApiKeyScope(auth: AuthContext, permission: Permission): void {
+    if (!auth.apiKey) {
+      return;
+    }
+
+    if (!isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
+      // API key scope is checked at service-level too because invitation target permission is dynamic.
+      throw new ForbiddenException(`${permission} API key scope is required`);
+    }
   }
 
   private buildAcceptUrl(token: string): string {

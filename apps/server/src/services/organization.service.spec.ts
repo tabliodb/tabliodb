@@ -41,6 +41,7 @@ describe(OrganizationService.name, () => {
     create: vi.fn(),
   };
   const organizationRepository = {
+    addMemberIfAbsent: vi.fn(),
     getRole: vi.fn(),
     getMember: vi.fn(),
     getMembers: vi.fn(),
@@ -51,12 +52,19 @@ describe(OrganizationService.name, () => {
     updateMemberRole: vi.fn(),
     updateSettings: vi.fn(),
   };
+  const userRepository = {
+    getByEmail: vi.fn(),
+  };
 
   let service: OrganizationService;
 
   beforeEach(() => {
     vi.resetAllMocks();
-    service = new OrganizationService(auditLogRepository as never, organizationRepository as never);
+    service = new OrganizationService(
+      auditLogRepository as never,
+      organizationRepository as never,
+      userRepository as never,
+    );
     organizationRepository.getRole.mockResolvedValue({ role: OrganizationRole.Owner });
   });
 
@@ -137,6 +145,49 @@ describe(OrganizationService.name, () => {
     expect(auditLogRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'organization.member_role_updated',
+        actorId: 'owner-id',
+        entityId: 'member-id',
+        entityType: 'organization_member',
+        organizationId: 'organization-id',
+      }),
+    );
+  });
+
+  it('adds an existing user to a workspace and records audit metadata', async () => {
+    userRepository.getByEmail.mockResolvedValue({
+      email: 'member@tabliodb.local',
+      id: 'member-id',
+      name: 'Member User',
+    });
+    organizationRepository.getMember.mockResolvedValue(undefined);
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      ...ownerMember,
+      email: 'member@tabliodb.local',
+      name: 'Member User',
+      role: OrganizationRole.Member,
+      userId: 'member-id',
+    });
+
+    await expect(
+      service.addMember(auth, 'organization-id', {
+        email: 'member@tabliodb.local',
+        role: OrganizationRole.Member,
+      }),
+    ).resolves.toMatchObject({
+      email: 'member@tabliodb.local',
+      role: OrganizationRole.Member,
+      userId: 'member-id',
+    });
+
+    expect(organizationRepository.addMemberIfAbsent).toHaveBeenCalledWith({
+      createdById: 'owner-id',
+      organizationId: 'organization-id',
+      role: OrganizationRole.Member,
+      userId: 'member-id',
+    });
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'organization.member_added',
         actorId: 'owner-id',
         entityId: 'member-id',
         entityType: 'organization_member',

@@ -60,15 +60,22 @@ export class ProjectRepository {
       : sql``;
     const rows = await sql<ProjectVisibleRow>`
       WITH project_access AS (
-        SELECT project_id, role
+        SELECT project_members.project_id, project_members.role
         FROM project_members
-        WHERE user_id = ${userId}
+        INNER JOIN projects ON projects.id = project_members.project_id
+        INNER JOIN organization_members ON organization_members.organization_id = projects.organization_id
+        WHERE project_members.user_id = ${userId}
+          AND organization_members.user_id = ${userId}
+          AND organization_members.status = 'active'
         UNION ALL
         SELECT project_team_access.project_id, project_team_access.role
         FROM project_team_access
         INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
         INNER JOIN teams ON teams.id = project_team_access.team_id
+        INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
         WHERE team_members.user_id = ${userId}
+          AND organization_members.user_id = ${userId}
+          AND organization_members.status = 'active'
           AND teams.archived_at IS NULL
         UNION ALL
         -- Workspace owners/admins can administer every project in their workspace even if no direct project_members row exists.
@@ -136,15 +143,22 @@ export class ProjectRepository {
     `.execute(this.db);
     const totalRow = await sql<{ count: number }>`
       WITH project_access AS (
-        SELECT project_id, role
+        SELECT project_members.project_id, project_members.role
         FROM project_members
-        WHERE user_id = ${userId}
+        INNER JOIN projects ON projects.id = project_members.project_id
+        INNER JOIN organization_members ON organization_members.organization_id = projects.organization_id
+        WHERE project_members.user_id = ${userId}
+          AND organization_members.user_id = ${userId}
+          AND organization_members.status = 'active'
         UNION ALL
         SELECT project_team_access.project_id, project_team_access.role
         FROM project_team_access
         INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
         INNER JOIN teams ON teams.id = project_team_access.team_id
+        INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
         WHERE team_members.user_id = ${userId}
+          AND organization_members.user_id = ${userId}
+          AND organization_members.status = 'active'
           AND teams.archived_at IS NULL
         UNION ALL
         -- Workspace owners/admins are counted with effective access for the same reason they are listed above.
@@ -235,8 +249,11 @@ export class ProjectRepository {
       SELECT project_members.role
       FROM project_members
       INNER JOIN projects ON projects.id = project_members.project_id
+      INNER JOIN organization_members ON organization_members.organization_id = projects.organization_id
       WHERE project_members.user_id = ${userId}
         AND project_members.project_id = ${projectId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
         AND projects.archived_at IS NULL
       UNION ALL
       SELECT project_team_access.role
@@ -244,7 +261,10 @@ export class ProjectRepository {
       INNER JOIN projects ON projects.id = project_team_access.project_id
       INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
       INNER JOIN teams ON teams.id = project_team_access.team_id
+      INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
       WHERE team_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
         AND project_team_access.project_id = ${projectId}
         AND projects.archived_at IS NULL
         AND teams.archived_at IS NULL
@@ -294,27 +314,39 @@ export class ProjectRepository {
       SELECT diagram_members.role
       FROM diagram_members
       INNER JOIN diagram_scope ON diagram_scope.id = diagram_members.diagram_id
+      INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
       WHERE diagram_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
       UNION ALL
       SELECT diagram_team_access.role
       FROM diagram_team_access
       INNER JOIN diagram_scope ON diagram_scope.id = diagram_team_access.diagram_id
       INNER JOIN team_members ON team_members.team_id = diagram_team_access.team_id
       INNER JOIN teams ON teams.id = diagram_team_access.team_id
+      INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
       WHERE team_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
         AND teams.archived_at IS NULL
       UNION ALL
       SELECT project_members.role
       FROM project_members
       INNER JOIN diagram_scope ON diagram_scope.project_id = project_members.project_id
+      INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
       WHERE project_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
       UNION ALL
       SELECT project_team_access.role
       FROM project_team_access
       INNER JOIN diagram_scope ON diagram_scope.project_id = project_team_access.project_id
       INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
       INNER JOIN teams ON teams.id = project_team_access.team_id
+      INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
       WHERE team_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
         AND teams.archived_at IS NULL
       UNION ALL
       -- Workspace managers retain owner-level recovery access to every diagram in their workspace.

@@ -8,6 +8,7 @@ import {
   OrganizationDto,
   OrganizationListQueryDto,
   OrganizationListResponseDto,
+  OrganizationMemberCreateDto,
   OrganizationMemberDto,
   OrganizationMemberListQueryDto,
   OrganizationMemberListResponseDto,
@@ -18,6 +19,7 @@ import {
 } from '../dtos/organization.dto.js';
 import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
+import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
 import { toIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
@@ -27,6 +29,7 @@ export class OrganizationService {
   constructor(
     private readonly auditLogRepository: AuditLogRepository,
     private readonly organizationRepository: OrganizationRepository,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async create(auth: AuthContext, dto: OrganizationCreateDto): Promise<OrganizationDto> {
@@ -145,6 +148,53 @@ export class OrganizationService {
       ...members,
       items: members.items.map((member) => this.serializeMember(member)),
     };
+  }
+
+  async addMember(
+    auth: AuthContext,
+    organizationId: string,
+    dto: OrganizationMemberCreateDto,
+  ): Promise<OrganizationMemberDto> {
+    await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+
+    const user = await this.userRepository.getByEmail(dto.email);
+    if (!user) {
+      throw new NotFoundException('User not found. Create an invitation for new users first.');
+    }
+
+    if (user.id === auth.user.id) {
+      throw new BadRequestException('You are already a member of this workspace');
+    }
+
+    const existingMember = await this.organizationRepository.getMember(organizationId, user.id);
+    if (existingMember) {
+      throw new BadRequestException('User is already a workspace member');
+    }
+
+    const member = await this.organizationRepository.addMemberIfAbsent({
+      createdById: auth.user.id,
+      organizationId,
+      role: dto.role,
+      userId: user.id,
+    });
+
+    if (!member) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    await this.recordOrganizationAudit(auth, {
+      action: AuditAction.OrganizationMemberAdded,
+      entityId: user.id,
+      entityType: 'organization_member',
+      metadata: {
+        email: member.email,
+        name: member.name,
+        role: member.role,
+      },
+      organizationId,
+    });
+
+    return this.serializeMember(member);
   }
 
   async updateMemberRole(

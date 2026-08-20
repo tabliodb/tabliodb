@@ -329,7 +329,10 @@ export class DiagramRepository {
       SELECT diagram_members.diagram_id, diagram_members.role
       FROM diagram_members
       INNER JOIN diagrams ON diagrams.id = diagram_members.diagram_id
+      INNER JOIN organization_members ON organization_members.organization_id = diagrams.organization_id
       WHERE diagram_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
         AND diagrams.archived_at IS NULL
       UNION ALL
       SELECT diagram_team_access.diagram_id, diagram_team_access.role
@@ -337,7 +340,10 @@ export class DiagramRepository {
       INNER JOIN diagrams ON diagrams.id = diagram_team_access.diagram_id
       INNER JOIN team_members ON team_members.team_id = diagram_team_access.team_id
       INNER JOIN teams ON teams.id = diagram_team_access.team_id
+      INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
       WHERE team_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
         AND diagrams.archived_at IS NULL
         AND teams.archived_at IS NULL
       UNION ALL
@@ -345,7 +351,10 @@ export class DiagramRepository {
       FROM diagrams
       INNER JOIN projects ON projects.id = diagrams.project_id
       INNER JOIN project_members ON project_members.project_id = projects.id
+      INNER JOIN organization_members ON organization_members.organization_id = diagrams.organization_id
       WHERE project_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
         AND diagrams.archived_at IS NULL
         AND projects.archived_at IS NULL
       UNION ALL
@@ -355,7 +364,10 @@ export class DiagramRepository {
       INNER JOIN project_team_access ON project_team_access.project_id = projects.id
       INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
       INNER JOIN teams ON teams.id = project_team_access.team_id
+      INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
       WHERE team_members.user_id = ${userId}
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
         AND diagrams.archived_at IS NULL
         AND projects.archived_at IS NULL
         AND teams.archived_at IS NULL

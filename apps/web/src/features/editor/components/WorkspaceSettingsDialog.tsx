@@ -3,9 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { OrganizationRole, ProjectRole, type OrganizationRoleValue, type ProjectRoleValue } from '@tabliodb/shared';
 import {
   DefaultProjectRole as SdkDefaultProjectRole,
-  Role2 as SdkOrganizationMemberRole,
-  Role4 as SdkTeamProjectRole,
+  OrganizationRole as SdkInvitationOrganizationRole,
+  Role3 as SdkOrganizationMemberCreateRole,
+  Role4 as SdkOrganizationMemberUpdateRole,
+  Role6 as SdkTeamProjectRole,
   type AuditLogDtoOutput,
+  type InvitationCreateResponseDtoOutput,
   type OrganizationDtoOutput,
   type OrganizationMemberDtoOutput,
   type OrganizationSettingsDtoOutput,
@@ -27,18 +30,33 @@ import {
   DialogTrigger,
   FieldError,
   IconButton,
+  Input,
   Select,
   WithTooltip,
   cn,
 } from '@tabliodb/ui';
-import { Archive, Building2, Loader2, Plus, Save, ShieldCheck, Trash2, UserPlus, UsersRound } from 'lucide-react';
+import {
+  Archive,
+  Building2,
+  Copy,
+  Loader2,
+  MailPlus,
+  Plus,
+  Save,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  UsersRound,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledSelect } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
+import { useCreateInvitationMutation } from '@/resources/invitations';
 import {
   organizationsQueries,
+  useAddOrganizationMemberMutation,
   useRemoveOrganizationMemberMutation,
   useUpdateOrganizationMemberMutation,
   useUpdateOrganizationSettingsMutation,
@@ -58,6 +76,7 @@ import { selectClassName } from '../editor-form-styles';
 import { UserAvatar } from './UserAvatar';
 
 type AuditLogDto = AuditLogDtoOutput;
+type InvitationCreateResponseDto = InvitationCreateResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
 type OrganizationMemberDto = OrganizationMemberDtoOutput;
 type OrganizationSettingsDto = OrganizationSettingsDtoOutput;
@@ -66,6 +85,7 @@ type TeamMemberDto = TeamMemberDtoOutput;
 type TeamProjectAccessDto = TeamProjectAccessDtoOutput;
 type TeamProjectRole = `${SdkTeamProjectRole}`;
 type TeamResponseDto = TeamResponseDtoOutput;
+type WorkspaceMemberCreateRole = OrganizationRole.Admin | OrganizationRole.Member | OrganizationRole.Guest;
 type WorkspaceDefaultProjectRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
 
 const sdkDefaultProjectRoleByValue: Record<WorkspaceDefaultProjectRole, SdkDefaultProjectRole> = {
@@ -74,11 +94,23 @@ const sdkDefaultProjectRoleByValue: Record<WorkspaceDefaultProjectRole, SdkDefau
   [ProjectRole.Viewer]: SdkDefaultProjectRole.Viewer,
 };
 
-const sdkOrganizationMemberRoleByValue: Record<OrganizationRoleValue, SdkOrganizationMemberRole> = {
-  [OrganizationRole.Admin]: SdkOrganizationMemberRole.Admin,
-  [OrganizationRole.Guest]: SdkOrganizationMemberRole.Guest,
-  [OrganizationRole.Member]: SdkOrganizationMemberRole.Member,
-  [OrganizationRole.Owner]: SdkOrganizationMemberRole.Owner,
+const sdkOrganizationMemberCreateRoleByValue: Record<WorkspaceMemberCreateRole, SdkOrganizationMemberCreateRole> = {
+  [OrganizationRole.Admin]: SdkOrganizationMemberCreateRole.Admin,
+  [OrganizationRole.Guest]: SdkOrganizationMemberCreateRole.Guest,
+  [OrganizationRole.Member]: SdkOrganizationMemberCreateRole.Member,
+};
+
+const sdkInvitationOrganizationRoleByValue: Record<WorkspaceMemberCreateRole, SdkInvitationOrganizationRole> = {
+  [OrganizationRole.Admin]: SdkInvitationOrganizationRole.Admin,
+  [OrganizationRole.Guest]: SdkInvitationOrganizationRole.Guest,
+  [OrganizationRole.Member]: SdkInvitationOrganizationRole.Member,
+};
+
+const sdkOrganizationMemberUpdateRoleByValue: Record<OrganizationRoleValue, SdkOrganizationMemberUpdateRole> = {
+  [OrganizationRole.Admin]: SdkOrganizationMemberUpdateRole.Admin,
+  [OrganizationRole.Guest]: SdkOrganizationMemberUpdateRole.Guest,
+  [OrganizationRole.Member]: SdkOrganizationMemberUpdateRole.Member,
+  [OrganizationRole.Owner]: SdkOrganizationMemberUpdateRole.Owner,
 };
 
 const sdkTeamProjectRoleByValue: Record<TeamProjectRole, SdkTeamProjectRole> = {
@@ -87,7 +119,7 @@ const sdkTeamProjectRoleByValue: Record<TeamProjectRole, SdkTeamProjectRole> = {
   viewer: SdkTeamProjectRole.Viewer,
 };
 
-function toOrganizationRoleValue(role: OrganizationRoleValue | SdkOrganizationMemberRole): OrganizationRoleValue {
+function toOrganizationRoleValue(role: OrganizationRoleValue | SdkOrganizationMemberUpdateRole): OrganizationRoleValue {
   return role as OrganizationRoleValue;
 }
 
@@ -115,6 +147,20 @@ type TeamFormState = z.infer<typeof teamFormSchema>;
 const teamFormDefaults: TeamFormState = {
   description: '',
   name: '',
+};
+
+const workspaceMemberRoleOptions = [OrganizationRole.Member, OrganizationRole.Admin, OrganizationRole.Guest] as const;
+
+const workspaceMemberFormSchema = z.object({
+  email: z.string().trim().email('Enter a valid email.'),
+  role: z.enum(workspaceMemberRoleOptions),
+});
+
+type WorkspaceMemberFormState = z.infer<typeof workspaceMemberFormSchema>;
+
+const workspaceMemberFormDefaults: WorkspaceMemberFormState = {
+  email: '',
+  role: OrganizationRole.Member,
 };
 
 const teamMemberFormSchema = z.object({
@@ -158,12 +204,9 @@ function isOrganizationManager(organization: OrganizationDto): boolean {
   return organization.role === 'owner' || organization.role === 'admin';
 }
 
-export function WorkspaceSettingsDialog({
-  organization,
-}: {
-  organization: OrganizationDto;
-}) {
+export function WorkspaceSettingsDialog({ organization }: { organization: OrganizationDto }) {
   const [open, setOpen] = useState(false);
+  const [createdWorkspaceInvite, setCreatedWorkspaceInvite] = useState<InvitationCreateResponseDto | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const canManageWorkspace = isOrganizationManager(organization);
   const form = useForm<WorkspaceSettingsFormState>({
@@ -181,6 +224,11 @@ export function WorkspaceSettingsDialog({
     mode: 'onBlur',
     resolver: zodResolver(teamFormSchema),
   });
+  const workspaceMemberForm = useForm<WorkspaceMemberFormState>({
+    defaultValues: workspaceMemberFormDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(workspaceMemberFormSchema),
+  });
   const teamMemberForm = useForm<TeamMemberFormState>({
     defaultValues: teamMemberFormDefaults,
     mode: 'onBlur',
@@ -194,6 +242,7 @@ export function WorkspaceSettingsDialog({
   const { errors } = form.formState;
   const { errors: teamErrors } = teamForm.formState;
   const { errors: selectedTeamErrors } = selectedTeamForm.formState;
+  const { errors: workspaceMemberErrors } = workspaceMemberForm.formState;
   const { errors: teamMemberErrors } = teamMemberForm.formState;
   const { errors: teamProjectAccessErrors } = teamProjectAccessForm.formState;
   const settingsQueryOptions = organizationsQueries.settings(organization.id);
@@ -261,9 +310,29 @@ export function WorkspaceSettingsDialog({
       },
     },
   });
+  const addMemberMutation = useAddOrganizationMemberMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        workspaceMemberForm.reset(workspaceMemberFormDefaults);
+        setCreatedWorkspaceInvite(null);
+      },
+    },
+  });
+  const createWorkspaceInvitationMutation = useCreateInvitationMutation({
+    mutationConfig: {
+      onSuccess: (invite) => {
+        // Invitation token is only returned once, so the dialog keeps the generated link visible for copying.
+        setCreatedWorkspaceInvite(invite);
+      },
+    },
+  });
   const updateMemberMutation = useUpdateOrganizationMemberMutation();
   const removeMemberMutation = useRemoveOrganizationMemberMutation();
-  const isWorkspaceMemberMutationPending = updateMemberMutation.isPending || removeMemberMutation.isPending;
+  const isWorkspaceMemberMutationPending =
+    addMemberMutation.isPending ||
+    createWorkspaceInvitationMutation.isPending ||
+    updateMemberMutation.isPending ||
+    removeMemberMutation.isPending;
   const createTeamMutation = useCreateTeamMutation({
     mutationConfig: {
       onSuccess: (team) => {
@@ -317,6 +386,8 @@ export function WorkspaceSettingsDialog({
     if (open) {
       form.reset(getWorkspaceSettingsDefaults(organization, settingsQuery.data));
       updateSettingsMutation.reset();
+      addMemberMutation.reset();
+      createWorkspaceInvitationMutation.reset();
       updateMemberMutation.reset();
       removeMemberMutation.reset();
       createTeamMutation.reset();
@@ -353,6 +424,8 @@ export function WorkspaceSettingsDialog({
     if (!nextOpen) {
       form.reset(getWorkspaceSettingsDefaults(organization, settingsQuery.data));
       updateSettingsMutation.reset();
+      addMemberMutation.reset();
+      createWorkspaceInvitationMutation.reset();
       updateMemberMutation.reset();
       removeMemberMutation.reset();
       createTeamMutation.reset();
@@ -365,6 +438,8 @@ export function WorkspaceSettingsDialog({
       setSelectedTeamId(null);
       teamForm.reset(teamFormDefaults);
       selectedTeamForm.reset(teamFormDefaults);
+      setCreatedWorkspaceInvite(null);
+      workspaceMemberForm.reset(workspaceMemberFormDefaults);
       teamMemberForm.reset(teamMemberFormDefaults);
       teamProjectAccessForm.reset(teamProjectAccessFormDefaults);
     }
@@ -386,13 +461,50 @@ export function WorkspaceSettingsDialog({
     });
   }
 
+  function handleAddWorkspaceMember(values: WorkspaceMemberFormState) {
+    if (!canManageWorkspace) {
+      return;
+    }
+
+    addMemberMutation.mutate({
+      body: {
+        email: values.email,
+        // The create endpoint intentionally excludes Owner; ownership is managed by role changes with owner guards.
+        role: sdkOrganizationMemberCreateRoleByValue[values.role],
+      },
+      organizationId: organization.id,
+    });
+  }
+
+  function handleCreateWorkspaceInvite(values: WorkspaceMemberFormState) {
+    if (!canManageWorkspace) {
+      return;
+    }
+
+    createWorkspaceInvitationMutation.mutate({
+      email: values.email,
+      expiresInDays: 7,
+      organizationId: organization.id,
+      // Workspace invitation creates a new account, while the Add action is reserved for existing users.
+      organizationRole: sdkInvitationOrganizationRoleByValue[values.role],
+    });
+  }
+
+  async function copyWorkspaceInviteUrl() {
+    if (!createdWorkspaceInvite) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(createdWorkspaceInvite.acceptUrl);
+  }
+
   function handleUpdateWorkspaceMemberRole(member: OrganizationMemberDto, role: OrganizationRoleValue) {
     if (member.role === role) {
       return;
     }
 
     updateMemberMutation.mutate({
-      body: { role: sdkOrganizationMemberRoleByValue[role] },
+      body: { role: sdkOrganizationMemberUpdateRoleByValue[role] },
       organizationId: organization.id,
       userId: member.userId,
     });
@@ -506,7 +618,11 @@ export function WorkspaceSettingsDialog({
     });
   }
 
-  const memberMutationError = updateMemberMutation.error ?? removeMemberMutation.error;
+  const memberMutationError =
+    addMemberMutation.error ??
+    createWorkspaceInvitationMutation.error ??
+    updateMemberMutation.error ??
+    removeMemberMutation.error;
   const teamMutationError =
     createTeamMutation.error ??
     updateTeamMutation.error ??
@@ -598,6 +714,86 @@ export function WorkspaceSettingsDialog({
                 </div>
                 <Badge variant="green">{workspaceMembers.length} loaded</Badge>
               </div>
+
+              <form
+                className="mt-4 grid gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_150px_auto]"
+                onSubmit={workspaceMemberForm.handleSubmit(handleAddWorkspaceMember)}
+              >
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Existing user email
+                  </span>
+                  <ControlledInput
+                    aria-invalid={Boolean(workspaceMemberErrors.email)}
+                    autoComplete="email"
+                    control={workspaceMemberForm.control}
+                    disabled={isWorkspaceMemberMutationPending}
+                    name="email"
+                    placeholder="teammate@company.com"
+                    type="email"
+                  />
+                  <FieldError>{workspaceMemberErrors.email?.message}</FieldError>
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                    Workspace role
+                  </span>
+                  <ControlledSelect
+                    className={selectClassName}
+                    control={workspaceMemberForm.control}
+                    disabled={isWorkspaceMemberMutationPending}
+                    name="role"
+                    options={workspaceMemberRoleOptions.map((role) => ({
+                      label: formatOrganizationRole(role),
+                      value: role,
+                    }))}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2 self-start sm:mt-6">
+                  <Button className="gap-2" disabled={isWorkspaceMemberMutationPending} type="submit">
+                    {addMemberMutation.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <UserPlus className="size-4" />
+                    )}
+                    Add
+                  </Button>
+                  <Button
+                    className="gap-2"
+                    disabled={isWorkspaceMemberMutationPending}
+                    onClick={workspaceMemberForm.handleSubmit(handleCreateWorkspaceInvite)}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {createWorkspaceInvitationMutation.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <MailPlus className="size-4" />
+                    )}
+                    Invite link
+                  </Button>
+                </div>
+              </form>
+
+              {createdWorkspaceInvite ? (
+                <div className="mt-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3">
+                  <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
+                    Invitation link
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input readOnly value={createdWorkspaceInvite.acceptUrl} />
+                    <Button
+                      className="shrink-0 gap-2"
+                      onClick={copyWorkspaceInviteUrl}
+                      type="button"
+                      variant="secondary"
+                    >
+                      <Copy className="size-4" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
               {membersQuery.isPending ? (
                 <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
@@ -1216,7 +1412,7 @@ function OrganizationMemberRow({
       <Select
         className={selectClassName}
         disabled={isBusy}
-        onValueChange={(role) => onRoleChange(member, toOrganizationRoleValue(role as SdkOrganizationMemberRole))}
+        onValueChange={(role) => onRoleChange(member, toOrganizationRoleValue(role as SdkOrganizationMemberUpdateRole))}
         options={organizationRoleOptions.map((role) => ({
           label: formatOrganizationRole(role),
           value: role,

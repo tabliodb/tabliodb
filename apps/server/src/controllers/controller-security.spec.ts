@@ -52,6 +52,7 @@ const servicePermissionRoutes = new Set([
   'CommentController.resolveThread',
   'CommentController.unresolveThread',
   'CommentController.updateComment',
+  'InvitationController.createInvitation',
   'ReviewSignalController.ignoreReviewSignal',
   'ReviewSignalController.unignoreReviewSignal',
   'SnapshotController.getSnapshotDiff',

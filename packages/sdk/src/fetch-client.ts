@@ -836,8 +836,12 @@ export type OrganizationMemberListResponseDtoOutput = {
   nextCursor: string | null;
   totalCount: number;
 };
+export type OrganizationMemberCreateDto = {
+  email: string;
+  role?: Role3;
+};
 export type OrganizationMemberUpdateDto = {
-  role: Role2;
+  role: Role4;
 };
 export type OrganizationMemberRemoveResponseDtoOutput = {
   successful: boolean;
@@ -901,7 +905,7 @@ export type ProjectMemberDtoOutput = {
   name: string;
   avatarUrl: string | null;
   cursorColor: string;
-  role: Role3;
+  role: Role5;
   createdAt: string;
   updatedAt: string;
 };
@@ -912,10 +916,10 @@ export type ProjectMemberListResponseDtoOutput = {
 };
 export type ProjectMemberCreateDto = {
   email: string;
-  role?: Role3;
+  role?: Role5;
 };
 export type ProjectMemberUpdateDto = {
-  role: Role3;
+  role: Role5;
 };
 export type ProjectMemberRemoveResponseDtoOutput = {
   successful: boolean;
@@ -1587,7 +1591,7 @@ export type TeamProjectAccessDtoOutput = {
   projectId: string;
   projectName: string;
   projectSlug: string;
-  role: Role4;
+  role: Role6;
   createdAt: string;
   updatedAt: string;
 };
@@ -1598,7 +1602,7 @@ export type TeamProjectAccessListResponseDtoOutput = {
 };
 export type TeamProjectAccessUpsertDto = {
   projectId: string;
-  role?: Role4;
+  role?: Role6;
 };
 export type TeamProjectAccessRemoveResponseDtoOutput = {
   successful: boolean;
@@ -2983,6 +2987,30 @@ export function getOrganizationMembers(
     ),
   );
 }
+export function addOrganizationMember(
+  {
+    organizationId,
+    organizationMemberCreateDto,
+  }: {
+    organizationId: string;
+    organizationMemberCreateDto: OrganizationMemberCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: OrganizationMemberDtoOutput;
+    }>(
+      `/organizations/${encodeURIComponent(organizationId)}/members`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: organizationMemberCreateDto,
+      }),
+    ),
+  );
+}
 export function updateOrganizationMember(
   {
     userId,
@@ -4263,13 +4291,24 @@ export enum Status7 {
   Active = 'active',
   Suspended = 'suspended',
 }
+export enum Role3 {
+  Admin = 'admin',
+  Member = 'member',
+  Guest = 'guest',
+}
+export enum Role4 {
+  Owner = 'owner',
+  Admin = 'admin',
+  Member = 'member',
+  Guest = 'guest',
+}
 export enum ProjectRole2 {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Role3 {
+export enum Role5 {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',
@@ -4324,7 +4363,7 @@ export enum Type3 {
   Relationship = 'relationship',
   Table = 'table',
 }
-export enum Role4 {
+export enum Role6 {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',

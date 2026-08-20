@@ -9,6 +9,7 @@ import {
   OrganizationDto,
   OrganizationListQueryDto,
   OrganizationListResponseDto,
+  OrganizationMemberCreateDto,
   OrganizationMemberDto,
   OrganizationMemberListQueryDto,
   OrganizationMemberListResponseDto,
@@ -90,6 +91,21 @@ export class OrganizationController {
     @Query() query: OrganizationMemberListQueryDto,
   ): Promise<OrganizationMemberListResponseDto> {
     return this.organizationService.getMembers(auth, organizationId, query);
+  }
+
+  @Post(':organizationId/members')
+  @RateLimit(RateLimitPreset.OrganizationWrite)
+  @RequirePermission(Permission.OrganizationManage, { key: 'organizationId', source: 'param', type: 'organization' })
+  @ApiParam({ name: 'organizationId', type: String })
+  @ApiBody({ type: OrganizationMemberCreateDto })
+  @ApiOperation({ operationId: 'addOrganizationMember' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: OrganizationMemberDto })
+  addOrganizationMember(
+    @Auth() auth: AuthContext,
+    @Param('organizationId') organizationId: string,
+    @Body() dto: OrganizationMemberCreateDto,
+  ): Promise<OrganizationMemberDto> {
+    return this.organizationService.addMember(auth, organizationId, dto);
   }
 
   @Patch(':organizationId/members/:userId')

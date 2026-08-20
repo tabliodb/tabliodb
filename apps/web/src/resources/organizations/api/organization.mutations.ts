@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import {
+  addOrganizationMember,
   createOrganization,
   removeOrganizationMember,
   updateOrganizationMember,
@@ -7,6 +8,7 @@ import {
   type OrganizationCreateDto,
   type OrganizationDtoOutput,
   type OrganizationListResponseDtoOutput,
+  type OrganizationMemberCreateDto,
   type OrganizationMemberUpdateDto,
   type OrganizationSettingsUpdateDto,
 } from '@tabliodb/sdk';
@@ -18,6 +20,11 @@ const createOrganizationMutationFn = (body: OrganizationCreateDto) =>
   createOrganization({ organizationCreateDto: body });
 const updateOrganizationSettingsMutationFn = (input: { body: OrganizationSettingsUpdateDto; organizationId: string }) =>
   updateOrganizationSettings({ organizationId: input.organizationId, organizationSettingsUpdateDto: input.body });
+const addOrganizationMemberMutationFn = (input: { body: OrganizationMemberCreateDto; organizationId: string }) =>
+  addOrganizationMember({
+    organizationId: input.organizationId,
+    organizationMemberCreateDto: input.body,
+  });
 const updateOrganizationMemberMutationFn = (input: {
   body: OrganizationMemberUpdateDto;
   organizationId: string;
@@ -80,6 +87,24 @@ function prependOrganizationToList(
     items: [organization, ...existingItems],
     totalCount: existingItems.length === current.items.length ? current.totalCount + 1 : current.totalCount,
   };
+}
+
+type UseAddOrganizationMemberMutationParams = {
+  mutationConfig?: MutationConfig<typeof addOrganizationMemberMutationFn>;
+};
+
+export function useAddOrganizationMemberMutation(params: UseAddOrganizationMemberMutationParams = {}) {
+  return useMutation({
+    mutationFn: addOrganizationMemberMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Existing-user membership changes the workspace roster immediately and leaves an audit trail.
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
 }
 
 type UseUpdateOrganizationMemberMutationParams = {

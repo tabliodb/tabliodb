@@ -76,6 +76,19 @@ const OrganizationMemberListResponseSchema = z
   })
   .meta({ id: 'OrganizationMemberListResponseDto' });
 
+const OrganizationMemberCreateRoleSchema = z.enum([
+  OrganizationRole.Admin,
+  OrganizationRole.Member,
+  OrganizationRole.Guest,
+]);
+
+const OrganizationMemberCreateSchema = z
+  .object({
+    email: z.email(),
+    role: OrganizationMemberCreateRoleSchema.default(OrganizationRole.Member),
+  })
+  .meta({ id: 'OrganizationMemberCreateDto' });
+
 const OrganizationMemberUpdateSchema = z
   .object({
     role: OrganizationRoleSchema,
@@ -112,6 +125,7 @@ export class OrganizationDto extends createZodDto(OrganizationSchema) {}
 export class OrganizationCreateDto extends createZodDto(OrganizationCreateSchema) {}
 export class OrganizationListQueryDto extends createZodDto(OrganizationListQuerySchema) {}
 export class OrganizationListResponseDto extends createZodDto(OrganizationListResponseSchema) {}
+export class OrganizationMemberCreateDto extends createZodDto(OrganizationMemberCreateSchema) {}
 export class OrganizationMemberDto extends createZodDto(OrganizationMemberSchema) {}
 export class OrganizationMemberListQueryDto extends createZodDto(OrganizationMemberListQuerySchema) {}
 export class OrganizationMemberListResponseDto extends createZodDto(OrganizationMemberListResponseSchema) {}

@@ -1,6 +1,5 @@
 import { Body, Controller, Get, HttpStatus, Param, Post, Res } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
-import { Permission } from '@tabliodb/shared';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
 import { AuthType } from '../constants.js';
@@ -13,7 +12,6 @@ import {
   InvitationPublicDto,
 } from '../dtos/invitation.dto.js';
 import { Auth, Authenticated } from '../middleware/auth.guard.js';
-import { RequirePermission } from '../middleware/permission.guard.js';
 import { RateLimitPreset } from '../middleware/rate-limit.presets.js';
 import { RateLimit } from '../middleware/rate-limit.guard.js';
 import { InvitationService } from '../services/invitation.service.js';
@@ -27,7 +25,6 @@ export class InvitationController {
   @Post()
   @RateLimit(RateLimitPreset.InvitationCreate)
   @Authenticated()
-  @RequirePermission(Permission.OrganizationManage)
   @ApiBody({ type: InvitationCreateDto })
   @ApiOperation({ operationId: 'createInvitation' })
   @ZodResponse({ status: HttpStatus.CREATED, type: InvitationCreateResponseDto })
