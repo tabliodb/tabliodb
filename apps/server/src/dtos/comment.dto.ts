@@ -116,7 +116,7 @@ const CommentThreadListItemSchema = CommentThreadSchema.meta({ id: 'CommentThrea
 
 const CommentThreadReaderSchema = z.object({
   lastReadAt: DateTimeSchema,
-  lastReadCommentId: z.string().uuid().nullable(),
+  lastReadCommentId: z.uuid().nullable(),
   user: CommentAuthorSchema,
 });
 
