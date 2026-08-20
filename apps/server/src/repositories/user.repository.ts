@@ -11,8 +11,6 @@ export type ManagedUserCreateOptions = {
   email: string;
   instanceRole?: 'admin';
   name: string;
-  organizationId: string;
-  organizationRole: OrganizationRole.Admin | OrganizationRole.Member;
   passwordHash: string;
 };
 
@@ -119,18 +117,6 @@ export class UserRepository {
         })
         .returning('id')
         .executeTakeFirstOrThrow();
-
-      await tx
-        .insertInto('organization_members')
-        .values({
-          createdById: options.createdById,
-          joinedAt: new Date(),
-          organizationId: options.organizationId,
-          role: options.organizationRole,
-          status: 'active',
-          userId: user.id,
-        })
-        .execute();
 
       if (options.instanceRole) {
         await tx

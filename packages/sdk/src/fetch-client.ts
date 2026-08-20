@@ -1588,8 +1588,6 @@ export type UserCreateDto = {
   email: string;
   name: string;
   password: string;
-  organizationId?: string;
-  organizationRole?: OrganizationRole;
   instanceRole?: InstanceRole2;
 };
 export type UserStatusUpdateDto = {

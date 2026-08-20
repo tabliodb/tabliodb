@@ -62,7 +62,6 @@ const createUserFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
   grantInstanceAdmin: z.boolean(),
   name: z.string().trim().min(1, 'Name is required.'),
-  organizationRole: z.enum(SdkOrganizationRole),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
 });
 
@@ -72,7 +71,6 @@ const createUserDefaults: CreateUserFormState = {
   email: '',
   grantInstanceAdmin: false,
   name: '',
-  organizationRole: SdkOrganizationRole.Member,
   password: '',
 };
 
@@ -172,7 +170,7 @@ export function AdminUsersPage() {
         <div>
           <h2 className="text-2xl font-extrabold tracking-normal text-[rgb(var(--tabliodb-ink))]">Manage users</h2>
           <p className="mt-1 max-w-2xl text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-            Create teammates, assign workspace roles, and grant instance admin access.
+            Create instance accounts, review workspace access, and grant instance admin access.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -184,8 +182,8 @@ export function AdminUsersPage() {
       <section className="grid gap-3 md:grid-cols-4">
         <StatCard label="Matching users" value={totalCount} />
         <StatCard label="Showing now" value={stats.total} tone="green" />
-        <StatCard label="Page admins" value={stats.instanceAdmins} tone="blue" />
-        <StatCard label="Page org admins" value={stats.organizationAdmins} tone="yellow" />
+        <StatCard label="Instance admins on page" value={stats.instanceAdmins} tone="blue" />
+        <StatCard label="Workspace admins on page" value={stats.organizationAdmins} tone="yellow" />
       </section>
 
       {userActionError ? <InlineErrorState error={userActionError} title="User action failed" /> : null}
@@ -512,7 +510,6 @@ function CreateUserDialog() {
       email: values.email,
       instanceRole: values.grantInstanceAdmin ? InstanceRole2.Admin : undefined,
       name: values.name,
-      organizationRole: values.organizationRole,
       password: values.password,
     });
   }
@@ -529,7 +526,7 @@ function CreateUserDialog() {
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>Create user</DialogTitle>
-            <DialogDescription>Add a teammate to the current workspace.</DialogDescription>
+            <DialogDescription>Create an instance account. Workspace access is assigned separately.</DialogDescription>
           </DialogHeader>
 
           <DialogBody>
@@ -578,26 +575,6 @@ function CreateUserDialog() {
                 />
                 <FieldError>{errors.password?.message}</FieldError>
               </label>
-
-              <fieldset>
-                <legend className="mb-2 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Workspace role
-                </legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <RoleOption
-                    checked={form.watch('organizationRole') === SdkOrganizationRole.Member}
-                    description="Can create and edit accessible projects."
-                    label="Member"
-                    onClick={() => form.setValue('organizationRole', SdkOrganizationRole.Member, { shouldDirty: true })}
-                  />
-                  <RoleOption
-                    checked={form.watch('organizationRole') === SdkOrganizationRole.Admin}
-                    description="Can help manage workspace members."
-                    label="Admin"
-                    onClick={() => form.setValue('organizationRole', SdkOrganizationRole.Admin, { shouldDirty: true })}
-                  />
-                </div>
-              </fieldset>
 
               <label className="flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
                 <ControlledCheckbox

@@ -30,10 +30,6 @@ describe(UserService.name, () => {
   const cryptoRepository = {
     hashBcrypt: vi.fn(),
   };
-  const organizationRepository = {
-    getByIdForUser: vi.fn(),
-    getFirstForUser: vi.fn(),
-  };
   const userRepository = {
     createManagedUser: vi.fn(),
     getAnyByEmail: vi.fn(),
@@ -56,7 +52,6 @@ describe(UserService.name, () => {
     service = new UserService(
       auditLogRepository as never,
       cryptoRepository as never,
-      organizationRepository as never,
       sessionRepository as never,
       userRepository as never,
     );
@@ -64,16 +59,12 @@ describe(UserService.name, () => {
     userRepository.getInstanceRole.mockResolvedValue({ role: 'owner' });
     userRepository.getAnyByEmail.mockResolvedValue(undefined);
     userRepository.getEnabledInstanceOwnerCount.mockResolvedValue(2);
-    organizationRepository.getFirstForUser.mockResolvedValue({
-      id: 'organization-id',
-      name: 'Default Workspace',
-    });
     cryptoRepository.hashBcrypt.mockResolvedValue('hashed-password');
     userRepository.createManagedUser.mockResolvedValue(createManagedUserRow({ id: 'created-user-id' }));
     sessionRepository.revokeAllForUser.mockResolvedValue(3);
   });
 
-  it('creates a managed organization member from an instance owner', async () => {
+  it('creates a managed instance account without assigning workspace access', async () => {
     const result = await service.create(auth, {
       email: ' NEW.USER@TABLIODB.LOCAL ',
       name: ' New User ',
@@ -91,8 +82,6 @@ describe(UserService.name, () => {
       email: 'new.user@tabliodb.local',
       instanceRole: undefined,
       name: 'New User',
-      organizationId: 'organization-id',
-      organizationRole: OrganizationRole.Member,
       passwordHash: 'hashed-password',
     });
   });
@@ -158,8 +147,7 @@ describe(UserService.name, () => {
       }),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    // Duplicate email berhenti sebelum lookup organisasi agar error yang keluar tetap spesifik dan murah.
-    expect(organizationRepository.getFirstForUser).not.toHaveBeenCalled();
+    // Duplicate email berhenti sebelum hashing/insert agar error yang keluar tetap spesifik dan murah.
     expect(userRepository.createManagedUser).not.toHaveBeenCalled();
   });
 

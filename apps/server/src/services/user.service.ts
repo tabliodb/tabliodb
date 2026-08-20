@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrganizationRole, Permission, isGranted } from '@tabliodb/shared';
+import { Permission, isGranted } from '@tabliodb/shared';
 import { AuditAction, SALT_ROUNDS } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import {
@@ -20,7 +20,6 @@ import {
 } from '../dtos/user.dto.js';
 import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { CryptoRepository } from '../repositories/crypto.repository.js';
-import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { SessionRepository } from '../repositories/session.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
@@ -32,7 +31,6 @@ export class UserService {
   constructor(
     private readonly auditLogRepository: AuditLogRepository,
     private readonly cryptoRepository: CryptoRepository,
-    private readonly organizationRepository: OrganizationRepository,
     private readonly sessionRepository: SessionRepository,
     private readonly userRepository: UserRepository,
   ) {}
@@ -67,14 +65,6 @@ export class UserService {
       throw new ForbiddenException('Only instance owners can create instance admins');
     }
 
-    const organization = dto.organizationId
-      ? await this.organizationRepository.getByIdForUser(auth.user.id, dto.organizationId)
-      : await this.organizationRepository.getFirstForUser(auth.user.id);
-
-    if (!organization) {
-      throw new NotFoundException('Organization not found');
-    }
-
     const passwordHash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
 
     const user = await this.userRepository.createManagedUser({
@@ -83,8 +73,7 @@ export class UserService {
       email,
       instanceRole: dto.instanceRole,
       name: dto.name.trim(),
-      organizationId: organization.id,
-      organizationRole: dto.organizationRole ?? OrganizationRole.Member,
+      // Workspace access is intentionally not inferred from the acting admin, because that silently leaks the admin's first workspace to newly-created accounts.
       passwordHash,
     });
 

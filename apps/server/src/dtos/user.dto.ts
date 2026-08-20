@@ -1,8 +1,6 @@
-import { OrganizationRole } from '@tabliodb/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-const UserOrganizationRoleSchema = z.enum([OrganizationRole.Admin, OrganizationRole.Member]);
 const InstanceRoleSchema = z.enum(['owner', 'admin']);
 const UserRoleFilterSchema = z.enum(['owner', 'instance-admin', 'org-admin', 'member']);
 const DateTimeSchema = z.iso.datetime({ offset: true });
@@ -12,8 +10,7 @@ const UserCreateSchema = z
     email: z.email(),
     name: z.string().min(1),
     password: z.string().min(8),
-    organizationId: z.uuid().optional(),
-    organizationRole: UserOrganizationRoleSchema.optional(),
+    // User creation is an instance-level account lifecycle operation; workspace/project access is granted separately through invitations or workspace members.
     instanceRole: z.enum(['admin']).optional(),
   })
   .meta({ id: 'UserCreateDto' });
