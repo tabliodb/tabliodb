@@ -25,6 +25,7 @@ import {
 import { Building2, Check, ChevronsUpDown, FileText, FolderPlus, Pencil, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { DiagramSettingsDialog } from './DiagramSettingsDialog';
+import { DialectBadge, formatDialectLabel } from './DialectIcon';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
@@ -269,6 +270,11 @@ function DiagramNavigator({
       : null;
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && stackedDialogOpen) {
+      // Nested create/settings dialogs are rendered in their own portal; Radix can report that as an outside close for this parent.
+      return;
+    }
+
     onDiagramLibraryOpenChange(nextOpen);
 
     if (!nextOpen) {
@@ -321,7 +327,27 @@ function DiagramNavigator({
       </div>
 
       <Dialog modal={!stackedDialogOpen} onOpenChange={handleOpenChange} open={open}>
-        <DialogContent className="h-[min(86dvh,760px)] w-[min(96vw,1040px)] max-w-none max-[640px]:h-[100dvh] max-[640px]:max-h-screen max-[640px]:w-screen max-[640px]:rounded-none max-[640px]:border-0">
+        <DialogContent
+          className="h-[min(86dvh,760px)] w-[min(96vw,1040px)] max-w-none max-[640px]:h-[100dvh] max-[640px]:max-h-screen max-[640px]:w-screen max-[640px]:rounded-none max-[640px]:border-0"
+          onEscapeKeyDown={(event) => {
+            if (stackedDialogOpen) {
+              // Escape belongs to the top-most child dialog while the dialog stack is active.
+              event.preventDefault();
+            }
+          }}
+          onInteractOutside={(event) => {
+            if (stackedDialogOpen) {
+              // Keep the library dialog mounted behind New diagram/New folder so users return to the same filtered list.
+              event.preventDefault();
+            }
+          }}
+          onPointerDownOutside={(event) => {
+            if (stackedDialogOpen) {
+              // Pointer events from the child portal should not dismiss the parent dialog.
+              event.preventDefault();
+            }
+          }}
+        >
           <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-4">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
@@ -463,11 +489,11 @@ function DiagramNavigator({
                           <span className="min-w-0">
                             <span className="block truncate text-[14px] font-black">{diagram.name}</span>
                             <span className="mt-1 block text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {formatDiagramDialectLabel(diagram.dialect)} / {folderName}
+                              {formatDialectLabel(diagram.dialect)} / {folderName}
                             </span>
                           </span>
                           <span className="mt-3 flex items-center justify-between gap-2">
-                            <Badge variant={isActive ? 'green' : 'neutral'}>{isActive ? 'Open' : 'Diagram'}</Badge>
+                            <DialectBadge className="min-w-0 shrink" dialect={diagram.dialect} />
                             {isActive ? (
                               <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" />
                             ) : null}
@@ -532,16 +558,6 @@ function getSelectedFolderLabel(folderFilterId: string, projects: ProjectRespons
   }
 
   return projects.find((project) => project.id === folderFilterId)?.name ?? 'Folder';
-}
-
-function formatDiagramDialectLabel(dialect: string): string {
-  return {
-    mariadb: 'MariaDB',
-    mysql: 'MySQL',
-    postgresql: 'PostgreSQL',
-    sqlite: 'SQLite',
-    sqlserver: 'SQL Server',
-  }[dialect] ?? dialect;
 }
 
 function isOrganizationManager(organization: OrganizationDto): boolean {
