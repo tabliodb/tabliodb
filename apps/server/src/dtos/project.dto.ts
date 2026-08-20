@@ -53,8 +53,8 @@ const ProjectListResponseSchema = z
 
 const ProjectMemberSchema = z
   .object({
-    userId: z.string().uuid(),
-    email: z.string().email(),
+    userId: z.uuid(),
+    email: z.email(),
     name: z.string(),
     avatarUrl: z.string().nullable(),
     cursorColor: z.string(),
