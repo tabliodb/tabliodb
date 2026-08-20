@@ -346,6 +346,26 @@ describe(DiagramService.name, () => {
     expect(response.content).toContain('CREATE TABLE');
   });
 
+  it('allows a project viewer to export a diagram as Mermaid ERD', async () => {
+    const model = createStarterDiagramModel('Library System', 'postgresql');
+
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    collaborationRepository.loadDocument.mockResolvedValue(encodeDiagramModelAsYjsUpdate(model));
+
+    const response = await service.exportDiagram(auth, 'diagram-id', {
+      format: 'mermaid',
+    });
+
+    expect(response).toMatchObject({
+      filename: 'library-system.erd.mmd',
+      format: 'mermaid',
+      mediaType: 'text/vnd.mermaid',
+    });
+    expect(response.content).toContain('erDiagram');
+    expect(response.content).toContain('USERS ||--o{ BORROWINGS');
+  });
+
   it('blocks a project viewer from importing a diagram', async () => {
     projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
 

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { generateDiagramMarkdown } from '@tabliodb/docs';
+import { generateDiagramMarkdown, generateDiagramMermaid } from '@tabliodb/docs';
 import { generateDiagramSvg } from '@tabliodb/render';
 import {
   createEmptyDiagramModel,
@@ -393,6 +393,16 @@ export class DiagramService {
         filename: `${filenameBase}.md`,
         format,
         mediaType: 'text/markdown',
+        warnings: integrityWarnings,
+      };
+    }
+
+    if (format === 'mermaid') {
+      return {
+        content: generateDiagramMermaid(model),
+        filename: `${filenameBase}.erd.mmd`,
+        format,
+        mediaType: 'text/vnd.mermaid',
         warnings: integrityWarnings,
       };
     }

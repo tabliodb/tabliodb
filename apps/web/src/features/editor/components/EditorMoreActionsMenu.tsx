@@ -17,6 +17,7 @@ import {
   FileJson,
   FileText,
   FileUp,
+  GitBranch,
   ImageDown,
   Keyboard,
   MoreHorizontal,
@@ -37,6 +38,7 @@ export function EditorMoreActionsMenu({
   onDownloadSql,
   onExportJson,
   onExportMarkdown,
+  onExportMermaid,
   onExportPng,
   onExportSvg,
   onImportJson,
@@ -55,6 +57,7 @@ export function EditorMoreActionsMenu({
   onDownloadSql: MenuAction;
   onExportJson: MenuAction;
   onExportMarkdown: MenuAction;
+  onExportMermaid: MenuAction;
   onExportPng: MenuAction;
   onExportSvg: MenuAction;
   onImportJson: MenuAction;
@@ -128,6 +131,10 @@ export function EditorMoreActionsMenu({
         <DropdownMenuItem disabled={isExporting} onSelect={() => void onExportMarkdown()}>
           <FileText className="size-4" />
           Export Markdown docs
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={isExporting} onSelect={() => void onExportMermaid()}>
+          <GitBranch className="size-4" />
+          Export Mermaid ERD
         </DropdownMenuItem>
         <DropdownMenuItem disabled={isExporting} onSelect={() => void onExportSvg()}>
           <FileImage className="size-4" />

@@ -1,4 +1,4 @@
-import { generateDiagramMarkdown } from '@tabliodb/docs';
+import { generateDiagramMarkdown, generateDiagramMermaid } from '@tabliodb/docs';
 import { generateDiagramSvg } from '@tabliodb/render';
 import {
   getDiagramModelIntegrityWarnings,
@@ -23,7 +23,7 @@ import {
 import { createDiagramModelSignature } from './model-history';
 
 type DiagramExportResponseDto = DiagramExportResponseDtoOutput;
-type DiagramExportFormat = 'tabliodb_json' | 'sql' | 'markdown' | 'svg';
+type DiagramExportFormat = 'tabliodb_json' | 'sql' | 'markdown' | 'mermaid' | 'svg';
 
 export type DiagramSqlPreview = {
   sql: string;
@@ -40,6 +40,7 @@ const sdkDialectByValue: Record<DatabaseDialect, SdkDialect> = {
 
 const sdkExportFormatByValue: Record<DiagramExportFormat, SdkExportFormat> = {
   markdown: SdkExportFormat.Markdown,
+  mermaid: SdkExportFormat.Mermaid,
   sql: SdkExportFormat.Sql,
   svg: SdkExportFormat.Svg,
   tabliodb_json: SdkExportFormat.TabliodbJson,
@@ -168,6 +169,23 @@ export function useDiagramExportActions({
     downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
   }
 
+  async function exportMermaid() {
+    if (!model) {
+      return;
+    }
+
+    const payload = await resolveDiagramExport({ format: sdkExportFormatByValue.mermaid }, () => ({
+      content: generateDiagramMermaid(model),
+      filename: `${fileStem}.erd.mmd`,
+      format: sdkExportFormatByValue.mermaid,
+      mediaType: 'text/vnd.mermaid',
+      warnings: toDiagramExportWarnings(getDiagramModelIntegrityWarnings(model)),
+    }));
+
+    // Mermaid `.mmd` bisa langsung dipakai di dokumentasi dan tooling diagram-as-code.
+    downloadTextFile(payload.filename, payload.content, `${payload.mediaType};charset=utf-8`);
+  }
+
   async function exportSvg() {
     if (!model) {
       return;
@@ -237,6 +255,7 @@ export function useDiagramExportActions({
     downloadSql,
     exportJson,
     exportMarkdown,
+    exportMermaid,
     exportPng,
     exportSvg,
     isExporting: exportDiagramMutation.isPending,

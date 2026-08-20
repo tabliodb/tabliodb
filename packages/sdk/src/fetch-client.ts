@@ -2713,7 +2713,7 @@ export function exportDiagram(
   }: {
     includeComments?: boolean;
     dialect?: 'postgresql' | 'mysql' | 'sqlite' | 'mariadb' | 'sqlserver';
-    format?: 'tabliodb_json' | 'sql' | 'markdown' | 'svg';
+    format?: 'tabliodb_json' | 'sql' | 'markdown' | 'mermaid' | 'svg';
     diagramId: string;
   },
   opts?: Oazapfts.RequestOpts,
@@ -4305,6 +4305,7 @@ export enum Format {
   TabliodbJson = 'tabliodb_json',
   Sql = 'sql',
   Markdown = 'markdown',
+  Mermaid = 'mermaid',
   Svg = 'svg',
 }
 export enum Mode {

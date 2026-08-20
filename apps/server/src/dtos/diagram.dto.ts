@@ -166,7 +166,7 @@ const DiagramTransferWarningSchema = z.object({
     .optional(),
 });
 
-const DiagramExportFormatSchema = z.enum(['tabliodb_json', 'sql', 'markdown', 'svg']);
+const DiagramExportFormatSchema = z.enum(['tabliodb_json', 'sql', 'markdown', 'mermaid', 'svg']);
 const DiagramImportSourceSchema = z.enum(['tabliodb_json', 'sql']);
 
 const DiagramExportQuerySchema = z

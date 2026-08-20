@@ -175,7 +175,8 @@ export class DiagramController {
   @RateLimit(RateLimitPreset.DiagramExport)
   @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })
-  @ApiQuery({ enum: ['tabliodb_json', 'sql', 'markdown', 'svg'], name: 'format', required: false })
+  // Keep this enum aligned with DiagramExportFormatSchema so the pure generated SDK accepts every export format.
+  @ApiQuery({ enum: ['tabliodb_json', 'sql', 'markdown', 'mermaid', 'svg'], name: 'format', required: false })
   @ApiQuery({ enum: ['postgresql', 'mysql', 'sqlite', 'mariadb', 'sqlserver'], name: 'dialect', required: false })
   @ApiQuery({ name: 'includeComments', required: false, type: Boolean })
   @ApiOperation({ operationId: 'exportDiagram' })

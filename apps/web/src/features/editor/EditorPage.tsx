@@ -1560,6 +1560,7 @@ export function EditorPage() {
         onDownloadSql={diagramExportActions.downloadSql}
         onExportJson={diagramExportActions.exportJson}
         onExportMarkdown={diagramExportActions.exportMarkdown}
+        onExportMermaid={diagramExportActions.exportMermaid}
         onExportPng={diagramExportActions.exportPng}
         onExportSvg={diagramExportActions.exportSvg}
         onFitDiagram={() => setFitSignal((value) => value + 1)}

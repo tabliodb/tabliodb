@@ -2139,6 +2139,7 @@
                 "tabliodb_json",
                 "sql",
                 "markdown",
+                "mermaid",
                 "svg"
               ],
               "type": "string"
@@ -7744,6 +7745,7 @@
               "tabliodb_json",
               "sql",
               "markdown",
+              "mermaid",
               "svg"
             ]
           },
