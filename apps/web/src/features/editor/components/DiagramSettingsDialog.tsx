@@ -33,6 +33,7 @@ import {
 import { selectClassName } from '../editor-form-styles';
 import { formatDiagramDialect } from '../diagram-formatters';
 import { ReviewSignalSettingsFields, toReviewSignalSettingsDto } from '../review-signal-settings';
+import { getDialectSelectOption } from './DialectIcon';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type ReviewSignalEffectiveSettingsDto = ReviewSignalEffectiveSettingsDtoOutput;
@@ -160,10 +161,7 @@ export function DiagramSettingsDialog({
                   control={form.control}
                   disabled={isPending || !canEdit}
                   name="dialect"
-                  options={diagramDialectOptions.map((dialect) => ({
-                    label: formatDiagramDialect(dialect),
-                    value: dialect,
-                  }))}
+                  options={diagramDialectOptions.map(getDialectSelectOption)}
                 />
                 <FieldError>{errors.dialect?.message}</FieldError>
               </label>

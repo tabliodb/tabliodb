@@ -11,7 +11,7 @@ import { History, LocateFixed, Loader2, MessageSquareText, Play, Redo2, Save, Un
 import LOGO from '@/assets/logo.svg';
 import type { DiagramCollaborationStatus } from '@/features/collaboration/collaboration-client';
 import { CollaborationPresence, type CollaboratorPresence } from '../collaboration-status';
-import { DiagramShareDialog } from './DiagramShareDialog';
+import { DiagramAccessDialog } from './DiagramAccessDialog';
 import { NotificationInboxMenu, UserAccountMenu, type NotificationInboxItem } from './EditorHeaderMenus';
 import { EditorMoreActionsMenu } from './EditorMoreActionsMenu';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
@@ -218,7 +218,7 @@ export function EditorHeader({
             ) : null}
           </div>
         ) : null}
-        {canEditDiagram ? <DiagramShareDialog canManage={canEditDiagram} diagram={activeDiagram} /> : null}
+        {canEditDiagram ? <DiagramAccessDialog canManage={canEditDiagram} diagram={activeDiagram} /> : null}
         <NotificationInboxMenu
           error={notificationError}
           hasNextPage={notificationHasNextPage}

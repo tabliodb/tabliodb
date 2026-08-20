@@ -60,7 +60,7 @@ const shareFormDefaults: ShareFormState = {
   role: SdkDiagramMemberRole.Viewer,
 };
 
-export function DiagramShareDialog({ canManage, diagram }: { canManage: boolean; diagram: DiagramResponseDto }) {
+export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean; diagram: DiagramResponseDto }) {
   const [confirmRemoveUserId, setConfirmRemoveUserId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
@@ -160,14 +160,14 @@ export function DiagramShareDialog({ canManage, diagram }: { canManage: boolean;
       <IconButton
         disabled={!canManage}
         icon={UsersRound}
-        label="Share diagram"
+        label="Diagram access"
         onClick={() => setOpen(true)}
       />
       <DialogContent className="w-[min(94vw,780px)] max-w-none">
         <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-4">
-          <DialogTitle>Share diagram</DialogTitle>
+          <DialogTitle>Diagram access</DialogTitle>
           <DialogDescription>
-            Invite people directly to {diagram.name}. Folder access and workspace access stay separate.
+            Invite people and manage direct permissions for {diagram.name}. Public read-only links stay in the More menu.
           </DialogDescription>
         </DialogHeader>
 

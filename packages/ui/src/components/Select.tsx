@@ -1,12 +1,13 @@
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
-import type { ComponentPropsWithoutRef, ElementRef } from 'react';
+import type { ComponentPropsWithoutRef, ElementRef, ReactNode } from 'react';
 import { forwardRef } from 'react';
 import { cn } from '../lib/utils.js';
 
 export type SelectOption = {
   disabled?: boolean;
-  label: string;
+  label: ReactNode;
+  textValue?: string;
   value: string;
 };
 
@@ -64,7 +65,12 @@ export function Select({
           </SelectPrimitive.ScrollUpButton>
           <SelectPrimitive.Viewport className="p-1">
             {options.map((option) => (
-              <SelectItem disabled={option.disabled} key={option.value} value={option.value}>
+              <SelectItem
+                disabled={option.disabled}
+                key={option.value}
+                textValue={option.textValue ?? (typeof option.label === 'string' ? option.label : option.value)}
+                value={option.value}
+              >
                 {option.label}
               </SelectItem>
             ))}

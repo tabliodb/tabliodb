@@ -26,7 +26,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
-import { formatDiagramDialect } from '../diagram-formatters';
+import { DialectBadge, getDialectSelectOption } from './DialectIcon';
 
 export type EditorImportSource = 'tabliodb_json' | 'sql';
 
@@ -365,10 +365,7 @@ export function ImportSqlDialog({
                   control={form.control}
                   disabled={disabled}
                   name="dialect"
-                  options={diagramDialectOptions.map((option) => ({
-                    label: formatDiagramDialect(option),
-                    value: option,
-                  }))}
+                  options={diagramDialectOptions.map(getDialectSelectOption)}
                 />
                 <FieldError>{errors.dialect?.message}</FieldError>
               </label>
@@ -435,7 +432,7 @@ function ImportJsonPreview({ preview }: { preview: ImportJsonDraftPreview }) {
   return (
     <section className="grid gap-3 rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="green">{formatDiagramDialect(model.dialect)}</Badge>
+        <DialectBadge dialect={model.dialect} />
         <Badge>{Object.keys(model.tables).length} tables</Badge>
         <Badge>{Object.keys(model.relationships).length} relationships</Badge>
         <Badge>{Object.keys(model.indexes).length} indexes</Badge>
@@ -493,7 +490,7 @@ function ImportSqlPreview({ preview }: { preview: ImportSqlDraftPreview }) {
   return (
     <section className="grid gap-3 rounded-[18px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="blue">{formatDiagramDialect(model.dialect)}</Badge>
+        <DialectBadge dialect={model.dialect} />
         <Badge>{Object.keys(model.tables).length} tables</Badge>
         <Badge>{Object.keys(model.relationships).length} relationships</Badge>
         <Badge>{Object.keys(model.indexes).length} indexes</Badge>

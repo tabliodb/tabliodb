@@ -27,7 +27,7 @@ import { getErrorMessage } from '@/features/app/RouteStates';
 import { defaultDiagramName, useCreateDiagramMutation, useCreateWorkspaceDiagramMutation } from '@/resources/diagrams';
 import { useCreateOrganizationMutation } from '@/resources/organizations';
 import { useCreateProjectMutation } from '@/resources/projects';
-import { formatDiagramDialect } from '../diagram-formatters';
+import { getDialectSelectOption } from './DialectIcon';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
@@ -485,10 +485,7 @@ export function CreateDiagramDialog({
                   control={form.control}
                   disabled={!canCreateInContext || isCreatingDiagram}
                   name="dialect"
-                  options={diagramDialectOptions.map((dialect) => ({
-                    label: formatDiagramDialect(dialect),
-                    value: dialect,
-                  }))}
+                  options={diagramDialectOptions.map(getDialectSelectOption)}
                 />
                 <FieldError>{errors.dialect?.message}</FieldError>
               </label>

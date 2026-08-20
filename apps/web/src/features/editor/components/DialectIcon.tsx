@@ -1,5 +1,5 @@
 import type { Dialect } from '@tabliodb/sdk';
-import { cn } from '@tabliodb/ui';
+import { cn, type SelectOption } from '@tabliodb/ui';
 import mariadbIconUrl from '@/assets/dialects/mariadb.svg';
 import mysqlIconUrl from '@/assets/dialects/mysql.svg';
 import postgresqlIconUrl from '@/assets/dialects/postgresql.svg';
@@ -78,6 +78,33 @@ export function DialectBadge({ className, dialect }: { className?: string; diale
       <span className="truncate">{meta.label}</span>
     </span>
   );
+}
+
+export function DialectSelectLabel({ dialect }: { dialect: DialectValue }) {
+  const meta = getDialectMeta(dialect);
+
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span
+        className={cn(
+          // Select rows need a quieter icon treatment than cards, so the logo reads as metadata instead of a call to action.
+          'grid size-6 shrink-0 place-items-center rounded-[8px] border border-[rgb(var(--tabliodb-border))]',
+          meta.logoBackground,
+        )}
+      >
+        <DialectIcon className="size-4" dialect={dialect} />
+      </span>
+      <span className="truncate">{meta.label}</span>
+    </span>
+  );
+}
+
+export function getDialectSelectOption(dialect: DialectValue): SelectOption {
+  return {
+    label: <DialectSelectLabel dialect={dialect} />,
+    textValue: formatDialectLabel(dialect),
+    value: String(dialect),
+  };
 }
 
 export function formatDialectLabel(dialect: DialectValue): string {
