@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const TeamProjectRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
+const TeamDiagramRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
 
 const TeamCreateSchema = z
   .object({
@@ -28,6 +29,7 @@ const TeamResponseSchema = z
     slug: z.string(),
     description: z.string().nullable(),
     memberCount: z.number().int().nonnegative(),
+    diagramAccessCount: z.number().int().nonnegative(),
     projectAccessCount: z.number().int().nonnegative(),
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,
@@ -133,8 +135,52 @@ const TeamProjectAccessRemoveResponseSchema = z
   })
   .meta({ id: 'TeamProjectAccessRemoveResponseDto' });
 
+const TeamDiagramAccessSchema = z
+  .object({
+    diagramId: z.uuid(),
+    diagramName: z.string(),
+    projectId: z.uuid().nullable(),
+    role: TeamDiagramRoleSchema,
+    createdAt: DateTimeSchema,
+    updatedAt: DateTimeSchema,
+  })
+  .meta({ id: 'TeamDiagramAccessDto' });
+
+const TeamDiagramAccessUpsertSchema = z
+  .object({
+    diagramId: z.uuid(),
+    role: TeamDiagramRoleSchema.default(ProjectRole.Viewer),
+  })
+  .meta({ id: 'TeamDiagramAccessUpsertDto' });
+
+const TeamDiagramAccessListQuerySchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .meta({ id: 'TeamDiagramAccessListQueryDto' });
+
+const TeamDiagramAccessListResponseSchema = z
+  .object({
+    items: z.array(TeamDiagramAccessSchema),
+    nextCursor: z.string().nullable(),
+    totalCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'TeamDiagramAccessListResponseDto' });
+
+const TeamDiagramAccessRemoveResponseSchema = z
+  .object({
+    successful: z.boolean(),
+  })
+  .meta({ id: 'TeamDiagramAccessRemoveResponseDto' });
+
 export class TeamArchiveResponseDto extends createZodDto(TeamArchiveResponseSchema) {}
 export class TeamCreateDto extends createZodDto(TeamCreateSchema) {}
+export class TeamDiagramAccessDto extends createZodDto(TeamDiagramAccessSchema) {}
+export class TeamDiagramAccessListQueryDto extends createZodDto(TeamDiagramAccessListQuerySchema) {}
+export class TeamDiagramAccessListResponseDto extends createZodDto(TeamDiagramAccessListResponseSchema) {}
+export class TeamDiagramAccessRemoveResponseDto extends createZodDto(TeamDiagramAccessRemoveResponseSchema) {}
+export class TeamDiagramAccessUpsertDto extends createZodDto(TeamDiagramAccessUpsertSchema) {}
 export class TeamListQueryDto extends createZodDto(TeamListQuerySchema) {}
 export class TeamListResponseDto extends createZodDto(TeamListResponseSchema) {}
 export class TeamMemberCreateDto extends createZodDto(TeamMemberCreateSchema) {}

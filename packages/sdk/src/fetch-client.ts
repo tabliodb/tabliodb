@@ -1571,6 +1571,7 @@ export type TeamResponseDtoOutput = {
   slug: string;
   description: string | null;
   memberCount: number;
+  diagramAccessCount: number;
   projectAccessCount: number;
   createdAt: string;
   updatedAt: string;
@@ -1629,6 +1630,26 @@ export type TeamProjectAccessUpsertDto = {
   role?: Role6;
 };
 export type TeamProjectAccessRemoveResponseDtoOutput = {
+  successful: boolean;
+};
+export type TeamDiagramAccessDtoOutput = {
+  diagramId: string;
+  diagramName: string;
+  projectId: string | null;
+  role: Role6;
+  createdAt: string;
+  updatedAt: string;
+};
+export type TeamDiagramAccessListResponseDtoOutput = {
+  items: TeamDiagramAccessDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type TeamDiagramAccessUpsertDto = {
+  diagramId: string;
+  role?: Role6;
+};
+export type TeamDiagramAccessRemoveResponseDtoOutput = {
   successful: boolean;
 };
 export type UserResponseDtoOutput = {
@@ -3979,6 +4000,79 @@ export function removeTeamProjectAccess(
       status: 200;
       data: TeamProjectAccessRemoveResponseDtoOutput;
     }>(`/teams/${encodeURIComponent(teamId)}/projects/${encodeURIComponent(projectId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
+  );
+}
+export function getTeamDiagramAccesses(
+  {
+    cursor,
+    limit,
+    teamId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    teamId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: TeamDiagramAccessListResponseDtoOutput;
+    }>(
+      `/teams/${encodeURIComponent(teamId)}/diagrams${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function upsertTeamDiagramAccess(
+  {
+    teamId,
+    teamDiagramAccessUpsertDto,
+  }: {
+    teamId: string;
+    teamDiagramAccessUpsertDto: TeamDiagramAccessUpsertDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: TeamDiagramAccessDtoOutput;
+    }>(
+      `/teams/${encodeURIComponent(teamId)}/diagrams`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: teamDiagramAccessUpsertDto,
+      }),
+    ),
+  );
+}
+export function removeTeamDiagramAccess(
+  {
+    diagramId,
+    teamId,
+  }: {
+    diagramId: string;
+    teamId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: TeamDiagramAccessRemoveResponseDtoOutput;
+    }>(`/teams/${encodeURIComponent(teamId)}/diagrams/${encodeURIComponent(diagramId)}`, {
       ...opts,
       method: 'DELETE',
     }),

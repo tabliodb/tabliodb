@@ -13,6 +13,7 @@ import {
   type OrganizationMemberDtoOutput,
   type OrganizationSettingsDtoOutput,
   type ProjectResponseDtoOutput,
+  type TeamDiagramAccessDtoOutput,
   type TeamMemberDtoOutput,
   type TeamProjectAccessDtoOutput,
   type TeamResponseDtoOutput,
@@ -53,6 +54,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledSelect } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
+import { diagramsQueries } from '@/resources/diagrams';
 import { useCreateInvitationMutation } from '@/resources/invitations';
 import {
   organizationsQueries,
@@ -68,8 +70,10 @@ import {
   useArchiveTeamMutation,
   useCreateTeamMutation,
   useRemoveTeamMemberMutation,
+  useRemoveTeamDiagramAccessMutation,
   useRemoveTeamProjectAccessMutation,
   useUpdateTeamMutation,
+  useUpsertTeamDiagramAccessMutation,
   useUpsertTeamProjectAccessMutation,
 } from '@/resources/teams';
 import { selectClassName } from '../editor-form-styles';
@@ -81,6 +85,7 @@ type OrganizationDto = OrganizationDtoOutput;
 type OrganizationMemberDto = OrganizationMemberDtoOutput;
 type OrganizationSettingsDto = OrganizationSettingsDtoOutput;
 type ProjectResponseDto = ProjectResponseDtoOutput;
+type TeamDiagramAccessDto = TeamDiagramAccessDtoOutput;
 type TeamMemberDto = TeamMemberDtoOutput;
 type TeamProjectAccessDto = TeamProjectAccessDtoOutput;
 type TeamProjectRole = `${SdkTeamProjectRole}`;
@@ -187,6 +192,18 @@ const teamProjectAccessFormDefaults: TeamProjectAccessFormState = {
   role: ProjectRole.Viewer,
 };
 
+const teamDiagramAccessFormSchema = z.object({
+  diagramId: z.string().min(1, 'Select a diagram.'),
+  role: z.enum(teamProjectAccessRoleOptions),
+});
+
+type TeamDiagramAccessFormState = z.infer<typeof teamDiagramAccessFormSchema>;
+
+const teamDiagramAccessFormDefaults: TeamDiagramAccessFormState = {
+  diagramId: '',
+  role: ProjectRole.Viewer,
+};
+
 const organizationRoleOptions = [
   OrganizationRole.Owner,
   OrganizationRole.Admin,
@@ -196,6 +213,7 @@ const organizationRoleOptions = [
 
 const teamPageQuery = { limit: 50 } as const;
 const teamMemberPageQuery = { limit: 50 } as const;
+const teamDiagramAccessPageQuery = { limit: 50 } as const;
 const teamProjectAccessPageQuery = { limit: 50 } as const;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
@@ -239,12 +257,18 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     mode: 'onBlur',
     resolver: zodResolver(teamProjectAccessFormSchema),
   });
+  const teamDiagramAccessForm = useForm<TeamDiagramAccessFormState>({
+    defaultValues: teamDiagramAccessFormDefaults,
+    mode: 'onBlur',
+    resolver: zodResolver(teamDiagramAccessFormSchema),
+  });
   const { errors } = form.formState;
   const { errors: teamErrors } = teamForm.formState;
   const { errors: selectedTeamErrors } = selectedTeamForm.formState;
   const { errors: workspaceMemberErrors } = workspaceMemberForm.formState;
   const { errors: teamMemberErrors } = teamMemberForm.formState;
   const { errors: teamProjectAccessErrors } = teamProjectAccessForm.formState;
+  const { errors: teamDiagramAccessErrors } = teamDiagramAccessForm.formState;
   const settingsQueryOptions = organizationsQueries.settings(organization.id);
   const settingsQuery = useQuery({
     ...settingsQueryOptions,
@@ -285,9 +309,26 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
       Boolean(selectedTeamId) &&
       selectedTeamProjectAccessesQueryOptions.enabled !== false,
   });
+  const selectedTeamDiagramAccessesQueryOptions = teamsQueries.diagramAccesses(
+    selectedTeamId ?? '',
+    teamDiagramAccessPageQuery,
+  );
+  const selectedTeamDiagramAccessesQuery = useQuery({
+    ...selectedTeamDiagramAccessesQueryOptions,
+    enabled:
+      open &&
+      canManageWorkspace &&
+      Boolean(selectedTeamId) &&
+      selectedTeamDiagramAccessesQueryOptions.enabled !== false,
+  });
   const teamProjectOptionsQuery = useQuery({
     ...projectsQueries.list({ limit: 50, organizationId: organization.id }),
     // Folder options are backed by the legacy project endpoint while the product language stays diagram-first.
+    enabled: open && canManageWorkspace,
+  });
+  const teamDiagramOptionsQuery = useQuery({
+    ...diagramsQueries.listByWorkspace(organization.id, { limit: 50 }),
+    // Diagram options are needed only when a workspace admin manages team grants.
     enabled: open && canManageWorkspace,
   });
   const auditLogs = auditLogsQuery.data?.items ?? [];
@@ -296,11 +337,18 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
   const selectedTeam = selectedTeamId ? (teams.find((team) => team.id === selectedTeamId) ?? null) : null;
   const selectedTeamMembers = selectedTeamMembersQuery.data?.items ?? [];
   const selectedTeamProjectAccesses = selectedTeamProjectAccessesQuery.data?.items ?? [];
+  const selectedTeamDiagramAccesses = selectedTeamDiagramAccessesQuery.data?.items ?? [];
   const teamProjectOptions = teamProjectOptionsQuery.data?.items ?? [];
+  const teamDiagramOptions = teamDiagramOptionsQuery.data?.items ?? [];
   const teamProjectSelectOptions = teamProjectOptions.map((projectOption) => ({
     disabled: selectedTeamProjectAccesses.some((access) => access.projectId === projectOption.id),
     label: projectOption.name,
     value: projectOption.id,
+  }));
+  const teamDiagramSelectOptions = teamDiagramOptions.map((diagramOption) => ({
+    disabled: selectedTeamDiagramAccesses.some((access) => access.diagramId === diagramOption.id),
+    label: diagramOption.projectId ? `${diagramOption.name} / folder` : `${diagramOption.name} / root`,
+    value: diagramOption.id,
   }));
   const updateSettingsMutation = useUpdateOrganizationSettingsMutation({
     mutationConfig: {
@@ -373,6 +421,14 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     },
   });
   const removeTeamProjectAccessMutation = useRemoveTeamProjectAccessMutation();
+  const upsertTeamDiagramAccessMutation = useUpsertTeamDiagramAccessMutation({
+    mutationConfig: {
+      onSuccess: () => {
+        teamDiagramAccessForm.reset(teamDiagramAccessFormDefaults);
+      },
+    },
+  });
+  const removeTeamDiagramAccessMutation = useRemoveTeamDiagramAccessMutation();
   const isTeamMutationPending =
     createTeamMutation.isPending ||
     updateTeamMutation.isPending ||
@@ -380,7 +436,9 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     addTeamMemberMutation.isPending ||
     removeTeamMemberMutation.isPending ||
     upsertTeamProjectAccessMutation.isPending ||
-    removeTeamProjectAccessMutation.isPending;
+    removeTeamProjectAccessMutation.isPending ||
+    upsertTeamDiagramAccessMutation.isPending ||
+    removeTeamDiagramAccessMutation.isPending;
 
   useEffect(() => {
     if (open) {
@@ -397,6 +455,8 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
       removeTeamMemberMutation.reset();
       upsertTeamProjectAccessMutation.reset();
       removeTeamProjectAccessMutation.reset();
+      upsertTeamDiagramAccessMutation.reset();
+      removeTeamDiagramAccessMutation.reset();
     }
   }, [form, open, organization, settingsQuery.data]);
 
@@ -435,6 +495,8 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
       removeTeamMemberMutation.reset();
       upsertTeamProjectAccessMutation.reset();
       removeTeamProjectAccessMutation.reset();
+      upsertTeamDiagramAccessMutation.reset();
+      removeTeamDiagramAccessMutation.reset();
       setSelectedTeamId(null);
       teamForm.reset(teamFormDefaults);
       selectedTeamForm.reset(teamFormDefaults);
@@ -442,6 +504,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
       workspaceMemberForm.reset(workspaceMemberFormDefaults);
       teamMemberForm.reset(teamMemberFormDefaults);
       teamProjectAccessForm.reset(teamProjectAccessFormDefaults);
+      teamDiagramAccessForm.reset(teamDiagramAccessFormDefaults);
     }
   }
 
@@ -618,6 +681,49 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     });
   }
 
+  function handleUpsertTeamDiagramAccess(values: TeamDiagramAccessFormState) {
+    if (!selectedTeam) {
+      return;
+    }
+
+    upsertTeamDiagramAccessMutation.mutate({
+      body: {
+        diagramId: values.diagramId,
+        // Team diagram grants use the same role enum as folder grants.
+        role: sdkTeamProjectRoleByValue[values.role as TeamProjectRole],
+      },
+      organizationId: organization.id,
+      teamId: selectedTeam.id,
+    });
+  }
+
+  function handleRemoveTeamDiagramAccess(access: TeamDiagramAccessDto) {
+    if (!selectedTeam) {
+      return;
+    }
+
+    removeTeamDiagramAccessMutation.mutate({
+      diagramId: access.diagramId,
+      organizationId: organization.id,
+      teamId: selectedTeam.id,
+    });
+  }
+
+  function handleUpdateTeamDiagramAccessRole(access: TeamDiagramAccessDto, role: TeamProjectRole) {
+    if (!selectedTeam || access.role === role) {
+      return;
+    }
+
+    upsertTeamDiagramAccessMutation.mutate({
+      body: {
+        diagramId: access.diagramId,
+        role: sdkTeamProjectRoleByValue[role],
+      },
+      organizationId: organization.id,
+      teamId: selectedTeam.id,
+    });
+  }
+
   const memberMutationError =
     addMemberMutation.error ??
     createWorkspaceInvitationMutation.error ??
@@ -630,7 +736,9 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     addTeamMemberMutation.error ??
     removeTeamMemberMutation.error ??
     upsertTeamProjectAccessMutation.error ??
-    removeTeamProjectAccessMutation.error;
+    removeTeamProjectAccessMutation.error ??
+    upsertTeamDiagramAccessMutation.error ??
+    removeTeamDiagramAccessMutation.error;
   const updatingUserId = updateMemberMutation.isPending ? updateMemberMutation.variables?.userId : null;
   const removingUserId = removeMemberMutation.isPending ? removeMemberMutation.variables?.userId : null;
   const removingTeamMemberUserId = removeTeamMemberMutation.isPending
@@ -638,6 +746,9 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     : null;
   const removingTeamProjectId = removeTeamProjectAccessMutation.isPending
     ? removeTeamProjectAccessMutation.variables?.projectId
+    : null;
+  const removingTeamDiagramId = removeTeamDiagramAccessMutation.isPending
+    ? removeTeamDiagramAccessMutation.variables?.diagramId
     : null;
 
   return (
@@ -932,7 +1043,8 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                           <div className="min-w-0">
                             <h4 className="truncate text-sm font-extrabold">{selectedTeam.name}</h4>
                             <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} folder grants
+                              {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} folder grants /{' '}
+                              {selectedTeam.diagramAccessCount} diagram grants
                             </p>
                           </div>
                           <WithTooltip content={`Archive ${selectedTeam.name}`}>
@@ -1139,6 +1251,84 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                               </div>
                             )}
                           </section>
+
+                          <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 xl:col-span-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h5 className="text-sm font-extrabold">Diagram access</h5>
+                                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  Direct diagram grants inherited by team members
+                                </p>
+                              </div>
+                              <Badge>{selectedTeamDiagramAccesses.length} loaded</Badge>
+                            </div>
+
+                            <form
+                              className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_auto]"
+                              onSubmit={teamDiagramAccessForm.handleSubmit(handleUpsertTeamDiagramAccess)}
+                            >
+                              <label className="block text-sm">
+                                <span className="sr-only">Diagram</span>
+                                <ControlledSelect
+                                  aria-invalid={Boolean(teamDiagramAccessErrors.diagramId)}
+                                  className={selectClassName}
+                                  control={teamDiagramAccessForm.control}
+                                  disabled={isTeamMutationPending || teamDiagramOptionsQuery.isPending}
+                                  name="diagramId"
+                                  options={teamDiagramSelectOptions}
+                                  placeholder="Select diagram"
+                                />
+                                <FieldError>{teamDiagramAccessErrors.diagramId?.message}</FieldError>
+                              </label>
+                              <label className="block text-sm">
+                                <span className="sr-only">Role</span>
+                                <ControlledSelect
+                                  aria-invalid={Boolean(teamDiagramAccessErrors.role)}
+                                  className={selectClassName}
+                                  control={teamDiagramAccessForm.control}
+                                  disabled={isTeamMutationPending}
+                                  name="role"
+                                  options={teamProjectAccessRoleOptions.map((role) => ({
+                                    label: formatProjectRole(role),
+                                    value: role,
+                                  }))}
+                                />
+                              </label>
+                              <Button disabled={isTeamMutationPending} size="sm" type="submit">
+                                {upsertTeamDiagramAccessMutation.isPending ? (
+                                  <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                  <ShieldCheck className="size-4" />
+                                )}
+                                Grant
+                              </Button>
+                            </form>
+
+                            {selectedTeamDiagramAccessesQuery.isPending ? (
+                              <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                <Loader2 className="size-4 animate-spin" />
+                                Loading diagram access
+                              </div>
+                            ) : selectedTeamDiagramAccesses.length === 0 ? (
+                              <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                No diagram grants yet
+                              </div>
+                            ) : (
+                              <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
+                                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                                  {selectedTeamDiagramAccesses.map((access) => (
+                                    <TeamDiagramAccessRow
+                                      access={access}
+                                      isRemoving={removingTeamDiagramId === access.diagramId}
+                                      key={access.diagramId}
+                                      onRemove={handleRemoveTeamDiagramAccess}
+                                      onRoleChange={handleUpdateTeamDiagramAccessRole}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </section>
                         </div>
                       </div>
                     ) : (
@@ -1156,10 +1346,16 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                 </div>
               )}
 
-              {teamMutationError || selectedTeamMembersQuery.error || selectedTeamProjectAccessesQuery.error ? (
+              {teamMutationError ||
+              selectedTeamMembersQuery.error ||
+              selectedTeamProjectAccessesQuery.error ||
+              selectedTeamDiagramAccessesQuery.error ? (
                 <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                   {getErrorMessage(
-                    teamMutationError ?? selectedTeamMembersQuery.error ?? selectedTeamProjectAccessesQuery.error,
+                    teamMutationError ??
+                      selectedTeamMembersQuery.error ??
+                      selectedTeamProjectAccessesQuery.error ??
+                      selectedTeamDiagramAccessesQuery.error,
                   )}
                 </div>
               ) : null}
@@ -1285,7 +1481,7 @@ function TeamListItem({
         {team.description || 'No description yet'}
       </p>
       <div className="truncate text-xs font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
-        {team.projectAccessCount} folder grants
+        {team.projectAccessCount} folder grants / {team.diagramAccessCount} diagram grants
       </div>
     </button>
   );
@@ -1370,6 +1566,53 @@ function TeamProjectAccessRow({
       <WithTooltip content={`Remove ${access.projectName} folder access from this team`}>
         <Button
           aria-label={`Remove ${access.projectName} folder access from this team`}
+          disabled={isRemoving}
+          onClick={() => onRemove(access)}
+          size="icon"
+          variant="ghost"
+        >
+          {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        </Button>
+      </WithTooltip>
+    </article>
+  );
+}
+
+function TeamDiagramAccessRow({
+  access,
+  isRemoving,
+  onRemove,
+  onRoleChange,
+}: {
+  access: TeamDiagramAccessDto;
+  isRemoving: boolean;
+  onRemove: (access: TeamDiagramAccessDto) => void;
+  onRoleChange: (access: TeamDiagramAccessDto, role: TeamProjectRole) => void;
+}) {
+  return (
+    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-center">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <h6 className="min-w-0 truncate text-sm font-extrabold">{access.diagramName}</h6>
+          <Badge className="shrink-0" variant={access.projectId ? 'neutral' : 'blue'}>
+            {access.projectId ? 'Folder' : 'Root'}
+          </Badge>
+        </div>
+        <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Direct team diagram grant</p>
+      </div>
+      <Select
+        className={selectClassName}
+        disabled={isRemoving}
+        onValueChange={(role) => onRoleChange(access, role as TeamProjectRole)}
+        options={teamProjectAccessRoleOptions.map((role) => ({
+          label: formatProjectRole(role),
+          value: role,
+        }))}
+        value={access.role}
+      />
+      <WithTooltip content={`Remove ${access.diagramName} diagram access from this team`}>
+        <Button
+          aria-label={`Remove ${access.diagramName} diagram access from this team`}
           disabled={isRemoving}
           onClick={() => onRemove(access)}
           size="icon"
@@ -1563,6 +1806,28 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     )}`;
   }
 
+  if (auditLog.action === 'team.diagram_access_updated') {
+    const role = auditLog.metadata.role;
+    const teamName = readMetadataString(auditLog.metadata, 'teamName', 'team');
+    const diagramName = readMetadataString(auditLog.metadata, 'diagramName', 'diagram');
+
+    if (role && typeof role === 'object' && !Array.isArray(role)) {
+      return `Changed ${teamName} diagram access to ${diagramName} from ${formatProjectRoleValue(
+        readMetadataString(role as Record<string, unknown>, 'before', ProjectRole.Viewer),
+      )} to ${formatProjectRoleValue(readMetadataString(role as Record<string, unknown>, 'after', ProjectRole.Viewer))}`;
+    }
+
+    return `Granted ${teamName} ${formatProjectRoleValue(String(role ?? ProjectRole.Viewer))} on diagram ${diagramName}`;
+  }
+
+  if (auditLog.action === 'team.diagram_access_removed') {
+    return `Removed ${readMetadataString(auditLog.metadata, 'teamName', 'team')} diagram access from ${readMetadataString(
+      auditLog.metadata,
+      'diagramName',
+      'diagram',
+    )}`;
+  }
+
   if (auditLog.action === 'comment.deleted') {
     return readMetadataBoolean(auditLog.metadata, 'deletedByAuthor') ? 'Deleted own comment' : 'Moderated a comment';
   }
@@ -1620,6 +1885,8 @@ function formatAuditLogAction(action: string): string {
       'team.created': 'Team',
       'team.member_added': 'Team user',
       'team.member_removed': 'Removed',
+      'team.diagram_access_removed': 'Access',
+      'team.diagram_access_updated': 'Access',
       'team.project_access_removed': 'Access',
       'team.project_access_updated': 'Access',
       'team.updated': 'Team',
@@ -1651,6 +1918,7 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     action === 'project.member_added' ||
     action === 'team.created' ||
     action === 'team.member_added' ||
+    action === 'team.diagram_access_updated' ||
     action === 'team.project_access_updated' ||
     action === 'user.enabled'
   ) {
@@ -1665,6 +1933,7 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     action === 'project.member_removed' ||
     action === 'team.archived' ||
     action === 'team.member_removed' ||
+    action === 'team.diagram_access_removed' ||
     action === 'team.project_access_removed' ||
     action === 'user.disabled'
   ) {

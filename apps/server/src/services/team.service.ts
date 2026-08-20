@@ -5,6 +5,11 @@ import type { AuthContext } from '../database.js';
 import {
   TeamArchiveResponseDto,
   TeamCreateDto,
+  TeamDiagramAccessDto,
+  TeamDiagramAccessListQueryDto,
+  TeamDiagramAccessListResponseDto,
+  TeamDiagramAccessRemoveResponseDto,
+  TeamDiagramAccessUpsertDto,
   TeamListQueryDto,
   TeamListResponseDto,
   TeamMemberCreateDto,
@@ -22,7 +27,7 @@ import {
 } from '../dtos/team.dto.js';
 import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
-import { TeamRepository, type TeamProjectRole } from '../repositories/team.repository.js';
+import { TeamRepository, type TeamDiagramRole, type TeamProjectRole } from '../repositories/team.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
 import { toIsoDateTime } from '../utils/date-time.js';
@@ -307,6 +312,98 @@ export class TeamService {
     return { successful: true };
   }
 
+  async getDiagramAccesses(
+    auth: AuthContext,
+    teamId: string,
+    query: TeamDiagramAccessListQueryDto,
+  ): Promise<TeamDiagramAccessListResponseDto> {
+    await this.requireTeam(auth, teamId, Permission.OrganizationRead);
+
+    const accesses = await this.teamRepository.getDiagramAccesses(teamId, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+    });
+
+    return {
+      ...accesses,
+      items: accesses.items.map((access) => this.serializeDiagramAccess(access)),
+    };
+  }
+
+  async upsertDiagramAccess(
+    auth: AuthContext,
+    teamId: string,
+    dto: TeamDiagramAccessUpsertDto,
+  ): Promise<TeamDiagramAccessDto> {
+    const team = await this.requireTeam(auth, teamId, Permission.OrganizationManage);
+    const diagram = await this.teamRepository.getDiagramInOrganization(dto.diagramId, team.organizationId);
+
+    if (!diagram) {
+      throw new BadRequestException('Diagram must belong to the same workspace as the team');
+    }
+
+    const currentAccess = await this.teamRepository.getDiagramAccess(teamId, dto.diagramId);
+    const access = await this.teamRepository.upsertDiagramAccess(teamId, {
+      createdById: auth.user.id,
+      diagramId: dto.diagramId,
+      // Direct diagram team grants reuse project roles because the effective permission matrix is the same.
+      role: (dto.role ?? ProjectRole.Viewer) as TeamDiagramRole,
+    });
+
+    if (!access) {
+      throw new NotFoundException('Team diagram access could not be loaded');
+    }
+
+    if (!currentAccess || currentAccess.role !== access.role) {
+      await this.recordTeamAudit(auth, {
+        action: AuditAction.TeamDiagramAccessUpdated,
+        diagramId: diagram.id,
+        entityId: diagram.id,
+        entityType: 'team_diagram_access',
+        metadata: {
+          diagramName: diagram.name,
+          role: currentAccess ? { after: access.role, before: currentAccess.role } : access.role,
+          teamName: team.name,
+        },
+        organizationId: team.organizationId,
+        projectId: diagram.projectId,
+      });
+    }
+
+    return this.serializeDiagramAccess(access);
+  }
+
+  async removeDiagramAccess(
+    auth: AuthContext,
+    teamId: string,
+    diagramId: string,
+  ): Promise<TeamDiagramAccessRemoveResponseDto> {
+    const team = await this.requireTeam(auth, teamId, Permission.OrganizationManage);
+    const currentAccess = await this.teamRepository.getDiagramAccess(teamId, diagramId);
+
+    if (!currentAccess) {
+      throw new NotFoundException('Team diagram access not found');
+    }
+
+    await this.teamRepository.removeDiagramAccess(teamId, diagramId);
+
+    await this.recordTeamAudit(auth, {
+      action: AuditAction.TeamDiagramAccessRemoved,
+      diagramId,
+      entityId: diagramId,
+      entityType: 'team_diagram_access',
+      metadata: {
+        diagramName: currentAccess.diagramName,
+        role: currentAccess.role,
+        teamName: team.name,
+      },
+      organizationId: team.organizationId,
+      projectId: currentAccess.projectId,
+    });
+
+    return { successful: true };
+  }
+
   private async requireTeam(auth: AuthContext, teamId: string, permission: Permission) {
     const team = await this.teamRepository.getById(teamId);
 
@@ -335,6 +432,7 @@ export class TeamService {
       action: AuditAction;
       entityId: string;
       entityType: string;
+      diagramId?: string | null;
       metadata: Record<string, JsonValue>;
       organizationId: string;
       projectId?: string | null;
@@ -343,6 +441,7 @@ export class TeamService {
     return this.auditLogRepository.create({
       action: options.action,
       actorId: auth.user.id,
+      diagramId: options.diagramId ?? null,
       entityId: options.entityId,
       entityType: options.entityType,
       ipAddress: auth.request?.ipAddress ?? null,
@@ -357,6 +456,7 @@ export class TeamService {
   private serializeTeam(team: TeamRow): TeamResponseDto {
     return {
       description: team.description,
+      diagramAccessCount: Number(team.diagramAccessCount),
       id: team.id,
       memberCount: Number(team.memberCount),
       name: team.name,
@@ -389,11 +489,23 @@ export class TeamService {
       updatedAt: toIsoDateTime(access.updatedAt),
     };
   }
+
+  private serializeDiagramAccess(access: TeamDiagramAccessRow): TeamDiagramAccessDto {
+    return {
+      createdAt: toIsoDateTime(access.createdAt),
+      diagramId: access.diagramId,
+      diagramName: access.diagramName,
+      projectId: access.projectId,
+      role: access.role as ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer,
+      updatedAt: toIsoDateTime(access.updatedAt),
+    };
+  }
 }
 
 type TeamRow = {
   createdAt: Date | string;
   description: string | null;
+  diagramAccessCount: number;
   id: string;
   memberCount: number;
   name: string;
@@ -417,6 +529,15 @@ type TeamProjectAccessRow = {
   projectId: string;
   projectName: string;
   projectSlug: string;
+  role: string;
+  updatedAt: Date | string;
+};
+
+type TeamDiagramAccessRow = {
+  createdAt: Date | string;
+  diagramId: string;
+  diagramName: string;
+  projectId: string | null;
   role: string;
   updatedAt: Date | string;
 };

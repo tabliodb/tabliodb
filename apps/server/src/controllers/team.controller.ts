@@ -5,6 +5,11 @@ import type { AuthContext } from '../database.js';
 import {
   TeamArchiveResponseDto,
   TeamCreateDto,
+  TeamDiagramAccessDto,
+  TeamDiagramAccessListQueryDto,
+  TeamDiagramAccessListResponseDto,
+  TeamDiagramAccessRemoveResponseDto,
+  TeamDiagramAccessUpsertDto,
   TeamListQueryDto,
   TeamListResponseDto,
   TeamMemberCreateDto,
@@ -152,5 +157,47 @@ export class TeamController {
     @Param('projectId') projectId: string,
   ): Promise<TeamProjectAccessRemoveResponseDto> {
     return this.teamService.removeProjectAccess(auth, teamId, projectId);
+  }
+
+  @Get(':teamId/diagrams')
+  @ApiParam({ name: 'teamId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getTeamDiagramAccesses' })
+  @ZodResponse({ status: HttpStatus.OK, type: TeamDiagramAccessListResponseDto })
+  getTeamDiagramAccesses(
+    @Auth() auth: AuthContext,
+    @Param('teamId') teamId: string,
+    @Query() query: TeamDiagramAccessListQueryDto,
+  ): Promise<TeamDiagramAccessListResponseDto> {
+    return this.teamService.getDiagramAccesses(auth, teamId, query);
+  }
+
+  @Post(':teamId/diagrams')
+  @RateLimit(RateLimitPreset.TeamWrite)
+  @ApiParam({ name: 'teamId', type: String })
+  @ApiBody({ type: TeamDiagramAccessUpsertDto })
+  @ApiOperation({ operationId: 'upsertTeamDiagramAccess' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: TeamDiagramAccessDto })
+  upsertTeamDiagramAccess(
+    @Auth() auth: AuthContext,
+    @Param('teamId') teamId: string,
+    @Body() dto: TeamDiagramAccessUpsertDto,
+  ): Promise<TeamDiagramAccessDto> {
+    return this.teamService.upsertDiagramAccess(auth, teamId, dto);
+  }
+
+  @Delete(':teamId/diagrams/:diagramId')
+  @RateLimit(RateLimitPreset.TeamWrite)
+  @HttpCode(HttpStatus.OK)
+  @ApiParam({ name: 'teamId', type: String })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiOperation({ operationId: 'removeTeamDiagramAccess' })
+  @ZodResponse({ status: HttpStatus.OK, type: TeamDiagramAccessRemoveResponseDto })
+  removeTeamDiagramAccess(
+    @Auth() auth: AuthContext,
+    @Param('teamId') teamId: string,
+    @Param('diagramId') diagramId: string,
+  ): Promise<TeamDiagramAccessRemoveResponseDto> {
+    return this.teamService.removeDiagramAccess(auth, teamId, diagramId);
   }
 }

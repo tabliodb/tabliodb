@@ -9,6 +9,9 @@ export const teamsKeys = {
   list: (query: TeamListQuery) => [...teamsKeys.lists(), query] as const,
   membersRoot: (teamId: string) => [...teamsKeys.all, 'members', teamId] as const,
   members: (teamId: string, query: PaginationQuery = {}) => [...teamsKeys.membersRoot(teamId), query] as const,
+  diagramAccessesRoot: (teamId: string) => [...teamsKeys.all, 'diagram-accesses', teamId] as const,
+  diagramAccesses: (teamId: string, query: PaginationQuery = {}) =>
+    [...teamsKeys.diagramAccessesRoot(teamId), query] as const,
   projectAccessesRoot: (teamId: string) => [...teamsKeys.all, 'project-accesses', teamId] as const,
   projectAccesses: (teamId: string, query: PaginationQuery = {}) =>
     [...teamsKeys.projectAccessesRoot(teamId), query] as const,

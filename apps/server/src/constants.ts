@@ -50,6 +50,8 @@ export enum AuditAction {
   TeamCreated = 'team.created',
   TeamMemberAdded = 'team.member_added',
   TeamMemberRemoved = 'team.member_removed',
+  TeamDiagramAccessRemoved = 'team.diagram_access_removed',
+  TeamDiagramAccessUpdated = 'team.diagram_access_updated',
   TeamProjectAccessRemoved = 'team.project_access_removed',
   TeamProjectAccessUpdated = 'team.project_access_updated',
   TeamUpdated = 'team.updated',

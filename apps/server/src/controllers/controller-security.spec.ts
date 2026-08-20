@@ -60,12 +60,15 @@ const servicePermissionRoutes = new Set([
   'TeamController.addTeamMember',
   'TeamController.archiveTeam',
   'TeamController.createTeam',
+  'TeamController.getTeamDiagramAccesses',
   'TeamController.getTeamMembers',
   'TeamController.getTeamProjectAccesses',
   'TeamController.getTeams',
+  'TeamController.removeTeamDiagramAccess',
   'TeamController.removeTeamMember',
   'TeamController.removeTeamProjectAccess',
   'TeamController.updateTeam',
+  'TeamController.upsertTeamDiagramAccess',
   'TeamController.upsertTeamProjectAccess',
 ]);
 

@@ -24,6 +24,7 @@ const auth: AuthContext = {
 const team = {
   createdAt: new Date('2026-08-02T07:00:00.000Z'),
   description: 'Backend and API maintainers',
+  diagramAccessCount: 0,
   id: 'team-id',
   memberCount: 0,
   name: 'Backend team',
@@ -51,6 +52,15 @@ const projectAccess = {
   updatedAt: new Date('2026-08-02T09:00:00.000Z'),
 };
 
+const diagramAccess = {
+  createdAt: new Date('2026-08-02T09:30:00.000Z'),
+  diagramId: 'diagram-id',
+  diagramName: 'Main schema',
+  projectId: null,
+  role: ProjectRole.Commenter,
+  updatedAt: new Date('2026-08-02T09:30:00.000Z'),
+};
+
 describe(TeamService.name, () => {
   const auditLogRepository = {
     create: vi.fn(),
@@ -66,6 +76,9 @@ describe(TeamService.name, () => {
     archive: vi.fn(),
     create: vi.fn(),
     getById: vi.fn(),
+    getDiagramAccess: vi.fn(),
+    getDiagramAccesses: vi.fn(),
+    getDiagramInOrganization: vi.fn(),
     getMember: vi.fn(),
     getMembers: vi.fn(),
     getProjectAccess: vi.fn(),
@@ -73,8 +86,10 @@ describe(TeamService.name, () => {
     getProjectInOrganization: vi.fn(),
     list: vi.fn(),
     removeMember: vi.fn(),
+    removeDiagramAccess: vi.fn(),
     removeProjectAccess: vi.fn(),
     update: vi.fn(),
+    upsertDiagramAccess: vi.fn(),
     upsertProjectAccess: vi.fn(),
   };
   const userRepository = {
@@ -217,5 +232,55 @@ describe(TeamService.name, () => {
 
     // The service validates project ownership before inserting the team grant.
     expect(teamRepository.upsertProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it('grants same-workspace diagram access through a team', async () => {
+    teamRepository.getDiagramInOrganization.mockResolvedValue({
+      id: diagramAccess.diagramId,
+      name: diagramAccess.diagramName,
+      organizationId: team.organizationId,
+      projectId: null,
+    });
+    teamRepository.getDiagramAccess.mockResolvedValue(undefined);
+    teamRepository.upsertDiagramAccess.mockResolvedValue(diagramAccess);
+
+    await expect(
+      service.upsertDiagramAccess(auth, 'team-id', {
+        diagramId: diagramAccess.diagramId,
+        role: ProjectRole.Commenter,
+      }),
+    ).resolves.toMatchObject({
+      diagramId: diagramAccess.diagramId,
+      role: ProjectRole.Commenter,
+    });
+
+    expect(teamRepository.upsertDiagramAccess).toHaveBeenCalledWith('team-id', {
+      createdById: 'owner-id',
+      diagramId: diagramAccess.diagramId,
+      role: ProjectRole.Commenter,
+    });
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AuditAction.TeamDiagramAccessUpdated,
+        diagramId: diagramAccess.diagramId,
+        entityId: diagramAccess.diagramId,
+        entityType: 'team_diagram_access',
+        organizationId: team.organizationId,
+      }),
+    );
+  });
+
+  it('rejects diagram access grants across workspace boundaries', async () => {
+    teamRepository.getDiagramInOrganization.mockResolvedValue(undefined);
+
+    await expect(
+      service.upsertDiagramAccess(auth, 'team-id', {
+        diagramId: 'foreign-diagram-id',
+        role: ProjectRole.Viewer,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Direct team-to-diagram grants must keep the same workspace boundary as folder grants.
+    expect(teamRepository.upsertDiagramAccess).not.toHaveBeenCalled();
   });
 });

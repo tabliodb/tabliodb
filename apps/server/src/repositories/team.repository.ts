@@ -18,6 +18,7 @@ export type TeamChildListOptions = {
 };
 
 export type TeamProjectRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+export type TeamDiagramRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
 
 @Injectable()
 export class TeamRepository {
@@ -60,6 +61,11 @@ export class TeamRepository {
           FROM project_team_access
           WHERE project_team_access.team_id = teams.id
         )`.as('projectAccessCount'),
+        sql<number>`(
+          SELECT count(*)::int
+          FROM diagram_team_access
+          WHERE diagram_team_access.team_id = teams.id
+        )`.as('diagramAccessCount'),
       ])
       .where('id', '=', teamId)
       .where('archivedAt', 'is', null)
@@ -88,6 +94,11 @@ export class TeamRepository {
           FROM project_team_access
           WHERE project_team_access.team_id = teams.id
         )`.as('projectAccessCount'),
+        sql<number>`(
+          SELECT count(*)::int
+          FROM diagram_team_access
+          WHERE diagram_team_access.team_id = teams.id
+        )`.as('diagramAccessCount'),
       ])
       .where('organizationId', '=', options.organizationId)
       .where('archivedAt', 'is', null)
@@ -320,11 +331,107 @@ export class TeamRepository {
     return Number(result.numDeletedRows) > 0;
   }
 
+  async getDiagramAccesses(teamId: string, options: TeamChildListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await this.db
+      .selectFrom('diagram_team_access')
+      .innerJoin('diagrams', 'diagrams.id', 'diagram_team_access.diagramId')
+      .select([
+        'diagram_team_access.diagramId',
+        'diagrams.name as diagramName',
+        'diagrams.projectId',
+        'diagram_team_access.role',
+        'diagram_team_access.createdAt',
+        'diagram_team_access.updatedAt',
+      ])
+      .where('diagram_team_access.teamId', '=', teamId)
+      .where('diagrams.archivedAt', 'is', null)
+      .orderBy('diagram_team_access.createdAt', 'asc')
+      .orderBy('diagram_team_access.diagramId', 'asc')
+      .limit(options.limit + 1)
+      .offset(offset)
+      .execute();
+    const totalRow = await this.db
+      .selectFrom('diagram_team_access')
+      .innerJoin('diagrams', 'diagrams.id', 'diagram_team_access.diagramId')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('diagram_team_access.teamId', '=', teamId)
+      .where('diagrams.archivedAt', 'is', null)
+      .executeTakeFirstOrThrow();
+
+    return {
+      items: rows.slice(0, options.limit),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
+  }
+
+  getDiagramAccess(teamId: string, diagramId: string) {
+    return this.db
+      .selectFrom('diagram_team_access')
+      .innerJoin('diagrams', 'diagrams.id', 'diagram_team_access.diagramId')
+      .select([
+        'diagram_team_access.diagramId',
+        'diagrams.name as diagramName',
+        'diagrams.projectId',
+        'diagram_team_access.role',
+        'diagram_team_access.createdAt',
+        'diagram_team_access.updatedAt',
+      ])
+      .where('diagram_team_access.teamId', '=', teamId)
+      .where('diagram_team_access.diagramId', '=', diagramId)
+      .where('diagrams.archivedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  async upsertDiagramAccess(
+    teamId: string,
+    options: { createdById: string; diagramId: string; role: TeamDiagramRole },
+  ) {
+    await this.db
+      .insertInto('diagram_team_access')
+      .values({
+        createdById: options.createdById,
+        diagramId: options.diagramId,
+        role: options.role,
+        teamId,
+      })
+      .onConflict((oc) =>
+        oc.columns(['diagramId', 'teamId']).doUpdateSet({
+          role: options.role,
+          updatedAt: new Date(),
+        }),
+      )
+      .execute();
+
+    return this.getDiagramAccess(teamId, options.diagramId);
+  }
+
+  async removeDiagramAccess(teamId: string, diagramId: string): Promise<boolean> {
+    const result = await this.db
+      .deleteFrom('diagram_team_access')
+      .where('teamId', '=', teamId)
+      .where('diagramId', '=', diagramId)
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows) > 0;
+  }
+
   getProjectInOrganization(projectId: string, organizationId: string) {
     return this.db
       .selectFrom('projects')
       .select(['id', 'organizationId', 'name', 'slug'])
       .where('id', '=', projectId)
+      .where('organizationId', '=', organizationId)
+      .where('archivedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  getDiagramInOrganization(diagramId: string, organizationId: string) {
+    return this.db
+      .selectFrom('diagrams')
+      .select(['id', 'organizationId', 'name', 'projectId'])
+      .where('id', '=', diagramId)
       .where('organizationId', '=', organizationId)
       .where('archivedAt', 'is', null)
       .executeTakeFirst();

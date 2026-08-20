@@ -1,8 +1,10 @@
 import type { PaginationQuery } from '@tabliodb/shared';
 import {
+  getTeamDiagramAccesses,
   getTeamMembers,
   getTeamProjectAccesses,
   getTeams,
+  type TeamDiagramAccessListResponseDtoOutput,
   type TeamListResponseDtoOutput,
   type TeamMemberListResponseDtoOutput,
   type TeamProjectAccessListResponseDtoOutput,
@@ -11,6 +13,10 @@ import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { teamsKeys, type TeamListQuery } from './team.keys';
 
 type TeamsQueries = {
+  diagramAccesses: (
+    teamId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<TeamDiagramAccessListResponseDtoOutput, ReturnType<typeof teamsKeys.diagramAccesses>>;
   list: (query: TeamListQuery) => AppQueryOptions<TeamListResponseDtoOutput, ReturnType<typeof teamsKeys.list>>;
   members: (
     teamId: string,
@@ -23,6 +29,13 @@ type TeamsQueries = {
 };
 
 export const teamsQueries: TeamsQueries = {
+  diagramAccesses: (teamId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(teamId),
+      queryFn: () => getTeamDiagramAccesses({ teamId, ...query }),
+      queryKey: teamsKeys.diagramAccesses(teamId, query),
+    }),
+
   list: (query: TeamListQuery) =>
     appQueryOptions({
       enabled: Boolean(query.organizationId),
