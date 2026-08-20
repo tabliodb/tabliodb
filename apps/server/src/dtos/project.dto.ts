@@ -22,8 +22,8 @@ const ProjectUpdateSchema = z
 
 const ProjectResponseSchema = z
   .object({
-    id: z.string().uuid(),
-    organizationId: z.string().uuid(),
+    id: z.uuid(),
+    organizationId: z.uuid(),
     organizationName: z.string(),
     organizationSlug: z.string(),
     projectRole: ProjectRoleSchema,
