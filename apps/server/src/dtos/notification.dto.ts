@@ -69,7 +69,7 @@ const NotificationParentCommentSchema = z
   .object({
     author: NotificationUserSchema,
     bodyText: z.string(),
-    id: z.string().uuid(),
+    id: z.uuid(),
   })
   .nullable();
 
