@@ -102,7 +102,8 @@ export async function editorLoader({ params }: LoaderFunctionArgs): Promise<Edit
       );
     }
 
-    return { title: activeProject.name };
+    // Browser chrome follows the opened diagram document; project folders are only an organizational fallback.
+    return { title: activeDiagram.name };
   } catch (error) {
     if (error instanceof TabliodbApiError && error.status === 401) {
       throw redirect(routes.login.to());
