@@ -58,7 +58,7 @@ const InvitationCreateResponseSchema = z
   .object({
     invitation: InvitationSchema,
     token: z.string(),
-    acceptUrl: z.string().url(),
+    acceptUrl: z.url(),
   })
   .meta({ id: 'InvitationCreateResponseDto' });
 
