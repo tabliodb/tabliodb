@@ -81,7 +81,7 @@ const ProjectMemberListResponseSchema = z
 
 const ProjectMemberCreateSchema = z
   .object({
-    email: z.string().email(),
+    email: z.email(),
     role: ProjectRoleSchema.default(ProjectRole.Viewer),
   })
   .meta({ id: 'ProjectMemberCreateDto' });
