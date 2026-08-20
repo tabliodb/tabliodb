@@ -38,7 +38,7 @@ const TeamListQuerySchema = z
   .object({
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
-    organizationId: z.string().uuid(),
+    organizationId: z.uuid(),
   })
   .meta({ id: 'TeamListQueryDto' });
 
