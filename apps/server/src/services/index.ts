@@ -9,6 +9,7 @@ import { FileService } from './file.service.js';
 import { InvitationService } from './invitation.service.js';
 import { MailService } from './mail.service.js';
 import { MetricsService } from './metrics.service.js';
+import { NotificationRealtimeService } from './notification-realtime.service.js';
 import { NotificationService } from './notification.service.js';
 import { OrganizationService } from './organization.service.js';
 import { PermissionService } from './permission.service.js';
@@ -34,6 +35,7 @@ export const services = [
   InvitationService,
   MailService,
   MetricsService,
+  NotificationRealtimeService,
   NotificationService,
   OrganizationService,
   PermissionService,

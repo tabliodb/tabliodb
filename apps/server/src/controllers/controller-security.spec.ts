@@ -36,6 +36,7 @@ const currentUserScopedRoutes = new Set([
   'FileController.getFile',
   'NotificationController.getInbox',
   'NotificationController.getSummary',
+  'NotificationController.stream',
   'OrganizationController.createOrganization',
 ]);
 

@@ -1,5 +1,7 @@
-import { Controller, Get, HttpStatus, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, HttpStatus, Query, Sse } from '@nestjs/common';
+import type { MessageEvent } from '@nestjs/common';
+import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Observable } from 'rxjs';
 import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import {
@@ -30,5 +32,11 @@ export class NotificationController {
   @ZodResponse({ status: HttpStatus.OK, type: NotificationSummaryDto })
   getSummary(@Auth() auth: AuthContext) {
     return this.service.getSummary(auth);
+  }
+
+  @Sse('stream')
+  @ApiExcludeEndpoint()
+  stream(@Auth() auth: AuthContext): Observable<MessageEvent> {
+    return this.service.stream(auth);
   }
 }

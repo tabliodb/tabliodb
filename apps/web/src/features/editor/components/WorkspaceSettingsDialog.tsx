@@ -823,7 +823,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                     {membersQuery.data?.totalCount ?? workspaceMembers.length} people with workspace access
                   </p>
                 </div>
-                <Badge variant="green">{workspaceMembers.length} loaded</Badge>
+                <Badge variant="green">{workspaceMembers.length} shown</Badge>
               </div>
 
               <form
@@ -960,7 +960,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                     Teams
                   </h3>
                   <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                    Manage reusable groups before granting folder access.
+                    Manage reusable groups before granting folder or diagram access.
                   </p>
                 </div>
                 <Badge variant="green">{teamsQuery.data?.totalCount ?? teams.length} teams</Badge>
@@ -1017,7 +1017,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                 </div>
               ) : (
                 <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-                  <div className="tabliodb-scrollbar max-h-128 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-2">
+                  <div className="tabliodb-scrollbar max-h-[32rem] overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-2">
                     {teams.length === 0 ? (
                       <div className="grid min-h-28 place-items-center rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] px-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                         No teams yet
@@ -1116,10 +1116,10 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                               <div>
                                 <h5 className="text-sm font-extrabold">Members</h5>
                                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  People inherited by this team
+                                  People who inherit every folder and diagram grant on this team
                                 </p>
                               </div>
-                              <Badge>{selectedTeamMembers.length} loaded</Badge>
+                              <Badge>{selectedTeamMembers.length} shown</Badge>
                             </div>
 
                             <form
@@ -1179,10 +1179,10 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                               <div>
                                 <h5 className="text-sm font-extrabold">Folder access</h5>
                                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  Folder grants inherited by team members
+                                  Grants inherited by team members for every diagram inside a folder
                                 </p>
                               </div>
-                              <Badge>{selectedTeamProjectAccesses.length} loaded</Badge>
+                              <Badge>{selectedTeamProjectAccesses.length} shown</Badge>
                             </div>
 
                             <form
@@ -1257,10 +1257,10 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                               <div>
                                 <h5 className="text-sm font-extrabold">Diagram access</h5>
                                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  Direct diagram grants inherited by team members
+                                  Grants inherited by team members for one specific diagram
                                 </p>
                               </div>
-                              <Badge>{selectedTeamDiagramAccesses.length} loaded</Badge>
+                              <Badge>{selectedTeamDiagramAccesses.length} shown</Badge>
                             </div>
 
                             <form
@@ -1337,7 +1337,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                           <UsersRound className="mx-auto size-8 text-[rgb(var(--tabliodb-primary-text))]" />
                           <h4 className="mt-3 text-sm font-extrabold">Select a team</h4>
                           <p className="mt-1 max-w-sm text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                            Pick a team to manage members and folder grants, or create a new one above.
+                            Pick a team to manage members, folder access, and direct diagram access.
                           </p>
                         </div>
                       </div>
@@ -1368,10 +1368,10 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
                 <div>
                   <h3 className="text-sm font-extrabold">Recent activity</h3>
                   <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                    Folder and workspace changes recorded by the server
+                    Workspace, folder, team, and diagram access changes recorded by the server
                   </p>
                 </div>
-                <Badge variant="blue">{auditLogs.length} loaded</Badge>
+                <Badge variant="blue">{auditLogs.length} shown</Badge>
               </div>
 
               {auditLogsQuery.isPending ? (

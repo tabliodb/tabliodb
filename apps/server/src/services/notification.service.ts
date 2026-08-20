@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import type { MessageEvent } from '@nestjs/common';
 import type { DatabaseDialect } from '@tabliodb/schema-core';
+import type { Observable } from 'rxjs';
 import type { AuthContext } from '../database.js';
 import { NotificationInboxListQueryDto } from '../dtos/notification.dto.js';
 import {
@@ -11,13 +13,17 @@ import type { JsonValue } from '../schema/index.js';
 import { createPlainTextCommentLexicalDocument, type CommentLexicalDocument } from '../utils/comment-body.js';
 import { toIsoDateTime, toNullableIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
+import { NotificationRealtimeService } from './notification-realtime.service.js';
 
 type CommentTargetType =
   'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
 
 @Injectable()
 export class NotificationService {
-  constructor(private readonly notificationRepository: NotificationRepository) {}
+  constructor(
+    private readonly notificationRealtimeService: NotificationRealtimeService,
+    private readonly notificationRepository: NotificationRepository,
+  ) {}
 
   async getInbox(auth: AuthContext, query: NotificationInboxListQueryDto) {
     const inbox = await this.notificationRepository.getInbox({
@@ -41,6 +47,38 @@ export class NotificationService {
       unreadCount: summary.unreadCount,
       updatedAt: toNullableIsoDateTime(summary.updatedAt),
     };
+  }
+
+  stream(auth: AuthContext): Observable<MessageEvent> {
+    return this.notificationRealtimeService.streamForUser(auth.user.id);
+  }
+
+  async emitCommentInboxChanged(options: { actorId: string; commentId: string; threadId: string }): Promise<void> {
+    const recipients = await this.notificationRepository.getCommentDeliveryRecipients({
+      actorId: options.actorId,
+      commentId: options.commentId,
+    });
+    const recipientIds = new Set([
+      ...recipients.mentionUserIds,
+      ...(recipients.replyUserId ? [recipients.replyUserId] : []),
+    ]);
+
+    await Promise.all(
+      [...recipientIds].map((userId) =>
+        this.notificationRealtimeService.emitUserChanged(userId, {
+          commentId: options.commentId,
+          reason: 'comment_changed',
+          threadId: options.threadId,
+        }),
+      ),
+    );
+  }
+
+  async emitThreadRead(auth: AuthContext, threadId: string): Promise<void> {
+    await this.notificationRealtimeService.emitUserChanged(auth.user.id, {
+      reason: 'thread_read',
+      threadId,
+    });
   }
 
   private serializeInboxItem(item: NotificationInboxRow) {

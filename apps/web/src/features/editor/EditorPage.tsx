@@ -18,16 +18,7 @@ import {
 } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
 import { Button, IconButton, Surface, toast } from '@tabliodb/ui';
-import {
-  Building2,
-  FileText,
-  Plus,
-  StickyNote,
-  UsersRound,
-  RotateCcw,
-  PanelRight,
-  PanelLeft,
-} from 'lucide-react';
+import { Building2, FileText, Plus, StickyNote, UsersRound, RotateCcw, PanelRight, PanelLeft } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -50,8 +41,8 @@ import { authQueries, useLogoutMutation, useUpdateCurrentUserEditorPreferenceMut
 import { diagramsQueries, useImportDiagramMutation } from '@/resources/diagrams';
 import { organizationsQueries } from '@/resources/organizations';
 import { projectsQueries } from '@/resources/projects';
-import { notificationQueries } from '@/resources/notifications';
-import { commentQueries } from '@/resources/comments';
+import { commentKeys, commentQueries } from '@/resources/comments';
+import { notificationKeys, notificationQueries, subscribeNotificationEvents } from '@/resources/notifications';
 import { snapshotsQueries, useCreateSnapshotMutation, useRestoreSnapshotMutation } from '@/resources/snapshots';
 import { reviewSignalQueries, useIgnoreReviewSignalMutation } from '@/resources/review-signals';
 import {
@@ -299,6 +290,19 @@ export function EditorPage() {
     // Share links hanya dibutuhkan ketika dialog dibuka; public sharing tidak ikut memperlambat editor utama.
     enabled: Boolean(activeDiagram) && shareLinksOpen && shareLinksQueryOptions.enabled !== false,
   });
+  useEffect(() => {
+    if (!currentUser) {
+      return undefined;
+    }
+
+    return subscribeNotificationEvents({
+      onChange: () => {
+        // SSE hanya menjadi invalidation signal; payload detail tetap dibaca lewat REST query agar cache dan DTO SDK tetap konsisten.
+        void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+        void queryClient.invalidateQueries({ queryKey: commentKeys.all });
+      },
+    });
+  }, [currentUser?.id, queryClient]);
   const diagramExportActions = useDiagramExportActions({
     activeDiagramId: activeDiagram?.id ?? null,
     diagramName: activeDiagram?.name,
@@ -999,13 +1003,7 @@ export function EditorPage() {
         replace: true,
       });
     }
-  }, [
-    activeOrganization,
-    navigate,
-    projects,
-    projectsQuery.isPending,
-    routeProjectId,
-  ]);
+  }, [activeOrganization, navigate, projects, projectsQuery.isPending, routeProjectId]);
 
   useEffect(() => {
     if (!activeOrganization || diagramsQuery.isPending) {

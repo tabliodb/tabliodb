@@ -24,6 +24,7 @@ import { clampPaginationLimit } from '../utils/pagination.js';
 import { BackgroundJobService } from './background-job.service.js';
 import { DiagramService } from './diagram.service.js';
 import { DiagramReviewService } from './diagram-review.service.js';
+import { NotificationService } from './notification.service.js';
 
 type CommentTargetType =
   'check' | 'column' | 'diagram' | 'enum' | 'group' | 'index' | 'note' | 'relationship' | 'table';
@@ -41,6 +42,7 @@ export class CommentService {
     private readonly commentRepository: CommentRepository,
     private readonly diagramService: DiagramService,
     private readonly diagramReviewService: DiagramReviewService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async createThread(auth: AuthContext, dto: CommentThreadCreateDto) {
@@ -61,6 +63,11 @@ export class CommentService {
       actorId: auth.user.id,
       commentId: result.comment.id,
       source: 'comment.created',
+      threadId: result.comment.threadId,
+    });
+    await this.emitCommentNotificationChange({
+      actorId: auth.user.id,
+      commentId: result.comment.id,
       threadId: result.comment.threadId,
     });
     await this.diagramReviewService.recordCommented(auth, dto.diagramId, {
@@ -193,6 +200,8 @@ export class CommentService {
     await this.commentRepository.markThreadRead(thread.id, auth.user.id);
     const state = await this.commentRepository.getThreadReadState(thread.id, auth.user.id);
 
+    await this.emitThreadRead(auth, thread.id);
+
     return this.serializeReadState(thread.id, state);
   }
 
@@ -222,6 +231,11 @@ export class CommentService {
       actorId: auth.user.id,
       commentId: result.comment.id,
       source: 'comment.created',
+      threadId: result.comment.threadId,
+    });
+    await this.emitCommentNotificationChange({
+      actorId: auth.user.id,
+      commentId: result.comment.id,
       threadId: result.comment.threadId,
     });
 
@@ -309,6 +323,11 @@ export class CommentService {
       actorId: auth.user.id,
       commentId: updatedComment.id,
       source: 'comment.updated',
+      threadId: updatedComment.threadId,
+    });
+    await this.emitCommentNotificationChange({
+      actorId: auth.user.id,
+      commentId: updatedComment.id,
       threadId: updatedComment.threadId,
     });
 
@@ -554,6 +573,32 @@ export class CommentService {
 
       // Comment writes should not fail only because an async delivery side effect cannot be queued.
       this.logger.warn(`Failed to enqueue comment notification delivery job. ${message}`);
+    }
+  }
+
+  private async emitCommentNotificationChange(payload: {
+    actorId: string;
+    commentId: string;
+    threadId: string;
+  }): Promise<void> {
+    try {
+      // Live notification adalah side effect UX; transaksi komentar tetap dianggap sukses meski stream Redis/SSE gagal.
+      await this.notificationService.emitCommentInboxChanged(payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      this.logger.warn(`Failed to emit live comment notification. ${message}`);
+    }
+  }
+
+  private async emitThreadRead(auth: AuthContext, threadId: string): Promise<void> {
+    try {
+      // Read event menjaga badge di tab/browser lain turun tanpa menunggu polling atau reload.
+      await this.notificationService.emitThreadRead(auth, threadId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      this.logger.warn(`Failed to emit live thread read notification. ${message}`);
     }
   }
 

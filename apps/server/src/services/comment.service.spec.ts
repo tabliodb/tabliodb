@@ -84,6 +84,10 @@ describe(CommentService.name, () => {
   const diagramReviewService = {
     recordCommented: vi.fn(),
   };
+  const notificationService = {
+    emitCommentInboxChanged: vi.fn(),
+    emitThreadRead: vi.fn(),
+  };
 
   let service: CommentService;
 
@@ -95,6 +99,7 @@ describe(CommentService.name, () => {
       commentRepository as never,
       diagramService as never,
       diagramReviewService as never,
+      notificationService as never,
     );
   });
 
@@ -149,6 +154,11 @@ describe(CommentService.name, () => {
       parentCommentId: null,
       threadId: 'thread-id',
     });
+    expect(notificationService.emitCommentInboxChanged).toHaveBeenCalledWith({
+      actorId: 'user-id',
+      commentId: 'comment-id',
+      threadId: 'thread-id',
+    });
   });
 
   it('rejects empty Lexical comment documents before inserting a reply', async () => {
@@ -199,6 +209,11 @@ describe(CommentService.name, () => {
       commentId: 'comment-id',
       editedById: 'user-id',
       mentionUserIds: [],
+    });
+    expect(notificationService.emitCommentInboxChanged).toHaveBeenCalledWith({
+      actorId: 'user-id',
+      commentId: 'comment-id',
+      threadId: 'thread-id',
     });
     expect(auditLogRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -696,6 +711,7 @@ describe(CommentService.name, () => {
     expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
     expect(commentRepository.markThreadRead).toHaveBeenCalledWith('thread-id', 'user-id');
     expect(commentRepository.getThreadReadState).toHaveBeenCalledWith('thread-id', 'user-id');
+    expect(notificationService.emitThreadRead).toHaveBeenCalledWith(auth, 'thread-id');
   });
 
   it('creates a nested reply only after the parent comment is verified inside the same thread', async () => {

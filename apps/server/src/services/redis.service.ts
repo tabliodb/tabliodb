@@ -7,6 +7,7 @@ export type FixedWindowHit = {
   count: number;
   resetAt: number;
 };
+export type RedisMessageHandler = (message: string) => void;
 
 const fixedWindowIncrementScript = `
 local count = redis.call("INCR", KEYS[1])
@@ -29,7 +30,10 @@ return value
 export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private readonly client?: RedisInstance;
+  private readonly subscriberClient?: RedisInstance;
+  private readonly subscriptionHandlers = new Map<string, Set<RedisMessageHandler>>();
   private connectPromise?: Promise<RedisInstance | null>;
+  private subscriberConnectPromise?: Promise<RedisInstance | null>;
   private warnedUnavailable = false;
 
   constructor(@Inject(ConfigRepository) private readonly configRepository: ConfigRepository) {
@@ -44,11 +48,24 @@ export class RedisService implements OnModuleDestroy {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
     });
+    const subscriberClient = new RedisClient(redis.url, {
+      enableOfflineQueue: false,
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+    });
     this.client = client;
+    this.subscriberClient = subscriberClient;
     client.on('error', (error) => this.warnUnavailable(error));
     client.on('ready', () => {
       this.warnedUnavailable = false;
       this.logger.log('Redis connection ready for server ephemeral state.');
+    });
+    subscriberClient.on('error', (error) => this.warnUnavailable(error));
+    subscriberClient.on('message', (channel, message) => {
+      // Redis pub/sub callbacks stay inside RedisService so callers do not need to manage raw ioredis lifecycle details.
+      for (const handler of this.subscriptionHandlers.get(channel) ?? []) {
+        handler(message);
+      }
     });
   }
 
@@ -60,7 +77,7 @@ export class RedisService implements OnModuleDestroy {
     }
 
     try {
-      const result = (await client.eval(fixedWindowIncrementScript, 1, `tabliodb:${key}`, String(windowMs))) as [
+      const result = (await client.eval(fixedWindowIncrementScript, 1, this.createKey(key), String(windowMs))) as [
         number | string,
         number | string,
       ];
@@ -90,7 +107,7 @@ export class RedisService implements OnModuleDestroy {
     }
 
     try {
-      const result = await client.set(`tabliodb:${key}`, value, 'PX', ttlMs, 'NX');
+      const result = await client.set(this.createKey(key), value, 'PX', ttlMs, 'NX');
       return result === 'OK';
     } catch (error) {
       this.warnUnavailable(error);
@@ -107,12 +124,80 @@ export class RedisService implements OnModuleDestroy {
 
     try {
       // Redis GETDEL is not available everywhere a self-hoster might run, so a tiny Lua script keeps consume atomic.
-      const result = await client.eval(getAndDeleteScript, 1, `tabliodb:${key}`);
+      const result = await client.eval(getAndDeleteScript, 1, this.createKey(key));
       return typeof result === 'string' ? result : null;
     } catch (error) {
       this.warnUnavailable(error);
       return null;
     }
+  }
+
+  async publish(channel: string, message: string): Promise<boolean> {
+    const client = await this.getReadyClient();
+
+    if (!client) {
+      return false;
+    }
+
+    try {
+      await client.publish(this.createKey(channel), message);
+      return true;
+    } catch (error) {
+      this.warnUnavailable(error);
+      return false;
+    }
+  }
+
+  async subscribe(channel: string, handler: RedisMessageHandler): Promise<(() => Promise<void>) | null> {
+    const client = await this.getReadySubscriberClient();
+
+    if (!client) {
+      return null;
+    }
+
+    const redisChannel = this.createKey(channel);
+    const handlers = this.subscriptionHandlers.get(redisChannel) ?? new Set<RedisMessageHandler>();
+    const shouldSubscribe = handlers.size === 0;
+
+    handlers.add(handler);
+    this.subscriptionHandlers.set(redisChannel, handlers);
+
+    try {
+      if (shouldSubscribe) {
+        await client.subscribe(redisChannel);
+      }
+    } catch (error) {
+      handlers.delete(handler);
+
+      if (handlers.size === 0) {
+        this.subscriptionHandlers.delete(redisChannel);
+      }
+
+      this.warnUnavailable(error);
+      return null;
+    }
+
+    return async () => {
+      const currentHandlers = this.subscriptionHandlers.get(redisChannel);
+
+      if (!currentHandlers) {
+        return;
+      }
+
+      currentHandlers.delete(handler);
+
+      if (currentHandlers.size > 0) {
+        return;
+      }
+
+      this.subscriptionHandlers.delete(redisChannel);
+
+      try {
+        await client.unsubscribe(redisChannel);
+      } catch (error) {
+        this.warnUnavailable(error);
+      }
+    };
   }
 
   isConfigured(): boolean {
@@ -135,6 +220,17 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.subscriptionHandlers.clear();
+
+    if (this.subscriberClient && this.subscriberClient.status !== 'end') {
+      try {
+        await this.subscriberClient.quit();
+      } catch {
+        // During shutdown we prefer a fast process exit over waiting on a broken Redis socket.
+        this.subscriberClient.disconnect(false);
+      }
+    }
+
     if (!this.client || this.client.status === 'end') {
       return;
     }
@@ -172,6 +268,37 @@ export class RedisService implements OnModuleDestroy {
       });
 
     return this.connectPromise;
+  }
+
+  private async getReadySubscriberClient(): Promise<RedisInstance | null> {
+    if (!this.subscriberClient) {
+      return null;
+    }
+
+    if (this.subscriberClient.status === 'ready') {
+      return this.subscriberClient;
+    }
+
+    if (this.subscriberClient.status !== 'wait') {
+      return null;
+    }
+
+    this.subscriberConnectPromise ??= this.subscriberClient
+      .connect()
+      .then(() => this.subscriberClient ?? null)
+      .catch((error) => {
+        this.warnUnavailable(error);
+        return null;
+      })
+      .finally(() => {
+        this.subscriberConnectPromise = undefined;
+      });
+
+    return this.subscriberConnectPromise;
+  }
+
+  private createKey(key: string): string {
+    return `tabliodb:${key}`;
   }
 
   private warnUnavailable(error: unknown): void {
