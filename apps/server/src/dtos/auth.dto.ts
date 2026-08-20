@@ -57,7 +57,7 @@ const SignUpSchema = LoginCredentialSchema.extend({
 
 const PasswordResetRequestSchema = z
   .object({
-    email: z.string().email(),
+    email: z.email(),
   })
   .meta({ id: 'PasswordResetRequestDto' });
 
