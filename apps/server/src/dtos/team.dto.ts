@@ -96,7 +96,7 @@ const TeamMemberRemoveResponseSchema = z
 
 const TeamProjectAccessSchema = z
   .object({
-    projectId: z.string().uuid(),
+    projectId: z.uuid(),
     projectName: z.string(),
     projectSlug: z.string(),
     role: TeamProjectRoleSchema,
