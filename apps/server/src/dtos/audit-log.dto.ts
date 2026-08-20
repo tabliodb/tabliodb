@@ -6,13 +6,13 @@ const AuditMetadataSchema = z.record(z.string(), z.unknown());
 
 const AuditLogSchema = z
   .object({
-    id: z.string().uuid(),
-    organizationId: z.string().uuid().nullable(),
-    projectId: z.string().uuid().nullable(),
-    diagramId: z.string().uuid().nullable(),
-    actorId: z.string().uuid().nullable(),
+    id: z.uuid(),
+    organizationId: z.uuid().nullable(),
+    projectId: z.uuid().nullable(),
+    diagramId: z.uuid().nullable(),
+    actorId: z.uuid().nullable(),
     actorName: z.string().nullable(),
-    actorEmail: z.string().email().nullable(),
+    actorEmail: z.email().nullable(),
     action: z.string(),
     entityType: z.string(),
     entityId: z.string(),
