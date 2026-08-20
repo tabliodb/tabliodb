@@ -93,7 +93,7 @@ const CommentThreadCreateSchema = z
 const CommentReplyCreateSchema = z
   .object({
     bodyJson: CommentLexicalDocumentSchema,
-    parentCommentId: z.string().uuid().nullable().optional(),
+    parentCommentId: z.uuid().nullable().optional(),
   })
   .meta({ id: 'CommentReplyCreateDto' });
 
