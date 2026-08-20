@@ -58,8 +58,8 @@ const TeamArchiveResponseSchema = z
 
 const TeamMemberSchema = z
   .object({
-    userId: z.string().uuid(),
-    email: z.string().email(),
+    userId: z.uuid(),
+    email: z.email(),
     name: z.string(),
     avatarUrl: z.string().nullable(),
     cursorColor: z.string(),
