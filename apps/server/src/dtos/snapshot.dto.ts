@@ -26,11 +26,11 @@ const SnapshotResponseSchema = z
 
 const SnapshotReferenceSchema = z
   .object({
-    id: z.string().uuid(),
-    diagramId: z.string().uuid(),
+    id: z.uuid(),
+    diagramId: z.uuid(),
     version: z.number(),
     message: z.string().nullable(),
-    restoredFromSnapshotId: z.string().uuid().nullable(),
+    restoredFromSnapshotId: z.uuid().nullable(),
     createdAt: DateTimeSchema,
   })
   .meta({ id: 'SnapshotReferenceDto' });
