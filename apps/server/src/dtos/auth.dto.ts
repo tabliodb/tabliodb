@@ -25,7 +25,7 @@ export const SessionBindingSchema = z
 
 const LoginCredentialSchema = z
   .object({
-    email: z.string().email(),
+    email: z.email(),
     password: z.string().min(1),
     sessionBinding: SessionBindingSchema.optional(),
   })
