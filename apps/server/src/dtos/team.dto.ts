@@ -7,7 +7,7 @@ const TeamProjectRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter,
 
 const TeamCreateSchema = z
   .object({
-    organizationId: z.string().uuid(),
+    organizationId: z.uuid(),
     name: z.string().trim().min(1),
     description: z.string().trim().optional(),
   })
