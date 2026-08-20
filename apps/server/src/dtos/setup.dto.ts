@@ -51,7 +51,7 @@ const OidcProviderSettingsSchema = z
 const OidcProviderSettingsUpdateSchema = z
   .object({
     autoCreateUsers: z.boolean(),
-    autoJoinOrganizationId: z.string().uuid().nullable(),
+    autoJoinOrganizationId: z.uuid().nullable(),
     autoJoinOrganizationRole: OidcAutoJoinOrganizationRoleSchema.nullable(),
     buttonLabel: z.string().min(1).max(60),
     clearClientSecret: z.boolean().optional(),
