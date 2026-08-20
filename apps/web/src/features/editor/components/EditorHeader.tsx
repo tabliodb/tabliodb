@@ -42,7 +42,6 @@ export function EditorHeader({
   currentDraftPersisted,
   currentUser,
   diagrams,
-  filteredProjects,
   importDiagramPending,
   isExporting,
   latestSnapshot,
@@ -78,14 +77,11 @@ export function EditorHeader({
   onOpenSqlPreview,
   onOrganizationSelect,
   onProjectArchived,
-  onProjectSearchChange,
-  onProjectSelect,
   onRedo,
   onUndo,
   onUserLogout,
   openCommentThreadCount,
   organizations,
-  projectSearchTerm,
   snapshotHistoryLoading,
   snapshotSavePending,
   unreadNotificationCount,
@@ -106,7 +102,6 @@ export function EditorHeader({
   currentDraftPersisted: boolean;
   currentUser: AvatarIdentity & { email: string };
   diagrams: DiagramResponseDto[];
-  filteredProjects: ProjectResponseDto[];
   importDiagramPending: boolean;
   isExporting: boolean;
   latestSnapshot: SnapshotResponseDto | null;
@@ -142,15 +137,12 @@ export function EditorHeader({
   onOpenSqlPreview: () => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
   onProjectArchived: () => void;
-  onProjectSearchChange: (value: string) => void;
-  onProjectSelect: (project: ProjectResponseDto) => void;
   onRedo: () => void;
   onToggleMinimap: () => void;
   onUndo: () => void;
   onUserLogout: () => void;
   openCommentThreadCount: number;
   organizations: OrganizationDto[];
-  projectSearchTerm: string;
   snapshotHistoryLoading: boolean;
   snapshotSavePending: boolean;
   unreadNotificationCount: number;
@@ -170,11 +162,7 @@ export function EditorHeader({
           onCreateDiagram={onCreateDiagram}
           onDiagramSelect={onDiagramSelect}
           onOrganizationSelect={onOrganizationSelect}
-          onProjectSearchChange={onProjectSearchChange}
-          onProjectSelect={onProjectSelect}
           organizations={organizations}
-          projectSearchTerm={projectSearchTerm}
-          projects={filteredProjects}
         />
       </div>
 

@@ -22,7 +22,6 @@ export function useEditorRouteActions({
   navigate,
   persistedDraftSignatureRef,
   setModel,
-  setProjectSearchTerm,
   snapshotRecoveryModelRef,
 }: {
   clearSelection: () => void;
@@ -30,7 +29,6 @@ export function useEditorRouteActions({
   navigate: NavigateFunction;
   persistedDraftSignatureRef: MutableRefObject<string | null>;
   setModel: Dispatch<SetStateAction<DiagramModel | null>>;
-  setProjectSearchTerm: Dispatch<SetStateAction<string>>;
   snapshotRecoveryModelRef: MutableRefObject<DiagramModel | null>;
 }) {
   const resetDraft = useCallback(
@@ -73,26 +71,15 @@ export function useEditorRouteActions({
   }, [navigate]);
 
   const goToWorkspace = useCallback(
-    (
-      organization: OrganizationDto,
-      {
-        clearProjectSearch = false,
-        replace,
-        ...resetOptions
-      }: EditorRouteActionOptions & { clearProjectSearch?: boolean } = {},
-    ) => {
+    (organization: OrganizationDto, { replace, ...resetOptions }: EditorRouteActionOptions = {}) => {
       resetDraft(resetOptions);
-
-      if (clearProjectSearch) {
-        setProjectSearchTerm('');
-      }
 
       navigate(
         routes.workspace.to({ workspaceSlug: getOrganizationSlug(organization) }),
         createNavigateOptions(replace),
       );
     },
-    [navigate, resetDraft, setProjectSearchTerm],
+    [navigate, resetDraft],
   );
 
   const goToProject = useCallback(

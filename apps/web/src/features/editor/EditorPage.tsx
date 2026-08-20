@@ -94,7 +94,7 @@ import {
   KeyboardShortcutsDialog,
   type EditorConfirmAction,
 } from './components/EditorShellDialogs';
-import { CreateDiagramDialog, CreateProjectDialog, CreateWorkspaceDialog } from './components/WorkspaceShellDialogs';
+import { CreateDiagramDialog, CreateWorkspaceDialog } from './components/WorkspaceShellDialogs';
 import {
   ImportJsonDialog,
   ImportSqlDialog,
@@ -125,7 +125,6 @@ import {
   useEditorActiveOrganization,
   useEditorActiveProject,
   useEditorPermissionFlags,
-  useFilteredEditorProjects,
 } from './useEditorActiveTarget';
 import { useEditorModelHistory } from './useEditorModelHistory';
 import { useEditorRouteActions } from './useEditorRouteActions';
@@ -162,7 +161,6 @@ export function EditorPage() {
   const [importSqlOpen, setImportSqlOpen] = useState(false);
   const [shareLinksOpen, setShareLinksOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
-  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createDiagramOpen, setCreateDiagramOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [minimapToggleSignal, setMinimapToggleSignal] = useState(0);
@@ -182,7 +180,6 @@ export function EditorPage() {
   const persistedDraftSignatureRef = useRef<string | null>(null);
   const loadedSnapshotIdRef = useRef<string | null>(null);
   const canvasViewportRef = useRef<CanvasViewportRect | null>(null);
-  const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const {
     applyRemoteSelectionFallback,
     clearSelection,
@@ -204,7 +201,6 @@ export function EditorPage() {
     navigate,
     persistedDraftSignatureRef,
     setModel,
-    setProjectSearchTerm,
     snapshotRecoveryModelRef,
   });
   const [editorConfirmAction, setEditorConfirmAction] = useState<EditorConfirmAction | null>(null);
@@ -238,10 +234,6 @@ export function EditorPage() {
 
   const projectsQuery = useQuery(projectsQueries.listByOrganization(activeOrganization));
   const projects = projectsQuery.data ?? [];
-  const filteredProjects = useFilteredEditorProjects({
-    projectSearchTerm,
-    projects,
-  });
   const activeProject = useEditorActiveProject({
     projects,
     routeProjectId,
@@ -1566,7 +1558,6 @@ export function EditorPage() {
         currentDraftPersisted={currentDraftPersisted}
         currentUser={currentUser}
         diagrams={diagrams}
-        filteredProjects={filteredProjects}
         importDiagramPending={importDiagramMutation.isPending}
         isExporting={diagramExportActions.isExporting}
         latestSnapshot={latestSnapshot}
@@ -1626,14 +1617,10 @@ export function EditorPage() {
         onOpenSnapshotHistory={() => setSnapshotHistoryOpen(true)}
         onOpenSqlPreview={() => setSqlPreviewOpen(true)}
         onOrganizationSelect={(organization) => {
-          editorRouteActions.goToWorkspace(organization, { clearProjectSearch: true });
+          editorRouteActions.goToWorkspace(organization);
         }}
         onProjectArchived={() => {
           editorRouteActions.goHome({ replace: true });
-        }}
-        onProjectSearchChange={setProjectSearchTerm}
-        onProjectSelect={(project) => {
-          editorRouteActions.goToProject(project);
         }}
         onRedo={handleRedoModelChange}
         onToggleMinimap={() => setMinimapToggleSignal((value) => value + 1)}
@@ -1641,7 +1628,6 @@ export function EditorPage() {
         onUserLogout={() => logoutMutation.mutate(undefined)}
         openCommentThreadCount={openCommentThreadCount}
         organizations={organizations}
-        projectSearchTerm={projectSearchTerm}
         snapshotHistoryLoading={snapshotsQuery.isPending}
         snapshotSavePending={saveSnapshotMutation.isPending}
         unreadNotificationCount={unreadNotificationCount}
@@ -1810,25 +1796,12 @@ export function EditorPage() {
       <CreateWorkspaceDialog
         onCreated={(organization) => {
           setCreateWorkspaceOpen(false);
-          editorRouteActions.goToWorkspace(organization, { clearProjectSearch: true });
+          editorRouteActions.goToWorkspace(organization);
         }}
         onOpenChange={setCreateWorkspaceOpen}
         open={createWorkspaceOpen}
         trigger={null}
       />
-
-      {canCreateProject ? (
-        <CreateProjectDialog
-          onCreated={(project) => {
-            setCreateProjectOpen(false);
-            editorRouteActions.goToProject(project);
-          }}
-          onOpenChange={setCreateProjectOpen}
-          open={createProjectOpen}
-          organizationId={activeOrganization.id}
-          trigger={null}
-        />
-      ) : null}
 
       {canCreateDiagram ? (
         <CreateDiagramDialog
