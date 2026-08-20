@@ -23,11 +23,11 @@ const ReviewSignalListQuerySchema = z
 const ReviewSignalResponseSchema = z
   .object({
     code: z.string(),
-    diagramId: z.string().uuid(),
+    diagramId: z.uuid(),
     generatedAt: DateTimeSchema,
-    id: z.string().uuid(),
+    id: z.uuid(),
     ignoredAt: DateTimeSchema.nullable(),
-    ignoredById: z.string().uuid().nullable(),
+    ignoredById: z.uuid().nullable(),
     message: z.string(),
     ruleKey: z.string(),
     severity: z.enum(['info', 'warning', 'error', 'success']),
