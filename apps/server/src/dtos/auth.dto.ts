@@ -70,8 +70,8 @@ const PasswordResetConfirmSchema = z
 
 const AuthUserSchema = z
   .object({
-    id: z.string().uuid(),
-    email: z.string().email(),
+    id: z.uuid(),
+    email: z.email(),
     name: z.string(),
     avatarUrl: z.string().nullable(),
     cursorColor: z.string(),
