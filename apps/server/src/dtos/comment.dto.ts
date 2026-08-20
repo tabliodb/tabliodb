@@ -51,7 +51,7 @@ const CommentThreadTargetSummarySchema = z
 
 const CommentDiagramSummarySchema = z
   .object({
-    diagramId: z.string().uuid(),
+    diagramId: z.uuid(),
     openCount: z.number().int().nonnegative(),
     resolvedCount: z.number().int().nonnegative(),
     targets: z.array(CommentThreadTargetSummarySchema),
