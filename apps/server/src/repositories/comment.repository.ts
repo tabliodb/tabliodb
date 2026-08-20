@@ -291,32 +291,50 @@ export class CommentRepository {
         SELECT diagrams.id, diagrams.organization_id, diagrams.project_id
         FROM diagrams
         LEFT JOIN projects ON projects.id = diagrams.project_id
+        INNER JOIN organizations ON organizations.id = diagrams.organization_id
         WHERE diagrams.id = ${diagramId}
           AND diagrams.archived_at IS NULL
+          AND organizations.archived_at IS NULL
           AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
       ),
       access_users AS (
         SELECT diagram_members.user_id
         FROM diagram_members
         INNER JOIN diagram_scope ON diagram_scope.id = diagram_members.diagram_id
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE organization_members.user_id = diagram_members.user_id
+          AND organization_members.status = 'active'
         UNION
         SELECT team_members.user_id
         FROM diagram_team_access
         INNER JOIN diagram_scope ON diagram_scope.id = diagram_team_access.diagram_id
         INNER JOIN team_members ON team_members.team_id = diagram_team_access.team_id
         INNER JOIN teams ON teams.id = diagram_team_access.team_id
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
         WHERE teams.archived_at IS NULL
+          -- Team rows are tenant-scoped defensively so stale cross-workspace grants cannot leak mention targets.
+          AND teams.organization_id = diagram_scope.organization_id
+          AND organization_members.user_id = team_members.user_id
+          AND organization_members.status = 'active'
         UNION
         SELECT project_members.user_id
         FROM project_members
         INNER JOIN diagram_scope ON diagram_scope.project_id = project_members.project_id
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE organization_members.user_id = project_members.user_id
+          AND organization_members.status = 'active'
         UNION
         SELECT team_members.user_id
         FROM project_team_access
         INNER JOIN diagram_scope ON diagram_scope.project_id = project_team_access.project_id
         INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
         INNER JOIN teams ON teams.id = project_team_access.team_id
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
         WHERE teams.archived_at IS NULL
+          -- Folder-team inheritance must stay inside the diagram workspace even if an old row was written incorrectly.
+          AND teams.organization_id = diagram_scope.organization_id
+          AND organization_members.user_id = team_members.user_id
+          AND organization_members.status = 'active'
         UNION
         -- Workspace managers are always mentionable because they can recover/administer every diagram in the workspace.
         SELECT organization_members.user_id

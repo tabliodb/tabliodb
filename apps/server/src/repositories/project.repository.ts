@@ -70,12 +70,15 @@ export class ProjectRepository {
         UNION ALL
         SELECT project_team_access.project_id, project_team_access.role
         FROM project_team_access
+        INNER JOIN projects ON projects.id = project_team_access.project_id
         INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
         INNER JOIN teams ON teams.id = project_team_access.team_id
         INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
         WHERE team_members.user_id = ${userId}
           AND organization_members.user_id = ${userId}
           AND organization_members.status = 'active'
+          -- Team folder grants are tenant-scoped defensively so stale cross-workspace rows cannot expose folders.
+          AND teams.organization_id = projects.organization_id
           AND teams.archived_at IS NULL
         UNION ALL
         -- Workspace owners/admins can administer every project in their workspace even if no direct project_members row exists.
@@ -153,12 +156,15 @@ export class ProjectRepository {
         UNION ALL
         SELECT project_team_access.project_id, project_team_access.role
         FROM project_team_access
+        INNER JOIN projects ON projects.id = project_team_access.project_id
         INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
         INNER JOIN teams ON teams.id = project_team_access.team_id
         INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
         WHERE team_members.user_id = ${userId}
           AND organization_members.user_id = ${userId}
           AND organization_members.status = 'active'
+          -- Count query mirrors the list query's tenant guard for team-derived folder access.
+          AND teams.organization_id = projects.organization_id
           AND teams.archived_at IS NULL
         UNION ALL
         -- Workspace owners/admins are counted with effective access for the same reason they are listed above.
@@ -268,6 +274,7 @@ export class ProjectRepository {
         AND project_team_access.project_id = ${projectId}
         AND projects.archived_at IS NULL
         AND teams.archived_at IS NULL
+        AND teams.organization_id = projects.organization_id
       UNION ALL
       -- Workspace managers get effective owner access so admin UI and recovery flows never depend on per-project grants.
       SELECT 'owner' AS role
@@ -329,6 +336,7 @@ export class ProjectRepository {
         AND organization_members.user_id = ${userId}
         AND organization_members.status = 'active'
         AND teams.archived_at IS NULL
+        AND teams.organization_id = diagram_scope.organization_id
       UNION ALL
       SELECT project_members.role
       FROM project_members
@@ -348,6 +356,7 @@ export class ProjectRepository {
         AND organization_members.user_id = ${userId}
         AND organization_members.status = 'active'
         AND teams.archived_at IS NULL
+        AND teams.organization_id = diagram_scope.organization_id
       UNION ALL
       -- Workspace managers retain owner-level recovery access to every diagram in their workspace.
       SELECT 'owner' AS role

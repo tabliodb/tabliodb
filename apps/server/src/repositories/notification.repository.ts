@@ -430,8 +430,12 @@ export class NotificationRepository {
         EXISTS (
           SELECT 1
           FROM diagram_members access_diagram_members
+          INNER JOIN organization_members access_diagram_organization_members
+            ON access_diagram_organization_members.organization_id = diagrams.organization_id
           WHERE access_diagram_members.diagram_id = diagrams.id
             AND access_diagram_members.user_id = ${userId}
+            AND access_diagram_organization_members.user_id = ${userId}
+            AND access_diagram_organization_members.status = 'active'
         )
         OR EXISTS (
           SELECT 1
@@ -440,8 +444,14 @@ export class NotificationRepository {
             ON access_diagram_team_members.team_id = access_diagram_team_access.team_id
           INNER JOIN teams access_diagram_teams
             ON access_diagram_teams.id = access_diagram_team_access.team_id
+          INNER JOIN organization_members access_diagram_team_organization_members
+            ON access_diagram_team_organization_members.organization_id = diagrams.organization_id
           WHERE access_diagram_team_access.diagram_id = diagrams.id
             AND access_diagram_team_members.user_id = ${userId}
+            -- Direct team grants are only valid when the team belongs to the same workspace as the diagram.
+            AND access_diagram_teams.organization_id = diagrams.organization_id
+            AND access_diagram_team_organization_members.user_id = ${userId}
+            AND access_diagram_team_organization_members.status = 'active'
             AND access_diagram_teams.archived_at IS NULL
         )
         OR
@@ -459,16 +469,26 @@ export class NotificationRepository {
         OR EXISTS (
           SELECT 1
           FROM project_members access_project_members
+          INNER JOIN organization_members access_project_organization_members
+            ON access_project_organization_members.organization_id = diagrams.organization_id
           WHERE access_project_members.project_id = projects.id
             AND access_project_members.user_id = ${userId}
+            AND access_project_organization_members.user_id = ${userId}
+            AND access_project_organization_members.status = 'active'
         )
         OR EXISTS (
           SELECT 1
           FROM project_team_access
           INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
           INNER JOIN teams ON teams.id = project_team_access.team_id
+          INNER JOIN organization_members access_project_team_organization_members
+            ON access_project_team_organization_members.organization_id = diagrams.organization_id
           WHERE project_team_access.project_id = projects.id
             AND team_members.user_id = ${userId}
+            -- Folder team grants inherit to diagrams only inside the same workspace.
+            AND teams.organization_id = diagrams.organization_id
+            AND access_project_team_organization_members.user_id = ${userId}
+            AND access_project_team_organization_members.status = 'active'
             AND teams.archived_at IS NULL
         )
         OR EXISTS (

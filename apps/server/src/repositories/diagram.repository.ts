@@ -308,6 +308,8 @@ export class DiagramRepository {
         INNER JOIN team_members ON team_members.team_id = teams.id
         INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
         WHERE teams.archived_at IS NULL
+          -- Direct team-to-diagram grants are valid only inside the same workspace as the diagram.
+          AND teams.organization_id = diagram_scope.organization_id
           AND organization_members.user_id = team_members.user_id
           AND organization_members.status = 'active'
 
@@ -347,6 +349,8 @@ export class DiagramRepository {
         INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
         WHERE diagram_scope.project_id IS NOT NULL
           AND teams.archived_at IS NULL
+          -- Folder team inheritance must not cross tenant boundaries even if a stale row exists.
+          AND teams.organization_id = diagram_scope.organization_id
           AND organization_members.user_id = team_members.user_id
           AND organization_members.status = 'active'
 
@@ -497,6 +501,7 @@ export class DiagramRepository {
         INNER JOIN team_members ON team_members.team_id = teams.id
         INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
         WHERE teams.archived_at IS NULL
+          AND teams.organization_id = diagram_scope.organization_id
           AND organization_members.user_id = team_members.user_id
           AND organization_members.status = 'active'
 
@@ -520,6 +525,7 @@ export class DiagramRepository {
         INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
         WHERE diagram_scope.project_id IS NOT NULL
           AND teams.archived_at IS NULL
+          AND teams.organization_id = diagram_scope.organization_id
           AND organization_members.user_id = team_members.user_id
           AND organization_members.status = 'active'
 
@@ -669,6 +675,7 @@ export class DiagramRepository {
         AND organization_members.status = 'active'
         AND diagrams.archived_at IS NULL
         AND teams.archived_at IS NULL
+        AND teams.organization_id = diagrams.organization_id
       UNION ALL
       SELECT diagrams.id AS diagram_id, project_members.role
       FROM diagrams
@@ -694,6 +701,7 @@ export class DiagramRepository {
         AND diagrams.archived_at IS NULL
         AND projects.archived_at IS NULL
         AND teams.archived_at IS NULL
+        AND teams.organization_id = diagrams.organization_id
       UNION ALL
       SELECT diagrams.id AS diagram_id, 'owner' AS role
       FROM diagrams
