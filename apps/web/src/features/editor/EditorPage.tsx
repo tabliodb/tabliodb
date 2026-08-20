@@ -1555,7 +1555,6 @@ export function EditorPage() {
         activeProject={activeProject}
         canCommentDiagram={canCommentDiagram}
         canCreateDiagram={canCreateDiagram}
-        canCreateProject={canCreateProject}
         canCreateSnapshot={canCreateSnapshot}
         canEditDiagram={canEditDiagram}
         canManageProject={canManageProject}
@@ -1581,9 +1580,7 @@ export function EditorPage() {
         onAdmin={editorRouteActions.goToAdminSettings}
         onCopySql={diagramExportActions.copySql}
         onCreateDiagram={() => setCreateDiagramOpen(true)}
-        onCreateProject={() => setCreateProjectOpen(true)}
         onCreateSnapshot={() => handleSaveSnapshot()}
-        onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         onDiagramSelect={(diagram) => {
           editorRouteActions.goToDiagram({
             diagramId: diagram.id,

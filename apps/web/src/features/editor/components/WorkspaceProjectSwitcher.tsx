@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
   Input,
 } from '@tabliodb/ui';
-import { Building2, Check, ChevronsUpDown, FileText, FolderPlus, Search } from 'lucide-react';
+import { Building2, Check, ChevronDown, ChevronsUpDown, FileText, Folder, Search } from 'lucide-react';
 import { useState } from 'react';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
@@ -27,11 +27,8 @@ export function WorkspaceProjectSwitcher({
   activeOrganization,
   activeProject,
   canCreateDiagram,
-  canCreateProject,
   diagrams,
   onCreateDiagram,
-  onCreateProject,
-  onCreateWorkspace,
   onDiagramSelect,
   onOrganizationSelect,
   onProjectSearchChange,
@@ -44,11 +41,8 @@ export function WorkspaceProjectSwitcher({
   activeOrganization: OrganizationDto;
   activeProject: ProjectResponseDto;
   canCreateDiagram: boolean;
-  canCreateProject: boolean;
   diagrams: DiagramResponseDto[];
   onCreateDiagram: () => void;
-  onCreateProject: () => void;
-  onCreateWorkspace: () => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
   onProjectSearchChange: (value: string) => void;
@@ -58,9 +52,19 @@ export function WorkspaceProjectSwitcher({
   projects: ProjectResponseDto[];
 }) {
   const [open, setOpen] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      // Location is secondary context, so every fresh open returns to the diagram-first decision surface.
+      setLocationOpen(false);
+    }
+  }
 
   return (
-    <DropdownMenu onOpenChange={setOpen} open={open}>
+    <DropdownMenu onOpenChange={handleOpenChange} open={open}>
       <DropdownMenuTrigger asChild>
         <button
           className="flex min-w-0 max-w-full cursor-pointer items-center gap-2 border-l border-[rgb(var(--tabliodb-border))] py-1 pl-2 text-left transition hover:text-[rgb(var(--tabliodb-primary-text))] sm:pl-3"
@@ -75,190 +79,194 @@ export function WorkspaceProjectSwitcher({
           <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[min(92vw,380px)] p-2">
-        <div className="px-2 py-1">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-              Workspace
+      <DropdownMenuContent align="start" className="w-[min(92vw,400px)] overflow-hidden p-0">
+        <div className="border-b border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                Current diagram
+              </div>
+              <div className="mt-1 truncate text-[15px] font-black leading-5 text-[rgb(var(--tabliodb-ink))]">
+                {activeDiagram.name}
+              </div>
+              <div className="truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                {activeDiagram.dialect} / {activeProject.name}
+              </div>
             </div>
+            <Badge className="shrink-0" variant="green">
+              {activeDiagram.dialect}
+            </Badge>
+          </div>
+          {canCreateDiagram ? (
             <Button
+              className="mt-3 w-full justify-center gap-2"
               onClick={(event) => {
                 event.preventDefault();
                 setOpen(false);
-                // Dialog workspace sengaja dibuka dari parent supaya Radix tidak membuat dua focus trap hidup bersamaan.
-                onCreateWorkspace();
+                // Diagram creation is the only primary action in this switcher so users do not confuse ERD creation with workspace/folder management.
+                onCreateDiagram();
               }}
-              size="sm"
-              variant="soft"
             >
-              <Building2 className="size-3.5" />
-              Workspace
+              <FileText className="size-4" />
+              New diagram
             </Button>
-          </div>
-          <div className="tabliodb-scrollbar mt-1 grid max-h-36 gap-1 overflow-y-auto pr-1">
-            {organizations.map((organization) => {
-              const isActive = organization.id === activeOrganization.id;
-
-              return (
-                <DropdownMenuItem
-                  className="justify-between"
-                  key={organization.id}
-                  onSelect={() => {
-                    if (!isActive) {
-                      onOrganizationSelect(organization);
-                    }
-
-                    setOpen(false);
-                  }}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-extrabold">{organization.name}</span>
-                    <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                      {organization.slug}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <Badge variant={isOrganizationManager(organization) ? 'blue' : 'neutral'}>
-                      {formatOrganizationRole(organization.role)}
-                    </Badge>
-                    {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
-                  </span>
-                </DropdownMenuItem>
-              );
-            })}
-          </div>
+          ) : null}
         </div>
 
-        {diagrams.length > 0 || canCreateDiagram ? (
-          <>
-            <DropdownMenuSeparatorItem />
-            <div className="px-2 py-1.5">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Diagrams
-                </div>
-                {canCreateDiagram ? (
-                  <Button
-                    onClick={(event) => {
-                      event.preventDefault();
+        <div className="p-2">
+          <div className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Diagrams
+          </div>
+          {diagrams.length === 0 ? (
+            <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              No diagrams yet
+            </div>
+          ) : (
+            <div className="tabliodb-scrollbar grid max-h-52 gap-1 overflow-y-auto pr-1">
+              {diagrams.map((diagram) => {
+                const isActive = diagram.id === activeDiagram.id;
+
+                return (
+                  <DropdownMenuItem
+                    className="justify-between"
+                    key={diagram.id}
+                    onSelect={() => {
+                      if (!isActive) {
+                        onDiagramSelect(diagram);
+                      }
+
                       setOpen(false);
-                      // Diagram is the primary database-design document, so this action stays above folder/project management.
-                      onCreateDiagram();
                     }}
-                    size="sm"
-                    variant="soft"
                   >
-                    <FileText className="size-3.5" />
-                    Diagram
-                  </Button>
-                ) : null}
-              </div>
-              {diagrams.length === 0 ? (
-                <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  No diagrams yet
+                    <span className="min-w-0 truncate text-[13px] font-extrabold">{diagram.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Badge variant="neutral">{diagram.dialect}</Badge>
+                      {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                    </span>
+                  </DropdownMenuItem>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <DropdownMenuSeparatorItem />
+
+        <div className="p-2">
+          <button
+            className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-[var(--tabliodb-radius-md)] px-2 py-2 text-left hover:bg-[rgb(var(--tabliodb-surface-raised))]"
+            onClick={() => setLocationOpen((current) => !current)}
+            type="button"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <Folder className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
+              <span className="min-w-0">
+                <span className="block text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Location
+                </span>
+                <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  {activeOrganization.name} / {activeProject.name}
+                </span>
+              </span>
+            </span>
+            <ChevronDown
+              className={`size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))] transition-transform ${
+                locationOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {locationOpen ? (
+            <div className="mt-2 grid gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
+              <div>
+                <div className="mb-1 flex items-center gap-1.5 px-1 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  <Building2 className="size-3.5" />
+                  Workspace
                 </div>
-              ) : (
-                <div className="tabliodb-scrollbar grid max-h-40 gap-1 overflow-y-auto pr-1">
-                  {diagrams.map((diagram) => {
-                    const isActive = diagram.id === activeDiagram.id;
+                <div className="tabliodb-scrollbar grid max-h-32 gap-1 overflow-y-auto pr-1">
+                  {organizations.map((organization) => {
+                    const isActive = organization.id === activeOrganization.id;
 
                     return (
                       <DropdownMenuItem
                         className="justify-between"
-                        key={diagram.id}
+                        key={organization.id}
                         onSelect={() => {
                           if (!isActive) {
-                            onDiagramSelect(diagram);
+                            onOrganizationSelect(organization);
                           }
 
                           setOpen(false);
                         }}
                       >
-                        <span className="min-w-0 truncate text-[13px] font-extrabold">{diagram.name}</span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] font-extrabold">{organization.name}</span>
+                          <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                            {organization.slug}
+                          </span>
+                        </span>
                         <span className="flex shrink-0 items-center gap-2">
-                          <Badge variant="green">{diagram.dialect}</Badge>
+                          <Badge variant={isOrganizationManager(organization) ? 'blue' : 'neutral'}>
+                            {formatOrganizationRole(organization.role)}
+                          </Badge>
                           {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
                         </span>
                       </DropdownMenuItem>
                     );
                   })}
                 </div>
-              )}
-            </div>
-          </>
-        ) : null}
-
-        <DropdownMenuSeparatorItem />
-
-        <div className="px-2 py-1.5">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div>
-              <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Project folders
               </div>
-              <p className="text-[11px] font-semibold text-[rgb(var(--tabliodb-ink-subtle))]">
-                Organize related diagrams
-              </p>
-            </div>
-            {canCreateProject ? (
-              <Button
-                onClick={(event) => {
-                  event.preventDefault();
-                  setOpen(false);
-                  // Project remains available as an organization folder, but it is no longer the first mental step.
-                  onCreateProject();
-                }}
-                size="sm"
-                variant="soft"
-              >
-                <FolderPlus className="size-3.5" />
-                Folder
-              </Button>
-            ) : null}
-          </div>
-          <div className="relative mb-2">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
-            <Input
-              className="h-9 pl-9 text-[13px]"
-              onChange={(event) => onProjectSearchChange(event.target.value)}
-              onKeyDown={(event) => event.stopPropagation()}
-              placeholder="Search folders"
-              value={projectSearchTerm}
-            />
-          </div>
-          {projects.length === 0 ? (
-            <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-              No matching folders
-            </div>
-          ) : (
-            <div className="tabliodb-scrollbar grid max-h-52 gap-1 overflow-y-auto pr-1">
-              {projects.map((project) => {
-                const isActive = project.id === activeProject.id;
 
-                return (
-                  <DropdownMenuItem
-                    className="justify-between"
-                    key={project.id}
-                    onSelect={() => {
-                      if (!isActive) {
-                        onProjectSelect(project);
-                      }
+              <div>
+                <div className="mb-1 px-1 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Project folders
+                </div>
+                <div className="relative mb-2">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+                  <Input
+                    className="h-9 pl-9 text-[13px]"
+                    onChange={(event) => onProjectSearchChange(event.target.value)}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    placeholder="Search folders"
+                    value={projectSearchTerm}
+                  />
+                </div>
+                {projects.length === 0 ? (
+                  <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    No matching folders
+                  </div>
+                ) : (
+                  <div className="tabliodb-scrollbar grid max-h-40 gap-1 overflow-y-auto pr-1">
+                    {projects.map((project) => {
+                      const isActive = project.id === activeProject.id;
 
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-extrabold">{project.name}</span>
-                      <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                        {project.slug}
-                      </span>
-                    </span>
-                    {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
-                  </DropdownMenuItem>
-                );
-              })}
+                      return (
+                        <DropdownMenuItem
+                          className="justify-between"
+                          key={project.id}
+                          onSelect={() => {
+                            if (!isActive) {
+                              onProjectSelect(project);
+                            }
+
+                            setOpen(false);
+                          }}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-[13px] font-extrabold">{project.name}</span>
+                            <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                              {project.slug}
+                            </span>
+                          </span>
+                          {isActive ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          ) : null}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

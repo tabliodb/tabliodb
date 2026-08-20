@@ -31,7 +31,6 @@ export function EditorHeader({
   activeProject,
   canCommentDiagram,
   canCreateDiagram,
-  canCreateProject,
   canCreateSnapshot,
   canEditDiagram,
   canManageProject,
@@ -57,9 +56,7 @@ export function EditorHeader({
   onAdmin,
   onCopySql,
   onCreateDiagram,
-  onCreateProject,
   onCreateSnapshot,
-  onCreateWorkspace,
   onDiagramSelect,
   onDiagramUpdated,
   onDownloadSql,
@@ -98,7 +95,6 @@ export function EditorHeader({
   activeProject: ProjectResponseDto;
   canCommentDiagram: boolean;
   canCreateDiagram: boolean;
-  canCreateProject: boolean;
   canCreateSnapshot: boolean;
   canEditDiagram: boolean;
   canManageProject: boolean;
@@ -124,9 +120,7 @@ export function EditorHeader({
   onAdmin: () => void;
   onCopySql: HeaderAction;
   onCreateDiagram: () => void;
-  onCreateProject: () => void;
   onCreateSnapshot: () => void;
-  onCreateWorkspace: () => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
   onDiagramUpdated: (diagram: DiagramResponseDto) => void;
   onDownloadSql: HeaderAction;
@@ -172,11 +166,8 @@ export function EditorHeader({
           activeOrganization={activeOrganization}
           activeProject={activeProject}
           canCreateDiagram={canCreateDiagram}
-          canCreateProject={canCreateProject}
           diagrams={diagrams}
           onCreateDiagram={onCreateDiagram}
-          onCreateProject={onCreateProject}
-          onCreateWorkspace={onCreateWorkspace}
           onDiagramSelect={onDiagramSelect}
           onOrganizationSelect={onOrganizationSelect}
           onProjectSearchChange={onProjectSearchChange}
