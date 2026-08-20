@@ -112,8 +112,8 @@ const SetupCreateResponseSchema = z
     user: z.object({
       avatarUrl: z.string().nullable(),
       cursorColor: z.string(),
-      email: z.string().email(),
-      id: z.string().uuid(),
+      email: z.email(),
+      id: z.uuid(),
       name: z.string(),
     }),
   })
