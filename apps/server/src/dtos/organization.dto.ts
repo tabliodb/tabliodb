@@ -51,13 +51,13 @@ const OrganizationMemberSchema = z
     avatarUrl: z.string().nullable(),
     cursorColor: z.string(),
     createdAt: DateTimeSchema,
-    email: z.string().email(),
+    email: z.email(),
     joinedAt: DateTimeSchema.nullable(),
     name: z.string(),
     role: OrganizationRoleSchema,
     status: z.enum(['pending', 'active', 'suspended']),
     updatedAt: DateTimeSchema,
-    userId: z.string().uuid(),
+    userId: z.uuid(),
   })
   .meta({ id: 'OrganizationMemberDto' });
 
