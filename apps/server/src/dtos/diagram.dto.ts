@@ -13,6 +13,13 @@ const DiagramCreateSchema = z
   })
   .meta({ id: 'DiagramCreateDto' });
 
+const WorkspaceDiagramCreateSchema = z
+  .object({
+    name: z.string().min(1),
+    dialect: DatabaseDialectSchema.default('postgresql'),
+  })
+  .meta({ id: 'WorkspaceDiagramCreateDto' });
+
 const DiagramUpdateSchema = z
   .object({
     // Diagram settings is a partial update because users may rename the diagram without changing its SQL dialect.
@@ -107,3 +114,4 @@ export class DiagramListQueryDto extends createZodDto(DiagramListQuerySchema) {}
 export class DiagramListResponseDto extends createZodDto(DiagramListResponseSchema) {}
 export class DiagramResponseDto extends createZodDto(DiagramResponseSchema) {}
 export class DiagramUpdateDto extends createZodDto(DiagramUpdateSchema) {}
+export class WorkspaceDiagramCreateDto extends createZodDto(WorkspaceDiagramCreateSchema) {}

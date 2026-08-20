@@ -11,6 +11,7 @@ import {
   DiagramImportResponseDto,
   DiagramResponseDto,
   DiagramUpdateDto,
+  WorkspaceDiagramCreateDto,
 } from '../dtos/diagram.dto.js';
 import {
   DiagramReviewActionCreateDto,
@@ -43,6 +44,21 @@ export class DiagramController {
   @ZodResponse({ status: HttpStatus.CREATED, type: DiagramResponseDto })
   createDiagram(@Auth() auth: AuthContext, @Body() dto: DiagramCreateDto) {
     return this.service.create(auth, dto);
+  }
+
+  @Post('workspace/:organizationId')
+  @RateLimit(RateLimitPreset.DiagramWrite)
+  @RequirePermission(Permission.ProjectCreate, { key: 'organizationId', source: 'param', type: 'organization' })
+  @ApiParam({ name: 'organizationId', type: String })
+  @ApiBody({ type: WorkspaceDiagramCreateDto })
+  @ApiOperation({ operationId: 'createWorkspaceDiagram' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: DiagramResponseDto })
+  createWorkspaceDiagram(
+    @Auth() auth: AuthContext,
+    @Param('organizationId') organizationId: string,
+    @Body() dto: WorkspaceDiagramCreateDto,
+  ) {
+    return this.service.createInOrganization(auth, organizationId, dto);
   }
 
   @Patch(':diagramId')

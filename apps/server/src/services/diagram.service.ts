@@ -14,8 +14,9 @@ import {
   type DatabaseDialect,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import { Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import { generateCreateSchemaSqlWithWarnings, parseCreateSchemaSql } from '@tabliodb/sql';
+import { AuditAction } from '../constants.js';
 import { AuthContext } from '../database.js';
 import {
   DiagramCreateDto,
@@ -26,19 +27,31 @@ import {
   DiagramListQueryDto,
   DiagramResponseDto,
   DiagramUpdateDto,
+  WorkspaceDiagramCreateDto,
 } from '../dtos/diagram.dto.js';
+import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { CollaborationRepository } from '../repositories/collaboration.repository.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
+import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
 import { ReviewSignalRepository } from '../repositories/review-signal.repository.js';
+import type { JsonValue } from '../schema/index.js';
 import { toIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
+
+const defaultWorkspaceDiagramFolder = {
+  description: 'Default folder for diagrams created directly from the workspace.',
+  name: 'General',
+  slug: 'general',
+} as const;
 
 @Injectable()
 export class DiagramService {
   constructor(
+    private readonly auditLogRepository: AuditLogRepository,
     private readonly collaborationRepository: CollaborationRepository,
     private readonly diagramRepository: DiagramRepository,
+    private readonly organizationRepository: OrganizationRepository,
     private readonly projectRepository: ProjectRepository,
     private readonly reviewSignalRepository: ReviewSignalRepository,
   ) {}
@@ -60,6 +73,23 @@ export class DiagramService {
     });
 
     return this.serializeDiagram(diagram);
+  }
+
+  async createInOrganization(
+    auth: AuthContext,
+    organizationId: string,
+    dto: WorkspaceDiagramCreateDto,
+  ): Promise<DiagramResponseDto> {
+    this.assertApiKeyScope(auth, Permission.ProjectCreate);
+
+    const project = await this.getOrCreateDefaultDiagramFolder(auth, organizationId);
+
+    // Workspace-level creation keeps the UI diagram-first while reusing the project-level write path for final role checks.
+    return this.create(auth, {
+      dialect: dto.dialect,
+      name: dto.name,
+      projectId: project.id,
+    });
   }
 
   async getByProject(auth: AuthContext, projectId: string, query: DiagramListQueryDto) {
@@ -219,10 +249,7 @@ export class DiagramService {
   }
 
   private assertProjectPermission(auth: AuthContext, role: ProjectRole, permission: Permission): void {
-    if (auth.apiKey && !isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
-      // Service-level diagram checks cover routes where the URL only has snapshot/comment/signal ids, so API key scope must be enforced here too.
-      throw new ForbiddenException(`${permission} API key scope is required`);
-    }
+    this.assertApiKeyScope(auth, permission);
 
     if (
       !isGranted({
@@ -232,6 +259,155 @@ export class DiagramService {
     ) {
       throw new ForbiddenException(`${permission} permission is required`);
     }
+  }
+
+  private assertApiKeyScope(auth: AuthContext, permission: Permission): void {
+    if (auth.apiKey && !isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
+      // Service-level diagram checks cover internal callers and routes where the URL does not expose the final project id.
+      throw new ForbiddenException(`${permission} API key scope is required`);
+    }
+  }
+
+  private async getOrCreateDefaultDiagramFolder(auth: AuthContext, organizationId: string) {
+    const organization = await this.organizationRepository.getByIdForUser(auth.user.id, organizationId);
+
+    if (!organization) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    const visibleProject = await this.projectRepository.getBySlugForUser(
+      auth.user.id,
+      organizationId,
+      defaultWorkspaceDiagramFolder.slug,
+    );
+
+    if (visibleProject) {
+      this.assertProjectPermission(auth, visibleProject.projectRole, Permission.DiagramCreate);
+
+      return visibleProject;
+    }
+
+    const existingProject = await this.projectRepository.getActiveBySlugInOrganization(
+      organizationId,
+      defaultWorkspaceDiagramFolder.slug,
+    );
+
+    if (existingProject) {
+      return this.attachCurrentUserToDefaultFolder(
+        auth,
+        organizationId,
+        existingProject.id,
+        organization.allowMemberProjectCreate,
+      );
+    }
+
+    await this.assertCanCreateDefaultFolder(auth, organizationId, organization.allowMemberProjectCreate);
+
+    try {
+      const project = await this.projectRepository.create({
+        createdById: auth.user.id,
+        description: defaultWorkspaceDiagramFolder.description,
+        name: defaultWorkspaceDiagramFolder.name,
+        organizationId,
+        reviewSettings: defaultDiagramReviewSettings,
+        slug: defaultWorkspaceDiagramFolder.slug,
+      });
+
+      await this.recordDefaultFolderAudit(auth, {
+        metadata: {
+          description: project.description,
+          generatedFor: 'workspace_diagram_create',
+          name: project.name,
+          slug: project.slug,
+        },
+        organizationId: project.organizationId,
+        projectId: project.id,
+      });
+
+      return project;
+    } catch (error) {
+      if (!isProjectSlugConflict(error)) {
+        throw error;
+      }
+
+      const project = await this.projectRepository.getActiveBySlugInOrganization(
+        organizationId,
+        defaultWorkspaceDiagramFolder.slug,
+      );
+
+      if (!project) {
+        throw error;
+      }
+
+      // Concurrent first-diagram creates can race on the default folder; the loser joins the row that already exists.
+      return this.attachCurrentUserToDefaultFolder(auth, organizationId, project.id, organization.allowMemberProjectCreate);
+    }
+  }
+
+  private async attachCurrentUserToDefaultFolder(
+    auth: AuthContext,
+    organizationId: string,
+    projectId: string,
+    allowMemberProjectCreate: boolean,
+  ) {
+    await this.assertCanCreateDefaultFolder(auth, organizationId, allowMemberProjectCreate);
+
+    // Existing default folders are utility containers; editor access lets diagram-first creation recover from slug races.
+    await this.projectRepository.upsertMember(projectId, {
+      createdById: auth.user.id,
+      role: ProjectRole.Editor,
+      userId: auth.user.id,
+    });
+
+    const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
+
+    if (!project) {
+      throw new ForbiddenException('Default diagram folder is not accessible');
+    }
+
+    this.assertProjectPermission(auth, project.projectRole, Permission.DiagramCreate);
+
+    return project;
+  }
+
+  private async assertCanCreateDefaultFolder(
+    auth: AuthContext,
+    organizationId: string,
+    allowMemberProjectCreate: boolean,
+  ): Promise<void> {
+    if (allowMemberProjectCreate) {
+      return;
+    }
+
+    const membership = await this.organizationRepository.getRole(auth.user.id, organizationId);
+
+    if (membership?.role === OrganizationRole.Owner || membership?.role === OrganizationRole.Admin) {
+      return;
+    }
+
+    throw new ForbiddenException('Workspace members cannot create diagram folders');
+  }
+
+  private recordDefaultFolderAudit(
+    auth: AuthContext,
+    options: {
+      metadata: Record<string, JsonValue>;
+      organizationId: string;
+      projectId: string;
+    },
+  ) {
+    return this.auditLogRepository.create({
+      action: AuditAction.ProjectCreated,
+      actorId: auth.user.id,
+      entityId: options.projectId,
+      entityType: 'project',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: options.metadata,
+      organizationId: options.organizationId,
+      projectId: options.projectId,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
   }
 
   private serializeDiagram(
@@ -324,6 +500,16 @@ function normalizeTransferWarning(warning: {
     statement: warning.statement,
     target: warning.target,
   };
+}
+
+function isProjectSlugConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const record = error as { code?: unknown; constraint?: unknown };
+
+  return record.code === '23505' && record.constraint === 'projects_organization_id_slug_key';
 }
 
 function toFilenameBase(value: string): string {

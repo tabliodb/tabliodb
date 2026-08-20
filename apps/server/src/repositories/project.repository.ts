@@ -211,6 +211,23 @@ export class ProjectRepository {
     return project && role ? { ...project, projectRole: role.role } : undefined;
   }
 
+  async getActiveBySlugInOrganization(organizationId: string, slug: string) {
+    return this.db
+      .selectFrom('projects')
+      .select(['id', 'organizationId', 'name', 'slug'])
+      .where('organizationId', '=', organizationId)
+      .where('slug', '=', slug)
+      .where('archivedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  async getBySlugForUser(userId: string, organizationId: string, slug: string) {
+    const project = await this.getActiveBySlugInOrganization(organizationId, slug);
+
+    // Reuse the canonical access resolver so folder lookup and route lookup cannot drift in permission behavior.
+    return project ? this.getByIdForUser(userId, project.id) : undefined;
+  }
+
   async getProjectRole(userId: string, projectId: string) {
     const roles = await sql<{ role: ProjectRole }>`
       SELECT project_members.role

@@ -24,7 +24,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
-import { defaultDiagramName, useCreateDiagramMutation } from '@/resources/diagrams';
+import { defaultDiagramName, useCreateDiagramMutation, useCreateWorkspaceDiagramMutation } from '@/resources/diagrams';
 import { useCreateOrganizationMutation } from '@/resources/organizations';
 import { useCreateProjectMutation } from '@/resources/projects';
 import { formatDiagramDialect } from '../diagram-formatters';
@@ -68,8 +68,6 @@ const diagramCreateFormSchema = z.object({
 });
 
 type DiagramCreateFormState = z.infer<typeof diagramCreateFormSchema>;
-const autoDiagramProjectName = 'General';
-const autoDiagramProjectDescription = 'Auto-created for diagrams that do not need a dedicated project yet.';
 
 export function CreateWorkspaceDialog({
   onCreated,
@@ -96,7 +94,7 @@ export function CreateWorkspaceDialog({
   const createWorkspaceMutation = useCreateOrganizationMutation({
     mutationConfig: {
       onSuccess: (organization) => {
-        // Workspace creation switches context immediately so the next expected action is creating a project inside it.
+        // Workspace creation switches context immediately so the next expected action can be creating a diagram directly.
         form.reset({ name: '' });
         handleOpenChange(false);
         onCreated(organization);
@@ -356,7 +354,16 @@ export function CreateDiagramDialog({
     resolver: zodResolver(diagramCreateFormSchema),
   });
   const { errors } = form.formState;
-  const createProjectMutation = useCreateProjectMutation();
+  const createWorkspaceDiagramMutation = useCreateWorkspaceDiagramMutation({
+    mutationConfig: {
+      onSuccess: (diagram) => {
+        // Workspace-level diagram creation has the same UX contract as project-level creation: close and open the new ERD.
+        form.reset({ dialect: defaultDialect, name: '' });
+        handleOpenChange(false);
+        onCreated(diagram);
+      },
+    },
+  });
 
   useEffect(() => {
     if (dialogOpen) {
@@ -380,10 +387,10 @@ export function CreateDiagramDialog({
     setInternalOpen(nextOpen);
     onOpenChange?.(nextOpen);
 
-    if (!nextOpen && !createDiagramMutation.isPending && !createProjectMutation.isPending) {
+    if (!nextOpen && !createDiagramMutation.isPending && !createWorkspaceDiagramMutation.isPending) {
       form.reset({ dialect: defaultDialect, name: '' });
       createDiagramMutation.reset();
-      createProjectMutation.reset();
+      createWorkspaceDiagramMutation.reset();
     }
   }
 
@@ -393,29 +400,31 @@ export function CreateDiagramDialog({
     }
 
     try {
-      const targetProjectId =
-        projectId ??
-        (
-          await createProjectMutation.mutateAsync({
-            description: autoDiagramProjectDescription,
-            // Project is created as an organization folder here so the user-facing action can stay diagram-first.
-            name: autoDiagramProjectName,
-            organizationId: organizationId!,
-          })
-        ).id;
+      if (!projectId) {
+        await createWorkspaceDiagramMutation.mutateAsync({
+          body: {
+            dialect: sdkDialectByValue[values.dialect],
+            name: values.name,
+          },
+          // Workspace-level creation lets the server create or reuse the hidden General backing folder atomically.
+          organizationId: organizationId!,
+        });
+
+        return;
+      }
 
       await createDiagramMutation.mutateAsync({
         dialect: sdkDialectByValue[values.dialect],
         name: values.name,
-        projectId: targetProjectId,
+        projectId,
       });
     } catch {
       // React Query keeps the failed mutation in state; the dialog renders that message without throwing into react-hook-form.
     }
   }
 
-  const isCreatingDiagram = createDiagramMutation.isPending || createProjectMutation.isPending;
-  const createDiagramError = createDiagramMutation.error ?? createProjectMutation.error;
+  const isCreatingDiagram = createDiagramMutation.isPending || createWorkspaceDiagramMutation.isPending;
+  const createDiagramError = createDiagramMutation.error ?? createWorkspaceDiagramMutation.error;
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
@@ -434,7 +443,7 @@ export function CreateDiagramDialog({
           <DialogHeader>
             <DialogTitle>New database diagram</DialogTitle>
             <DialogDescription>
-              Name the diagram and choose its SQL dialect. Projects stay in the background as organization folders.
+              Name the ERD and choose its SQL dialect. Folder organization can wait until the diagram list gets busy.
             </DialogDescription>
           </DialogHeader>
 
@@ -474,7 +483,7 @@ export function CreateDiagramDialog({
 
               {!projectId ? (
                 <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  Tabliodb will create a General folder for this workspace automatically.
+                  This diagram will be created in the current workspace. Tabliodb keeps the backing folder tidy automatically.
                 </div>
               ) : null}
 

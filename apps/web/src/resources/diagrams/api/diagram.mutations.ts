@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import {
   createDiagram,
   createDiagramReviewAction,
+  createWorkspaceDiagram,
   exportDiagram,
   importDiagram,
   updateDiagram,
@@ -11,13 +12,20 @@ import {
   type DiagramReviewSummaryDtoOutput,
   type DiagramResponseDtoOutput,
   type DiagramUpdateDto,
+  type WorkspaceDiagramCreateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { commentKeys } from '@/resources/comments';
+import { projectsKeys } from '@/resources/projects';
 import { reviewSignalKeys } from '@/resources/review-signals';
 import { diagramsKeys, type DiagramExportQuery } from './diagram.keys';
 
 const createDiagramMutationFn = (body: DiagramCreateDto) => createDiagram({ diagramCreateDto: body });
+const createWorkspaceDiagramMutationFn = (input: { body: WorkspaceDiagramCreateDto; organizationId: string }) =>
+  createWorkspaceDiagram({
+    organizationId: input.organizationId,
+    workspaceDiagramCreateDto: input.body,
+  });
 const updateDiagramMutationFn = (input: { body: DiagramUpdateDto; diagramId: string }) =>
   updateDiagram({ diagramId: input.diagramId, diagramUpdateDto: input.body });
 const importDiagramMutationFn = (input: { body: DiagramImportDto; diagramId: string }) =>
@@ -38,6 +46,10 @@ type UseCreateDiagramMutationParams = {
   mutationConfig?: MutationConfig<typeof createDiagramMutationFn>;
 };
 
+type UseCreateWorkspaceDiagramMutationParams = {
+  mutationConfig?: MutationConfig<typeof createWorkspaceDiagramMutationFn>;
+};
+
 export function useCreateDiagramMutation(params: UseCreateDiagramMutationParams = {}) {
   return useMutation({
     mutationFn: createDiagramMutationFn,
@@ -49,6 +61,23 @@ export function useCreateDiagramMutation(params: UseCreateDiagramMutationParams 
         (current) => [data, ...(current ?? []).filter((diagram) => diagram.id !== data.id)],
       );
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useCreateWorkspaceDiagramMutation(params: UseCreateWorkspaceDiagramMutationParams = {}) {
+  return useMutation({
+    mutationFn: createWorkspaceDiagramMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Workspace-level create may auto-create the backing General folder, so project and diagram lists must refresh together.
+      queryClient.setQueryData<DiagramResponseDtoOutput[]>(
+        diagramsKeys.listItemsByProject(data.projectId),
+        (current) => [data, ...(current ?? []).filter((diagram) => diagram.id !== data.id)],
+      );
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

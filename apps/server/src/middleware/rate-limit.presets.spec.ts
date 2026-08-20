@@ -78,6 +78,7 @@ describe('rate limit presets', () => {
       { handler: TeamController.prototype.upsertTeamProjectAccess, preset: RateLimitPreset.TeamWrite },
       { handler: TeamController.prototype.removeTeamProjectAccess, preset: RateLimitPreset.TeamWrite },
       { handler: DiagramController.prototype.createDiagram, preset: RateLimitPreset.DiagramWrite },
+      { handler: DiagramController.prototype.createWorkspaceDiagram, preset: RateLimitPreset.DiagramWrite },
       { handler: DiagramController.prototype.updateDiagram, preset: RateLimitPreset.DiagramWrite },
       { handler: DiagramController.prototype.exportDiagram, preset: RateLimitPreset.DiagramExport },
       { handler: DiagramController.prototype.importDiagram, preset: RateLimitPreset.DiagramImport },

@@ -402,6 +402,10 @@ export type DiagramResponseDtoOutput = {
   createdAt: string;
   updatedAt: string;
 };
+export type WorkspaceDiagramCreateDto = {
+  name: string;
+  dialect?: Dialect;
+};
 export type DiagramUpdateDto = {
   name?: string;
   dialect?: Dialect;
@@ -2403,6 +2407,30 @@ export function createDiagram(
         ...opts,
         method: 'POST',
         body: diagramCreateDto,
+      }),
+    ),
+  );
+}
+export function createWorkspaceDiagram(
+  {
+    organizationId,
+    workspaceDiagramCreateDto,
+  }: {
+    organizationId: string;
+    workspaceDiagramCreateDto: WorkspaceDiagramCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: DiagramResponseDtoOutput;
+    }>(
+      `/diagrams/workspace/${encodeURIComponent(organizationId)}`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: workspaceDiagramCreateDto,
       }),
     ),
   );

@@ -269,7 +269,7 @@ function DiagramNavigator({
               <div className="min-w-0">
                 <DialogTitle>Database diagrams</DialogTitle>
                 <DialogDescription>
-                  Open an existing ERD, create a new diagram, or move to another project folder.
+                  Open an ERD or create a new database diagram in the current workspace.
                 </DialogDescription>
               </div>
               {canCreateDiagram ? (
@@ -281,81 +281,14 @@ function DiagramNavigator({
             </div>
           </DialogHeader>
 
-          <DialogBody className="grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 md:grid-cols-[300px_minmax(0,1fr)]">
-            <section className="flex min-h-0 flex-col rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))]">
-              <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h2 className="text-[13px] font-black">Project folders</h2>
-                    <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Group diagrams by app, client, or product area.
-                    </p>
-                  </div>
-                  {canCreateProject ? (
-                    <Button className="shrink-0 gap-1.5" onClick={handleCreateProject} size="sm" variant="secondary">
-                      <FolderPlus className="size-4" />
-                      Folder
-                    </Button>
-                  ) : null}
-                </div>
-                <div className="relative mt-3">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
-                  <Input
-                    className="h-9 pl-9 text-[13px]"
-                    onChange={(event) => setProjectSearchTerm(event.target.value)}
-                    placeholder="Search folders"
-                    value={projectSearchTerm}
-                  />
-                </div>
-              </div>
-              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-gutter:stable]">
-                {filteredProjects.length === 0 ? (
-                  <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                    No matching folders
-                  </div>
-                ) : (
-                  <div className="grid gap-1">
-                    {filteredProjects.map((project) => {
-                      const isActive = project.id === activeProject.id;
-
-                      return (
-                        <button
-                          className={`flex min-w-0 cursor-pointer items-center justify-between gap-2 rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-left transition ${
-                            isActive
-                              ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
-                              : 'border-transparent bg-white hover:border-[rgb(var(--tabliodb-border))]'
-                          }`}
-                          key={project.id}
-                          onClick={() => {
-                            if (!isActive) {
-                              setOpen(false);
-                              onProjectSelect(project);
-                            }
-                          }}
-                          type="button"
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate text-[13px] font-extrabold">{project.name}</span>
-                            <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {project.slug}
-                            </span>
-                          </span>
-                          {isActive ? <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </section>
-
+          <DialogBody className="grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 md:grid-cols-[minmax(0,1fr)_280px]">
             <section className="flex min-h-0 flex-col rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white">
               <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-3">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="truncate text-[13px] font-black">Diagrams in {activeProject.name}</h2>
+                    <h2 className="truncate text-[13px] font-black">My diagrams</h2>
                     <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                      These are the ERD documents inside the selected folder.
+                      Folder: {activeProject.name}
                     </p>
                   </div>
                   <Badge className="shrink-0" variant="green">
@@ -416,6 +349,74 @@ function DiagramNavigator({
                               <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" />
                             ) : null}
                           </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-col rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))]">
+              <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-[13px] font-black">Folders</h2>
+                    <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                      Optional grouping for larger workspaces.
+                    </p>
+                  </div>
+                  {canCreateProject ? (
+                    <Button className="shrink-0 gap-1.5" onClick={handleCreateProject} size="sm" variant="secondary">
+                      <FolderPlus className="size-4" />
+                      New
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="relative mt-3">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+                  <Input
+                    className="h-9 pl-9 text-[13px]"
+                    onChange={(event) => setProjectSearchTerm(event.target.value)}
+                    placeholder="Search folders"
+                    value={projectSearchTerm}
+                  />
+                </div>
+              </div>
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-gutter:stable]">
+                {filteredProjects.length === 0 ? (
+                  <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    No matching folders
+                  </div>
+                ) : (
+                  <div className="grid gap-1">
+                    {filteredProjects.map((project) => {
+                      const isActive = project.id === activeProject.id;
+
+                      return (
+                        <button
+                          className={`flex min-w-0 cursor-pointer items-center justify-between gap-2 rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-left transition ${
+                            isActive
+                              ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
+                              : 'border-transparent bg-white hover:border-[rgb(var(--tabliodb-border))]'
+                          }`}
+                          key={project.id}
+                          onClick={() => {
+                            if (!isActive) {
+                              setOpen(false);
+                              // Selecting a folder changes the diagram collection shown in the primary panel.
+                              onProjectSelect(project);
+                            }
+                          }}
+                          type="button"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-[13px] font-extrabold">{project.name}</span>
+                            <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                              {project.slug}
+                            </span>
+                          </span>
+                          {isActive ? <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
                         </button>
                       );
                     })}

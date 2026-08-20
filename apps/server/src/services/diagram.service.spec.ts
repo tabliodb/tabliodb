@@ -57,6 +57,9 @@ describe(DiagramService.name, () => {
   const collaborationRepository = {
     loadDocument: vi.fn(),
   };
+  const auditLogRepository = {
+    create: vi.fn(),
+  };
   const diagramRepository = {
     create: vi.fn(),
     getById: vi.fn(),
@@ -64,9 +67,17 @@ describe(DiagramService.name, () => {
     replaceDocumentModel: vi.fn(),
     update: vi.fn(),
   };
-  const projectRepository = {
+  const organizationRepository = {
     getByIdForUser: vi.fn(),
+    getRole: vi.fn(),
+  };
+  const projectRepository = {
+    create: vi.fn(),
+    getActiveBySlugInOrganization: vi.fn(),
+    getByIdForUser: vi.fn(),
+    getBySlugForUser: vi.fn(),
     getDiagramRole: vi.fn(),
+    upsertMember: vi.fn(),
   };
   const reviewSignalRepository = {
     getSettingsForDiagram: vi.fn(),
@@ -78,8 +89,10 @@ describe(DiagramService.name, () => {
   beforeEach(() => {
     vi.resetAllMocks();
     service = new DiagramService(
+      auditLogRepository as never,
       collaborationRepository as never,
       diagramRepository as never,
+      organizationRepository as never,
       projectRepository as never,
       reviewSignalRepository as never,
     );
@@ -118,6 +131,103 @@ describe(DiagramService.name, () => {
       name: 'Main schema',
       projectId: 'project-id',
     });
+  });
+
+  it('creates the default workspace diagram folder when creating a diagram from a workspace', async () => {
+    organizationRepository.getByIdForUser.mockResolvedValue({
+      allowMemberProjectCreate: true,
+      id: 'organization-id',
+    });
+    projectRepository.getBySlugForUser.mockResolvedValue(undefined);
+    projectRepository.getActiveBySlugInOrganization.mockResolvedValue(undefined);
+    projectRepository.create.mockResolvedValue({
+      ...project,
+      description: 'Default folder for diagrams created directly from the workspace.',
+      id: 'general-project-id',
+      name: 'General',
+      slug: 'general',
+    });
+    projectRepository.getByIdForUser.mockResolvedValue({
+      ...project,
+      id: 'general-project-id',
+      projectRole: ProjectRole.Editor,
+    });
+    diagramRepository.create.mockResolvedValue({
+      ...diagram,
+      projectId: 'general-project-id',
+    });
+
+    await expect(
+      service.createInOrganization(auth, 'organization-id', {
+        dialect: 'postgresql',
+        name: 'Inventory ERD',
+      }),
+    ).resolves.toMatchObject({
+      name: 'Main schema',
+      projectId: 'general-project-id',
+    });
+
+    expect(projectRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'General',
+        organizationId: 'organization-id',
+        slug: 'general',
+      }),
+    );
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'project.created',
+        entityId: 'general-project-id',
+        metadata: expect.objectContaining({
+          generatedFor: 'workspace_diagram_create',
+        }),
+      }),
+    );
+    expect(diagramRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Inventory ERD',
+        projectId: 'general-project-id',
+      }),
+    );
+  });
+
+  it('uses an existing visible default folder for workspace-level diagram creation', async () => {
+    organizationRepository.getByIdForUser.mockResolvedValue({
+      allowMemberProjectCreate: true,
+      id: 'organization-id',
+    });
+    projectRepository.getBySlugForUser.mockResolvedValue({
+      ...project,
+      id: 'general-project-id',
+      projectRole: ProjectRole.Editor,
+    });
+    projectRepository.getByIdForUser.mockResolvedValue({
+      ...project,
+      id: 'general-project-id',
+      projectRole: ProjectRole.Editor,
+    });
+    diagramRepository.create.mockResolvedValue({
+      ...diagram,
+      projectId: 'general-project-id',
+    });
+
+    await expect(
+      service.createInOrganization(auth, 'organization-id', {
+        dialect: 'postgresql',
+        name: 'Orders ERD',
+      }),
+    ).resolves.toMatchObject({
+      projectId: 'general-project-id',
+    });
+
+    expect(projectRepository.create).not.toHaveBeenCalled();
+    expect(projectRepository.upsertMember).not.toHaveBeenCalled();
+    expect(diagramRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Orders ERD',
+        projectId: 'general-project-id',
+      }),
+    );
   });
 
   it('blocks a project viewer from update-class diagram permissions', async () => {

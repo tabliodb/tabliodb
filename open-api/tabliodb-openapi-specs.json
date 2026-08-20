@@ -1669,6 +1669,58 @@
         ]
       }
     },
+    "/diagrams/workspace/{organizationId}": {
+      "post": {
+        "operationId": "createWorkspaceDiagram",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceDiagramCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
     "/diagrams/{diagramId}": {
       "patch": {
         "operationId": "updateDiagram",
@@ -6774,6 +6826,29 @@
           "updatedAt"
         ],
         "additionalProperties": false
+      },
+      "WorkspaceDiagramCreateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dialect": {
+            "default": "postgresql",
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "mysql",
+              "sqlite",
+              "mariadb",
+              "sqlserver"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ]
       },
       "DiagramUpdateDto": {
         "type": "object",
