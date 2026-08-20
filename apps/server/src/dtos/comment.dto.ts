@@ -123,9 +123,9 @@ const CommentThreadReaderSchema = z.object({
 const CommentThreadReadStateSchema = z
   .object({
     lastReadAt: DateTimeSchema.nullable(),
-    lastReadCommentId: z.string().uuid().nullable(),
+    lastReadCommentId: z.uuid().nullable(),
     readers: z.array(CommentThreadReaderSchema),
-    threadId: z.string().uuid(),
+    threadId: z.uuid(),
     totalReaderCount: z.number().int().nonnegative(),
     unreadCount: z.number().int().nonnegative(),
     updatedAt: DateTimeSchema.nullable(),
