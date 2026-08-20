@@ -25,11 +25,11 @@ const CommentAuthorSchema = z.object({
 
 const CommentThreadSchema = z.object({
   createdAt: DateTimeSchema,
-  createdById: z.string().uuid(),
-  diagramId: z.string().uuid(),
-  id: z.string().uuid(),
+  createdById: z.uuid(),
+  diagramId: z.uuid(),
+  id: z.uuid(),
   resolvedAt: DateTimeSchema.nullable(),
-  resolvedById: z.string().uuid().nullable(),
+  resolvedById: z.uuid().nullable(),
   status: z.enum(['open', 'resolved']),
   targetId: z.string().nullable(),
   targetType: CommentTargetTypeSchema,
