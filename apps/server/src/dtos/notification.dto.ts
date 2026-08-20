@@ -25,9 +25,9 @@ const NotificationUserSchema = z.object({
 });
 
 const NotificationProjectSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string(),
-  organizationId: z.string().uuid(),
+  organizationId: z.uuid(),
   organizationName: z.string(),
   organizationSlug: z.string(),
   slug: z.string(),
