@@ -39,7 +39,7 @@ const ProjectListQuerySchema = z
   .object({
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
-    organizationId: z.string().uuid().optional(),
+    organizationId: z.uuid().optional(),
   })
   .meta({ id: 'ProjectListQueryDto' });
 
