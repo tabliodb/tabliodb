@@ -65,7 +65,7 @@ const DiagramShareLinkListQuerySchema = z
 
 const PublicDiagramShareSnapshotSchema = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     version: z.number().int().positive(),
     message: z.string().nullable(),
     createdAt: DateTimeSchema,
