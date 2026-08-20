@@ -15,6 +15,7 @@ import {
   type DiagramModel,
 } from '@tabliodb/schema-core';
 import {
+  OrganizationRole,
   type OrganizationRoleValue,
   Permission,
   ProjectRole,
@@ -23,6 +24,7 @@ import {
   permissionsForProjectRole,
 } from '@tabliodb/shared';
 import { generateCreateSchemaSqlWithWarnings, parseCreateSchemaSql } from '@tabliodb/sql';
+import { AuditAction } from '../constants.js';
 import { AuthContext } from '../database.js';
 import {
   DiagramCreateDto,
@@ -31,26 +33,37 @@ import {
   DiagramImportDto,
   DiagramImportResponseDto,
   DiagramListQueryDto,
+  DiagramMemberCreateDto,
+  DiagramMemberDto,
+  DiagramMemberListQueryDto,
+  DiagramMemberListResponseDto,
+  DiagramMemberRemoveResponseDto,
+  DiagramMemberUpdateDto,
   DiagramResponseDto,
   DiagramUpdateDto,
   WorkspaceDiagramCreateDto,
 } from '../dtos/diagram.dto.js';
+import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { CollaborationRepository } from '../repositories/collaboration.repository.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
 import { ReviewSignalRepository } from '../repositories/review-signal.repository.js';
+import { UserRepository } from '../repositories/user.repository.js';
+import type { JsonValue } from '../schema/index.js';
 import { toIsoDateTime } from '../utils/date-time.js';
 import { clampPaginationLimit } from '../utils/pagination.js';
 
 @Injectable()
 export class DiagramService {
   constructor(
+    private readonly auditLogRepository: AuditLogRepository,
     private readonly collaborationRepository: CollaborationRepository,
     private readonly diagramRepository: DiagramRepository,
     private readonly organizationRepository: OrganizationRepository,
     private readonly projectRepository: ProjectRepository,
     private readonly reviewSignalRepository: ReviewSignalRepository,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async create(auth: AuthContext, dto: DiagramCreateDto): Promise<DiagramResponseDto> {
@@ -94,11 +107,12 @@ export class DiagramService {
   }
 
   async getByOrganization(auth: AuthContext, organizationId: string, query: DiagramListQueryDto) {
-    await this.assertOrganizationPermission(auth, organizationId, Permission.DiagramRead);
+    await this.assertOrganizationPermission(auth, organizationId, Permission.OrganizationRead);
 
     const diagrams = await this.diagramRepository.getByOrganization(organizationId, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
+      userId: auth.user.id,
     });
 
     return {
@@ -110,6 +124,148 @@ export class DiagramService {
         updatedAt: toIsoDateTime(diagram.updatedAt),
       })),
     };
+  }
+
+  async getMembers(
+    auth: AuthContext,
+    diagramId: string,
+    query: DiagramMemberListQueryDto,
+  ): Promise<DiagramMemberListResponseDto> {
+    await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+
+    const members = await this.diagramRepository.getMembers(diagramId, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+    });
+
+    return {
+      ...members,
+      items: members.items.map((member) => this.serializeMember(member)),
+    };
+  }
+
+  async addMember(auth: AuthContext, diagramId: string, dto: DiagramMemberCreateDto): Promise<DiagramMemberDto> {
+    const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+    const user = await this.userRepository.getByEmail(dto.email.trim().toLowerCase());
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Direct diagram access still anchors the invited user inside the workspace as a guest tenant member.
+    await this.organizationRepository.addMemberIfAbsent({
+      createdById: auth.user.id,
+      organizationId: diagram.organizationId,
+      role: OrganizationRole.Guest,
+      userId: user.id,
+    });
+
+    const existingMember = await this.diagramRepository.getMember(diagramId, user.id);
+    const member = await this.diagramRepository.upsertMember(diagramId, {
+      createdById: auth.user.id,
+      role: dto.role ?? ProjectRole.Viewer,
+      userId: user.id,
+    });
+
+    if (!member) {
+      throw new NotFoundException('Diagram member could not be loaded');
+    }
+
+    if (!existingMember) {
+      await this.recordDiagramMemberAudit(auth, {
+        action: AuditAction.DiagramMemberAdded,
+        diagram,
+        entityId: user.id,
+        metadata: {
+          email: user.email,
+          name: user.name,
+          role: member.role,
+        },
+      });
+    } else if (existingMember.role !== member.role) {
+      await this.recordDiagramMemberAudit(auth, {
+        action: AuditAction.DiagramMemberRoleUpdated,
+        diagram,
+        entityId: user.id,
+        metadata: {
+          email: user.email,
+          name: user.name,
+          role: {
+            after: member.role,
+            before: existingMember.role,
+          },
+        },
+      });
+    }
+
+    return this.serializeMember(member);
+  }
+
+  async updateMember(
+    auth: AuthContext,
+    diagramId: string,
+    userId: string,
+    dto: DiagramMemberUpdateDto,
+  ): Promise<DiagramMemberDto> {
+    const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+    const currentMember = await this.assertCanChangeOwnerRole(diagramId, userId, dto.role);
+
+    const member = await this.diagramRepository.updateMember(diagramId, userId, dto.role);
+    if (!member) {
+      throw new NotFoundException('Diagram member not found');
+    }
+
+    if (currentMember.role !== member.role) {
+      await this.recordDiagramMemberAudit(auth, {
+        action: AuditAction.DiagramMemberRoleUpdated,
+        diagram,
+        entityId: userId,
+        metadata: {
+          email: member.email,
+          name: member.name,
+          role: {
+            after: member.role,
+            before: currentMember.role,
+          },
+        },
+      });
+    }
+
+    return this.serializeMember(member);
+  }
+
+  async removeMember(
+    auth: AuthContext,
+    diagramId: string,
+    userId: string,
+  ): Promise<DiagramMemberRemoveResponseDto> {
+    const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+    const currentMember = await this.diagramRepository.getMember(diagramId, userId);
+    if (!currentMember) {
+      throw new NotFoundException('Diagram member not found');
+    }
+
+    if (
+      currentMember.role === ProjectRole.Owner &&
+      (await this.diagramRepository.getDiagramOwnerCount(diagramId)) <= 1
+    ) {
+      throw new BadRequestException('Diagram must keep at least one owner');
+    }
+
+    await this.diagramRepository.removeMember(diagramId, userId);
+
+    await this.recordDiagramMemberAudit(auth, {
+      action: AuditAction.DiagramMemberRemoved,
+      diagram,
+      entityId: userId,
+      metadata: {
+        email: currentMember.email,
+        name: currentMember.name,
+        role: currentMember.role,
+      },
+    });
+
+    return { successful: true };
   }
 
   async getByProject(auth: AuthContext, projectId: string, query: DiagramListQueryDto) {
@@ -324,6 +480,66 @@ export class DiagramService {
       createdAt: toIsoDateTime(diagram.createdAt),
       updatedAt: toIsoDateTime(diagram.updatedAt),
     };
+  }
+
+  private serializeMember(member: {
+    avatarUrl?: string | null;
+    cursorColor: string;
+    createdAt: Date | string;
+    email: string;
+    name: string;
+    role: ProjectRole;
+    updatedAt: Date | string;
+    userId: string;
+  }): DiagramMemberDto {
+    return {
+      ...member,
+      avatarUrl: member.avatarUrl ?? null,
+      // Member timestamps are serialized here so every generated SDK response receives stable ISO strings.
+      createdAt: toIsoDateTime(member.createdAt),
+      updatedAt: toIsoDateTime(member.updatedAt),
+    };
+  }
+
+  private async assertCanChangeOwnerRole(diagramId: string, userId: string, nextRole: ProjectRole) {
+    const currentMember = await this.diagramRepository.getMember(diagramId, userId);
+    if (!currentMember) {
+      throw new NotFoundException('Diagram member not found');
+    }
+
+    if (currentMember.role === ProjectRole.Owner && nextRole !== ProjectRole.Owner) {
+      const ownerCount = await this.diagramRepository.getDiagramOwnerCount(diagramId);
+
+      if (ownerCount <= 1) {
+        throw new BadRequestException('Diagram must keep at least one owner');
+      }
+    }
+
+    return currentMember;
+  }
+
+  private recordDiagramMemberAudit(
+    auth: AuthContext,
+    options: {
+      action: AuditAction;
+      diagram: NonNullable<Awaited<ReturnType<DiagramRepository['getById']>>>;
+      entityId: string;
+      metadata: Record<string, JsonValue>;
+    },
+  ) {
+    return this.auditLogRepository.create({
+      action: options.action,
+      actorId: auth.user.id,
+      diagramId: options.diagram.id,
+      entityId: options.entityId,
+      entityType: 'diagram_member',
+      ipAddress: auth.request?.ipAddress ?? null,
+      metadata: options.metadata,
+      organizationId: options.diagram.organizationId,
+      projectId: options.diagram.projectId,
+      requestId: auth.request?.requestId ?? null,
+      userAgent: auth.request?.userAgent ?? null,
+    });
   }
 
   private async loadCurrentModel(

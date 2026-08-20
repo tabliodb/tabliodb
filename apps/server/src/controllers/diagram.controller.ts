@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@tabliodb/shared';
 import { ZodResponse } from 'nestjs-zod';
@@ -11,6 +11,12 @@ import {
   DiagramImportResponseDto,
   DiagramListQueryDto,
   DiagramListResponseDto,
+  DiagramMemberCreateDto,
+  DiagramMemberDto,
+  DiagramMemberListQueryDto,
+  DiagramMemberListResponseDto,
+  DiagramMemberRemoveResponseDto,
+  DiagramMemberUpdateDto,
   DiagramResponseDto,
   DiagramUpdateDto,
   WorkspaceDiagramCreateDto,
@@ -64,7 +70,7 @@ export class DiagramController {
   }
 
   @Get('workspace/:organizationId')
-  @RequirePermission(Permission.DiagramRead, { key: 'organizationId', source: 'param', type: 'organization' })
+  @RequirePermission(Permission.OrganizationRead, { key: 'organizationId', source: 'param', type: 'organization' })
   @ApiParam({ name: 'organizationId', type: String })
   @ApiPaginationQuery()
   @ApiOperation({ operationId: 'getWorkspaceDiagrams' })
@@ -75,6 +81,68 @@ export class DiagramController {
     @Query() query: DiagramListQueryDto,
   ) {
     return this.service.getByOrganization(auth, organizationId, query);
+  }
+
+  @Get(':diagramId/members')
+  @RequirePermission(Permission.DiagramMemberManage, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getDiagramMembers' })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramMemberListResponseDto })
+  getDiagramMembers(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Query() query: DiagramMemberListQueryDto,
+  ): Promise<DiagramMemberListResponseDto> {
+    return this.service.getMembers(auth, diagramId, query);
+  }
+
+  @Post(':diagramId/members')
+  @RateLimit(RateLimitPreset.DiagramWrite)
+  @RequirePermission(Permission.DiagramMemberManage, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiBody({ type: DiagramMemberCreateDto })
+  @ApiOperation({ operationId: 'addDiagramMember' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: DiagramMemberDto })
+  addDiagramMember(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Body() dto: DiagramMemberCreateDto,
+  ): Promise<DiagramMemberDto> {
+    return this.service.addMember(auth, diagramId, dto);
+  }
+
+  @Patch(':diagramId/members/:userId')
+  @RateLimit(RateLimitPreset.DiagramWrite)
+  @RequirePermission(Permission.DiagramMemberManage, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiParam({ name: 'userId', type: String })
+  @ApiBody({ type: DiagramMemberUpdateDto })
+  @ApiOperation({ operationId: 'updateDiagramMember' })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramMemberDto })
+  updateDiagramMember(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Param('userId') userId: string,
+    @Body() dto: DiagramMemberUpdateDto,
+  ): Promise<DiagramMemberDto> {
+    return this.service.updateMember(auth, diagramId, userId, dto);
+  }
+
+  @Delete(':diagramId/members/:userId')
+  @RateLimit(RateLimitPreset.DiagramWrite)
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission(Permission.DiagramMemberManage, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiParam({ name: 'userId', type: String })
+  @ApiOperation({ operationId: 'removeDiagramMember' })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramMemberRemoveResponseDto })
+  removeDiagramMember(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Param('userId') userId: string,
+  ): Promise<DiagramMemberRemoveResponseDto> {
+    return this.service.removeMember(auth, diagramId, userId);
   }
 
   @Patch(':diagramId')

@@ -29,6 +29,7 @@ export enum Permission {
   DiagramUpdate = 'diagram.update',
   DiagramDelete = 'diagram.delete',
   DiagramComment = 'diagram.comment',
+  DiagramMemberManage = 'diagram.member.manage',
   SnapshotCreate = 'snapshot.create',
   SnapshotRead = 'snapshot.read',
   ApiKeyManage = 'api-key.manage',
@@ -68,6 +69,7 @@ const organizationRolePermissions: Record<OrganizationRoleValue, Permission[]> =
     Permission.DiagramUpdate,
     Permission.DiagramDelete,
     Permission.DiagramComment,
+    Permission.DiagramMemberManage,
     Permission.SnapshotCreate,
     Permission.SnapshotRead,
   ],
@@ -82,7 +84,7 @@ const organizationRolePermissions: Record<OrganizationRoleValue, Permission[]> =
     Permission.SnapshotCreate,
     Permission.SnapshotRead,
   ],
-  [OrganizationRole.Guest]: [Permission.OrganizationRead, Permission.DiagramRead, Permission.SnapshotRead],
+  [OrganizationRole.Guest]: [Permission.OrganizationRead],
 };
 
 export function permissionsForOrganizationRole(role: OrganizationRoleValue): Permission[] {

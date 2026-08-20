@@ -55,6 +55,9 @@ const diagram = {
 };
 
 describe(DiagramService.name, () => {
+  const auditLogRepository = {
+    create: vi.fn(),
+  };
   const collaborationRepository = {
     loadDocument: vi.fn(),
   };
@@ -82,17 +85,22 @@ describe(DiagramService.name, () => {
     getSettingsForDiagram: vi.fn(),
     syncGeneratedSignals: vi.fn(),
   };
+  const userRepository = {
+    getByEmail: vi.fn(),
+  };
 
   let service: DiagramService;
 
   beforeEach(() => {
     vi.resetAllMocks();
     service = new DiagramService(
+      auditLogRepository as never,
       collaborationRepository as never,
       diagramRepository as never,
       organizationRepository as never,
       projectRepository as never,
       reviewSignalRepository as never,
+      userRepository as never,
     );
   });
 

@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { OrganizationRole, ProjectRole, type OrganizationRoleValue, type ProjectRoleValue } from '@tabliodb/shared';
 import {
   DefaultProjectRole as SdkDefaultProjectRole,
-  Role as SdkOrganizationMemberRole,
-  Role3 as SdkTeamProjectRole,
+  Role2 as SdkOrganizationMemberRole,
+  Role4 as SdkTeamProjectRole,
   type AuditLogDtoOutput,
   type OrganizationDtoOutput,
   type OrganizationMemberDtoOutput,

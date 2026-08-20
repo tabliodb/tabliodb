@@ -25,6 +25,9 @@ const pendingInvitation: InvitationRecord = {
   id: 'invite-id',
   invitedById: 'owner-id',
   invitedByName: 'Tabliodb Owner',
+  diagramId: null,
+  diagramName: null,
+  diagramRole: null,
   message: 'Welcome aboard',
   organizationId: 'organization-id',
   organizationName: 'Default Workspace',
@@ -49,12 +52,16 @@ describe(InvitationService.name, () => {
     hashSha256: vi.fn(),
     randomBytesAsText: vi.fn(),
   };
+  const diagramRepository = {
+    getById: vi.fn(),
+  };
   const invitationRepository = {
     acceptWithNewUser: vi.fn(),
     create: vi.fn(),
     getByTokenHash: vi.fn(),
   };
   const organizationRepository = {
+    getActiveById: vi.fn(),
     getByIdForUser: vi.fn(),
     getFirstForUser: vi.fn(),
   };
@@ -77,6 +84,7 @@ describe(InvitationService.name, () => {
       authService as never,
       configRepository as never,
       cryptoRepository as never,
+      diagramRepository as never,
       invitationRepository as never,
       organizationRepository as never,
       projectRepository as never,
@@ -125,6 +133,8 @@ describe(InvitationService.name, () => {
       email: 'new.user@tabliodb.local',
       expiresAt: new Date('2026-08-05T12:00:00.000Z'),
       invitedById: 'owner-id',
+      diagramId: null,
+      diagramRole: null,
       message: 'Welcome aboard',
       organizationId: 'organization-id',
       organizationRole: OrganizationRole.Member,

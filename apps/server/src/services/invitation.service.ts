@@ -18,6 +18,7 @@ import {
 } from '../dtos/invitation.dto.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
 import { CryptoRepository } from '../repositories/crypto.repository.js';
+import { DiagramRepository } from '../repositories/diagram.repository.js';
 import { InvitationRecord, InvitationRepository } from '../repositories/invitation.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
 import { ProjectRepository } from '../repositories/project.repository.js';
@@ -33,6 +34,7 @@ export class InvitationService {
     private readonly authService: AuthService,
     private readonly configRepository: ConfigRepository,
     private readonly cryptoRepository: CryptoRepository,
+    private readonly diagramRepository: DiagramRepository,
     private readonly invitationRepository: InvitationRepository,
     private readonly organizationRepository: OrganizationRepository,
     private readonly projectRepository: ProjectRepository,
@@ -48,16 +50,28 @@ export class InvitationService {
       throw new ConflictException('A user with this email already exists');
     }
 
-    const organization = await this.resolveOrganization(auth, dto);
+    if (dto.projectId && dto.diagramId) {
+      throw new BadRequestException('Invitation can target either a project folder or a diagram, not both');
+    }
+
+    const diagram = dto.diagramId ? await this.resolveDiagram(dto.diagramId) : null;
+    const organization = await this.resolveOrganization(auth, dto, diagram?.organizationId);
     const project = dto.projectId ? await this.resolveProject(auth, dto.projectId, organization.id) : null;
+    if (diagram && diagram.organizationId !== organization.id) {
+      throw new BadRequestException('Diagram does not belong to the selected organization');
+    }
+
     const token = this.cryptoRepository.randomBytesAsText(32);
     const invitation = await this.invitationRepository.create({
+      diagramId: diagram?.id ?? null,
+      // Diagram-only invites default to viewer so a share token does not grant write access by surprise.
+      diagramRole: diagram ? (dto.diagramRole ?? ProjectRole.Viewer) : null,
       email,
       expiresAt: new Date(Date.now() + dto.expiresInDays * ONE_DAY_MS),
       invitedById: auth.user.id,
       message: dto.message?.trim() || null,
       organizationId: organization.id,
-      organizationRole: dto.organizationRole ?? OrganizationRole.Member,
+      organizationRole: dto.organizationRole ?? (diagram ? OrganizationRole.Guest : OrganizationRole.Member),
       projectId: project?.id ?? null,
       // Project invite default sengaja editor agar invite ke project langsung bisa produktif, sementara workspace-only invite tetap tanpa project role.
       projectRole: project ? (dto.projectRole ?? ProjectRole.Editor) : null,
@@ -105,16 +119,27 @@ export class InvitationService {
     };
   }
 
-  private async resolveOrganization(auth: AuthContext, dto: InvitationCreateDto) {
-    const organization = dto.organizationId
-      ? await this.organizationRepository.getByIdForUser(auth.user.id, dto.organizationId)
-      : await this.organizationRepository.getFirstForUser(auth.user.id);
+  private async resolveOrganization(auth: AuthContext, dto: InvitationCreateDto, fallbackOrganizationId?: string) {
+    const organization = fallbackOrganizationId
+      ? await this.organizationRepository.getActiveById(fallbackOrganizationId)
+      : dto.organizationId
+        ? await this.organizationRepository.getByIdForUser(auth.user.id, dto.organizationId)
+        : await this.organizationRepository.getFirstForUser(auth.user.id);
 
     if (!organization) {
       throw new NotFoundException('Organization not found');
     }
 
     return organization;
+  }
+
+  private async resolveDiagram(diagramId: string) {
+    const diagram = await this.diagramRepository.getById(diagramId);
+    if (!diagram) {
+      throw new NotFoundException('Diagram not found');
+    }
+
+    return diagram;
   }
 
   private async resolveProject(auth: AuthContext, projectId: string, organizationId: string) {
@@ -184,6 +209,8 @@ export class InvitationService {
       message: serialized.message,
       organizationName: serialized.organizationName,
       organizationRole: serialized.organizationRole,
+      diagramName: serialized.diagramName,
+      diagramRole: serialized.diagramRole,
       projectName: serialized.projectName,
       projectRole: serialized.projectRole,
       status: serialized.status,

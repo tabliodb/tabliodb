@@ -1,11 +1,13 @@
 import {
   exportDiagram,
+  getDiagramMembers,
   getDiagramReviewEvents,
   getDiagramReviewSummary,
   getProjectDiagrams,
   getWorkspaceDiagrams,
   type DiagramExportResponseDtoOutput,
   type DiagramListResponseDtoOutput,
+  type DiagramMemberListResponseDtoOutput,
   type DiagramReviewEventListResponseDtoOutput,
   type DiagramReviewSummaryDtoOutput,
   type DiagramResponseDtoOutput,
@@ -37,6 +39,10 @@ type DiagramsQueries = {
   listForWorkspace: (
     organization: OrganizationDtoOutput | null,
   ) => AppQueryOptions<DiagramResponseDtoOutput[], ReturnType<typeof diagramsKeys.listItemsByWorkspace>>;
+  members: (
+    diagramId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<DiagramMemberListResponseDtoOutput, ReturnType<typeof diagramsKeys.membersByDiagram>>;
   reviewEvents: (
     diagramId: string,
     query?: PaginationQuery,
@@ -80,6 +86,13 @@ export const diagramsQueries: DiagramsQueries = {
       enabled: Boolean(organization?.id),
       queryFn: () => listDiagramsForWorkspace(organization),
       queryKey: diagramsKeys.listItemsByWorkspace(organization?.id ?? 'missing-workspace'),
+    }),
+
+  members: (diagramId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(diagramId),
+      queryFn: () => getDiagramMembers({ diagramId, ...query }),
+      queryKey: diagramsKeys.membersByDiagram(diagramId, query),
     }),
 
   reviewEvents: (diagramId: string, query: PaginationQuery = {}) =>

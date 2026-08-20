@@ -15,10 +15,13 @@ export type InvitationRecord = {
   id: string;
   invitedById: string;
   invitedByName: string;
+  diagramId: string | null;
+  diagramName: string | null;
+  diagramRole: ProjectRole | null;
   message: string | null;
   organizationId: string;
   organizationName: string;
-  organizationRole: OrganizationRole.Admin | OrganizationRole.Member;
+  organizationRole: OrganizationRole.Admin | OrganizationRole.Member | OrganizationRole.Guest;
   organizationSlug: string;
   projectId: string | null;
   projectName: string | null;
@@ -105,6 +108,25 @@ export class InvitationRepository {
           .execute();
       }
 
+      const diagramRole = invitation.diagramRole;
+      if (invitation.diagramId && diagramRole) {
+        await tx
+          .insertInto('diagram_members')
+          .values({
+            createdById: invitation.invitedById,
+            diagramId: invitation.diagramId,
+            role: diagramRole,
+            userId: user.id,
+          })
+          .onConflict((conflict) =>
+            conflict.columns(['diagramId', 'userId']).doUpdateSet({
+              role: diagramRole,
+              updatedAt: now,
+            }),
+          )
+          .execute();
+      }
+
       await tx
         .updateTable('invitations')
         .set({
@@ -135,6 +157,7 @@ export class InvitationRepository {
       .innerJoin('organizations', 'organizations.id', 'invitations.organizationId')
       .innerJoin('users as invited_by', 'invited_by.id', 'invitations.invitedById')
       .leftJoin('projects', 'projects.id', 'invitations.projectId')
+      .leftJoin('diagrams', 'diagrams.id', 'invitations.diagramId')
       .select([
         'invitations.id',
         'invitations.email',
@@ -145,6 +168,9 @@ export class InvitationRepository {
         'invitations.projectId',
         'projects.name as projectName',
         'invitations.projectRole',
+        'invitations.diagramId',
+        'diagrams.name as diagramName',
+        'invitations.diagramRole',
         'invitations.message',
         'invitations.invitedById',
         'invited_by.name as invitedByName',
@@ -165,6 +191,9 @@ export class InvitationRepository {
     id: string;
     invitedById: string;
     invitedByName: string;
+    diagramId: string | null;
+    diagramName: string | null;
+    diagramRole: ProjectRole | string | null;
     message: string | null;
     organizationId: string;
     organizationName: string;
@@ -178,7 +207,8 @@ export class InvitationRepository {
     return {
       ...row,
       // Database check constraint menjaga value role; cast ini mengangkat text DB menjadi union domain untuk service/DTO.
-      organizationRole: row.organizationRole as OrganizationRole.Admin | OrganizationRole.Member,
+      organizationRole: row.organizationRole as OrganizationRole.Admin | OrganizationRole.Member | OrganizationRole.Guest,
+      diagramRole: row.diagramRole as ProjectRole | null,
       projectRole: row.projectRole as ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer | null,
     };
   }

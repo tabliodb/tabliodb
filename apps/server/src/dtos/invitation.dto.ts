@@ -5,8 +5,9 @@ import { LoginResponseDto, SessionBindingSchema } from './auth.dto.js';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const InvitationStatusSchema = z.enum(['pending', 'accepted', 'revoked', 'expired']);
-const InvitationOrganizationRoleSchema = z.enum([OrganizationRole.Admin, OrganizationRole.Member]);
+const InvitationOrganizationRoleSchema = z.enum([OrganizationRole.Admin, OrganizationRole.Member, OrganizationRole.Guest]);
 const InvitationProjectRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
+const InvitationDiagramRoleSchema = z.enum([ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
 
 const InvitationSchema = z
   .object({
@@ -19,6 +20,9 @@ const InvitationSchema = z
     projectId: z.uuid().nullable(),
     projectName: z.string().nullable(),
     projectRole: InvitationProjectRoleSchema.nullable(),
+    diagramId: z.uuid().nullable(),
+    diagramName: z.string().nullable(),
+    diagramRole: InvitationDiagramRoleSchema.nullable(),
     message: z.string().nullable(),
     invitedById: z.uuid(),
     invitedByName: z.string(),
@@ -37,6 +41,8 @@ const InvitationPublicSchema = InvitationSchema.pick({
   organizationRole: true,
   projectName: true,
   projectRole: true,
+  diagramName: true,
+  diagramRole: true,
   message: true,
   expiresAt: true,
   status: true,
@@ -46,9 +52,11 @@ const InvitationCreateSchema = z
   .object({
     email: z.email(),
     organizationId: z.uuid().optional(),
-    organizationRole: InvitationOrganizationRoleSchema.default(OrganizationRole.Member),
+    organizationRole: InvitationOrganizationRoleSchema.optional(),
     projectId: z.uuid().optional(),
     projectRole: InvitationProjectRoleSchema.optional(),
+    diagramId: z.uuid().optional(),
+    diagramRole: InvitationDiagramRoleSchema.optional(),
     message: z.string().trim().max(500).optional(),
     expiresInDays: z.coerce.number().int().min(1).max(30).default(7),
   })

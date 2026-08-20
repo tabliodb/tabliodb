@@ -1,9 +1,11 @@
 import { DatabaseDialectSchema, DiagramModelSchema } from '@tabliodb/schema-core';
+import { ProjectRole } from '@tabliodb/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const DiagramStatusSchema = z.enum(['draft', 'reviewed', 'approved', 'changes_requested']);
+const DiagramMemberRoleSchema = z.enum([ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
 
 const DiagramCreateSchema = z
   .object({
@@ -56,6 +58,53 @@ const DiagramListResponseSchema = z
     totalCount: z.number().int().nonnegative(),
   })
   .meta({ id: 'DiagramListResponseDto' });
+
+const DiagramMemberSchema = z
+  .object({
+    userId: z.uuid(),
+    email: z.email(),
+    name: z.string(),
+    avatarUrl: z.string().nullable(),
+    cursorColor: z.string(),
+    role: DiagramMemberRoleSchema,
+    createdAt: DateTimeSchema,
+    updatedAt: DateTimeSchema,
+  })
+  .meta({ id: 'DiagramMemberDto' });
+
+const DiagramMemberListQuerySchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .meta({ id: 'DiagramMemberListQueryDto' });
+
+const DiagramMemberListResponseSchema = z
+  .object({
+    items: z.array(DiagramMemberSchema),
+    nextCursor: z.string().nullable(),
+    totalCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'DiagramMemberListResponseDto' });
+
+const DiagramMemberCreateSchema = z
+  .object({
+    email: z.email(),
+    role: DiagramMemberRoleSchema.default(ProjectRole.Viewer),
+  })
+  .meta({ id: 'DiagramMemberCreateDto' });
+
+const DiagramMemberUpdateSchema = z
+  .object({
+    role: DiagramMemberRoleSchema,
+  })
+  .meta({ id: 'DiagramMemberUpdateDto' });
+
+const DiagramMemberRemoveResponseSchema = z
+  .object({
+    successful: z.boolean(),
+  })
+  .meta({ id: 'DiagramMemberRemoveResponseDto' });
 
 const DiagramTransferWarningSchema = z.object({
   code: z.string(),
@@ -114,6 +163,12 @@ export class DiagramImportDto extends createZodDto(DiagramImportSchema) {}
 export class DiagramImportResponseDto extends createZodDto(DiagramImportResponseSchema) {}
 export class DiagramListQueryDto extends createZodDto(DiagramListQuerySchema) {}
 export class DiagramListResponseDto extends createZodDto(DiagramListResponseSchema) {}
+export class DiagramMemberCreateDto extends createZodDto(DiagramMemberCreateSchema) {}
+export class DiagramMemberDto extends createZodDto(DiagramMemberSchema) {}
+export class DiagramMemberListQueryDto extends createZodDto(DiagramMemberListQuerySchema) {}
+export class DiagramMemberListResponseDto extends createZodDto(DiagramMemberListResponseSchema) {}
+export class DiagramMemberRemoveResponseDto extends createZodDto(DiagramMemberRemoveResponseSchema) {}
+export class DiagramMemberUpdateDto extends createZodDto(DiagramMemberUpdateSchema) {}
 export class DiagramResponseDto extends createZodDto(DiagramResponseSchema) {}
 export class DiagramUpdateDto extends createZodDto(DiagramUpdateSchema) {}
 export class WorkspaceDiagramCreateDto extends createZodDto(WorkspaceDiagramCreateSchema) {}

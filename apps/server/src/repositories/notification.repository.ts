@@ -427,6 +427,24 @@ export class NotificationRepository {
   private createProjectAccessExistsSql(userId: string | ReturnType<typeof sql.ref>) {
     return sql`
       (
+        EXISTS (
+          SELECT 1
+          FROM diagram_members access_diagram_members
+          WHERE access_diagram_members.diagram_id = diagrams.id
+            AND access_diagram_members.user_id = ${userId}
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM diagram_team_access access_diagram_team_access
+          INNER JOIN team_members access_diagram_team_members
+            ON access_diagram_team_members.team_id = access_diagram_team_access.team_id
+          INNER JOIN teams access_diagram_teams
+            ON access_diagram_teams.id = access_diagram_team_access.team_id
+          WHERE access_diagram_team_access.diagram_id = diagrams.id
+            AND access_diagram_team_members.user_id = ${userId}
+            AND access_diagram_teams.archived_at IS NULL
+        )
+        OR
         (
           diagrams.project_id IS NULL
           AND EXISTS (
@@ -435,6 +453,7 @@ export class NotificationRepository {
             WHERE access_root_organization_members.organization_id = diagrams.organization_id
               AND access_root_organization_members.user_id = ${userId}
               AND access_root_organization_members.status = 'active'
+              AND access_root_organization_members.role IN ('owner', 'admin', 'member')
           )
         )
         OR EXISTS (
@@ -460,7 +479,10 @@ export class NotificationRepository {
             AND access_manager_organization_members.status = 'active'
             AND (
               access_manager_organization_members.role IN ('owner', 'admin')
-              OR organizations.default_project_role IN ('editor', 'commenter', 'viewer')
+              OR (
+                access_manager_organization_members.role = 'member'
+                AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
+              )
             )
         )
       )

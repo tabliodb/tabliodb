@@ -1,13 +1,18 @@
 import { useMutation } from '@tanstack/react-query';
 import {
+  addDiagramMember,
   createDiagram,
   createDiagramReviewAction,
   createWorkspaceDiagram,
   exportDiagram,
   importDiagram,
+  removeDiagramMember,
   updateDiagram,
+  updateDiagramMember,
   type DiagramCreateDto,
   type DiagramImportDto,
+  type DiagramMemberCreateDto,
+  type DiagramMemberUpdateDto,
   type DiagramReviewActionCreateDto,
   type DiagramReviewSummaryDtoOutput,
   type DiagramResponseDtoOutput,
@@ -28,6 +33,12 @@ const createWorkspaceDiagramMutationFn = (input: { body: WorkspaceDiagramCreateD
   });
 const updateDiagramMutationFn = (input: { body: DiagramUpdateDto; diagramId: string }) =>
   updateDiagram({ diagramId: input.diagramId, diagramUpdateDto: input.body });
+const addDiagramMemberMutationFn = (input: { body: DiagramMemberCreateDto; diagramId: string }) =>
+  addDiagramMember({ diagramId: input.diagramId, diagramMemberCreateDto: input.body });
+const updateDiagramMemberMutationFn = (input: { body: DiagramMemberUpdateDto; diagramId: string; userId: string }) =>
+  updateDiagramMember({ diagramId: input.diagramId, diagramMemberUpdateDto: input.body, userId: input.userId });
+const removeDiagramMemberMutationFn = (input: { diagramId: string; userId: string }) =>
+  removeDiagramMember({ diagramId: input.diagramId, userId: input.userId });
 const importDiagramMutationFn = (input: { body: DiagramImportDto; diagramId: string }) =>
   importDiagram({ diagramId: input.diagramId, diagramImportDto: input.body });
 const exportDiagramMutationFn = (input: { diagramId: string; query?: DiagramExportQuery }) =>
@@ -48,6 +59,18 @@ type UseCreateDiagramMutationParams = {
 
 type UseCreateWorkspaceDiagramMutationParams = {
   mutationConfig?: MutationConfig<typeof createWorkspaceDiagramMutationFn>;
+};
+
+type UseAddDiagramMemberMutationParams = {
+  mutationConfig?: MutationConfig<typeof addDiagramMemberMutationFn>;
+};
+
+type UseUpdateDiagramMemberMutationParams = {
+  mutationConfig?: MutationConfig<typeof updateDiagramMemberMutationFn>;
+};
+
+type UseRemoveDiagramMemberMutationParams = {
+  mutationConfig?: MutationConfig<typeof removeDiagramMemberMutationFn>;
 };
 
 export function useCreateDiagramMutation(params: UseCreateDiagramMutationParams = {}) {
@@ -85,6 +108,42 @@ export function useUpdateDiagramMutation(params: UseUpdateDiagramMutationParams 
       // Diagram list feeds the active editor header, so successful metadata changes are patched into workspace/folder caches.
       patchDiagramListCache(data, 'replace');
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useAddDiagramMemberMutation(params: UseAddDiagramMemberMutationParams = {}) {
+  return useMutation({
+    mutationFn: addDiagramMemberMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Diagram sharing has its own cache root so access changes do not churn the full diagram list.
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.membersRoot(variables.diagramId) });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useUpdateDiagramMemberMutation(params: UseUpdateDiagramMemberMutationParams = {}) {
+  return useMutation({
+    mutationFn: updateDiagramMemberMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Role changes affect only the sharing panel and downstream permission checks handled by the server.
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.membersRoot(variables.diagramId) });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useRemoveDiagramMemberMutation(params: UseRemoveDiagramMemberMutationParams = {}) {
+  return useMutation({
+    mutationFn: removeDiagramMemberMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Removing a direct member leaves workspace/project caches intact; only diagram access membership changes.
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.membersRoot(variables.diagramId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

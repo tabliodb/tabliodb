@@ -161,9 +161,11 @@ export interface InvitationTable {
   id: Generated<string>;
   organizationId: string;
   projectId: NullableColumn<string>;
+  diagramId: NullableColumn<string>;
   email: string;
   organizationRole: string;
   projectRole: NullableColumn<ProjectRole>;
+  diagramRole: NullableColumn<ProjectRole>;
   tokenHash: BinaryColumn;
   message: NullableColumn<string>;
   invitedById: string;
@@ -219,6 +221,24 @@ export interface TeamMemberTable {
 
 export interface ProjectTeamAccessTable {
   projectId: string;
+  teamId: string;
+  role: ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+  createdById: NullableColumn<string>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface DiagramMemberTable {
+  diagramId: string;
+  userId: string;
+  role: ProjectRole;
+  createdById: NullableColumn<string>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface DiagramTeamAccessTable {
+  diagramId: string;
   teamId: string;
   role: ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
   createdById: NullableColumn<string>;
@@ -444,6 +464,8 @@ export interface DB {
   teams: TeamTable;
   team_members: TeamMemberTable;
   project_team_access: ProjectTeamAccessTable;
+  diagram_members: DiagramMemberTable;
+  diagram_team_access: DiagramTeamAccessTable;
   api_keys: ApiKeyTable;
   diagrams: DiagramTable;
   diagram_review_events: DiagramReviewEventTable;

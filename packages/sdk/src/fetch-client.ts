@@ -413,6 +413,31 @@ export type DiagramListResponseDtoOutput = {
   nextCursor: string | null;
   totalCount: number;
 };
+export type DiagramMemberDtoOutput = {
+  userId: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  cursorColor: string;
+  role: Role;
+  createdAt: string;
+  updatedAt: string;
+};
+export type DiagramMemberListResponseDtoOutput = {
+  items: DiagramMemberDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type DiagramMemberCreateDto = {
+  email: string;
+  role?: Role;
+};
+export type DiagramMemberUpdateDto = {
+  role: Role;
+};
+export type DiagramMemberRemoveResponseDtoOutput = {
+  successful: boolean;
+};
 export type DiagramUpdateDto = {
   name?: string;
   dialect?: Dialect;
@@ -630,6 +655,8 @@ export type InvitationCreateDto = {
   organizationRole?: OrganizationRole;
   projectId?: string;
   projectRole?: ProjectRole;
+  diagramId?: string;
+  diagramRole?: DiagramRole;
   message?: string;
   expiresInDays?: number;
 };
@@ -643,6 +670,9 @@ export type InvitationDtoOutput = {
   projectId: string | null;
   projectName: string | null;
   projectRole: ProjectRole | null;
+  diagramId: string | null;
+  diagramName: string | null;
+  diagramRole: DiagramRole | null;
   message: string | null;
   invitedById: string;
   invitedByName: string;
@@ -664,6 +694,8 @@ export type InvitationPublicDtoOutput = {
   organizationRole: OrganizationRole;
   projectName: string | null;
   projectRole: ProjectRole | null;
+  diagramName: string | null;
+  diagramRole: DiagramRole | null;
   message: string | null;
   expiresAt: string;
   status: Status5;
@@ -761,7 +793,7 @@ export type OrganizationDtoOutput = {
   id: string;
   name: string;
   slug: string;
-  role: Role;
+  role: Role2;
   status: string;
   defaultProjectRole: DefaultProjectRole | null;
   allowMemberProjectCreate: boolean;
@@ -794,7 +826,7 @@ export type OrganizationMemberDtoOutput = {
   email: string;
   joinedAt: string | null;
   name: string;
-  role: Role;
+  role: Role2;
   status: Status7;
   updatedAt: string;
   userId: string;
@@ -805,7 +837,7 @@ export type OrganizationMemberListResponseDtoOutput = {
   totalCount: number;
 };
 export type OrganizationMemberUpdateDto = {
-  role: Role;
+  role: Role2;
 };
 export type OrganizationMemberRemoveResponseDtoOutput = {
   successful: boolean;
@@ -869,7 +901,7 @@ export type ProjectMemberDtoOutput = {
   name: string;
   avatarUrl: string | null;
   cursorColor: string;
-  role: Role2;
+  role: Role3;
   createdAt: string;
   updatedAt: string;
 };
@@ -880,10 +912,10 @@ export type ProjectMemberListResponseDtoOutput = {
 };
 export type ProjectMemberCreateDto = {
   email: string;
-  role?: Role2;
+  role?: Role3;
 };
 export type ProjectMemberUpdateDto = {
-  role: Role2;
+  role: Role3;
 };
 export type ProjectMemberRemoveResponseDtoOutput = {
   successful: boolean;
@@ -1555,7 +1587,7 @@ export type TeamProjectAccessDtoOutput = {
   projectId: string;
   projectName: string;
   projectSlug: string;
-  role: Role3;
+  role: Role4;
   createdAt: string;
   updatedAt: string;
 };
@@ -1566,7 +1598,7 @@ export type TeamProjectAccessListResponseDtoOutput = {
 };
 export type TeamProjectAccessUpsertDto = {
   projectId: string;
-  role?: Role3;
+  role?: Role4;
 };
 export type TeamProjectAccessRemoveResponseDtoOutput = {
   successful: boolean;
@@ -2469,6 +2501,105 @@ export function getWorkspaceDiagrams(
         ...opts,
       },
     ),
+  );
+}
+export function getDiagramMembers(
+  {
+    cursor,
+    limit,
+    diagramId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramMemberListResponseDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/members${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function addDiagramMember(
+  {
+    diagramId,
+    diagramMemberCreateDto,
+  }: {
+    diagramId: string;
+    diagramMemberCreateDto: DiagramMemberCreateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 201;
+      data: DiagramMemberDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/members`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: diagramMemberCreateDto,
+      }),
+    ),
+  );
+}
+export function updateDiagramMember(
+  {
+    userId,
+    diagramId,
+    diagramMemberUpdateDto,
+  }: {
+    userId: string;
+    diagramId: string;
+    diagramMemberUpdateDto: DiagramMemberUpdateDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramMemberDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/members/${encodeURIComponent(userId)}`,
+      oazapfts.json({
+        ...opts,
+        method: 'PATCH',
+        body: diagramMemberUpdateDto,
+      }),
+    ),
+  );
+}
+export function removeDiagramMember(
+  {
+    userId,
+    diagramId,
+  }: {
+    userId: string;
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramMemberRemoveResponseDtoOutput;
+    }>(`/diagrams/${encodeURIComponent(diagramId)}/members/${encodeURIComponent(userId)}`, {
+      ...opts,
+      method: 'DELETE',
+    }),
   );
 }
 export function updateDiagram(
@@ -3921,6 +4052,7 @@ export enum Permissions {
   DiagramUpdate = 'diagram.update',
   DiagramDelete = 'diagram.delete',
   DiagramComment = 'diagram.comment',
+  DiagramMemberManage = 'diagram.member.manage',
   SnapshotCreate = 'snapshot.create',
   SnapshotRead = 'snapshot.read',
   ApiKeyManage = 'api-key.manage',
@@ -3967,6 +4099,12 @@ export enum Status4 {
   Reviewed = 'reviewed',
   Approved = 'approved',
   ChangesRequested = 'changes_requested',
+}
+export enum Role {
+  Owner = 'owner',
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
 }
 export enum Format {
   TabliodbJson = 'tabliodb_json',
@@ -4071,8 +4209,15 @@ export enum PreviousStatus {
 export enum OrganizationRole {
   Admin = 'admin',
   Member = 'member',
+  Guest = 'guest',
 }
 export enum ProjectRole {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum DiagramRole {
+  Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
@@ -4102,7 +4247,7 @@ export enum Type2 {
   Mention = 'mention',
   Reply = 'reply',
 }
-export enum Role {
+export enum Role2 {
   Owner = 'owner',
   Admin = 'admin',
   Member = 'member',
@@ -4124,7 +4269,7 @@ export enum ProjectRole2 {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Role2 {
+export enum Role3 {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',
@@ -4179,7 +4324,7 @@ export enum Type3 {
   Relationship = 'relationship',
   Table = 'table',
 }
-export enum Role3 {
+export enum Role4 {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',

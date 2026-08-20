@@ -17,6 +17,10 @@ export const diagramsKeys = {
     [...diagramsKeys.lists(), { organizationId }, query] as const,
   listItemsByWorkspace: (organizationId: string) =>
     [...diagramsKeys.lists(), 'items-by-workspace', { organizationId }, { limit: 50 }] as const,
+  members: () => [...diagramsKeys.all, 'members'] as const,
+  membersByDiagram: (diagramId: string, query: PaginationQuery = {}) =>
+    [...diagramsKeys.members(), { diagramId }, query] as const,
+  membersRoot: (diagramId: string) => [...diagramsKeys.members(), { diagramId }] as const,
   reviewEvents: () => [...diagramsKeys.reviews(), 'events'] as const,
   reviewEventsByDiagram: (diagramId: string, query: PaginationQuery = {}) =>
     [...diagramsKeys.reviewEvents(), { diagramId }, query] as const,

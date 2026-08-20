@@ -288,14 +288,25 @@ export class CommentRepository {
   getMentionableUsersForDiagram(diagramId: string) {
     return sql<{ email: string; name: string; userId: string }>`
       WITH diagram_scope AS (
-        SELECT diagrams.organization_id, diagrams.project_id
+        SELECT diagrams.id, diagrams.organization_id, diagrams.project_id
         FROM diagrams
         LEFT JOIN projects ON projects.id = diagrams.project_id
         WHERE diagrams.id = ${diagramId}
           AND diagrams.archived_at IS NULL
           AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
       ),
-      project_users AS (
+      access_users AS (
+        SELECT diagram_members.user_id
+        FROM diagram_members
+        INNER JOIN diagram_scope ON diagram_scope.id = diagram_members.diagram_id
+        UNION
+        SELECT team_members.user_id
+        FROM diagram_team_access
+        INNER JOIN diagram_scope ON diagram_scope.id = diagram_team_access.diagram_id
+        INNER JOIN team_members ON team_members.team_id = diagram_team_access.team_id
+        INNER JOIN teams ON teams.id = diagram_team_access.team_id
+        WHERE teams.archived_at IS NULL
+        UNION
         SELECT project_members.user_id
         FROM project_members
         INNER JOIN diagram_scope ON diagram_scope.project_id = project_members.project_id
@@ -307,19 +318,37 @@ export class CommentRepository {
         INNER JOIN teams ON teams.id = project_team_access.team_id
         WHERE teams.archived_at IS NULL
         UNION
-        -- Root diagrams live directly in a workspace, so mention candidates come from active workspace members.
+        -- Workspace managers are always mentionable because they can recover/administer every diagram in the workspace.
+        SELECT organization_members.user_id
+        FROM organization_members
+        INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
+        WHERE organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin')
+        UNION
+        -- Root diagrams include regular workspace members, while guest access must come from direct diagram membership.
         SELECT organization_members.user_id
         FROM organization_members
         INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
         WHERE diagram_scope.project_id IS NULL
           AND organization_members.status = 'active'
+          AND organization_members.role = 'member'
+        UNION
+        -- Workspace default project access contributes mention candidates for folder diagrams without individual rows.
+        SELECT organization_members.user_id
+        FROM organization_members
+        INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
+        INNER JOIN organizations ON organizations.id = diagram_scope.organization_id
+        WHERE diagram_scope.project_id IS NOT NULL
+          AND organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin', 'member')
+          AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
       )
       SELECT DISTINCT
         users.id AS "userId",
         users.email,
         users.name
-      FROM project_users
-      INNER JOIN users ON users.id = project_users.user_id
+      FROM access_users
+      INNER JOIN users ON users.id = access_users.user_id
       WHERE users.deleted_at IS NULL
       ORDER BY users.name ASC, users.email ASC
     `

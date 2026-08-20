@@ -89,6 +89,7 @@ export class ProjectRepository {
         INNER JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = ${userId}
           AND organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin', 'member')
           AND organizations.archived_at IS NULL
           AND projects.archived_at IS NULL
           AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
@@ -164,6 +165,7 @@ export class ProjectRepository {
         INNER JOIN organization_members ON organization_members.organization_id = organizations.id
         WHERE organization_members.user_id = ${userId}
           AND organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin', 'member')
           AND organizations.archived_at IS NULL
           AND projects.archived_at IS NULL
           AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
@@ -264,12 +266,13 @@ export class ProjectRepository {
       FROM projects
       INNER JOIN organizations ON organizations.id = projects.organization_id
       INNER JOIN organization_members ON organization_members.organization_id = organizations.id
-      WHERE organization_members.user_id = ${userId}
-        AND projects.id = ${projectId}
-        AND organization_members.status = 'active'
-        AND organizations.archived_at IS NULL
-        AND projects.archived_at IS NULL
-        AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
+        WHERE organization_members.user_id = ${userId}
+          AND projects.id = ${projectId}
+          AND organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin', 'member')
+          AND organizations.archived_at IS NULL
+          AND projects.archived_at IS NULL
+          AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
     `.execute(this.db);
     const role = resolveHighestProjectRole(roles.rows.map((row) => row.role));
 
@@ -277,43 +280,72 @@ export class ProjectRepository {
   }
 
   async getDiagramRole(userId: string, diagramId: string) {
-    const diagram = await this.db
-      .selectFrom('diagrams')
-      .select(['diagrams.organizationId', 'diagrams.projectId'])
-      .where('diagrams.id', '=', diagramId)
-      .where('diagrams.archivedAt', 'is', null)
-      .executeTakeFirst();
-
-    if (!diagram) {
-      return undefined;
-    }
-
-    if (diagram.projectId) {
-      return this.getProjectRole(userId, diagram.projectId);
-    }
-
-    const membership = await this.db
-      .selectFrom('organization_members')
-      .innerJoin('organizations', 'organizations.id', 'organization_members.organizationId')
-      .select('organization_members.role')
-      .where('organization_members.userId', '=', userId)
-      .where('organization_members.organizationId', '=', diagram.organizationId)
-      .where('organization_members.status', '=', 'active')
-      .where('organizations.archivedAt', 'is', null)
-      .executeTakeFirst();
-
-    if (!membership) {
-      return undefined;
-    }
-
-    // Root diagrams are workspace documents; project-like roles keep downstream permission checks unchanged.
-    const roleByOrganizationRole: Record<string, ProjectRole | null> = {
-      admin: ProjectRole.Owner,
-      guest: ProjectRole.Viewer,
-      member: ProjectRole.Editor,
-      owner: ProjectRole.Owner,
-    };
-    const role = roleByOrganizationRole[membership.role] ?? null;
+    const roles = await sql<{ role: ProjectRole }>`
+      WITH diagram_scope AS (
+        SELECT diagrams.id, diagrams.organization_id, diagrams.project_id
+        FROM diagrams
+        LEFT JOIN projects ON projects.id = diagrams.project_id
+        INNER JOIN organizations ON organizations.id = diagrams.organization_id
+        WHERE diagrams.id = ${diagramId}
+          AND diagrams.archived_at IS NULL
+          AND organizations.archived_at IS NULL
+          AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+      )
+      SELECT diagram_members.role
+      FROM diagram_members
+      INNER JOIN diagram_scope ON diagram_scope.id = diagram_members.diagram_id
+      WHERE diagram_members.user_id = ${userId}
+      UNION ALL
+      SELECT diagram_team_access.role
+      FROM diagram_team_access
+      INNER JOIN diagram_scope ON diagram_scope.id = diagram_team_access.diagram_id
+      INNER JOIN team_members ON team_members.team_id = diagram_team_access.team_id
+      INNER JOIN teams ON teams.id = diagram_team_access.team_id
+      WHERE team_members.user_id = ${userId}
+        AND teams.archived_at IS NULL
+      UNION ALL
+      SELECT project_members.role
+      FROM project_members
+      INNER JOIN diagram_scope ON diagram_scope.project_id = project_members.project_id
+      WHERE project_members.user_id = ${userId}
+      UNION ALL
+      SELECT project_team_access.role
+      FROM project_team_access
+      INNER JOIN diagram_scope ON diagram_scope.project_id = project_team_access.project_id
+      INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
+      INNER JOIN teams ON teams.id = project_team_access.team_id
+      WHERE team_members.user_id = ${userId}
+        AND teams.archived_at IS NULL
+      UNION ALL
+      -- Workspace managers retain owner-level recovery access to every diagram in their workspace.
+      SELECT 'owner' AS role
+      FROM organization_members
+      INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
+      WHERE organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
+        AND organization_members.role IN ('owner', 'admin')
+      UNION ALL
+      -- Root diagrams are first-class workspace documents; workspace members can edit them without a folder grant.
+      SELECT 'editor' AS role
+      FROM organization_members
+      INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
+      WHERE diagram_scope.project_id IS NULL
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
+        AND organization_members.role = 'member'
+      UNION ALL
+      -- Project default access intentionally excludes guests so diagram-only invites do not leak every folder diagram.
+      SELECT organizations.default_project_role AS role
+      FROM organization_members
+      INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
+      INNER JOIN organizations ON organizations.id = diagram_scope.organization_id
+      WHERE diagram_scope.project_id IS NOT NULL
+        AND organization_members.user_id = ${userId}
+        AND organization_members.status = 'active'
+        AND organization_members.role IN ('owner', 'admin', 'member')
+        AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
+    `.execute(this.db);
+    const role = resolveHighestProjectRole(roles.rows.map((row) => row.role));
 
     return role ? { role } : undefined;
   }
