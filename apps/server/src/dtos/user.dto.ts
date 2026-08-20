@@ -9,10 +9,10 @@ const DateTimeSchema = z.iso.datetime({ offset: true });
 
 const UserCreateSchema = z
   .object({
-    email: z.string().email(),
+    email: z.email(),
     name: z.string().min(1),
     password: z.string().min(8),
-    organizationId: z.string().uuid().optional(),
+    organizationId: z.uuid().optional(),
     organizationRole: UserOrganizationRoleSchema.optional(),
     instanceRole: z.enum(['admin']).optional(),
   })
