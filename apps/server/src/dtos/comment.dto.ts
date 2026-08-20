@@ -155,7 +155,7 @@ const CommentListQuerySchema = z
         }
 
         return Array.isArray(value) ? value[0] : value;
-      }, z.string().uuid().nullable().optional())
+      }, z.uuid().nullable().optional())
       .optional(),
   })
   .meta({ id: 'CommentListQueryDto' });
