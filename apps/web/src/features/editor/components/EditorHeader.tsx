@@ -31,6 +31,7 @@ export function EditorHeader({
   activeProject,
   canCommentDiagram,
   canCreateDiagram,
+  canCreateProject,
   canCreateSnapshot,
   canEditDiagram,
   canManageProject,
@@ -55,7 +56,9 @@ export function EditorHeader({
   onAdmin,
   onCopySql,
   onCreateDiagram,
+  onCreateProject,
   onCreateSnapshot,
+  onCreateWorkspace,
   onDiagramSelect,
   onDiagramUpdated,
   onDownloadSql,
@@ -77,11 +80,13 @@ export function EditorHeader({
   onOpenSqlPreview,
   onOrganizationSelect,
   onProjectArchived,
+  onProjectSelect,
   onRedo,
   onUndo,
   onUserLogout,
   openCommentThreadCount,
   organizations,
+  projects,
   snapshotHistoryLoading,
   snapshotSavePending,
   unreadNotificationCount,
@@ -91,6 +96,7 @@ export function EditorHeader({
   activeProject: ProjectResponseDto;
   canCommentDiagram: boolean;
   canCreateDiagram: boolean;
+  canCreateProject: boolean;
   canCreateSnapshot: boolean;
   canEditDiagram: boolean;
   canManageProject: boolean;
@@ -115,7 +121,9 @@ export function EditorHeader({
   onAdmin: () => void;
   onCopySql: HeaderAction;
   onCreateDiagram: () => void;
+  onCreateProject: () => void;
   onCreateSnapshot: () => void;
+  onCreateWorkspace: () => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
   onDiagramUpdated: (diagram: DiagramResponseDto) => void;
   onDownloadSql: HeaderAction;
@@ -137,12 +145,14 @@ export function EditorHeader({
   onOpenSqlPreview: () => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
   onProjectArchived: () => void;
+  onProjectSelect: (project: ProjectResponseDto) => void;
   onRedo: () => void;
   onToggleMinimap: () => void;
   onUndo: () => void;
   onUserLogout: () => void;
   openCommentThreadCount: number;
   organizations: OrganizationDto[];
+  projects: ProjectResponseDto[];
   snapshotHistoryLoading: boolean;
   snapshotSavePending: boolean;
   unreadNotificationCount: number;
@@ -158,11 +168,16 @@ export function EditorHeader({
           activeOrganization={activeOrganization}
           activeProject={activeProject}
           canCreateDiagram={canCreateDiagram}
+          canCreateProject={canCreateProject}
           diagrams={diagrams}
           onCreateDiagram={onCreateDiagram}
+          onCreateProject={onCreateProject}
+          onCreateWorkspace={onCreateWorkspace}
           onDiagramSelect={onDiagramSelect}
           onOrganizationSelect={onOrganizationSelect}
+          onProjectSelect={onProjectSelect}
           organizations={organizations}
+          projects={projects}
         />
       </div>
 

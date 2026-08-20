@@ -94,7 +94,7 @@ import {
   KeyboardShortcutsDialog,
   type EditorConfirmAction,
 } from './components/EditorShellDialogs';
-import { CreateDiagramDialog, CreateWorkspaceDialog } from './components/WorkspaceShellDialogs';
+import { CreateDiagramDialog, CreateProjectDialog, CreateWorkspaceDialog } from './components/WorkspaceShellDialogs';
 import {
   ImportJsonDialog,
   ImportSqlDialog,
@@ -161,6 +161,7 @@ export function EditorPage() {
   const [importSqlOpen, setImportSqlOpen] = useState(false);
   const [shareLinksOpen, setShareLinksOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createDiagramOpen, setCreateDiagramOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [minimapToggleSignal, setMinimapToggleSignal] = useState(0);
@@ -1547,6 +1548,7 @@ export function EditorPage() {
         activeProject={activeProject}
         canCommentDiagram={canCommentDiagram}
         canCreateDiagram={canCreateDiagram}
+        canCreateProject={canCreateProject}
         canCreateSnapshot={canCreateSnapshot}
         canEditDiagram={canEditDiagram}
         canManageProject={canManageProject}
@@ -1571,7 +1573,9 @@ export function EditorPage() {
         onAdmin={editorRouteActions.goToAdminSettings}
         onCopySql={diagramExportActions.copySql}
         onCreateDiagram={() => setCreateDiagramOpen(true)}
+        onCreateProject={() => setCreateProjectOpen(true)}
         onCreateSnapshot={() => handleSaveSnapshot()}
+        onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         onDiagramSelect={(diagram) => {
           editorRouteActions.goToDiagram({
             diagramId: diagram.id,
@@ -1622,12 +1626,16 @@ export function EditorPage() {
         onProjectArchived={() => {
           editorRouteActions.goHome({ replace: true });
         }}
+        onProjectSelect={(project) => {
+          editorRouteActions.goToProject(project);
+        }}
         onRedo={handleRedoModelChange}
         onToggleMinimap={() => setMinimapToggleSignal((value) => value + 1)}
         onUndo={handleUndoModelChange}
         onUserLogout={() => logoutMutation.mutate(undefined)}
         openCommentThreadCount={openCommentThreadCount}
         organizations={organizations}
+        projects={projects}
         snapshotHistoryLoading={snapshotsQuery.isPending}
         snapshotSavePending={saveSnapshotMutation.isPending}
         unreadNotificationCount={unreadNotificationCount}
@@ -1802,6 +1810,20 @@ export function EditorPage() {
         open={createWorkspaceOpen}
         trigger={null}
       />
+
+      {canCreateProject ? (
+        <CreateProjectDialog
+          onCreated={(project) => {
+            setCreateProjectOpen(false);
+            // Newly-created project folders become the active project so the next diagram action lands in the expected place.
+            editorRouteActions.goToProject(project);
+          }}
+          onOpenChange={setCreateProjectOpen}
+          open={createProjectOpen}
+          organizationId={activeOrganization.id}
+          trigger={null}
+        />
+      ) : null}
 
       {canCreateDiagram ? (
         <CreateDiagramDialog
