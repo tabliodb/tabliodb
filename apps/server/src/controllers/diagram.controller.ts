@@ -5,6 +5,7 @@ import { ZodResponse } from 'nestjs-zod';
 import type { AuthContext } from '../database.js';
 import {
   DiagramCreateDto,
+  DiagramEffectiveAccessListResponseDto,
   DiagramExportQueryDto,
   DiagramExportResponseDto,
   DiagramImportDto,
@@ -95,6 +96,20 @@ export class DiagramController {
     @Query() query: DiagramMemberListQueryDto,
   ): Promise<DiagramMemberListResponseDto> {
     return this.service.getMembers(auth, diagramId, query);
+  }
+
+  @Get(':diagramId/effective-access')
+  @RequirePermission(Permission.DiagramMemberManage, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiPaginationQuery()
+  @ApiOperation({ operationId: 'getDiagramEffectiveAccess' })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramEffectiveAccessListResponseDto })
+  getDiagramEffectiveAccess(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Query() query: DiagramMemberListQueryDto,
+  ): Promise<DiagramEffectiveAccessListResponseDto> {
+    return this.service.getEffectiveAccess(auth, diagramId, query);
   }
 
   @Post(':diagramId/members')

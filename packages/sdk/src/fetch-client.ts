@@ -432,6 +432,30 @@ export type DiagramMemberCreateDto = {
   email: string;
   role?: Role;
 };
+export type DiagramEffectiveAccessSourceDtoOutput = {
+  inherited: boolean;
+  role: Role;
+  sourceId: string | null;
+  sourceLabel: string;
+  sourceName: string | null;
+  sourceType: SourceType;
+};
+export type DiagramEffectiveAccessDtoOutput = {
+  accessType: AccessType;
+  avatarUrl: string | null;
+  cursorColor: string;
+  directRole: DirectRole | null;
+  email: string;
+  name: string;
+  role: Role;
+  sources: DiagramEffectiveAccessSourceDtoOutput[];
+  userId: string;
+};
+export type DiagramEffectiveAccessListResponseDtoOutput = {
+  items: DiagramEffectiveAccessDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
 export type DiagramMemberUpdateDto = {
   role: Role;
 };
@@ -2560,6 +2584,35 @@ export function addDiagramMember(
     ),
   );
 }
+export function getDiagramEffectiveAccess(
+  {
+    cursor,
+    limit,
+    diagramId,
+  }: {
+    cursor?: string;
+    limit?: number;
+    diagramId: string;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramEffectiveAccessListResponseDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/effective-access${QS.query(
+        QS.explode({
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
 export function updateDiagramMember(
   {
     userId,
@@ -4133,6 +4186,26 @@ export enum Role {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
+}
+export enum AccessType {
+  Direct = 'direct',
+  Inherited = 'inherited',
+  Mixed = 'mixed',
+}
+export enum DirectRole {
+  Owner = 'owner',
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum SourceType {
+  Direct = 'direct',
+  DiagramTeam = 'diagram_team',
+  Folder = 'folder',
+  FolderTeam = 'folder_team',
+  WorkspaceAdmin = 'workspace_admin',
+  WorkspaceDefault = 'workspace_default',
+  WorkspaceMember = 'workspace_member',
 }
 export enum Format {
   TabliodbJson = 'tabliodb_json',

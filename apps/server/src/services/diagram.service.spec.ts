@@ -64,6 +64,7 @@ describe(DiagramService.name, () => {
   const diagramRepository = {
     create: vi.fn(),
     getById: vi.fn(),
+    getEffectiveAccess: vi.fn(),
     getByOrganization: vi.fn(),
     getByProject: vi.fn(),
     replaceDocumentModel: vi.fn(),
@@ -223,6 +224,59 @@ describe(DiagramService.name, () => {
     ).resolves.toMatchObject({
       id: 'diagram-id',
     });
+  });
+
+  it('returns effective diagram access after checking manage permission', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    diagramRepository.getEffectiveAccess.mockResolvedValue({
+      items: [
+        {
+          accessType: 'mixed',
+          avatarUrl: null,
+          cursorColor: '#58cc02',
+          directRole: ProjectRole.Viewer,
+          email: 'member@tabliodb.local',
+          name: 'Member User',
+          role: ProjectRole.Editor,
+          sources: [
+            {
+              inherited: false,
+              role: ProjectRole.Viewer,
+              sourceId: 'diagram-id',
+              sourceLabel: 'Direct access',
+              sourceName: 'Main schema',
+              sourceType: 'direct',
+            },
+            {
+              inherited: true,
+              role: ProjectRole.Editor,
+              sourceId: 'project-id',
+              sourceLabel: 'Folder: Library System',
+              sourceName: 'Library System',
+              sourceType: 'folder',
+            },
+          ],
+          userId: 'member-id',
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    await expect(service.getEffectiveAccess(auth, 'diagram-id', { limit: 10 })).resolves.toMatchObject({
+      items: [
+        {
+          accessType: 'mixed',
+          directRole: ProjectRole.Viewer,
+          role: ProjectRole.Editor,
+          sources: [{ sourceLabel: 'Direct access' }, { sourceLabel: 'Folder: Library System' }],
+        },
+      ],
+      totalCount: 1,
+    });
+
+    expect(diagramRepository.getEffectiveAccess).toHaveBeenCalledWith('diagram-id', { cursor: undefined, limit: 10 });
   });
 
   it('rejects an empty diagram settings update', async () => {

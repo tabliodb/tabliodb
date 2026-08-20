@@ -28,6 +28,9 @@ import { AuditAction } from '../constants.js';
 import { AuthContext } from '../database.js';
 import {
   DiagramCreateDto,
+  DiagramEffectiveAccessDto,
+  DiagramEffectiveAccessListResponseDto,
+  DiagramEffectiveAccessSourceDto,
   DiagramExportQueryDto,
   DiagramExportResponseDto,
   DiagramImportDto,
@@ -144,6 +147,24 @@ export class DiagramService {
     };
   }
 
+  async getEffectiveAccess(
+    auth: AuthContext,
+    diagramId: string,
+    query: DiagramMemberListQueryDto,
+  ): Promise<DiagramEffectiveAccessListResponseDto> {
+    await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+
+    const access = await this.diagramRepository.getEffectiveAccess(diagramId, {
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+    });
+
+    return {
+      ...access,
+      items: access.items.map((member) => this.serializeEffectiveAccess(member)),
+    };
+  }
+
   async addMember(auth: AuthContext, diagramId: string, dto: DiagramMemberCreateDto): Promise<DiagramMemberDto> {
     const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
     const user = await this.userRepository.getByEmail(dto.email.trim().toLowerCase());
@@ -234,11 +255,7 @@ export class DiagramService {
     return this.serializeMember(member);
   }
 
-  async removeMember(
-    auth: AuthContext,
-    diagramId: string,
-    userId: string,
-  ): Promise<DiagramMemberRemoveResponseDto> {
+  async removeMember(auth: AuthContext, diagramId: string, userId: string): Promise<DiagramMemberRemoveResponseDto> {
     const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
     const currentMember = await this.diagramRepository.getMember(diagramId, userId);
     if (!currentMember) {
@@ -498,6 +515,23 @@ export class DiagramService {
       // Member timestamps are serialized here so every generated SDK response receives stable ISO strings.
       createdAt: toIsoDateTime(member.createdAt),
       updatedAt: toIsoDateTime(member.updatedAt),
+    };
+  }
+
+  private serializeEffectiveAccess(member: {
+    accessType: DiagramEffectiveAccessDto['accessType'];
+    avatarUrl?: string | null;
+    cursorColor: string;
+    directRole: ProjectRole | null;
+    email: string;
+    name: string;
+    role: ProjectRole;
+    sources: DiagramEffectiveAccessSourceDto[];
+    userId: string;
+  }): DiagramEffectiveAccessDto {
+    return {
+      ...member,
+      avatarUrl: member.avatarUrl ?? null,
     };
   }
 

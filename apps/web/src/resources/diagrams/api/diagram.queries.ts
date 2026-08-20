@@ -1,11 +1,13 @@
 import {
   exportDiagram,
+  getDiagramEffectiveAccess,
   getDiagramMembers,
   getDiagramReviewEvents,
   getDiagramReviewSummary,
   getProjectDiagrams,
   getWorkspaceDiagrams,
   type DiagramExportResponseDtoOutput,
+  type DiagramEffectiveAccessListResponseDtoOutput,
   type DiagramListResponseDtoOutput,
   type DiagramMemberListResponseDtoOutput,
   type DiagramReviewEventListResponseDtoOutput,
@@ -21,6 +23,13 @@ import { diagramsKeys, type DiagramExportQuery } from './diagram.keys';
 export const defaultDiagramName = 'Main schema';
 
 type DiagramsQueries = {
+  effectiveAccess: (
+    diagramId: string,
+    query?: PaginationQuery,
+  ) => AppQueryOptions<
+    DiagramEffectiveAccessListResponseDtoOutput,
+    ReturnType<typeof diagramsKeys.effectiveAccessByDiagram>
+  >;
   exportByDiagram: (
     diagramId: string,
     query?: DiagramExportQuery,
@@ -53,6 +62,13 @@ type DiagramsQueries = {
 };
 
 export const diagramsQueries: DiagramsQueries = {
+  effectiveAccess: (diagramId: string, query: PaginationQuery = {}) =>
+    appQueryOptions({
+      enabled: Boolean(diagramId),
+      queryFn: () => getDiagramEffectiveAccess({ diagramId, ...query }),
+      queryKey: diagramsKeys.effectiveAccessByDiagram(diagramId, query),
+    }),
+
   exportByDiagram: (diagramId: string, query: DiagramExportQuery = {}) =>
     appQueryOptions({
       enabled: Boolean(diagramId),

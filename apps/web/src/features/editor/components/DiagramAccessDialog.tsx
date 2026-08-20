@@ -1,6 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { Role as SdkDiagramMemberRole, type DiagramMemberDtoOutput, type DiagramResponseDtoOutput } from '@tabliodb/sdk';
+import {
+  AccessType as SdkDiagramAccessType,
+  Role as SdkDiagramMemberRole,
+  SourceType as SdkDiagramAccessSourceType,
+  type DiagramEffectiveAccessDtoOutput,
+  type DiagramMemberDtoOutput,
+  type DiagramResponseDtoOutput,
+} from '@tabliodb/sdk';
 import {
   Badge,
   Button,
@@ -33,6 +40,7 @@ import { selectClassName } from '../editor-form-styles';
 import { UserAvatar } from './UserAvatar';
 
 type DiagramMemberDto = DiagramMemberDtoOutput;
+type DiagramEffectiveAccessDto = DiagramEffectiveAccessDtoOutput;
 type DiagramResponseDto = DiagramResponseDtoOutput;
 
 const diagramMemberPageQuery = { limit: 50 } as const;
@@ -66,10 +74,16 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const membersQueryOptions = diagramsQueries.members(diagram.id, diagramMemberPageQuery);
+  const effectiveAccessQueryOptions = diagramsQueries.effectiveAccess(diagram.id, diagramMemberPageQuery);
   const membersQuery = useQuery({
     ...membersQueryOptions,
     // The member list is only needed while the dialog is visible; this keeps header render cheap.
     enabled: open && membersQueryOptions.enabled,
+  });
+  const effectiveAccessQuery = useQuery({
+    ...effectiveAccessQueryOptions,
+    // Effective access can include inherited workspace/folder/team grants, so it is loaded with the share dialog only.
+    enabled: open && effectiveAccessQueryOptions.enabled,
   });
   const addDiagramMemberMutation = useAddDiagramMemberMutation();
   const updateDiagramMemberMutation = useUpdateDiagramMemberMutation();
@@ -80,6 +94,7 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
     resolver: zodResolver(shareFormSchema),
   });
   const members = membersQuery.data?.items ?? [];
+  const effectiveAccess = effectiveAccessQuery.data?.items ?? [];
   const isMemberMutationPending =
     addDiagramMemberMutation.isPending ||
     updateDiagramMemberMutation.isPending ||
@@ -157,17 +172,13 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
-      <IconButton
-        disabled={!canManage}
-        icon={UsersRound}
-        label="Diagram access"
-        onClick={() => setOpen(true)}
-      />
+      <IconButton disabled={!canManage} icon={UsersRound} label="Diagram access" onClick={() => setOpen(true)} />
       <DialogContent className="w-[min(94vw,780px)] max-w-none">
         <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-4">
           <DialogTitle>Diagram access</DialogTitle>
           <DialogDescription>
-            Invite people and manage direct permissions for {diagram.name}. Public read-only links stay in the More menu.
+            Invite people and manage direct permissions for {diagram.name}. Public read-only links stay in the More
+            menu.
           </DialogDescription>
         </DialogHeader>
 
@@ -233,6 +244,48 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
           <section className="min-h-0 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white">
             <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] p-4">
               <div>
+                <h3 className="text-sm font-black">Effective access</h3>
+                <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                  Read-only view of everyone who can currently open this diagram.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className="shrink-0" variant="neutral">
+                  {effectiveAccessQuery.data?.totalCount ?? effectiveAccess.length} people
+                </Badge>
+                {effectiveAccessQuery.isFetching ? (
+                  <Loader2 className="size-4 animate-spin text-[rgb(var(--tabliodb-ink-muted))]" />
+                ) : null}
+              </div>
+            </div>
+
+            {effectiveAccessQuery.isPending ? (
+              <div className="flex items-center gap-2 p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                <Loader2 className="size-4 animate-spin" />
+                Loading access
+              </div>
+            ) : effectiveAccessQuery.error ? (
+              <div className="m-4 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                {getErrorMessage(effectiveAccessQuery.error)}
+              </div>
+            ) : effectiveAccess.length === 0 ? (
+              <div className="m-4 rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-5 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                No effective access found
+              </div>
+            ) : (
+              <div className="tabliodb-scrollbar max-h-[260px] overflow-y-auto">
+                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                  {effectiveAccess.map((member) => (
+                    <DiagramEffectiveAccessRow key={member.userId} member={member} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="min-h-0 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white">
+            <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] p-4">
+              <div>
                 <h3 className="text-sm font-black">Members</h3>
                 <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   People explicitly added to this diagram.
@@ -292,6 +345,39 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
   );
 }
 
+function DiagramEffectiveAccessRow({ member }: { member: DiagramEffectiveAccessDto }) {
+  return (
+    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_120px] sm:items-start">
+      <div className="flex min-w-0 items-start gap-3">
+        <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{member.name}</h4>
+            <DiagramRoleChip role={member.role} />
+            <AccessTypeChip accessType={member.accessType} />
+          </div>
+          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {member.sources.map((source, index) => (
+              <span
+                className="inline-flex min-h-6 items-center rounded-full border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] px-2 text-[11px] font-black leading-tight text-[rgb(var(--tabliodb-ink-muted))]"
+                key={`${member.userId}-${source.sourceType}-${source.sourceId ?? 'workspace'}-${index}`}
+              >
+                {formatAccessSource(source.sourceType, source.sourceLabel)} / {formatDiagramRole(source.role)}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-start sm:justify-end">
+        <Badge variant={member.directRole ? 'green' : 'neutral'}>
+          {member.directRole ? 'Direct row' : 'Inherited'}
+        </Badge>
+      </div>
+    </article>
+  );
+}
+
 function DiagramMemberRow({
   confirmRemove,
   isRemoving,
@@ -348,7 +434,7 @@ function DiagramMemberRow({
   );
 }
 
-function DiagramRoleChip({ role }: { role: SdkDiagramMemberRole }) {
+function DiagramRoleChip({ role }: { role: string }) {
   return (
     <span
       className={cn(
@@ -361,20 +447,59 @@ function DiagramRoleChip({ role }: { role: SdkDiagramMemberRole }) {
   );
 }
 
-function getRoleChipClassName(role: SdkDiagramMemberRole): string {
+function AccessTypeChip({ accessType }: { accessType: SdkDiagramAccessType }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex h-6 items-center rounded-full border px-2 text-[11px] font-black leading-none',
+        getAccessTypeChipClassName(accessType),
+      )}
+    >
+      {formatAccessType(accessType)}
+    </span>
+  );
+}
+
+function getRoleChipClassName(role: string): string {
   return {
     [SdkDiagramMemberRole.Commenter]: 'border-[#88d8f7] bg-[#effbff] text-[#08729c]',
     [SdkDiagramMemberRole.Editor]: 'border-[#98df7c] bg-[#f2ffe9] text-[#2d7b0b]',
     [SdkDiagramMemberRole.Owner]: 'border-[#ffd56a] bg-[#fff8d7] text-[#8a5a00]',
-    [SdkDiagramMemberRole.Viewer]: 'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] text-[rgb(var(--tabliodb-ink-muted))]',
-  }[role];
+    [SdkDiagramMemberRole.Viewer]:
+      'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] text-[rgb(var(--tabliodb-ink-muted))]',
+  }[role as SdkDiagramMemberRole];
 }
 
-function formatDiagramRole(role: SdkDiagramMemberRole): string {
+function getAccessTypeChipClassName(accessType: SdkDiagramAccessType): string {
+  return {
+    [SdkDiagramAccessType.Direct]: 'border-[#98df7c] bg-[#f2ffe9] text-[#2d7b0b]',
+    [SdkDiagramAccessType.Inherited]:
+      'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] text-[rgb(var(--tabliodb-ink-muted))]',
+    [SdkDiagramAccessType.Mixed]: 'border-[#88d8f7] bg-[#effbff] text-[#08729c]',
+  }[accessType];
+}
+
+function formatDiagramRole(role: string): string {
   return {
     [SdkDiagramMemberRole.Commenter]: 'Commenter',
     [SdkDiagramMemberRole.Editor]: 'Editor',
     [SdkDiagramMemberRole.Owner]: 'Owner',
     [SdkDiagramMemberRole.Viewer]: 'Viewer',
-  }[role];
+  }[role as SdkDiagramMemberRole];
+}
+
+function formatAccessType(accessType: SdkDiagramAccessType): string {
+  return {
+    [SdkDiagramAccessType.Direct]: 'Direct',
+    [SdkDiagramAccessType.Inherited]: 'Inherited',
+    [SdkDiagramAccessType.Mixed]: 'Mixed',
+  }[accessType];
+}
+
+function formatAccessSource(sourceType: SdkDiagramAccessSourceType, sourceLabel: string): string {
+  if (sourceType === SdkDiagramAccessSourceType.WorkspaceDefault) {
+    return 'Workspace default';
+  }
+
+  return sourceLabel;
 }

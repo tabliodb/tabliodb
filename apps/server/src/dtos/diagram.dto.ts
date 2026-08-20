@@ -5,7 +5,22 @@ import { z } from 'zod';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const DiagramStatusSchema = z.enum(['draft', 'reviewed', 'approved', 'changes_requested']);
-const DiagramMemberRoleSchema = z.enum([ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
+const DiagramMemberRoleSchema = z.enum([
+  ProjectRole.Owner,
+  ProjectRole.Editor,
+  ProjectRole.Commenter,
+  ProjectRole.Viewer,
+]);
+const DiagramEffectiveAccessTypeSchema = z.enum(['direct', 'inherited', 'mixed']);
+const DiagramEffectiveAccessSourceTypeSchema = z.enum([
+  'direct',
+  'diagram_team',
+  'folder',
+  'folder_team',
+  'workspace_admin',
+  'workspace_default',
+  'workspace_member',
+]);
 
 const DiagramCreateSchema = z
   .object({
@@ -87,6 +102,39 @@ const DiagramMemberListResponseSchema = z
   })
   .meta({ id: 'DiagramMemberListResponseDto' });
 
+const DiagramEffectiveAccessSourceSchema = z
+  .object({
+    inherited: z.boolean(),
+    role: DiagramMemberRoleSchema,
+    sourceId: z.uuid().nullable(),
+    sourceLabel: z.string(),
+    sourceName: z.string().nullable(),
+    sourceType: DiagramEffectiveAccessSourceTypeSchema,
+  })
+  .meta({ id: 'DiagramEffectiveAccessSourceDto' });
+
+const DiagramEffectiveAccessSchema = z
+  .object({
+    accessType: DiagramEffectiveAccessTypeSchema,
+    avatarUrl: z.string().nullable(),
+    cursorColor: z.string(),
+    directRole: DiagramMemberRoleSchema.nullable(),
+    email: z.email(),
+    name: z.string(),
+    role: DiagramMemberRoleSchema,
+    sources: z.array(DiagramEffectiveAccessSourceSchema),
+    userId: z.uuid(),
+  })
+  .meta({ id: 'DiagramEffectiveAccessDto' });
+
+const DiagramEffectiveAccessListResponseSchema = z
+  .object({
+    items: z.array(DiagramEffectiveAccessSchema),
+    nextCursor: z.string().nullable(),
+    totalCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'DiagramEffectiveAccessListResponseDto' });
+
 const DiagramMemberCreateSchema = z
   .object({
     email: z.email(),
@@ -157,6 +205,9 @@ const DiagramImportResponseSchema = z
   .meta({ id: 'DiagramImportResponseDto' });
 
 export class DiagramCreateDto extends createZodDto(DiagramCreateSchema) {}
+export class DiagramEffectiveAccessDto extends createZodDto(DiagramEffectiveAccessSchema) {}
+export class DiagramEffectiveAccessListResponseDto extends createZodDto(DiagramEffectiveAccessListResponseSchema) {}
+export class DiagramEffectiveAccessSourceDto extends createZodDto(DiagramEffectiveAccessSourceSchema) {}
 export class DiagramExportQueryDto extends createZodDto(DiagramExportQuerySchema) {}
 export class DiagramExportResponseDto extends createZodDto(DiagramExportResponseSchema) {}
 export class DiagramImportDto extends createZodDto(DiagramImportSchema) {}

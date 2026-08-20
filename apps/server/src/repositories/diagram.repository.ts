@@ -23,6 +23,16 @@ export type DiagramMemberListOptions = {
   limit: number;
 };
 
+const diagramEffectiveAccessSourceTypes = new Set([
+  'direct',
+  'diagram_team',
+  'folder',
+  'folder_team',
+  'workspace_admin',
+  'workspace_default',
+  'workspace_member',
+]);
+
 @Injectable()
 export class DiagramRepository {
   constructor(@InjectKysely() private readonly db: Kysely<DB>) {}
@@ -246,6 +256,319 @@ export class DiagramRepository {
     };
   }
 
+  async getEffectiveAccess(diagramId: string, options: DiagramMemberListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await sql<DiagramEffectiveAccessRow>`
+      WITH diagram_scope AS (
+        SELECT
+          diagrams.id,
+          diagrams.name,
+          diagrams.organization_id,
+          diagrams.project_id,
+          organizations.name AS organization_name,
+          organizations.default_project_role,
+          projects.name AS project_name
+        FROM diagrams
+        INNER JOIN organizations ON organizations.id = diagrams.organization_id
+        LEFT JOIN projects ON projects.id = diagrams.project_id AND projects.archived_at IS NULL
+        WHERE diagrams.id = ${diagramId}
+          AND diagrams.archived_at IS NULL
+          AND organizations.archived_at IS NULL
+      ),
+      access_sources AS (
+        SELECT
+          diagram_members.user_id,
+          diagram_members.role::text AS role,
+          'direct'::text AS source_type,
+          diagram_scope.id AS source_id,
+          diagram_scope.name AS source_name,
+          'Direct access'::text AS source_label,
+          true AS is_direct,
+          10 AS source_priority
+        FROM diagram_members
+        INNER JOIN diagram_scope ON diagram_scope.id = diagram_members.diagram_id
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE organization_members.user_id = diagram_members.user_id
+          AND organization_members.status = 'active'
+
+        UNION ALL
+
+        SELECT
+          team_members.user_id,
+          diagram_team_access.role::text AS role,
+          'diagram_team'::text AS source_type,
+          teams.id AS source_id,
+          teams.name AS source_name,
+          concat('Team: ', teams.name)::text AS source_label,
+          false AS is_direct,
+          20 AS source_priority
+        FROM diagram_team_access
+        INNER JOIN diagram_scope ON diagram_scope.id = diagram_team_access.diagram_id
+        INNER JOIN teams ON teams.id = diagram_team_access.team_id
+        INNER JOIN team_members ON team_members.team_id = teams.id
+        INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
+        WHERE teams.archived_at IS NULL
+          AND organization_members.user_id = team_members.user_id
+          AND organization_members.status = 'active'
+
+        UNION ALL
+
+        SELECT
+          project_members.user_id,
+          project_members.role::text AS role,
+          'folder'::text AS source_type,
+          diagram_scope.project_id AS source_id,
+          diagram_scope.project_name AS source_name,
+          concat('Folder: ', diagram_scope.project_name)::text AS source_label,
+          false AS is_direct,
+          30 AS source_priority
+        FROM diagram_scope
+        INNER JOIN project_members ON project_members.project_id = diagram_scope.project_id
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE diagram_scope.project_id IS NOT NULL
+          AND organization_members.user_id = project_members.user_id
+          AND organization_members.status = 'active'
+
+        UNION ALL
+
+        SELECT
+          team_members.user_id,
+          project_team_access.role::text AS role,
+          'folder_team'::text AS source_type,
+          teams.id AS source_id,
+          teams.name AS source_name,
+          concat('Team via folder: ', teams.name)::text AS source_label,
+          false AS is_direct,
+          40 AS source_priority
+        FROM diagram_scope
+        INNER JOIN project_team_access ON project_team_access.project_id = diagram_scope.project_id
+        INNER JOIN teams ON teams.id = project_team_access.team_id
+        INNER JOIN team_members ON team_members.team_id = teams.id
+        INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
+        WHERE diagram_scope.project_id IS NOT NULL
+          AND teams.archived_at IS NULL
+          AND organization_members.user_id = team_members.user_id
+          AND organization_members.status = 'active'
+
+        UNION ALL
+
+        SELECT
+          organization_members.user_id,
+          'owner'::text AS role,
+          'workspace_admin'::text AS source_type,
+          diagram_scope.organization_id AS source_id,
+          diagram_scope.organization_name AS source_name,
+          'Workspace admin'::text AS source_label,
+          false AS is_direct,
+          50 AS source_priority
+        FROM diagram_scope
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin')
+
+        UNION ALL
+
+        SELECT
+          organization_members.user_id,
+          'editor'::text AS role,
+          'workspace_member'::text AS source_type,
+          diagram_scope.organization_id AS source_id,
+          diagram_scope.organization_name AS source_name,
+          'Workspace member'::text AS source_label,
+          false AS is_direct,
+          60 AS source_priority
+        FROM diagram_scope
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE diagram_scope.project_id IS NULL
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'member'
+
+        UNION ALL
+
+        SELECT
+          organization_members.user_id,
+          diagram_scope.default_project_role::text AS role,
+          'workspace_default'::text AS source_type,
+          diagram_scope.organization_id AS source_id,
+          diagram_scope.organization_name AS source_name,
+          'Workspace default folder role'::text AS source_label,
+          false AS is_direct,
+          70 AS source_priority
+        FROM diagram_scope
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE diagram_scope.project_id IS NOT NULL
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'member'
+          AND diagram_scope.default_project_role IN ('editor', 'commenter', 'viewer')
+      ),
+      access_with_users AS (
+        SELECT
+          access_sources.*,
+          users.email,
+          users.name,
+          CASE
+            WHEN users.avatar_file_id IS NULL THEN NULL
+            ELSE concat('/api/files/', users.avatar_file_id::text)
+          END AS avatar_url,
+          users.cursor_color,
+          CASE access_sources.role
+            WHEN 'owner' THEN 4
+            WHEN 'editor' THEN 3
+            WHEN 'commenter' THEN 2
+            WHEN 'viewer' THEN 1
+            ELSE 0
+          END AS role_rank
+        FROM access_sources
+        INNER JOIN users ON users.id = access_sources.user_id
+        WHERE users.deleted_at IS NULL
+      ),
+      grouped_access AS (
+        SELECT
+          user_id,
+          email,
+          name,
+          avatar_url,
+          cursor_color,
+          CASE max(role_rank)
+            WHEN 4 THEN 'owner'
+            WHEN 3 THEN 'editor'
+            WHEN 2 THEN 'commenter'
+            ELSE 'viewer'
+          END AS role,
+          min(role) FILTER (WHERE is_direct) AS direct_role,
+          CASE
+            WHEN bool_or(is_direct) AND bool_or(NOT is_direct) THEN 'mixed'
+            WHEN bool_or(is_direct) THEN 'direct'
+            ELSE 'inherited'
+          END AS access_type,
+          jsonb_agg(
+            jsonb_build_object(
+              'inherited', NOT is_direct,
+              'role', role,
+              'sourceId', source_id,
+              'sourceLabel', source_label,
+              'sourceName', source_name,
+              'sourceType', source_type
+            )
+            ORDER BY source_priority ASC, role_rank DESC, source_name ASC
+          ) AS sources
+        FROM access_with_users
+        GROUP BY user_id, email, name, avatar_url, cursor_color
+      )
+      SELECT
+        user_id AS "userId",
+        email,
+        name,
+        avatar_url AS "avatarUrl",
+        cursor_color AS "cursorColor",
+        role,
+        direct_role AS "directRole",
+        access_type AS "accessType",
+        sources
+      FROM grouped_access
+      ORDER BY lower(name) ASC, email ASC, user_id ASC
+      LIMIT ${options.limit + 1}
+      OFFSET ${offset}
+    `.execute(this.db);
+    const totalRow = await sql<{ count: number }>`
+      WITH diagram_scope AS (
+        SELECT diagrams.id, diagrams.organization_id, diagrams.project_id, organizations.default_project_role
+        FROM diagrams
+        INNER JOIN organizations ON organizations.id = diagrams.organization_id
+        LEFT JOIN projects ON projects.id = diagrams.project_id AND projects.archived_at IS NULL
+        WHERE diagrams.id = ${diagramId}
+          AND diagrams.archived_at IS NULL
+          AND organizations.archived_at IS NULL
+      ),
+      access_user_ids AS (
+        SELECT diagram_members.user_id
+        FROM diagram_members
+        INNER JOIN diagram_scope ON diagram_scope.id = diagram_members.diagram_id
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE organization_members.user_id = diagram_members.user_id
+          AND organization_members.status = 'active'
+
+        UNION
+
+        SELECT team_members.user_id
+        FROM diagram_team_access
+        INNER JOIN diagram_scope ON diagram_scope.id = diagram_team_access.diagram_id
+        INNER JOIN teams ON teams.id = diagram_team_access.team_id
+        INNER JOIN team_members ON team_members.team_id = teams.id
+        INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
+        WHERE teams.archived_at IS NULL
+          AND organization_members.user_id = team_members.user_id
+          AND organization_members.status = 'active'
+
+        UNION
+
+        SELECT project_members.user_id
+        FROM diagram_scope
+        INNER JOIN project_members ON project_members.project_id = diagram_scope.project_id
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE diagram_scope.project_id IS NOT NULL
+          AND organization_members.user_id = project_members.user_id
+          AND organization_members.status = 'active'
+
+        UNION
+
+        SELECT team_members.user_id
+        FROM diagram_scope
+        INNER JOIN project_team_access ON project_team_access.project_id = diagram_scope.project_id
+        INNER JOIN teams ON teams.id = project_team_access.team_id
+        INNER JOIN team_members ON team_members.team_id = teams.id
+        INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
+        WHERE diagram_scope.project_id IS NOT NULL
+          AND teams.archived_at IS NULL
+          AND organization_members.user_id = team_members.user_id
+          AND organization_members.status = 'active'
+
+        UNION
+
+        SELECT organization_members.user_id
+        FROM diagram_scope
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE organization_members.status = 'active'
+          AND organization_members.role IN ('owner', 'admin')
+
+        UNION
+
+        SELECT organization_members.user_id
+        FROM diagram_scope
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE diagram_scope.project_id IS NULL
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'member'
+
+        UNION
+
+        SELECT organization_members.user_id
+        FROM diagram_scope
+        INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
+        WHERE diagram_scope.project_id IS NOT NULL
+          AND organization_members.status = 'active'
+          AND organization_members.role = 'member'
+          AND diagram_scope.default_project_role IN ('editor', 'commenter', 'viewer')
+      )
+      SELECT count(*)::int AS count
+      FROM access_user_ids
+      INNER JOIN users ON users.id = access_user_ids.user_id
+      WHERE users.deleted_at IS NULL
+    `.execute(this.db);
+
+    return {
+      items: rows.rows.slice(0, options.limit).map((row) => ({
+        ...row,
+        accessType: row.accessType as DiagramEffectiveAccessType,
+        directRole: row.directRole ? (row.directRole as ProjectRole) : null,
+        role: row.role as ProjectRole,
+        sources: normalizeEffectiveAccessSources(row.sources),
+      })),
+      nextCursor: rows.rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.rows[0]?.count ?? 0),
+    };
+  }
+
   getMember(diagramId: string, userId: string) {
     return this.createMemberQuery(diagramId).where('diagram_members.userId', '=', userId).executeTakeFirst();
   }
@@ -419,3 +742,77 @@ type DiagramListRow = {
   status: 'draft' | 'reviewed' | 'approved' | 'changes_requested';
   updatedAt: Date;
 };
+
+type DiagramEffectiveAccessType = 'direct' | 'inherited' | 'mixed';
+
+type DiagramEffectiveAccessSource = {
+  inherited: boolean;
+  role: ProjectRole;
+  sourceId: string | null;
+  sourceLabel: string;
+  sourceName: string | null;
+  sourceType:
+    'direct' | 'diagram_team' | 'folder' | 'folder_team' | 'workspace_admin' | 'workspace_default' | 'workspace_member';
+};
+
+type DiagramEffectiveAccessRow = {
+  accessType: string;
+  avatarUrl: string | null;
+  cursorColor: string;
+  directRole: string | null;
+  email: string;
+  name: string;
+  role: string;
+  sources: unknown;
+  userId: string;
+};
+
+function normalizeEffectiveAccessSources(value: unknown): DiagramEffectiveAccessSource[] {
+  const rawSources = typeof value === 'string' ? (JSON.parse(value) as unknown) : value;
+
+  if (!Array.isArray(rawSources)) {
+    return [];
+  }
+
+  return rawSources.flatMap((source) => {
+    if (!isEffectiveAccessSourceObject(source)) {
+      return [];
+    }
+
+    return [
+      {
+        inherited: Boolean(source.inherited),
+        role: normalizeProjectRole(source.role),
+        sourceId: typeof source.sourceId === 'string' ? source.sourceId : null,
+        sourceLabel: typeof source.sourceLabel === 'string' ? source.sourceLabel : 'Inherited access',
+        sourceName: typeof source.sourceName === 'string' ? source.sourceName : null,
+        sourceType: normalizeEffectiveAccessSourceType(source.sourceType),
+      },
+    ];
+  });
+}
+
+function isEffectiveAccessSourceObject(source: unknown): source is Record<string, unknown> {
+  return Boolean(source && typeof source === 'object');
+}
+
+function normalizeProjectRole(role: unknown): ProjectRole {
+  if (
+    role === ProjectRole.Owner ||
+    role === ProjectRole.Editor ||
+    role === ProjectRole.Commenter ||
+    role === ProjectRole.Viewer
+  ) {
+    return role;
+  }
+
+  return ProjectRole.Viewer;
+}
+
+function normalizeEffectiveAccessSourceType(sourceType: unknown): DiagramEffectiveAccessSource['sourceType'] {
+  if (typeof sourceType === 'string' && diagramEffectiveAccessSourceTypes.has(sourceType)) {
+    return sourceType as DiagramEffectiveAccessSource['sourceType'];
+  }
+
+  return 'workspace_member';
+}
