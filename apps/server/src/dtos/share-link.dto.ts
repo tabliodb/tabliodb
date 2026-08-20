@@ -8,15 +8,15 @@ const ShareLinkTargetTypeSchema = z.enum(['diagram', 'snapshot']);
 
 const DiagramShareLinkSchema = z
   .object({
-    id: z.string().uuid(),
-    diagramId: z.string().uuid(),
-    snapshotId: z.string().uuid().nullable(),
+    id: z.uuid(),
+    diagramId: z.uuid(),
+    snapshotId: z.uuid().nullable(),
     targetType: ShareLinkTargetTypeSchema,
     label: z.string().nullable(),
     status: ShareLinkStatusSchema,
     expiresAt: DateTimeSchema.nullable(),
     revokedAt: DateTimeSchema.nullable(),
-    createdById: z.string().uuid(),
+    createdById: z.uuid(),
     createdByName: z.string(),
     accessCount: z.number().int().nonnegative(),
     lastUsedAt: DateTimeSchema.nullable(),
