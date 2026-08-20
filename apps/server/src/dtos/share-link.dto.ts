@@ -37,7 +37,7 @@ const DiagramShareLinkCreateSchema = z
   .object({
     expiresAt: DateTimeSchema.nullable().optional(),
     label: z.string().trim().min(1).max(80).optional(),
-    snapshotId: z.string().uuid().optional(),
+    snapshotId: z.uuid().optional(),
     targetType: ShareLinkTargetTypeSchema.default('diagram'),
   })
   .meta({ id: 'DiagramShareLinkCreateDto' });
