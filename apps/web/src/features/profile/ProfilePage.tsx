@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, Button, FieldError, Input, Surface, cn } from '@tabliodb/ui';
-import { Camera, Check, ImageUp, Loader2, Palette, Save, Trash2, UserRound } from 'lucide-react';
+import { Camera, Check, ImageUp, Loader2, Palette, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -136,10 +136,6 @@ export function ProfilePage() {
     <div className="mx-auto grid w-full max-w-5xl gap-5 px-5 py-5">
       <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="mb-2 inline-flex items-center gap-2 rounded-full border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] px-3 py-1 text-xs font-extrabold text-[rgb(var(--tabliodb-sky-text))]">
-            <UserRound className="size-4" />
-            Personal profile
-          </p>
           <h1 className="text-2xl font-extrabold tracking-normal text-[rgb(var(--tabliodb-ink))]">Profile</h1>
           <p className="mt-1 max-w-2xl text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
             Manage your visible identity and realtime collaboration cursor.
