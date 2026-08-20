@@ -251,7 +251,7 @@ export function CreateProjectDialog({
           {trigger ?? (
             <Button disabled={!organizationId} size="sm" variant="secondary">
               <FolderPlus className="size-4" />
-              New
+              Folder
             </Button>
           )}
         </DialogTrigger>
@@ -259,15 +259,15 @@ export function CreateProjectDialog({
       <DialogContent className="w-[min(94vw,520px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
-            <DialogTitle>New project</DialogTitle>
-            <DialogDescription>Create a workspace project for a schema, product area, or service.</DialogDescription>
+            <DialogTitle>New project folder</DialogTitle>
+            <DialogDescription>Group related diagrams for one app, service, product area, or client.</DialogDescription>
           </DialogHeader>
 
           <DialogBody>
             <div className="grid gap-4">
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Project name
+                  Folder name
                 </span>
                 <ControlledInput
                   autoFocus
@@ -275,7 +275,7 @@ export function CreateProjectDialog({
                   control={form.control}
                   disabled={!organizationId || createProjectMutation.isPending}
                   name="name"
-                  placeholder="Billing Platform"
+                  placeholder="Library System"
                 />
                 <FieldError>{errors.name?.message}</FieldError>
               </label>
@@ -290,7 +290,7 @@ export function CreateProjectDialog({
                   control={form.control}
                   disabled={!organizationId || createProjectMutation.isPending}
                   name="description"
-                  placeholder="Schemas for invoices, customers, and subscriptions."
+                  placeholder="Diagrams for the main database, reporting schema, or future redesign."
                 />
                 <FieldError>{errors.description?.message}</FieldError>
               </label>
@@ -318,7 +318,7 @@ export function CreateProjectDialog({
               ) : (
                 <FolderPlus className="size-4" />
               )}
-              Create project
+              Create folder
             </Button>
           </DialogFooter>
         </form>
