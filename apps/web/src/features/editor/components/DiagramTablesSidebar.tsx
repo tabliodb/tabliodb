@@ -1,6 +1,6 @@
 import { getTableColumns, type DatabaseTable, type DiagramModel } from '@tabliodb/schema-core';
 import { Badge, IconButton, Input, cn } from '@tabliodb/ui';
-import { ChevronDown, Database, PanelLeft, Search, X } from 'lucide-react';
+import { ChevronDown, PanelLeft, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { normalizeEditorDiagramModel } from '../diagram-model';
 import { getDisplayTableColor } from '../table-colors';
@@ -72,9 +72,6 @@ export function DiagramTablesSidebar({
   return (
     <div className="flex h-full min-h-0 flex-col bg-[rgb(var(--tabliodb-surface-raised))]">
       <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] bg-white/80 px-3 backdrop-blur">
-        <div className="grid size-8 shrink-0 place-items-center rounded-[13px] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]">
-          <Database className="size-4" />
-        </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
             Tables
