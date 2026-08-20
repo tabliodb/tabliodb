@@ -13,7 +13,7 @@ const OrganizationRoleSchema = z.enum([
 
 const OrganizationSchema = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     name: z.string(),
     slug: z.string(),
     role: OrganizationRoleSchema,
