@@ -32,8 +32,8 @@ const UserPasswordResetSchema = z
 
 const UserResponseSchema = z
   .object({
-    id: z.string().uuid(),
-    email: z.string().email(),
+    id: z.uuid(),
+    email: z.email(),
     name: z.string(),
     avatarUrl: z.string().nullable(),
     cursorColor: z.string(),
@@ -42,7 +42,7 @@ const UserResponseSchema = z
     instanceRole: InstanceRoleSchema.nullable(),
     organizations: z.array(
       z.object({
-        id: z.string().uuid(),
+        id: z.uuid(),
         name: z.string(),
         slug: z.string(),
         role: z.string(),
