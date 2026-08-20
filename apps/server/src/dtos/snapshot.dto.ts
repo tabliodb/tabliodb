@@ -6,7 +6,7 @@ const DateTimeSchema = z.iso.datetime({ offset: true });
 
 const SnapshotCreateSchema = z
   .object({
-    diagramId: z.string().uuid(),
+    diagramId: z.uuid(),
     message: z.string().optional(),
     snapshot: DiagramModelSchema,
   })
@@ -14,12 +14,12 @@ const SnapshotCreateSchema = z
 
 const SnapshotResponseSchema = z
   .object({
-    id: z.string().uuid(),
-    diagramId: z.string().uuid(),
+    id: z.uuid(),
+    diagramId: z.uuid(),
     version: z.number(),
     message: z.string().nullable(),
     snapshot: DiagramModelSchema,
-    restoredFromSnapshotId: z.string().uuid().nullable(),
+    restoredFromSnapshotId: z.uuid().nullable(),
     createdAt: DateTimeSchema,
   })
   .meta({ id: 'SnapshotResponseDto' });
