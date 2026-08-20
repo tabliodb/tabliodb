@@ -123,12 +123,12 @@ export function SnapshotHistoryDialog({
                       >
                         <span className="mb-2 flex min-w-0 items-center justify-between gap-2">
                           <span className="flex min-w-0 items-center gap-2">
-                            <Badge variant={isLatest ? 'green' : 'neutral'}>v{snapshot.version}</Badge>
+                            <Badge variant={isLatest ? 'greenFilled' : 'neutral'}>v{snapshot.version}</Badge>
                             <span className="truncate text-[13px] font-extrabold">
                               {snapshot.message ?? `Snapshot v${snapshot.version}`}
                             </span>
                           </span>
-                          {isLatest ? <Badge variant="greenFilled">Current</Badge> : null}
+                          {isLatest ? <Badge variant="neutral">Current</Badge> : null}
                         </span>
                         <span className="block text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
                           {formatDateTime(snapshot.createdAt)}
