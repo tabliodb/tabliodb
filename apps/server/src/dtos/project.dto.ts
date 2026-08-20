@@ -7,7 +7,7 @@ const ProjectRoleSchema = z.enum([ProjectRole.Owner, ProjectRole.Editor, Project
 
 const ProjectCreateSchema = z
   .object({
-    organizationId: z.string().uuid(),
+    organizationId: z.uuid(),
     name: z.string().min(1),
     description: z.string().optional(),
   })
