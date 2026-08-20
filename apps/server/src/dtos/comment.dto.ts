@@ -18,8 +18,8 @@ const CommentTargetTypeSchema = z.enum([
 const CommentAuthorSchema = z.object({
   avatarUrl: z.string().nullable(),
   cursorColor: z.string(),
-  email: z.string().email(),
-  id: z.string().uuid(),
+  email: z.email(),
+  id: z.uuid(),
   name: z.string(),
 });
 
