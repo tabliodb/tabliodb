@@ -75,7 +75,7 @@ const PublicDiagramShareSnapshotSchema = z
 const PublicDiagramShareResponseSchema = z
   .object({
     diagram: z.object({
-      id: z.string().uuid(),
+      id: z.uuid(),
       dialect: DatabaseDialectSchema,
       name: z.string(),
       organizationName: z.string(),
