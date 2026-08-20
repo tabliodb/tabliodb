@@ -66,14 +66,14 @@ const OidcProviderSettingsUpdateSchema = z
 const SmtpSettingsSchema = z
   .object({
     enabled: z.boolean(),
-    fromEmail: z.string().email().nullable(),
+    fromEmail: z.email().nullable(),
     fromName: z.string().nullable(),
     host: z.string().nullable(),
     passwordConfigured: z.boolean(),
     passwordKeyId: z.string().nullable(),
     passwordUpdatedAt: DateTimeSchema.nullable(),
     port: z.number().int().min(1).max(65_535).nullable(),
-    replyToEmail: z.string().email().nullable(),
+    replyToEmail: z.email().nullable(),
     security: SmtpSecuritySchema,
     username: z.string().nullable(),
   })
