@@ -22,8 +22,8 @@ const TeamUpdateSchema = z
 
 const TeamResponseSchema = z
   .object({
-    id: z.string().uuid(),
-    organizationId: z.string().uuid(),
+    id: z.uuid(),
+    organizationId: z.uuid(),
     name: z.string(),
     slug: z.string(),
     description: z.string().nullable(),
