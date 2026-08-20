@@ -44,10 +44,10 @@ const InvitationPublicSchema = InvitationSchema.pick({
 
 const InvitationCreateSchema = z
   .object({
-    email: z.string().email(),
-    organizationId: z.string().uuid().optional(),
+    email: z.email(),
+    organizationId: z.uuid().optional(),
     organizationRole: InvitationOrganizationRoleSchema.default(OrganizationRole.Member),
-    projectId: z.string().uuid().optional(),
+    projectId: z.uuid().optional(),
     projectRole: InvitationProjectRoleSchema.optional(),
     message: z.string().trim().max(500).optional(),
     expiresInDays: z.coerce.number().int().min(1).max(30).default(7),
