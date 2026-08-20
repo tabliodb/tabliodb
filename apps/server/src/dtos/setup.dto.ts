@@ -83,12 +83,12 @@ const SmtpSettingsUpdateSchema = z
   .object({
     clearPassword: z.boolean().optional(),
     enabled: z.boolean(),
-    fromEmail: z.string().email().nullable(),
+    fromEmail: z.email().nullable(),
     fromName: z.string().min(1).max(120).nullable(),
     host: z.string().min(1).max(255).nullable(),
     password: z.string().min(1).max(4096).optional(),
     port: z.number().int().min(1).max(65_535).nullable(),
-    replyToEmail: z.string().email().nullable(),
+    replyToEmail: z.email().nullable(),
     security: SmtpSecuritySchema,
     username: z.string().min(1).max(255).nullable(),
   })
