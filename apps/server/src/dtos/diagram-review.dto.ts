@@ -41,7 +41,7 @@ const DiagramReviewSummarySchema = z
     changesRequestedCount: z.number().int().nonnegative(),
     commentedCount: z.number().int().nonnegative(),
     currentStatus: DiagramReviewStatusSchema,
-    diagramId: z.string().uuid(),
+    diagramId: z.uuid(),
     eventCount: z.number().int().nonnegative(),
     latestEvent: DiagramReviewEventSchema.nullable(),
     recentEvents: z.array(DiagramReviewEventSchema),
