@@ -117,9 +117,9 @@ const CurrentUserEditorPreferenceSchema = z
 
 const CurrentUserEditorPreferenceUpdateSchema = z
   .object({
-    diagramId: z.string().uuid().nullable().optional(),
-    organizationId: z.string().uuid(),
-    projectId: z.string().uuid().nullable().optional(),
+    diagramId: z.uuid().nullable().optional(),
+    organizationId: z.uuid(),
+    projectId: z.uuid().nullable().optional(),
   })
   .meta({ id: 'CurrentUserEditorPreferenceUpdateDto' });
 
