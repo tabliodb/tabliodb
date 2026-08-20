@@ -68,6 +68,8 @@ const diagramCreateFormSchema = z.object({
 });
 
 type DiagramCreateFormState = z.infer<typeof diagramCreateFormSchema>;
+const autoDiagramProjectName = 'General';
+const autoDiagramProjectDescription = 'Auto-created for diagrams that do not need a dedicated project yet.';
 
 export function CreateWorkspaceDialog({
   onCreated,
@@ -330,6 +332,7 @@ export function CreateDiagramDialog({
   onCreated,
   onOpenChange,
   open,
+  organizationId,
   projectId,
   trigger,
 }: {
@@ -337,11 +340,13 @@ export function CreateDiagramDialog({
   onCreated: (diagram: DiagramResponseDto) => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
+  organizationId: string | null;
   projectId: string | null;
   trigger?: ReactNode | null;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const dialogOpen = open ?? internalOpen;
+  const canCreateInContext = Boolean(projectId || organizationId);
   const form = useForm<DiagramCreateFormState>({
     defaultValues: {
       dialect: defaultDialect,
@@ -351,6 +356,7 @@ export function CreateDiagramDialog({
     resolver: zodResolver(diagramCreateFormSchema),
   });
   const { errors } = form.formState;
+  const createProjectMutation = useCreateProjectMutation();
 
   useEffect(() => {
     if (dialogOpen) {
@@ -374,30 +380,49 @@ export function CreateDiagramDialog({
     setInternalOpen(nextOpen);
     onOpenChange?.(nextOpen);
 
-    if (!nextOpen && !createDiagramMutation.isPending) {
+    if (!nextOpen && !createDiagramMutation.isPending && !createProjectMutation.isPending) {
       form.reset({ dialect: defaultDialect, name: '' });
       createDiagramMutation.reset();
+      createProjectMutation.reset();
     }
   }
 
-  function handleSubmit(values: DiagramCreateFormState) {
-    if (!projectId) {
+  async function handleSubmit(values: DiagramCreateFormState) {
+    if (!canCreateInContext) {
       return;
     }
 
-    createDiagramMutation.mutate({
-      dialect: sdkDialectByValue[values.dialect],
-      name: values.name,
-      projectId,
-    });
+    try {
+      const targetProjectId =
+        projectId ??
+        (
+          await createProjectMutation.mutateAsync({
+            description: autoDiagramProjectDescription,
+            // Project is created as an organization folder here so the user-facing action can stay diagram-first.
+            name: autoDiagramProjectName,
+            organizationId: organizationId!,
+          })
+        ).id;
+
+      await createDiagramMutation.mutateAsync({
+        dialect: sdkDialectByValue[values.dialect],
+        name: values.name,
+        projectId: targetProjectId,
+      });
+    } catch {
+      // React Query keeps the failed mutation in state; the dialog renders that message without throwing into react-hook-form.
+    }
   }
+
+  const isCreatingDiagram = createDiagramMutation.isPending || createProjectMutation.isPending;
+  const createDiagramError = createDiagramMutation.error ?? createProjectMutation.error;
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
       {trigger !== null ? (
         <DialogTrigger asChild>
           {trigger ?? (
-            <Button disabled={!projectId} size="sm" variant="secondary">
+            <Button disabled={!canCreateInContext} size="sm" variant="secondary">
               <FileText className="size-4" />
               Diagram
             </Button>
@@ -407,8 +432,10 @@ export function CreateDiagramDialog({
       <DialogContent className="w-[min(94vw,520px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
-            <DialogTitle>New diagram</DialogTitle>
-            <DialogDescription>Create a schema diagram inside the active project.</DialogDescription>
+            <DialogTitle>New database diagram</DialogTitle>
+            <DialogDescription>
+              Name the diagram and choose its SQL dialect. Projects stay in the background as organization folders.
+            </DialogDescription>
           </DialogHeader>
 
           <DialogBody>
@@ -421,7 +448,7 @@ export function CreateDiagramDialog({
                   autoFocus
                   aria-invalid={Boolean(errors.name)}
                   control={form.control}
-                  disabled={!projectId || createDiagramMutation.isPending}
+                  disabled={!canCreateInContext || isCreatingDiagram}
                   name="name"
                   placeholder={defaultDiagramName}
                 />
@@ -435,7 +462,7 @@ export function CreateDiagramDialog({
                 <ControlledSelect
                   aria-invalid={Boolean(errors.dialect)}
                   control={form.control}
-                  disabled={!projectId || createDiagramMutation.isPending}
+                  disabled={!canCreateInContext || isCreatingDiagram}
                   name="dialect"
                   options={diagramDialectOptions.map((dialect) => ({
                     label: formatDiagramDialect(dialect),
@@ -445,9 +472,15 @@ export function CreateDiagramDialog({
                 <FieldError>{errors.dialect?.message}</FieldError>
               </label>
 
-              {createDiagramMutation.error ? (
+              {!projectId ? (
+                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  Tabliodb will create a General folder for this workspace automatically.
+                </div>
+              ) : null}
+
+              {createDiagramError ? (
                 <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(createDiagramMutation.error)}
+                  {getErrorMessage(createDiagramError)}
                 </div>
               ) : null}
             </div>
@@ -455,15 +488,15 @@ export function CreateDiagramDialog({
 
           <DialogFooter>
             <Button
-              disabled={createDiagramMutation.isPending}
+              disabled={isCreatingDiagram}
               onClick={() => handleOpenChange(false)}
               type="button"
               variant="secondary"
             >
               Cancel
             </Button>
-            <Button disabled={!projectId || createDiagramMutation.isPending} type="submit">
-              {createDiagramMutation.isPending ? (
+            <Button disabled={!canCreateInContext || isCreatingDiagram} type="submit">
+              {isCreatingDiagram ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <FileText className="size-4" />

@@ -21,7 +21,6 @@ import { Button, IconButton, Surface, toast } from '@tabliodb/ui';
 import {
   Building2,
   FileText,
-  FolderPlus,
   Plus,
   StickyNote,
   UsersRound,
@@ -1433,15 +1432,21 @@ export function EditorPage() {
       <EditorEmptyAccessState
         action={
           canCreateProject ? (
-            <CreateProjectDialog
-              onCreated={(project) => {
-                editorRouteActions.goToProject(project);
+            <CreateDiagramDialog
+              defaultDialect="postgresql"
+              onCreated={(diagram) => {
+                editorRouteActions.goToDiagram({
+                  diagramId: diagram.id,
+                  projectId: diagram.projectId,
+                  workspaceSlug: getOrganizationSlug(activeOrganization),
+                });
               }}
               organizationId={activeOrganization.id}
+              projectId={null}
               trigger={
                 <Button className="gap-2">
-                  <FolderPlus className="size-4" />
-                  Create project
+                  <FileText className="size-4" />
+                  Create diagram
                 </Button>
               }
             />
@@ -1449,12 +1454,12 @@ export function EditorPage() {
         }
         description={
           canCreateProject
-            ? 'This workspace is ready. Create a project for a product, service, or bounded schema area to start designing.'
+            ? 'Create the first database diagram in this workspace. Tabliodb will organize it automatically so you can start designing right away.'
             : 'Your account is in this workspace, but an owner or admin has not connected you to a project or team yet.'
         }
-        icon={canCreateProject ? FolderPlus : UsersRound}
+        icon={canCreateProject ? FileText : UsersRound}
         onRetry={() => void queryClient.invalidateQueries()}
-        title={canCreateProject ? 'No projects yet' : 'Waiting for project access'}
+        title={canCreateProject ? 'No diagrams yet' : 'Waiting for project access'}
       />
     );
   }
@@ -1473,6 +1478,7 @@ export function EditorPage() {
                   workspaceSlug: getWorkspaceSlug(activeProject),
                 });
               }}
+              organizationId={activeProject.organizationId}
               projectId={activeProject.id}
               trigger={
                 <Button className="gap-2">
@@ -1840,6 +1846,7 @@ export function EditorPage() {
           }}
           onOpenChange={setCreateDiagramOpen}
           open={createDiagramOpen}
+          organizationId={activeOrganization.id}
           projectId={activeProject.id}
           trigger={null}
         />

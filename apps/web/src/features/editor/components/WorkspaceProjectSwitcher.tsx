@@ -67,9 +67,9 @@ export function WorkspaceProjectSwitcher({
           type="button"
         >
           <div className="min-w-0">
-            <h1 className="truncate text-[14px] font-extrabold leading-5">{activeProject.name}</h1>
+            <h1 className="truncate text-[14px] font-extrabold leading-5">{activeDiagram.name}</h1>
             <p className="truncate text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-              {activeDiagram.name} / {activeDiagram.dialect} / {activeOrganization.name}
+              {activeProject.name} / {activeDiagram.dialect} / {activeOrganization.name}
             </p>
           </div>
           <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
