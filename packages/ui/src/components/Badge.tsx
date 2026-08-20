@@ -10,8 +10,7 @@ export const badgeVariants = cva(
     },
     variants: {
       variant: {
-        blue:
-          'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
+        blue: 'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]',
         green:
           'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-selected-surface))] text-[rgb(var(--tabliodb-primary-text))]',
         neutral:
@@ -20,6 +19,8 @@ export const badgeVariants = cva(
           'border-[rgb(var(--tabliodb-lavender-border))] bg-[rgb(var(--tabliodb-lavender-soft))] text-[rgb(var(--tabliodb-lavender-text))]',
         yellow:
           'border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] text-[rgb(var(--tabliodb-gold-text))]',
+        greenFilled:
+          'border-[rgb(var(--tabliodb-green-border))] bg-[rgb(var(--tabliodb-green-soft))] text-[rgb(var(--tabliodb-green-text))]',
       },
     },
   },
