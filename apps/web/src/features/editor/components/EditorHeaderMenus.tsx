@@ -65,7 +65,7 @@ export function NotificationInboxMenu({
           <div className="min-w-0">
             <div className="text-[13px] font-extrabold">Notifications</div>
             <p className="mt-0.5 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-              Mentions and direct replies across your projects
+              Mentions and direct replies across your diagrams
             </p>
           </div>
           <Badge variant={unreadCount > 0 ? 'yellow' : 'neutral'}>{unreadLabel} unread</Badge>

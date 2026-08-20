@@ -1,4 +1,5 @@
 import { OrganizationRole, type OrganizationRoleValue } from '@tabliodb/shared';
+import type { DiagramModel } from '@tabliodb/schema-core';
 import {
   Role as SdkOrganizationRole,
   type DiagramResponseDtoOutput,
@@ -19,9 +20,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Input,
+  cn,
 } from '@tabliodb/ui';
-import { Building2, Check, ChevronsUpDown, FileText, FolderPlus, Plus, Search } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown, FileText, FolderPlus, Pencil, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { DiagramSettingsDialog } from './DiagramSettingsDialog';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
@@ -33,30 +36,40 @@ export function WorkspaceProjectSwitcher({
   activeProject,
   canCreateDiagram,
   canCreateProject,
+  canEditDiagram,
+  diagramLibraryOpen,
   diagrams,
+  model,
   onCreateDiagram,
   onCreateProject,
   onCreateWorkspace,
   onDiagramSelect,
+  onDiagramLibraryOpenChange,
+  onDiagramUpdated,
   onOrganizationSelect,
-  onProjectSelect,
   organizations,
   projects,
+  stackedDialogOpen,
 }: {
   activeDiagram: DiagramResponseDto;
   activeOrganization: OrganizationDto;
   activeProject: ProjectResponseDto | null;
   canCreateDiagram: boolean;
   canCreateProject: boolean;
+  canEditDiagram: boolean;
+  diagramLibraryOpen: boolean;
   diagrams: DiagramResponseDto[];
-  onCreateDiagram: () => void;
+  model: DiagramModel;
+  onCreateDiagram: (projectId?: string | null) => void;
   onCreateProject: () => void;
   onCreateWorkspace: () => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
+  onDiagramLibraryOpenChange: (open: boolean) => void;
+  onDiagramUpdated: (diagram: DiagramResponseDto) => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
-  onProjectSelect: (project: ProjectResponseDto) => void;
   organizations: OrganizationDto[];
   projects: ProjectResponseDto[];
+  stackedDialogOpen: boolean;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2 border-l border-[rgb(var(--tabliodb-border))] pl-2 sm:pl-3">
@@ -71,12 +84,17 @@ export function WorkspaceProjectSwitcher({
         activeProject={activeProject}
         canCreateDiagram={canCreateDiagram}
         canCreateProject={canCreateProject}
+        canEditDiagram={canEditDiagram}
         diagrams={diagrams}
+        model={model}
         onCreateDiagram={onCreateDiagram}
         onCreateProject={onCreateProject}
         onDiagramSelect={onDiagramSelect}
-        onProjectSelect={onProjectSelect}
+        onDiagramLibraryOpenChange={onDiagramLibraryOpenChange}
+        onDiagramUpdated={onDiagramUpdated}
+        open={diagramLibraryOpen}
         projects={projects}
+        stackedDialogOpen={stackedDialogOpen}
       />
     </div>
   );
@@ -172,41 +190,67 @@ function WorkspaceSwitcher({
   );
 }
 
+const allDiagramFilterId = '__all_diagrams__';
+const rootDiagramFilterId = '__root_diagrams__';
+
 function DiagramNavigator({
   activeDiagram,
   activeProject,
   canCreateDiagram,
   canCreateProject,
+  canEditDiagram,
   diagrams,
+  model,
   onCreateDiagram,
   onCreateProject,
+  onDiagramLibraryOpenChange,
   onDiagramSelect,
-  onProjectSelect,
+  onDiagramUpdated,
+  open,
   projects,
+  stackedDialogOpen,
 }: {
   activeDiagram: DiagramResponseDto;
   activeProject: ProjectResponseDto | null;
   canCreateDiagram: boolean;
   canCreateProject: boolean;
+  canEditDiagram: boolean;
   diagrams: DiagramResponseDto[];
-  onCreateDiagram: () => void;
+  model: DiagramModel;
+  onCreateDiagram: (projectId?: string | null) => void;
   onCreateProject: () => void;
+  onDiagramLibraryOpenChange: (open: boolean) => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
-  onProjectSelect: (project: ProjectResponseDto) => void;
+  onDiagramUpdated: (diagram: DiagramResponseDto) => void;
+  open: boolean;
   projects: ProjectResponseDto[];
+  stackedDialogOpen: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   const [diagramSearchTerm, setDiagramSearchTerm] = useState('');
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
+  const [selectedFolderFilterId, setSelectedFolderFilterId] = useState<string>(allDiagramFilterId);
+  const activeFolderName = activeProject?.name ?? 'No folder';
+  const rootDiagramCount = diagrams.filter((diagram) => !diagram.projectId).length;
   const filteredDiagrams = useMemo(() => {
     const search = diagramSearchTerm.trim().toLowerCase();
+    const folderFilteredDiagrams = diagrams.filter((diagram) => {
+      if (selectedFolderFilterId === allDiagramFilterId) {
+        return true;
+      }
+
+      if (selectedFolderFilterId === rootDiagramFilterId) {
+        return !diagram.projectId;
+      }
+
+      return diagram.projectId === selectedFolderFilterId;
+    });
 
     return search
-      ? diagrams.filter((diagram) =>
+      ? folderFilteredDiagrams.filter((diagram) =>
           [diagram.name, diagram.dialect].some((value) => value.toLowerCase().includes(search)),
         )
-      : diagrams;
-  }, [diagrams, diagramSearchTerm]);
+      : folderFilteredDiagrams;
+  }, [diagrams, diagramSearchTerm, selectedFolderFilterId]);
   const filteredProjects = useMemo(() => {
     const search = projectSearchTerm.trim().toLowerCase();
 
@@ -216,60 +260,74 @@ function DiagramNavigator({
         )
       : projects;
   }, [projectSearchTerm, projects]);
+  const selectedFolderLabel = getSelectedFolderLabel(selectedFolderFilterId, projects);
+  const selectedProjectIdForCreate =
+    selectedFolderFilterId !== allDiagramFilterId &&
+    selectedFolderFilterId !== rootDiagramFilterId &&
+    projects.some((project) => project.id === selectedFolderFilterId)
+      ? selectedFolderFilterId
+      : null;
 
   function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
+    onDiagramLibraryOpenChange(nextOpen);
 
     if (!nextOpen) {
-      // Dialog filters are per visit; stale filters should not make data look missing when the user opens it later.
+      // Search filters are per visit; folder filter stays sticky while the dialog is open so "New diagram" can inherit it.
       setDiagramSearchTerm('');
       setProjectSearchTerm('');
+      setSelectedFolderFilterId(allDiagramFilterId);
     }
   }
 
   function handleCreateDiagram() {
-    setOpen(false);
-    onCreateDiagram();
+    onCreateDiagram(selectedProjectIdForCreate);
   }
 
   function handleCreateProject() {
-    setOpen(false);
     onCreateProject();
   }
 
   return (
     <>
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="flex min-w-0 items-center gap-1 text-[15px] font-semibold">
         <button
-          className="flex h-11 min-w-0 max-w-[min(42vw,340px)] cursor-pointer items-center gap-2 rounded-[var(--tabliodb-radius-md)] px-2 text-left transition hover:bg-[rgb(var(--tabliodb-surface-raised))]"
-          onClick={() => setOpen(true)}
+          className="h-9 shrink-0 cursor-pointer rounded-[var(--tabliodb-radius-sm)] px-2 text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-surface-raised))] hover:text-[rgb(var(--tabliodb-ink))]"
+          onClick={() => onDiagramLibraryOpenChange(true)}
           type="button"
         >
-          <FileText className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
-          <span className="min-w-0">
-            <span className="block truncate text-[14px] font-extrabold leading-5">{activeDiagram.name}</span>
-            <span className="block truncate text-[12px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-              {activeProject?.name ?? 'Workspace'} / {activeDiagram.dialect}
-            </span>
-          </span>
-          <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
+          My diagrams
         </button>
-        {canCreateDiagram ? (
-          <Button className="hidden gap-2 md:inline-flex" onClick={handleCreateDiagram} size="sm">
-            <Plus className="size-4" />
-            New diagram
-          </Button>
-        ) : null}
+        <span className="shrink-0 text-[rgb(var(--tabliodb-ink-subtle))]">/</span>
+        <span className="group flex min-w-0 items-center gap-1 rounded-[var(--tabliodb-radius-sm)] px-1.5 py-1">
+          <span className="truncate text-[15px] font-extrabold leading-5">{activeDiagram.name}</span>
+          {canEditDiagram ? (
+            <DiagramSettingsDialog
+              canEdit={canEditDiagram}
+              diagram={activeDiagram}
+              model={model}
+              onUpdated={onDiagramUpdated}
+              trigger={
+                <button
+                  aria-label={`Edit ${activeDiagram.name}`}
+                  className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-[var(--tabliodb-radius-sm)] text-[rgb(var(--tabliodb-ink-subtle))] opacity-0 transition hover:bg-[rgb(var(--tabliodb-surface-raised))] hover:text-[rgb(var(--tabliodb-ink))] group-hover:opacity-100 focus:opacity-100 focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
+                  type="button"
+                >
+                  <Pencil className="size-4" />
+                </button>
+              }
+            />
+          ) : null}
+        </span>
       </div>
 
-      <Dialog onOpenChange={handleOpenChange} open={open}>
+      <Dialog modal={!stackedDialogOpen} onOpenChange={handleOpenChange} open={open}>
         <DialogContent className="h-[min(86dvh,760px)] w-[min(96vw,1040px)] max-w-none max-[640px]:h-[100dvh] max-[640px]:max-h-screen max-[640px]:w-screen max-[640px]:rounded-none max-[640px]:border-0">
           <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-4">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
-                <DialogTitle>Database diagrams</DialogTitle>
+                <DialogTitle>My diagrams</DialogTitle>
                 <DialogDescription>
-                  Open an ERD or create a new database diagram in the current workspace.
+                  Choose a diagram to open. Folders only filter this list and never switch the canvas by themselves.
                 </DialogDescription>
               </div>
               {canCreateDiagram ? (
@@ -281,82 +339,7 @@ function DiagramNavigator({
             </div>
           </DialogHeader>
 
-          <DialogBody className="grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 md:grid-cols-[minmax(0,1fr)_280px]">
-            <section className="flex min-h-0 flex-col rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white">
-              <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-3">
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-[13px] font-black">My diagrams</h2>
-                    <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                      {activeProject ? `Folder: ${activeProject.name}` : 'All diagrams in this workspace'}
-                    </p>
-                  </div>
-                  <Badge className="shrink-0" variant="green">
-                    {diagrams.length} total
-                  </Badge>
-                </div>
-                <div className="relative mt-3">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
-                  <Input
-                    className="h-9 pl-9 text-[13px]"
-                    onChange={(event) => setDiagramSearchTerm(event.target.value)}
-                    placeholder="Search diagrams"
-                    value={diagramSearchTerm}
-                  />
-                </div>
-              </div>
-              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-gutter:stable]">
-                {filteredDiagrams.length === 0 ? (
-                  <div className="grid h-full min-h-40 place-items-center rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center">
-                    <div>
-                      <FileText className="mx-auto size-8 text-[rgb(var(--tabliodb-ink-subtle))]" />
-                      <p className="mt-2 text-sm font-extrabold">No matching diagrams</p>
-                      <p className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                        Create a new ERD or adjust your search.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {filteredDiagrams.map((diagram) => {
-                      const isActive = diagram.id === activeDiagram.id;
-
-                      return (
-                        <button
-                          className={`flex min-h-28 cursor-pointer flex-col justify-between rounded-[var(--tabliodb-radius-lg)] border p-3 text-left transition ${
-                            isActive
-                              ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
-                              : 'border-[rgb(var(--tabliodb-border))] bg-white hover:border-[rgb(var(--tabliodb-primary-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]'
-                          }`}
-                          key={diagram.id}
-                          onClick={() => {
-                            if (!isActive) {
-                              setOpen(false);
-                              onDiagramSelect(diagram);
-                            }
-                          }}
-                          type="button"
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate text-[14px] font-black">{diagram.name}</span>
-                            <span className="mt-1 block text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {diagram.dialect}
-                            </span>
-                          </span>
-                          <span className="mt-3 flex items-center justify-between gap-2">
-                            <Badge variant={isActive ? 'green' : 'neutral'}>{isActive ? 'Open' : 'Diagram'}</Badge>
-                            {isActive ? (
-                              <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" />
-                            ) : null}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </section>
-
+          <DialogBody className="grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 md:grid-cols-[280px_minmax(0,1fr)]">
             <section className="flex min-h-0 flex-col rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))]">
               <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -384,39 +367,111 @@ function DiagramNavigator({
                 </div>
               </div>
               <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-gutter:stable]">
-                {filteredProjects.length === 0 ? (
-                  <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                    No matching folders
+                <div className="grid gap-1">
+                  <FolderFilterButton
+                    count={diagrams.length}
+                    isSelected={selectedFolderFilterId === allDiagramFilterId}
+                    label="All diagrams"
+                    onSelect={() => setSelectedFolderFilterId(allDiagramFilterId)}
+                    subtitle="Every ERD in this workspace"
+                  />
+                  <FolderFilterButton
+                    count={rootDiagramCount}
+                    isSelected={selectedFolderFilterId === rootDiagramFilterId}
+                    label="No folder"
+                    onSelect={() => setSelectedFolderFilterId(rootDiagramFilterId)}
+                    subtitle="Standalone diagrams"
+                  />
+                  {filteredProjects.length === 0 ? (
+                    <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                      No matching folders
+                    </div>
+                  ) : (
+                    filteredProjects.map((project) => (
+                      <FolderFilterButton
+                        count={diagrams.filter((diagram) => diagram.projectId === project.id).length}
+                        isSelected={selectedFolderFilterId === project.id}
+                        key={project.id}
+                        label={project.name}
+                        onSelect={() => setSelectedFolderFilterId(project.id)}
+                        subtitle={project.slug}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-col rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white">
+              <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-3">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-[13px] font-black">{selectedFolderLabel}</h2>
+                    <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                      Active canvas: {activeDiagram.name} / {activeFolderName}
+                    </p>
+                  </div>
+                  <Badge className="shrink-0" variant="green">
+                    {filteredDiagrams.length} shown
+                  </Badge>
+                </div>
+                <div className="relative mt-3">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
+                  <Input
+                    className="h-9 pl-9 text-[13px]"
+                    onChange={(event) => setDiagramSearchTerm(event.target.value)}
+                    placeholder="Search diagrams"
+                    value={diagramSearchTerm}
+                  />
+                </div>
+              </div>
+              <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-gutter:stable]">
+                {filteredDiagrams.length === 0 ? (
+                  <div className="grid h-full min-h-40 place-items-center rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-6 text-center">
+                    <div>
+                      <FileText className="mx-auto size-8 text-[rgb(var(--tabliodb-ink-subtle))]" />
+                      <p className="mt-2 text-sm font-extrabold">No matching diagrams</p>
+                      <p className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                        Create a new ERD or adjust the selected folder/search.
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="grid gap-1">
-                    {filteredProjects.map((project) => {
-                      const isActive = project.id === activeProject?.id;
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {filteredDiagrams.map((diagram) => {
+                      const isActive = diagram.id === activeDiagram.id;
+                      const folderName = diagram.projectId
+                        ? (projects.find((project) => project.id === diagram.projectId)?.name ?? 'Folder')
+                        : 'No folder';
 
                       return (
                         <button
-                          className={`flex min-w-0 cursor-pointer items-center justify-between gap-2 rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-left transition ${
+                          className={`flex min-h-28 cursor-pointer flex-col justify-between rounded-[var(--tabliodb-radius-lg)] border p-3 text-left transition ${
                             isActive
                               ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
-                              : 'border-transparent bg-white hover:border-[rgb(var(--tabliodb-border))]'
+                              : 'border-[rgb(var(--tabliodb-border))] bg-white hover:border-[rgb(var(--tabliodb-primary-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]'
                           }`}
-                          key={project.id}
+                          key={diagram.id}
                           onClick={() => {
                             if (!isActive) {
-                              setOpen(false);
-                              // Selecting a folder changes the diagram collection shown in the primary panel.
-                              onProjectSelect(project);
+                              onDiagramLibraryOpenChange(false);
+                              onDiagramSelect(diagram);
                             }
                           }}
                           type="button"
                         >
                           <span className="min-w-0">
-                            <span className="block truncate text-[13px] font-extrabold">{project.name}</span>
-                            <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {project.slug}
+                            <span className="block truncate text-[14px] font-black">{diagram.name}</span>
+                            <span className="mt-1 block text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                              {formatDiagramDialectLabel(diagram.dialect)} / {folderName}
                             </span>
                           </span>
-                          {isActive ? <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+                          <span className="mt-3 flex items-center justify-between gap-2">
+                            <Badge variant={isActive ? 'green' : 'neutral'}>{isActive ? 'Open' : 'Diagram'}</Badge>
+                            {isActive ? (
+                              <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" />
+                            ) : null}
+                          </span>
                         </button>
                       );
                     })}
@@ -429,6 +484,64 @@ function DiagramNavigator({
       </Dialog>
     </>
   );
+}
+
+function FolderFilterButton({
+  count,
+  isSelected,
+  label,
+  onSelect,
+  subtitle,
+}: {
+  count: number;
+  isSelected: boolean;
+  label: string;
+  onSelect: () => void;
+  subtitle: string;
+}) {
+  return (
+    <button
+      className={cn(
+        'flex min-w-0 cursor-pointer items-center justify-between gap-2 rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-left transition',
+        isSelected
+          ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
+          : 'border-transparent bg-white hover:border-[rgb(var(--tabliodb-border))]',
+      )}
+      onClick={onSelect}
+      type="button"
+    >
+      <span className="min-w-0">
+        <span className="block truncate text-[13px] font-extrabold">{label}</span>
+        <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">{subtitle}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <Badge variant="neutral">{count}</Badge>
+        {isSelected ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
+      </span>
+    </button>
+  );
+}
+
+function getSelectedFolderLabel(folderFilterId: string, projects: ProjectResponseDto[]): string {
+  if (folderFilterId === allDiagramFilterId) {
+    return 'All diagrams';
+  }
+
+  if (folderFilterId === rootDiagramFilterId) {
+    return 'No folder';
+  }
+
+  return projects.find((project) => project.id === folderFilterId)?.name ?? 'Folder';
+}
+
+function formatDiagramDialectLabel(dialect: string): string {
+  return {
+    mariadb: 'MariaDB',
+    mysql: 'MySQL',
+    postgresql: 'PostgreSQL',
+    sqlite: 'SQLite',
+    sqlserver: 'SQL Server',
+  }[dialect] ?? dialect;
 }
 
 function isOrganizationManager(organization: OrganizationDto): boolean {

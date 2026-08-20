@@ -482,7 +482,7 @@ export function SchemaInspector({
         </div>
         {readOnly ? (
           <Surface className="border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-xs font-extrabold text-[rgb(var(--tabliodb-gold-text))]">
-            This project role can inspect the schema, export SQL, and follow relationships, but cannot change the
+            This access role can inspect the schema, export SQL, and follow relationships, but cannot change the
             diagram.
           </Surface>
         ) : null}

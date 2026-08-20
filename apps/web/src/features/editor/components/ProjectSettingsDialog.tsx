@@ -62,7 +62,7 @@ const sdkProjectMemberRoleByValue: Record<ProjectRoleValue, SdkProjectMemberRole
 
 const projectFormSchema = z.object({
   description: z.string().trim().max(240, 'Keep the description under 240 characters.').optional(),
-  name: z.string().trim().min(1, 'Project name is required.').max(80, 'Keep the name under 80 characters.'),
+  name: z.string().trim().min(1, 'Folder name is required.').max(80, 'Keep the name under 80 characters.'),
 });
 
 type ProjectFormState = z.infer<typeof projectFormSchema>;
@@ -256,19 +256,19 @@ export function ProjectSettingsDialog({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <IconButton icon={Settings} label="Project settings" variant="ghost" />
+        <IconButton icon={Settings} label="Folder settings" variant="ghost" />
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,680px)]">
         <DialogHeader>
-          <DialogTitle>Project settings</DialogTitle>
-          <DialogDescription>Manage project details, access, and archive state.</DialogDescription>
+          <DialogTitle>Folder settings</DialogTitle>
+          <DialogDescription>Manage folder details, access, and archive state.</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="grid gap-5">
           <form className="grid gap-4" id="project-settings-form" onSubmit={form.handleSubmit(handleSubmit)}>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Project name
+                Folder name
               </span>
               <ControlledInput
                 aria-invalid={Boolean(errors.name)}
@@ -305,10 +305,10 @@ export function ProjectSettingsDialog({
               <div>
                 <h3 className="text-sm font-extrabold">Review rule defaults</h3>
                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  Disabled rules become the baseline for every diagram in this project.
+                  Disabled rules become the baseline for every diagram in this folder.
                 </p>
               </div>
-              <Badge variant="blue">{projectReviewSettingsQuery.isPending ? 'Loading' : 'Project'}</Badge>
+              <Badge variant="blue">{projectReviewSettingsQuery.isPending ? 'Loading' : 'Folder'}</Badge>
             </div>
             <form
               className="grid gap-3"
@@ -347,10 +347,10 @@ export function ProjectSettingsDialog({
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-extrabold">
                   <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
-                  Project members
+                  Folder members
                 </h3>
                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  {membersQuery.data?.totalCount ?? members.length} people with direct project access
+                  {membersQuery.data?.totalCount ?? members.length} people with direct folder access
                 </p>
               </div>
               <Badge variant="green">{members.length} loaded</Badge>
@@ -411,7 +411,7 @@ export function ProjectSettingsDialog({
               </div>
             ) : members.length === 0 ? (
               <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                No project members yet
+                No folder members yet
               </div>
             ) : (
               <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
@@ -516,7 +516,7 @@ function ProjectMemberRow({
         }))}
         value={member.role}
       />
-      <WithTooltip content={`Remove ${member.name} from this project`}>
+      <WithTooltip content={`Remove ${member.name} from this folder`}>
         <Button
           aria-label={`Remove ${member.name}`}
           disabled={isBusy}

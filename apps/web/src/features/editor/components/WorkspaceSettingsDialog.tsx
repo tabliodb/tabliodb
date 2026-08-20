@@ -130,7 +130,7 @@ const teamMemberFormDefaults: TeamMemberFormState = {
 const teamProjectAccessRoleOptions = [ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
 
 const teamProjectAccessFormSchema = z.object({
-  projectId: z.string().min(1, 'Select a project.'),
+  projectId: z.string().min(1, 'Select a folder.'),
   role: z.enum(teamProjectAccessRoleOptions),
 });
 
@@ -238,7 +238,7 @@ export function WorkspaceSettingsDialog({
   });
   const teamProjectOptionsQuery = useQuery({
     ...projectsQueries.list({ limit: 50, organizationId: organization.id }),
-    // Project options are used only when granting a team access to a project.
+    // Folder options are backed by the legacy project endpoint while the product language stays diagram-first.
     enabled: open && canManageWorkspace,
   });
   const auditLogs = auditLogsQuery.data?.items ?? [];
@@ -553,7 +553,7 @@ export function WorkspaceSettingsDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Default project role
+                  Default folder role
                 </span>
                 <ControlledSelect
                   className={selectClassName}
@@ -561,7 +561,7 @@ export function WorkspaceSettingsDialog({
                   disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
                   name="defaultProjectRole"
                   options={workspaceDefaultRoleOptions.map((role) => ({
-                    label: role === 'none' ? 'No automatic project role' : formatProjectRole(role),
+                    label: role === 'none' ? 'No automatic folder role' : formatProjectRole(role),
                     value: role,
                   }))}
                 />
@@ -573,7 +573,7 @@ export function WorkspaceSettingsDialog({
                   disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
                   name="allowMemberProjectCreate"
                 />
-                Members can create projects
+                Members can create folders
               </label>
             </div>
 
@@ -653,7 +653,7 @@ export function WorkspaceSettingsDialog({
                     Teams
                   </h3>
                   <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                    Manage reusable groups before granting project access.
+                    Manage reusable groups before granting folder access.
                   </p>
                 </div>
                 <Badge variant="green">{teamsQuery.data?.totalCount ?? teams.length} teams</Badge>
@@ -736,7 +736,7 @@ export function WorkspaceSettingsDialog({
                           <div className="min-w-0">
                             <h4 className="truncate text-sm font-extrabold">{selectedTeam.name}</h4>
                             <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} project grants
+                              {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} folder grants
                             </p>
                           </div>
                           <WithTooltip content={`Archive ${selectedTeam.name}`}>
@@ -869,9 +869,9 @@ export function WorkspaceSettingsDialog({
                           <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3">
                             <div className="flex items-center justify-between gap-3">
                               <div>
-                                <h5 className="text-sm font-extrabold">Project access</h5>
+                                <h5 className="text-sm font-extrabold">Folder access</h5>
                                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  Grants inherited by team members
+                                  Folder grants inherited by team members
                                 </p>
                               </div>
                               <Badge>{selectedTeamProjectAccesses.length} loaded</Badge>
@@ -890,7 +890,7 @@ export function WorkspaceSettingsDialog({
                                   disabled={isTeamMutationPending || teamProjectOptionsQuery.isPending}
                                   name="projectId"
                                   options={teamProjectSelectOptions}
-                                  placeholder="Select project"
+                                  placeholder="Select folder"
                                 />
                                 <FieldError>{teamProjectAccessErrors.projectId?.message}</FieldError>
                               </label>
@@ -921,11 +921,11 @@ export function WorkspaceSettingsDialog({
                             {selectedTeamProjectAccessesQuery.isPending ? (
                               <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                                 <Loader2 className="size-4 animate-spin" />
-                                Loading project access
+                                Loading folder access
                               </div>
                             ) : selectedTeamProjectAccesses.length === 0 ? (
                               <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                No project grants yet
+                                No folder grants yet
                               </div>
                             ) : (
                               <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
@@ -951,7 +951,7 @@ export function WorkspaceSettingsDialog({
                           <UsersRound className="mx-auto size-8 text-[rgb(var(--tabliodb-primary-text))]" />
                           <h4 className="mt-3 text-sm font-extrabold">Select a team</h4>
                           <p className="mt-1 max-w-sm text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                            Pick a team to manage members and project grants, or create a new one above.
+                            Pick a team to manage members and folder grants, or create a new one above.
                           </p>
                         </div>
                       </div>
@@ -976,7 +976,7 @@ export function WorkspaceSettingsDialog({
                 <div>
                   <h3 className="text-sm font-extrabold">Recent activity</h3>
                   <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                    Project and workspace changes recorded by the server
+                    Folder and workspace changes recorded by the server
                   </p>
                 </div>
                 <Badge variant="blue">{auditLogs.length} loaded</Badge>
@@ -1089,7 +1089,7 @@ function TeamListItem({
         {team.description || 'No description yet'}
       </p>
       <div className="truncate text-xs font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
-        {team.projectAccessCount} project grants
+        {team.projectAccessCount} folder grants
       </div>
     </button>
   );
@@ -1171,9 +1171,9 @@ function TeamProjectAccessRow({
         }))}
         value={access.role}
       />
-      <WithTooltip content={`Remove ${access.projectName} access from this team`}>
+      <WithTooltip content={`Remove ${access.projectName} folder access from this team`}>
         <Button
-          aria-label={`Remove ${access.projectName} access from this team`}
+          aria-label={`Remove ${access.projectName} folder access from this team`}
           disabled={isRemoving}
           onClick={() => onRemove(access)}
           size="icon"
@@ -1274,11 +1274,11 @@ function formatOrganizationRole(role: OrganizationRoleValue): string {
 
 function formatAuditLogMessage(auditLog: AuditLogDto): string {
   if (auditLog.action === 'project.created') {
-    return `Created project ${readMetadataString(auditLog.metadata, 'name', 'project')}`;
+    return `Created folder ${readMetadataString(auditLog.metadata, 'name', 'folder')}`;
   }
 
   if (auditLog.action === 'project.archived') {
-    return `Archived project ${readMetadataString(auditLog.metadata, 'name', 'project')}`;
+    return `Archived folder ${readMetadataString(auditLog.metadata, 'name', 'folder')}`;
   }
 
   if (auditLog.action === 'project.member_added') {
@@ -1288,7 +1288,7 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
   }
 
   if (auditLog.action === 'project.member_removed') {
-    return `Removed ${readMetadataString(auditLog.metadata, 'email', 'member')} from project access`;
+    return `Removed ${readMetadataString(auditLog.metadata, 'email', 'member')} from folder access`;
   }
 
   if (auditLog.action === 'project.member_role_updated') {
@@ -1348,22 +1348,22 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
   if (auditLog.action === 'team.project_access_updated') {
     const role = auditLog.metadata.role;
     const teamName = readMetadataString(auditLog.metadata, 'teamName', 'team');
-    const projectName = readMetadataString(auditLog.metadata, 'projectName', 'project');
+    const projectName = readMetadataString(auditLog.metadata, 'projectName', 'folder');
 
     if (role && typeof role === 'object' && !Array.isArray(role)) {
-      return `Changed ${teamName} access to ${projectName} from ${formatProjectRoleValue(
+      return `Changed ${teamName} folder access to ${projectName} from ${formatProjectRoleValue(
         readMetadataString(role as Record<string, unknown>, 'before', ProjectRole.Viewer),
       )} to ${formatProjectRoleValue(readMetadataString(role as Record<string, unknown>, 'after', ProjectRole.Viewer))}`;
     }
 
-    return `Granted ${teamName} ${formatProjectRoleValue(String(role ?? ProjectRole.Viewer))} on ${projectName}`;
+    return `Granted ${teamName} ${formatProjectRoleValue(String(role ?? ProjectRole.Viewer))} on folder ${projectName}`;
   }
 
   if (auditLog.action === 'team.project_access_removed') {
-    return `Removed ${readMetadataString(auditLog.metadata, 'teamName', 'team')} access from ${readMetadataString(
+    return `Removed ${readMetadataString(auditLog.metadata, 'teamName', 'team')} folder access from ${readMetadataString(
       auditLog.metadata,
       'projectName',
-      'project',
+      'folder',
     )}`;
   }
 

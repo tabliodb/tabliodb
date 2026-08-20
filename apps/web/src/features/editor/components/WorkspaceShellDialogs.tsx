@@ -32,6 +32,7 @@ import { formatDiagramDialect } from '../diagram-formatters';
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
 type ProjectResponseDto = ProjectResponseDtoOutput;
+const rootDiagramLocationValue = '__workspace_root__';
 
 const diagramDialectOptions = [
   'postgresql',
@@ -57,13 +58,14 @@ type WorkspaceCreateFormState = z.infer<typeof workspaceCreateFormSchema>;
 
 const projectCreateFormSchema = z.object({
   description: z.string().trim().max(240, 'Keep the description under 240 characters.').optional(),
-  name: z.string().trim().min(1, 'Project name is required.').max(80, 'Keep the name under 80 characters.'),
+  name: z.string().trim().min(1, 'Folder name is required.').max(80, 'Keep the name under 80 characters.'),
 });
 
 type ProjectCreateFormState = z.infer<typeof projectCreateFormSchema>;
 
 const diagramCreateFormSchema = z.object({
   dialect: z.enum(diagramDialectOptions),
+  projectId: z.string().min(1, 'Choose where this diagram should live.'),
   name: z.string().trim().min(1, 'Diagram name is required.').max(80, 'Keep the name under 80 characters.'),
 });
 
@@ -134,7 +136,7 @@ export function CreateWorkspaceDialog({
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New workspace</DialogTitle>
-            <DialogDescription>Create a place for teams, projects, members, and governance settings.</DialogDescription>
+            <DialogDescription>Create a place for diagrams, optional folders, teams, and members.</DialogDescription>
           </DialogHeader>
 
           <DialogBody>
@@ -212,7 +214,7 @@ export function CreateProjectDialog({
   const createProjectMutation = useCreateProjectMutation({
     mutationConfig: {
       onSuccess: (project) => {
-        // New project langsung dinavigasikan agar user merasa aksi create menghasilkan workspace yang nyata.
+        // Folder creation updates the folder list; the current canvas should stay focused on the open diagram.
         form.reset({ description: '', name: '' });
         handleOpenChange(false);
         onCreated(project);
@@ -257,7 +259,7 @@ export function CreateProjectDialog({
       <DialogContent className="w-[min(94vw,520px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
-            <DialogTitle>New project folder</DialogTitle>
+            <DialogTitle>New folder</DialogTitle>
             <DialogDescription>Group related diagrams for one app, service, product area, or client.</DialogDescription>
           </DialogHeader>
 
@@ -327,28 +329,35 @@ export function CreateProjectDialog({
 
 export function CreateDiagramDialog({
   defaultDialect,
+  defaultProjectId,
   onCreated,
   onOpenChange,
   open,
   organizationId,
-  projectId,
+  projects = [],
   trigger,
 }: {
   defaultDialect: DatabaseDialect;
+  defaultProjectId?: string | null;
   onCreated: (diagram: DiagramResponseDto) => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   organizationId: string | null;
-  projectId: string | null;
+  projects?: ProjectResponseDto[];
   trigger?: ReactNode | null;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const dialogOpen = open ?? internalOpen;
-  const canCreateInContext = Boolean(projectId || organizationId);
+  const canCreateInContext = Boolean(organizationId);
+  const selectedDefaultProjectId =
+    defaultProjectId && projects.some((project) => project.id === defaultProjectId)
+      ? defaultProjectId
+      : rootDiagramLocationValue;
   const form = useForm<DiagramCreateFormState>({
     defaultValues: {
       dialect: defaultDialect,
       name: '',
+      projectId: selectedDefaultProjectId,
     },
     mode: 'onBlur',
     resolver: zodResolver(diagramCreateFormSchema),
@@ -358,7 +367,7 @@ export function CreateDiagramDialog({
     mutationConfig: {
       onSuccess: (diagram) => {
         // Workspace-level diagram creation has the same UX contract as project-level creation: close and open the new ERD.
-        form.reset({ dialect: defaultDialect, name: '' });
+        form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
         handleOpenChange(false);
         onCreated(diagram);
       },
@@ -367,16 +376,16 @@ export function CreateDiagramDialog({
 
   useEffect(() => {
     if (dialogOpen) {
-      // Opening the dialog should respect the current diagram dialect but keep the name intentionally blank.
-      form.reset({ dialect: defaultDialect, name: '' });
+      // Opening the dialog respects the active dialect and the folder filter selected in the diagram library.
+      form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
     }
-  }, [defaultDialect, dialogOpen, form]);
+  }, [defaultDialect, dialogOpen, form, selectedDefaultProjectId]);
 
   const createDiagramMutation = useCreateDiagramMutation({
     mutationConfig: {
       onSuccess: (diagram) => {
         // New diagram becomes the active route; the editor will create its first snapshot through the existing snapshot flow.
-        form.reset({ dialect: defaultDialect, name: '' });
+        form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
         handleOpenChange(false);
         onCreated(diagram);
       },
@@ -388,7 +397,7 @@ export function CreateDiagramDialog({
     onOpenChange?.(nextOpen);
 
     if (!nextOpen && !createDiagramMutation.isPending && !createWorkspaceDiagramMutation.isPending) {
-      form.reset({ dialect: defaultDialect, name: '' });
+      form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
       createDiagramMutation.reset();
       createWorkspaceDiagramMutation.reset();
     }
@@ -400,13 +409,14 @@ export function CreateDiagramDialog({
     }
 
     try {
-      if (!projectId) {
+      const selectedProjectId = values.projectId === rootDiagramLocationValue ? null : values.projectId;
+
+      if (!selectedProjectId) {
         await createWorkspaceDiagramMutation.mutateAsync({
           body: {
             dialect: sdkDialectByValue[values.dialect],
             name: values.name,
           },
-          // Workspace-level creation lets the server create or reuse the hidden General backing folder atomically.
           organizationId: organizationId!,
         });
 
@@ -416,9 +426,9 @@ export function CreateDiagramDialog({
       await createDiagramMutation.mutateAsync({
         dialect: sdkDialectByValue[values.dialect],
         name: values.name,
-        // Diagram tetap milik workspace walau diletakkan di folder tertentu.
+        // Diagram tetap milik workspace; projectId hanya metadata folder opsional untuk organisasi daftar.
         organizationId: organizationId!,
-        projectId,
+        projectId: selectedProjectId,
       });
     } catch {
       // React Query keeps the failed mutation in state; the dialog renders that message without throwing into react-hook-form.
@@ -483,11 +493,31 @@ export function CreateDiagramDialog({
                 <FieldError>{errors.dialect?.message}</FieldError>
               </label>
 
-              {!projectId ? (
-                <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  This diagram will be created in the current workspace. Tabliodb keeps the backing folder tidy automatically.
-                </div>
-              ) : null}
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Location
+                </span>
+                <ControlledSelect
+                  aria-invalid={Boolean(errors.projectId)}
+                  control={form.control}
+                  disabled={!canCreateInContext || isCreatingDiagram}
+                  name="projectId"
+                  options={[
+                    {
+                      label: 'No folder',
+                      value: rootDiagramLocationValue,
+                    },
+                    ...projects.map((project) => ({
+                      label: project.name,
+                      value: project.id,
+                    })),
+                  ]}
+                />
+                <FieldError>{errors.projectId?.message}</FieldError>
+                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                  Folders are optional. Choose one only when this diagram should be grouped with related ERDs.
+                </p>
+              </label>
 
               {createDiagramError ? (
                 <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">

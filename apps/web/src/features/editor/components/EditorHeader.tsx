@@ -1,5 +1,5 @@
 import type { DiagramModel } from '@tabliodb/schema-core';
-import { ProjectRole, type ProjectRoleValue } from '@tabliodb/shared';
+import { OrganizationRole, ProjectRole, type OrganizationRoleValue, type ProjectRoleValue } from '@tabliodb/shared';
 import type {
   DiagramResponseDtoOutput,
   OrganizationDtoOutput,
@@ -11,7 +11,6 @@ import { History, LocateFixed, Loader2, MessageSquareText, Play, Redo2, Save, Un
 import LOGO from '@/assets/logo.svg';
 import type { DiagramCollaborationStatus } from '@/features/collaboration/collaboration-client';
 import { CollaborationPresence, type CollaboratorPresence } from '../collaboration-status';
-import { DiagramSettingsDialog } from './DiagramSettingsDialog';
 import { NotificationInboxMenu, UserAccountMenu, type NotificationInboxItem } from './EditorHeaderMenus';
 import { EditorMoreActionsMenu } from './EditorMoreActionsMenu';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
@@ -42,6 +41,8 @@ export function EditorHeader({
   collaborationStatus,
   currentDraftPersisted,
   currentUser,
+  diagramLibraryOpen,
+  diagramLibraryStackOpen,
   diagrams,
   importDiagramPending,
   isExporting,
@@ -60,6 +61,7 @@ export function EditorHeader({
   onCreateSnapshot,
   onCreateWorkspace,
   onDiagramSelect,
+  onDiagramLibraryOpenChange,
   onDiagramUpdated,
   onDownloadSql,
   onExportJson,
@@ -80,7 +82,6 @@ export function EditorHeader({
   onOpenSqlPreview,
   onOrganizationSelect,
   onProjectArchived,
-  onProjectSelect,
   onRedo,
   onUndo,
   onUserLogout,
@@ -107,6 +108,8 @@ export function EditorHeader({
   collaborationStatus: DiagramCollaborationStatus;
   currentDraftPersisted: boolean;
   currentUser: AvatarIdentity & { email: string };
+  diagramLibraryOpen: boolean;
+  diagramLibraryStackOpen: boolean;
   diagrams: DiagramResponseDto[];
   importDiagramPending: boolean;
   isExporting: boolean;
@@ -120,11 +123,12 @@ export function EditorHeader({
   notificationsOpen: boolean;
   onAdmin: () => void;
   onCopySql: HeaderAction;
-  onCreateDiagram: () => void;
+  onCreateDiagram: (projectId?: string | null) => void;
   onCreateProject: () => void;
   onCreateSnapshot: () => void;
   onCreateWorkspace: () => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
+  onDiagramLibraryOpenChange: (open: boolean) => void;
   onDiagramUpdated: (diagram: DiagramResponseDto) => void;
   onDownloadSql: HeaderAction;
   onExportJson: HeaderAction;
@@ -145,7 +149,6 @@ export function EditorHeader({
   onOpenSqlPreview: () => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
   onProjectArchived: () => void;
-  onProjectSelect: (project: ProjectResponseDto) => void;
   onRedo: () => void;
   onToggleMinimap: () => void;
   onUndo: () => void;
@@ -169,22 +172,27 @@ export function EditorHeader({
           activeProject={activeProject}
           canCreateDiagram={canCreateDiagram}
           canCreateProject={canCreateProject}
+          canEditDiagram={canEditDiagram}
+          diagramLibraryOpen={diagramLibraryOpen}
           diagrams={diagrams}
+          model={model}
           onCreateDiagram={onCreateDiagram}
           onCreateProject={onCreateProject}
           onCreateWorkspace={onCreateWorkspace}
           onDiagramSelect={onDiagramSelect}
+          onDiagramLibraryOpenChange={onDiagramLibraryOpenChange}
+          onDiagramUpdated={onDiagramUpdated}
           onOrganizationSelect={onOrganizationSelect}
-          onProjectSelect={onProjectSelect}
           organizations={organizations}
           projects={projects}
+          stackedDialogOpen={diagramLibraryStackOpen}
         />
       </div>
 
       {/* Header hanya menerima callback dari parent; route reset, mutation reset, dan model sync tetap berada di EditorPage sebagai orchestration boundary. */}
       <div className="tabliodb-scrollbar flex min-w-0 max-w-[64vw] shrink-0 items-center gap-1 overflow-x-auto py-1 max-[700px]:max-w-[58vw]">
         <Badge className="hidden md:inline-flex" variant={canEditDiagram ? 'green' : 'yellow'}>
-          {activeProject ? formatProjectRole(activeProject.projectRole) : 'Workspace'}
+          {activeProject ? formatProjectRole(activeProject.projectRole) : formatOrganizationRole(activeOrganization.role)}
         </Badge>
         {canEditDiagram ? (
           <div className="hidden items-center gap-1 xl:flex">
@@ -232,14 +240,6 @@ export function EditorHeader({
         {canManageWorkspace ? <WorkspaceSettingsDialog organization={activeOrganization} /> : null}
         {canManageProject && activeProject ? (
           <ProjectSettingsDialog onArchived={onProjectArchived} project={activeProject} />
-        ) : null}
-        {canEditDiagram ? (
-          <DiagramSettingsDialog
-            canEdit={canEditDiagram}
-            diagram={activeDiagram}
-            model={model}
-            onUpdated={onDiagramUpdated}
-          />
         ) : null}
         {canCreateSnapshot ? (
           <Button className="gap-2 px-3" disabled={snapshotSavePending} onClick={onCreateSnapshot}>
@@ -289,5 +289,14 @@ function formatProjectRole(role: ProjectRoleValue): string {
     [ProjectRole.Editor]: 'Editor',
     [ProjectRole.Owner]: 'Owner',
     [ProjectRole.Viewer]: 'Viewer',
+  }[role];
+}
+
+function formatOrganizationRole(role: OrganizationRoleValue): string {
+  return {
+    [OrganizationRole.Admin]: 'Admin',
+    [OrganizationRole.Guest]: 'Guest',
+    [OrganizationRole.Member]: 'Member',
+    [OrganizationRole.Owner]: 'Owner',
   }[role];
 }

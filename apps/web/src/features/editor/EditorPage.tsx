@@ -163,6 +163,8 @@ export function EditorPage() {
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createDiagramOpen, setCreateDiagramOpen] = useState(false);
+  const [createDiagramDefaultProjectId, setCreateDiagramDefaultProjectId] = useState<string | null>(null);
+  const [diagramLibraryOpen, setDiagramLibraryOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [minimapToggleSignal, setMinimapToggleSignal] = useState(0);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
@@ -239,19 +241,12 @@ export function EditorPage() {
     projects,
     routeProjectId,
   });
-  const projectDiagramsQueryOptions = diagramsQueries.listForProject(activeProject);
   const workspaceDiagramsQueryOptions = diagramsQueries.listForWorkspace(activeOrganization);
-  const projectDiagramsQuery = useQuery({
-    ...projectDiagramsQueryOptions,
-    // Project query is only active on folder routes; workspace routes use the root diagram feed instead.
-    enabled: Boolean(activeProject) && projectDiagramsQueryOptions.enabled !== false,
-  });
-  const workspaceDiagramsQuery = useQuery({
+  const diagramsQuery = useQuery({
     ...workspaceDiagramsQueryOptions,
-    // Keeping both hooks mounted preserves hook order while avoiding duplicate diagram fetches.
-    enabled: !activeProject && workspaceDiagramsQueryOptions.enabled !== false,
+    // Diagram browsing is workspace-first now; folders are metadata filters, not separate editor feeds.
+    enabled: Boolean(activeOrganization) && workspaceDiagramsQueryOptions.enabled !== false,
   });
-  const diagramsQuery = activeProject ? projectDiagramsQuery : workspaceDiagramsQuery;
   const diagrams = diagramsQuery.data ?? [];
   const activeDiagram = useEditorActiveDiagram({
     diagrams,
@@ -1396,7 +1391,7 @@ export function EditorPage() {
             }
           />
         }
-        description="Create a workspace first, then add projects and diagrams inside it. Invited users will only see workspaces assigned by an owner or admin."
+        description="Create a workspace first, then add diagrams inside it. Folders stay optional when the diagram list grows."
         icon={Building2}
         onRetry={() => void queryClient.invalidateQueries()}
         title="No workspace yet"
@@ -1431,7 +1426,7 @@ export function EditorPage() {
                 });
               }}
               organizationId={activeOrganization.id}
-              projectId={null}
+              projects={projects}
               trigger={
                 <Button className="gap-2">
                   <FileText className="size-4" />
@@ -1518,6 +1513,8 @@ export function EditorPage() {
         collaborators={collaborators}
         currentDraftPersisted={currentDraftPersisted}
         currentUser={currentUser}
+        diagramLibraryOpen={diagramLibraryOpen}
+        diagramLibraryStackOpen={createDiagramOpen || createProjectOpen}
         diagrams={diagrams}
         importDiagramPending={importDiagramMutation.isPending}
         isExporting={diagramExportActions.isExporting}
@@ -1531,17 +1528,23 @@ export function EditorPage() {
         notificationsOpen={notificationsOpen}
         onAdmin={editorRouteActions.goToAdminSettings}
         onCopySql={diagramExportActions.copySql}
-        onCreateDiagram={() => setCreateDiagramOpen(true)}
+        onCreateDiagram={(projectId = null) => {
+          // The diagram library can suggest a folder, but the create dialog still exposes "No folder" explicitly.
+          setCreateDiagramDefaultProjectId(projectId);
+          setCreateDiagramOpen(true);
+        }}
         onCreateProject={() => setCreateProjectOpen(true)}
         onCreateSnapshot={() => handleSaveSnapshot()}
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         onDiagramSelect={(diagram) => {
+          setDiagramLibraryOpen(false);
           editorRouteActions.goToDiagram({
             diagramId: diagram.id,
             projectId: diagram.projectId,
             workspaceSlug: getOrganizationSlug(activeOrganization),
           });
         }}
+        onDiagramLibraryOpenChange={setDiagramLibraryOpen}
         onDiagramUpdated={(diagram) => {
           setModel((current) => {
             if (!current) {
@@ -1584,9 +1587,6 @@ export function EditorPage() {
         }}
         onProjectArchived={() => {
           editorRouteActions.goHome({ replace: true });
-        }}
-        onProjectSelect={(project) => {
-          editorRouteActions.goToProject(project);
         }}
         onRedo={handleRedoModelChange}
         onToggleMinimap={() => setMinimapToggleSignal((value) => value + 1)}
@@ -1772,10 +1772,10 @@ export function EditorPage() {
 
       {canCreateProject ? (
         <CreateProjectDialog
-          onCreated={(project) => {
+          onCreated={() => {
             setCreateProjectOpen(false);
-            // Newly-created project folders become the active project so the next diagram action lands in the expected place.
-            editorRouteActions.goToProject(project);
+            // Folder creation is organization-only now; the active canvas stays put until the user opens a diagram.
+            setDiagramLibraryOpen(true);
           }}
           onOpenChange={setCreateProjectOpen}
           open={createProjectOpen}
@@ -1787,18 +1787,27 @@ export function EditorPage() {
       {canCreateDiagram ? (
         <CreateDiagramDialog
           defaultDialect={model.dialect}
+          defaultProjectId={createDiagramDefaultProjectId}
           onCreated={(diagram) => {
             setCreateDiagramOpen(false);
+            setDiagramLibraryOpen(false);
+            setCreateDiagramDefaultProjectId(null);
             editorRouteActions.goToDiagram({
               diagramId: diagram.id,
               projectId: diagram.projectId,
               workspaceSlug: getOrganizationSlug(activeOrganization),
             });
           }}
-          onOpenChange={setCreateDiagramOpen}
+          onOpenChange={(open) => {
+            setCreateDiagramOpen(open);
+
+            if (!open) {
+              setCreateDiagramDefaultProjectId(null);
+            }
+          }}
           open={createDiagramOpen}
           organizationId={activeOrganization.id}
-          projectId={activeProject?.id ?? null}
+          projects={projects}
           trigger={null}
         />
       ) : null}

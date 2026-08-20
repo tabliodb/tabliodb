@@ -17,7 +17,7 @@ import {
   IconButton,
 } from '@tabliodb/ui';
 import { Loader2, Save, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledInput, ControlledSelect } from '@/features/app/FormControls';
@@ -50,11 +50,13 @@ export function DiagramSettingsDialog({
   diagram,
   model,
   onUpdated,
+  trigger,
 }: {
   canEdit: boolean;
   diagram: DiagramResponseDto;
   model: DiagramModel;
   onUpdated: (diagram: DiagramResponseDto) => void;
+  trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const form = useForm<DiagramSettingsFormState>({
@@ -122,7 +124,7 @@ export function DiagramSettingsDialog({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="ghost" />
+        {trigger ?? <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="ghost" />}
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,520px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
@@ -185,7 +187,7 @@ export function DiagramSettingsDialog({
 
               {!canEdit ? (
                 <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-gold-border))] bg-[rgb(var(--tabliodb-gold-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-gold-text))]">
-                  Your project role can view this diagram but cannot update diagram settings.
+                  Your access role can view this diagram but cannot update diagram settings.
                 </div>
               ) : null}
 
