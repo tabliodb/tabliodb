@@ -1,0 +1,85 @@
+{
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "Follow Conventional Commits using the format: <type>(<scope>): <description>. The scope is optional when no single meaningful scope applies."
+    },
+    {
+      "text": "Allowed types: feat, fix, refactor, perf, test, docs, build, ci, chore, style."
+    },
+    {
+      "text": "Use feat only for a new user-facing or developer-facing capability."
+    },
+    {
+      "text": "Use fix only for correcting incorrect or broken behavior."
+    },
+    {
+      "text": "Use refactor for internal code restructuring that neither fixes a bug nor adds behavior."
+    },
+    {
+      "text": "Use perf for changes whose primary purpose is improving performance."
+    },
+    {
+      "text": "Use test for test-only changes, docs for documentation-only changes, style for formatting-only changes, build for build system or dependency changes, ci for CI/CD changes, and chore for repository maintenance that does not fit another type."
+    },
+    {
+      "text": "Choose the scope from the logical domain affected by the change rather than blindly using the directory name."
+    },
+    {
+      "text": "For TablioDB product features, prefer stable domain scopes when appropriate: auth, collaboration, editor, diagram, comments, review, share, invitations, profile, setup, project, organization, team, notifications, snapshot, or files."
+    },
+    {
+      "text": "For changes primarily contained within a reusable workspace package, prefer the package name as the scope: schema-core, sql, sdk, shared, render, ui, or docs."
+    },
+    {
+      "text": "For repository-level concerns, use scopes such as docker, openapi, e2e, deps, or config when they accurately describe the change."
+    },
+    {
+      "text": "When a feature change spans apps/web and apps/server, prefer the shared product domain as the scope instead of web or server. Example: feat(collaboration): add live cursor presence."
+    },
+    {
+      "text": "Use web or server as a scope only when the change is genuinely application-layer-specific and no more meaningful product domain exists."
+    },
+    {
+      "text": "If changes span multiple unrelated domains and there is no clear single scope, omit the scope instead of inventing a broad or misleading one."
+    },
+    {
+      "text": "Describe the resulting behavior or intent of the change, not the implementation steps or filenames."
+    },
+    {
+      "text": "Use imperative present-tense wording such as add, prevent, support, remove, simplify, or update."
+    },
+    {
+      "text": "Keep the subject concise, specific, and preferably no longer than 72 characters."
+    },
+    {
+      "text": "Use lowercase for the description unless capitalization is required for a proper name such as TablioDB, SQL, API, or OAuth."
+    },
+    {
+      "text": "Do not end the subject with a period."
+    },
+    {
+      "text": "Do not use emojis."
+    },
+    {
+      "text": "Do not use vague descriptions such as update code, update files, fix issue, various fixes, misc changes, code improvements, or refactor code."
+    },
+    {
+      "text": "Do not mention filenames, directories, implementation details, or technologies in the subject unless they are essential to understanding the change."
+    },
+    {
+      "text": "Do not repeat information already conveyed by the type or scope. For example, prefer fix(auth): prevent expired session reuse over fix(auth): fix authentication bug."
+    },
+    {
+      "text": "Use ! before the colon only for an intentional breaking change to a public API, SDK contract, schema format, configuration contract, or other externally consumed interface. Example: feat(sdk)!: replace legacy diagram client."
+    },
+    {
+      "text": "When a breaking change needs explanation, add a commit body and a BREAKING CHANGE: footer describing what consumers must change."
+    },
+    {
+      "text": "Add a commit body only when useful to explain why a non-obvious or complex change was made. Keep simple commits subject-only."
+    },
+    {
+      "text": "Generate one coherent commit message for the staged changes and do not invent changes, issue numbers, breaking changes, or motivations that are not supported by the diff."
+    }
+  ]
+}
