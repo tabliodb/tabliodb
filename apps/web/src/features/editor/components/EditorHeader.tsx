@@ -194,11 +194,6 @@ export function EditorHeader({
 
       {/* Header hanya menerima callback dari parent; route reset, mutation reset, dan model sync tetap berada di EditorPage sebagai orchestration boundary. */}
       <div className="tabliodb-scrollbar flex min-w-0 max-w-[64vw] shrink-0 items-center gap-1 overflow-x-auto py-1 max-[700px]:max-w-[58vw]">
-        <Badge className="hidden md:inline-flex" variant={canEditDiagram ? 'green' : 'yellow'}>
-          {activeProject
-            ? formatProjectRole(activeProject.projectRole)
-            : formatOrganizationRole(activeOrganization.role)}
-        </Badge>
         {canEditDiagram ? (
           <div className="hidden items-center gap-1 xl:flex">
             <IconButton disabled={!canUndoModelChange} icon={Undo2} label="Undo last edit" onClick={onUndo} />
