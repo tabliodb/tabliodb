@@ -215,7 +215,12 @@ export function SetupPage() {
                 )}
                 key={step.name}
               >
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white">
+                <span
+                  className={cn(
+                    'grid size-6 shrink-0 place-items-center rounded-full bg-white',
+                    index === stepIndex && 'text-[rgb(var(--tabliodb-primary))]',
+                  )}
+                >
                   {index < stepIndex ? (
                     <CheckCircle2 className="size-4 text-[rgb(var(--tabliodb-primary))]" />
                   ) : (
