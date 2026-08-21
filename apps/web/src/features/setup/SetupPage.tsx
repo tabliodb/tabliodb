@@ -12,7 +12,7 @@ import { useCompleteSetupMutation } from '@/resources/setup';
 import LOGO from '@/assets/logo.svg';
 
 const setupFormSchema = z.object({
-  ownerEmail: z.string().trim().email('Enter a valid owner email.'),
+  ownerEmail: z.email('Enter a valid owner email.'),
   ownerName: z.string().trim().min(1, 'Owner name is required.'),
   ownerPassword: z.string().min(8, 'Password must be at least 8 characters.'),
   publicUrl: z.string().trim().refine(isOptionalUrl, 'Enter a valid public URL.'),
