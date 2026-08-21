@@ -131,10 +131,7 @@ function WorkspaceSwitcher({
           <ChevronsUpDown className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="max-h-[min(72vh,420px)] w-[min(92vw,320px)] overflow-hidden p-2"
-      >
+      <DropdownMenuContent align="start" className="max-h-[min(72vh,420px)] w-[min(92vw,320px)] overflow-hidden p-2">
         <div className="px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
           Switch workspace
         </div>
@@ -305,7 +302,6 @@ function DiagramNavigator({
         </button>
         <span className="shrink-0 text-[rgb(var(--tabliodb-ink-subtle))]">/</span>
         <span className="group flex min-w-0 items-center gap-1 rounded-[var(--tabliodb-radius-sm)] px-1.5 py-1">
-          <span className="truncate text-[15px] font-extrabold leading-5">{activeDiagram.name}</span>
           {canEditDiagram ? (
             <DiagramSettingsDialog
               canEdit={canEditDiagram}
@@ -313,16 +309,21 @@ function DiagramNavigator({
               model={model}
               onUpdated={onDiagramUpdated}
               trigger={
-                <button
-                  aria-label={`Edit ${activeDiagram.name}`}
-                  className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-[var(--tabliodb-radius-sm)] text-[rgb(var(--tabliodb-ink-subtle))] opacity-0 transition hover:bg-[rgb(var(--tabliodb-surface-raised))] hover:text-[rgb(var(--tabliodb-ink))] group-hover:opacity-100 focus:opacity-100 focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
-                  type="button"
-                >
-                  <Pencil className="size-4" />
-                </button>
+                <div className="flex min-w-0 items-center gap-1">
+                  <span className="truncate text-[18px] leading-5">{activeDiagram.name}</span>
+                  <button
+                    aria-label={`Edit ${activeDiagram.name}`}
+                    className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-[var(--tabliodb-radius-sm)] text-[rgb(var(--tabliodb-ink-subtle))] opacity-0 transition hover:bg-[rgb(var(--tabliodb-surface-raised))] hover:text-[rgb(var(--tabliodb-ink))] group-hover:opacity-100 focus:opacity-100 focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
+                    type="button"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                </div>
               }
             />
-          ) : null}
+          ) : (
+            <span className="truncate text-[18px] leading-5">{activeDiagram.name}</span>
+          )}
         </span>
       </div>
 
