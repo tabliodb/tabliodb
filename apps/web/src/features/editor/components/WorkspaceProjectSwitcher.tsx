@@ -22,7 +22,7 @@ import {
   Input,
   cn,
 } from '@tabliodb/ui';
-import { Building2, Check, ChevronsUpDown, FileText, FolderPlus, Pencil, Plus, Search } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown, FileText, FolderOpen, FolderPlus, Pencil, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { DiagramSettingsDialog } from './DiagramSettingsDialog';
 import { DialectBadge } from './DialectIcon';
@@ -401,6 +401,7 @@ function DiagramNavigator({
                     label="All diagrams"
                     onSelect={() => setSelectedFolderFilterId(allDiagramFilterId)}
                     subtitle="Every ERD in this workspace"
+                    isFolder={false}
                   />
                   <FolderFilterButton
                     count={rootDiagramCount}
@@ -408,6 +409,7 @@ function DiagramNavigator({
                     label="No folder"
                     onSelect={() => setSelectedFolderFilterId(rootDiagramFilterId)}
                     subtitle="Standalone diagrams"
+                    isFolder={false}
                   />
                   {filteredProjects.length === 0 ? (
                     <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
@@ -422,6 +424,7 @@ function DiagramNavigator({
                         label={project.name}
                         onSelect={() => setSelectedFolderFilterId(project.id)}
                         subtitle={project.slug}
+                        isFolder={true}
                       />
                     ))
                   )}
@@ -519,12 +522,14 @@ function FolderFilterButton({
   label,
   onSelect,
   subtitle,
+  isFolder,
 }: {
   count: number;
   isSelected: boolean;
   label: string;
   onSelect: () => void;
-  subtitle: string;
+  subtitle?: string;
+  isFolder: boolean;
 }) {
   return (
     <button
@@ -537,10 +542,18 @@ function FolderFilterButton({
       onClick={onSelect}
       type="button"
     >
-      <span className="min-w-0">
-        <span className="block truncate text-[13px] font-extrabold">{label}</span>
-        <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">{subtitle}</span>
-      </span>
+      <div className="min-w-0 flex items-center gap-2">
+        {isFolder ? <FolderOpen className="size-4 shrink-0 text-[rgb(var(--tabliodb-ink-muted))]" /> : null}
+        <span className="min-w-0">
+          <span className={cn('block truncate text-[13px] font-extrabold', isFolder && 'font-medium')}>{label}</span>
+          {!isFolder && (
+            <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+              {subtitle}
+            </span>
+          )}
+        </span>
+      </div>
+
       <span className="flex shrink-0 items-center gap-2">
         <Badge variant="neutral">{count}</Badge>
         {isSelected ? <Check className="size-4 text-[rgb(var(--tabliodb-primary-text))]" /> : null}
