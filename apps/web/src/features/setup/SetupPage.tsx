@@ -1,18 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Badge, Button, FieldError, Surface, type InputProps, cn } from '@tabliodb/ui';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Building2,
-  CheckCircle2,
-  Database,
-  Globe2,
-  Loader2,
-  LockKeyhole,
-  Mail,
-  UserRound,
-} from 'lucide-react';
-import { useMemo, useState, type ComponentType } from 'react';
+import { Button, FieldError, Surface, type InputProps, cn } from '@tabliodb/ui';
+import { ArrowLeft, ArrowRight, CheckCircle2, Database, Loader2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useForm, type SubmitErrorHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
@@ -35,7 +24,6 @@ type SetupStep = {
   autoComplete: string;
   description: string;
   helper: string;
-  icon: ComponentType<{ className?: string }>;
   label: string;
   name: SetupFieldName;
   placeholder: string;
@@ -48,8 +36,7 @@ const setupSteps: readonly SetupStep[] = [
     autoComplete: 'name',
     description: 'This account becomes the first instance owner and can manage users, auth settings, and workspaces.',
     helper: 'Use a real person name so audit logs stay readable later.',
-    icon: UserRound,
-    label: 'Owner name',
+    label: 'Your name',
     name: 'ownerName',
     placeholder: 'Tabliodb Owner',
     title: 'Who will own this instance?',
@@ -58,8 +45,7 @@ const setupSteps: readonly SetupStep[] = [
     autoComplete: 'email',
     description: 'This email is used to sign in and receive future admin-related messages.',
     helper: 'For self-hosting, prefer an email that belongs to your team or company.',
-    icon: Mail,
-    label: 'Owner email',
+    label: 'Your email',
     name: 'ownerEmail',
     placeholder: 'owner@company.com',
     title: 'Where should the owner sign in?',
@@ -69,8 +55,7 @@ const setupSteps: readonly SetupStep[] = [
     autoComplete: 'new-password',
     description: 'Create the first password for the owner account. You can rotate it later from user management.',
     helper: 'Use at least 8 characters. A password manager is the tidy path here.',
-    icon: LockKeyhole,
-    label: 'Owner password',
+    label: 'Your password',
     name: 'ownerPassword',
     placeholder: 'Minimum 8 characters',
     title: 'Secure the owner account',
@@ -79,8 +64,7 @@ const setupSteps: readonly SetupStep[] = [
   {
     autoComplete: 'organization',
     description: 'A workspace groups users, projects, teams, diagrams, and access policy.',
-    helper: 'This does not rename the product. The app stays Tabliodb; this only names the first workspace.',
-    icon: Building2,
+    helper: 'This does not rename the product. The app stays TablioDB; this only names the first workspace.',
     label: 'Workspace name',
     name: 'workspaceName',
     placeholder: 'Personal Workspace',
@@ -88,9 +72,8 @@ const setupSteps: readonly SetupStep[] = [
   },
   {
     autoComplete: 'url',
-    description: 'Tabliodb uses this URL to build links such as invitations and password recovery.',
-    helper: 'For local development, the browser URL is fine. In production, use your real HTTPS domain.',
-    icon: Globe2,
+    description: 'TablioDB uses this URL to build links such as invitations and password recovery.',
+    helper: 'Use your real HTTPS domain.',
     label: 'Public URL',
     name: 'publicUrl',
     placeholder: 'https://tabliodb.company.com',
@@ -195,8 +178,6 @@ export function SetupPage() {
     }
   };
 
-  const StepIcon = currentStep?.icon ?? CheckCircle2;
-
   return (
     <main className="grid min-h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] px-4 py-8 text-[rgb(var(--tabliodb-ink))] sm:px-6">
       <Surface className="grid w-full max-w-5xl overflow-hidden p-0 md:grid-cols-[320px_minmax(0,1fr)]" depth="md">
@@ -269,13 +250,6 @@ export function SetupPage() {
           }}
         >
           <section className="grid content-center gap-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="grid size-14 place-items-center rounded-[22px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))] shadow-[0_3px_0_rgb(var(--tabliodb-sky-border))]">
-                <StepIcon className="size-7" />
-              </div>
-              <Badge variant={isReviewStep ? 'green' : 'blue'}>{isReviewStep ? 'Ready' : 'Setup'}</Badge>
-            </div>
-
             {currentStep ? (
               <div className="max-w-xl">
                 <p className="text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
@@ -340,9 +314,7 @@ export function SetupPage() {
               </div>
             )}
 
-            {setupMutation.error ? (
-              <InlineErrorState error={setupMutation.error} title="Setup failed" />
-            ) : null}
+            {setupMutation.error ? <InlineErrorState error={setupMutation.error} title="Setup failed" /> : null}
           </section>
 
           <footer className="mt-7 flex flex-col-reverse gap-3 border-t border-[rgb(var(--tabliodb-border))] pt-5 sm:flex-row sm:items-center sm:justify-between">
