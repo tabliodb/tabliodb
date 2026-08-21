@@ -9,6 +9,7 @@ import { routes } from '@/app/routes';
 import { ControlledInput } from '@/features/app/FormControls';
 import { InlineErrorState } from '@/features/app/RouteStates';
 import { useCompleteSetupMutation } from '@/resources/setup';
+import LOGO from '@/assets/logo.svg';
 
 const setupFormSchema = z.object({
   ownerEmail: z.string().trim().email('Enter a valid owner email.'),
@@ -183,13 +184,7 @@ export function SetupPage() {
       <Surface className="grid w-full max-w-5xl overflow-hidden p-0 md:grid-cols-[320px_minmax(0,1fr)]" depth="md">
         <aside className="border-b border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-5 md:border-b-0 md:border-r">
           <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-[18px] border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_3px_0_rgb(var(--tabliodb-primary-border))]">
-              <Database className="size-5" />
-            </div>
-            <div>
-              <h1 className="text-base font-extrabold">Tabliodb</h1>
-              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Instance setup wizard</p>
-            </div>
+            <img src={LOGO} alt="Tabliodb Logo" className="w-28" />
           </div>
 
           <div className="mt-7">
