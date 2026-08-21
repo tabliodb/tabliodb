@@ -215,13 +215,17 @@ export function SetupPage() {
                   index === stepIndex
                     ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
                     : index < stepIndex
-                      ? 'border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]'
+                      ? 'border-[rgb(var(--tabliodb-primary-border))] text-[rgb(var(--tabliodb-ink-muted))] opacity-60'
                       : 'border-transparent bg-white text-[rgb(var(--tabliodb-ink-muted))]',
                 )}
                 key={step.name}
               >
                 <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white">
-                  {index < stepIndex ? <CheckCircle2 className="size-4" /> : index + 1}
+                  {index < stepIndex ? (
+                    <CheckCircle2 className="size-4 text-[rgb(var(--tabliodb-primary))]" />
+                  ) : (
+                    index + 1
+                  )}
                 </span>
                 <span className="min-w-0 truncate">{step.label}</span>
               </li>
