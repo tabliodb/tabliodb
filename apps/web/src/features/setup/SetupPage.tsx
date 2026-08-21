@@ -213,7 +213,7 @@ export function SetupPage() {
                 className={cn(
                   'flex items-center gap-2 rounded-[var(--tabliodb-radius-md)] border px-3 py-2 text-xs font-extrabold transition',
                   index === stepIndex
-                    ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]'
+                    ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary))] text-white'
                     : index < stepIndex
                       ? 'border-[rgb(var(--tabliodb-primary-border))] text-[rgb(var(--tabliodb-ink-muted))] opacity-60'
                       : 'border-transparent bg-white text-[rgb(var(--tabliodb-ink-muted))]',
