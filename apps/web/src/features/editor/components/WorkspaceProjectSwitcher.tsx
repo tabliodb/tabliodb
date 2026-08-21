@@ -25,7 +25,7 @@ import {
 import { Building2, Check, ChevronsUpDown, FileText, FolderPlus, Pencil, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { DiagramSettingsDialog } from './DiagramSettingsDialog';
-import { DialectBadge, formatDialectLabel } from './DialectIcon';
+import { DialectBadge } from './DialectIcon';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
@@ -490,7 +490,7 @@ function DiagramNavigator({
                           <span className="min-w-0">
                             <span className="block truncate text-[14px] font-black">{diagram.name}</span>
                             <span className="mt-1 block text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {formatDialectLabel(diagram.dialect)} / {folderName}
+                              {folderName}
                             </span>
                           </span>
                           <span className="mt-3 flex items-center justify-between gap-2">
