@@ -71,6 +71,7 @@ describe(DiagramService.name, () => {
     getMember: vi.fn(),
     replaceDocumentModel: vi.fn(),
     removeMember: vi.fn(),
+    transferOwnership: vi.fn(),
     update: vi.fn(),
     updateMember: vi.fn(),
     upsertMember: vi.fn(),
@@ -78,6 +79,7 @@ describe(DiagramService.name, () => {
   const organizationRepository = {
     addMemberIfAbsent: vi.fn(),
     getByIdForUser: vi.fn(),
+    getMember: vi.fn(),
     getRole: vi.fn(),
   };
   const projectRepository = {
@@ -298,6 +300,131 @@ describe(DiagramService.name, () => {
     // Self-management is rejected before member lookup so an owner cannot demote and re-promote themselves.
     expect(diagramRepository.getMember).not.toHaveBeenCalled();
     expect(diagramRepository.updateMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents assigning diagram owner through the generic member update endpoint', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+
+    await expect(
+      service.updateMember(auth, 'diagram-id', 'target-user-id', {
+        role: ProjectRole.Owner,
+      } as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Owner changes must go through transferOwnership so the audit trail and single-owner normalization stay consistent.
+    expect(diagramRepository.getMember).not.toHaveBeenCalled();
+    expect(diagramRepository.updateMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents assigning diagram owner through the generic member create endpoint', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+
+    await expect(
+      service.addMember(auth, 'diagram-id', {
+        email: 'target@tabliodb.local',
+        role: ProjectRole.Owner,
+      } as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // The email is not resolved when the role itself is invalid for this generic endpoint.
+    expect(userRepository.getByEmail).not.toHaveBeenCalled();
+    expect(diagramRepository.upsertMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents transferring diagram ownership to yourself', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+
+    await expect(
+      service.transferOwnership(auth, 'diagram-id', {
+        userId: 'user-id',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Self-transfer is rejected before workspace/member lookup because it does not change ownership meaningfully.
+    expect(organizationRepository.getMember).not.toHaveBeenCalled();
+    expect(diagramRepository.transferOwnership).not.toHaveBeenCalled();
+  });
+
+  it('prevents transferring diagram ownership to a user without diagram access', async () => {
+    projectRepository.getDiagramRole
+      .mockResolvedValueOnce({ role: ProjectRole.Owner })
+      .mockResolvedValueOnce(undefined);
+    diagramRepository.getById.mockResolvedValue(diagram);
+    organizationRepository.getMember.mockResolvedValue({
+      status: 'active',
+      userId: 'target-user-id',
+    });
+
+    await expect(
+      service.transferOwnership(auth, 'diagram-id', {
+        userId: 'target-user-id',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // A target must already be visible in effective access before they can receive ownership.
+    expect(diagramRepository.transferOwnership).not.toHaveBeenCalled();
+  });
+
+  it('transfers diagram ownership to an existing collaborator', async () => {
+    projectRepository.getDiagramRole
+      .mockResolvedValueOnce({ role: ProjectRole.Owner })
+      .mockResolvedValueOnce({ role: ProjectRole.Viewer });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    organizationRepository.getMember.mockResolvedValue({
+      status: 'active',
+      userId: 'target-user-id',
+    });
+    diagramRepository.getMember.mockResolvedValue({
+      avatarUrl: null,
+      createdAt: new Date('2026-07-29T11:30:00.000Z'),
+      cursorColor: '#1cb0f6',
+      email: 'target@tabliodb.local',
+      name: 'Target User',
+      role: ProjectRole.Viewer,
+      updatedAt: new Date('2026-07-29T11:30:00.000Z'),
+      userId: 'target-user-id',
+    });
+    diagramRepository.transferOwnership.mockResolvedValue({
+      avatarUrl: null,
+      createdAt: new Date('2026-07-29T11:30:00.000Z'),
+      cursorColor: '#1cb0f6',
+      email: 'target@tabliodb.local',
+      name: 'Target User',
+      role: ProjectRole.Owner,
+      updatedAt: new Date('2026-07-29T12:00:00.000Z'),
+      userId: 'target-user-id',
+    });
+
+    await expect(
+      service.transferOwnership(auth, 'diagram-id', {
+        userId: 'target-user-id',
+      }),
+    ).resolves.toMatchObject({
+      email: 'target@tabliodb.local',
+      role: ProjectRole.Owner,
+      updatedAt: '2026-07-29T12:00:00.000Z',
+    });
+
+    expect(diagramRepository.transferOwnership).toHaveBeenCalledWith('diagram-id', {
+      createdById: 'user-id',
+      userId: 'target-user-id',
+    });
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'diagram.member_role_updated',
+        entityId: 'target-user-id',
+        metadata: expect.objectContaining({
+          role: {
+            after: ProjectRole.Owner,
+            before: ProjectRole.Viewer,
+          },
+          transfer: true,
+        }),
+      }),
+    );
   });
 
   it('prevents removing your own direct diagram access', async () => {

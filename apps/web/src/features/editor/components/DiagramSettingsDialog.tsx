@@ -50,16 +50,21 @@ export function DiagramSettingsDialog({
   canEdit,
   diagram,
   model,
+  onOpenChange,
   onUpdated,
+  open,
   trigger,
 }: {
   canEdit: boolean;
   diagram: DiagramResponseDto;
-  model: DiagramModel;
+  model?: DiagramModel;
+  onOpenChange?: (open: boolean) => void;
   onUpdated: (diagram: DiagramResponseDto) => void;
+  open?: boolean;
   trigger?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = open ?? internalOpen;
   const form = useForm<DiagramSettingsFormState>({
     defaultValues: getDiagramSettingsDefaults(diagram),
     mode: 'onBlur',
@@ -70,27 +75,33 @@ export function DiagramSettingsDialog({
   const diagramReviewSettingsQuery = useQuery({
     ...diagramReviewSettingsQueryOptions,
     // Dialog settings menjadi fetch boundary; rule override baru dimuat ketika user benar-benar membuka modal.
-    enabled: open && diagramReviewSettingsQueryOptions.enabled !== false,
+    enabled: dialogOpen && diagramReviewSettingsQueryOptions.enabled !== false,
   });
   const updateDiagramMutation = useUpdateDiagramMutation();
   const updateDiagramReviewSettingsMutation = useUpdateDiagramReviewSignalSettingsMutation();
   const isPending = updateDiagramMutation.isPending || updateDiagramReviewSettingsMutation.isPending;
-  const hasUnsavedDialectChange = model.dialect !== diagram.dialect;
+  const liveModelDialect = model?.dialect;
+  const hasUnsavedDialectChange = liveModelDialect !== undefined && liveModelDialect !== diagram.dialect;
 
   useEffect(() => {
-    if (open) {
+    if (dialogOpen) {
       form.reset(getDiagramSettingsDefaults(diagram, diagramReviewSettingsQuery.data));
       updateDiagramMutation.reset();
       updateDiagramReviewSettingsMutation.reset();
     }
-  }, [diagram, diagramReviewSettingsQuery.data, form, open]);
+  }, [diagram, diagramReviewSettingsQuery.data, dialogOpen, form]);
+
+  function setDialogOpen(nextOpen: boolean) {
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  }
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && isPending) {
       return;
     }
 
-    setOpen(nextOpen);
+    setDialogOpen(nextOpen);
 
     if (!nextOpen) {
       form.reset(getDiagramSettingsDefaults(diagram, diagramReviewSettingsQuery.data));
@@ -119,14 +130,16 @@ export function DiagramSettingsDialog({
     // Rename/dialect dan review override adalah satu intent UI, jadi reset form memakai hasil kedua endpoint sekaligus.
     form.reset(getDiagramSettingsDefaults(updatedDiagram, updatedReviewSettings));
     onUpdated(updatedDiagram);
-    setOpen(false);
+    setDialogOpen(false);
   }
 
   return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogTrigger asChild>
-        {trigger ?? <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="ghost" />}
-      </DialogTrigger>
+    <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
+      {trigger !== null ? (
+        <DialogTrigger asChild>
+          {trigger ?? <IconButton icon={SlidersHorizontal} label="Diagram settings" variant="ghost" />}
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="w-[min(94vw,520px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
@@ -189,9 +202,9 @@ export function DiagramSettingsDialog({
                 </div>
               ) : null}
 
-              {hasUnsavedDialectChange ? (
+              {hasUnsavedDialectChange && liveModelDialect ? (
                 <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-sky-text))]">
-                  The open snapshot uses {formatDiagramDialect(model.dialect)} while the diagram record uses{' '}
+                  The open snapshot uses {formatDiagramDialect(liveModelDialect)} while the diagram record uses{' '}
                   {formatDiagramDialect(diagram.dialect)}.
                 </div>
               ) : null}

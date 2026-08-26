@@ -18,6 +18,7 @@ import {
   DiagramMemberListResponseDto,
   DiagramMemberRemoveResponseDto,
   DiagramMemberUpdateDto,
+  DiagramOwnershipTransferDto,
   DiagramResponseDto,
   DiagramUpdateDto,
   WorkspaceDiagramCreateDto,
@@ -125,6 +126,21 @@ export class DiagramController {
     @Body() dto: DiagramMemberCreateDto,
   ): Promise<DiagramMemberDto> {
     return this.service.addMember(auth, diagramId, dto);
+  }
+
+  @Post(':diagramId/ownership/transfer')
+  @RateLimit(RateLimitPreset.DiagramWrite)
+  @RequirePermission(Permission.DiagramMemberManage, { key: 'diagramId', source: 'param', type: 'diagram' })
+  @ApiParam({ name: 'diagramId', type: String })
+  @ApiBody({ type: DiagramOwnershipTransferDto })
+  @ApiOperation({ operationId: 'transferDiagramOwnership' })
+  @ZodResponse({ status: HttpStatus.OK, type: DiagramMemberDto })
+  transferDiagramOwnership(
+    @Auth() auth: AuthContext,
+    @Param('diagramId') diagramId: string,
+    @Body() dto: DiagramOwnershipTransferDto,
+  ): Promise<DiagramMemberDto> {
+    return this.service.transferOwnership(auth, diagramId, dto);
   }
 
   @Patch(':diagramId/members/:userId')

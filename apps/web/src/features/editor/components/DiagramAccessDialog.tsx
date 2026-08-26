@@ -2,7 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import {
   AccessType as SdkDiagramAccessType,
-  Role as SdkDiagramMemberRole,
+  Role2 as SdkDiagramMemberCreateRole,
+  Role4 as SdkDiagramMemberUpdateRole,
   SourceType as SdkDiagramAccessSourceType,
   type DiagramEffectiveAccessDtoOutput,
   type DiagramResponseDtoOutput,
@@ -32,6 +33,7 @@ import {
   diagramsQueries,
   useAddDiagramMemberMutation,
   useRemoveDiagramMemberMutation,
+  useTransferDiagramOwnershipMutation,
   useUpdateDiagramMemberMutation,
 } from '@/resources/diagrams';
 import { selectClassName } from '../editor-form-styles';
@@ -42,9 +44,9 @@ type DiagramResponseDto = DiagramResponseDtoOutput;
 
 const diagramAccessPageQuery = { limit: 50 } as const;
 const diagramAssignableRoleOptions = [
-  SdkDiagramMemberRole.Editor,
-  SdkDiagramMemberRole.Commenter,
-  SdkDiagramMemberRole.Viewer,
+  SdkDiagramMemberCreateRole.Editor,
+  SdkDiagramMemberCreateRole.Commenter,
+  SdkDiagramMemberCreateRole.Viewer,
 ] as const;
 
 const shareFormSchema = z.object({
@@ -56,13 +58,23 @@ type ShareFormState = z.infer<typeof shareFormSchema>;
 
 const shareFormDefaults: ShareFormState = {
   email: '',
-  role: SdkDiagramMemberRole.Viewer,
+  role: SdkDiagramMemberCreateRole.Viewer,
 };
 
-export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean; diagram: DiagramResponseDto }) {
+export function DiagramAccessDialog({
+  canManage,
+  currentUserId,
+  diagram,
+}: {
+  canManage: boolean;
+  currentUserId: string;
+  diagram: DiagramResponseDto;
+}) {
   const [confirmRemoveUserId, setConfirmRemoveUserId] = useState<string | null>(null);
+  const [confirmTransferUserId, setConfirmTransferUserId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [transferringUserId, setTransferringUserId] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const effectiveAccessQueryOptions = diagramsQueries.effectiveAccess(diagram.id, diagramAccessPageQuery);
   const effectiveAccessQuery = useQuery({
@@ -72,6 +84,7 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
   });
   const addDiagramMemberMutation = useAddDiagramMemberMutation();
   const updateDiagramMemberMutation = useUpdateDiagramMemberMutation();
+  const transferDiagramOwnershipMutation = useTransferDiagramOwnershipMutation();
   const removeDiagramMemberMutation = useRemoveDiagramMemberMutation();
   const form = useForm<ShareFormState>({
     defaultValues: shareFormDefaults,
@@ -82,15 +95,21 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
   const isMemberMutationPending =
     addDiagramMemberMutation.isPending ||
     updateDiagramMemberMutation.isPending ||
+    transferDiagramOwnershipMutation.isPending ||
     removeDiagramMemberMutation.isPending;
   const mutationError =
-    addDiagramMemberMutation.error ?? updateDiagramMemberMutation.error ?? removeDiagramMemberMutation.error;
+    addDiagramMemberMutation.error ??
+    updateDiagramMemberMutation.error ??
+    transferDiagramOwnershipMutation.error ??
+    removeDiagramMemberMutation.error;
 
   useEffect(() => {
     if (!open) {
       form.reset(shareFormDefaults);
       setConfirmRemoveUserId(null);
+      setConfirmTransferUserId(null);
       setRemovingUserId(null);
+      setTransferringUserId(null);
       setUpdatingUserId(null);
     }
   }, [form, open]);
@@ -117,8 +136,9 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
     );
   }
 
-  function handleUpdateRole(member: DiagramEffectiveAccessDto, role: SdkDiagramMemberRole) {
+  function handleUpdateRole(member: DiagramEffectiveAccessDto, role: SdkDiagramMemberUpdateRole) {
     setConfirmRemoveUserId(null);
+    setConfirmTransferUserId(null);
     setUpdatingUserId(member.userId);
     updateDiagramMemberMutation.mutate(
       {
@@ -132,9 +152,33 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
     );
   }
 
+  function handleTransferOwnership(member: DiagramEffectiveAccessDto) {
+    if (confirmTransferUserId !== member.userId) {
+      // Ownership is intentionally a two-step row action because it demotes existing direct owners in the same transaction.
+      setConfirmRemoveUserId(null);
+      setConfirmTransferUserId(member.userId);
+      return;
+    }
+
+    setTransferringUserId(member.userId);
+    transferDiagramOwnershipMutation.mutate(
+      {
+        body: { userId: member.userId },
+        diagramId: diagram.id,
+      },
+      {
+        onSettled: () => {
+          setConfirmTransferUserId(null);
+          setTransferringUserId(null);
+        },
+      },
+    );
+  }
+
   function handleRemoveMember(member: DiagramEffectiveAccessDto) {
     if (confirmRemoveUserId !== member.userId) {
       // A two-click delete keeps this compact dialog free from another confirmation layer while making destructive action deliberate.
+      setConfirmTransferUserId(null);
       setConfirmRemoveUserId(member.userId);
       return;
     }
@@ -250,12 +294,16 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
                   {peopleWithAccess.map((member) => (
                     <DiagramAccessPersonRow
                       confirmRemove={confirmRemoveUserId === member.userId}
+                      confirmTransfer={confirmTransferUserId === member.userId}
+                      currentUserId={currentUserId}
                       isRemoving={removingUserId === member.userId}
+                      isTransferring={transferringUserId === member.userId}
                       isUpdating={updatingUserId === member.userId}
                       key={member.userId}
                       member={member}
                       onRemove={handleRemoveMember}
                       onRoleChange={handleUpdateRole}
+                      onTransferOwnership={handleTransferOwnership}
                     />
                   ))}
                 </div>
@@ -276,26 +324,35 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
 
 function DiagramAccessPersonRow({
   confirmRemove,
+  confirmTransfer,
+  currentUserId,
   isRemoving,
+  isTransferring,
   isUpdating,
   member,
   onRemove,
   onRoleChange,
+  onTransferOwnership,
 }: {
   confirmRemove: boolean;
+  confirmTransfer: boolean;
+  currentUserId: string;
   isRemoving: boolean;
+  isTransferring: boolean;
   isUpdating: boolean;
   member: DiagramEffectiveAccessDto;
   onRemove: (member: DiagramEffectiveAccessDto) => void;
-  onRoleChange: (member: DiagramEffectiveAccessDto, role: SdkDiagramMemberRole) => void;
+  onRoleChange: (member: DiagramEffectiveAccessDto, role: SdkDiagramMemberUpdateRole) => void;
+  onTransferOwnership: (member: DiagramEffectiveAccessDto) => void;
 }) {
-  const isBusy = isRemoving || isUpdating;
+  const isBusy = isRemoving || isTransferring || isUpdating;
   const isDirectEditable = Boolean(member.directRole);
   const directRole = member.directRole ?? member.role;
-  const canEditDirectRole = isDirectEditable && directRole !== SdkDiagramMemberRole.Owner;
+  const canEditDirectRole = isDirectEditable && directRole !== 'owner';
+  const canTransferOwnership = member.userId !== currentUserId && member.role !== 'owner';
 
   return (
-    <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
+    <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
       <div className="flex min-w-0 items-center gap-3">
         <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
@@ -306,15 +363,15 @@ function DiagramAccessPersonRow({
           </p>
         </div>
       </div>
-      <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-end">
+      <div className="grid min-w-0 gap-2 sm:justify-items-end">
         {canEditDirectRole ? (
-          <>
+          <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-end">
             <label className="min-w-0 flex-1 sm:max-w-[150px]">
               <span className="sr-only">Direct role</span>
               <Select
                 className={selectClassName}
                 disabled={isBusy}
-                onValueChange={(role) => onRoleChange(member, role as SdkDiagramMemberRole)}
+                onValueChange={(role) => onRoleChange(member, role as SdkDiagramMemberUpdateRole)}
                 options={diagramAssignableRoleOptions.map((role) => ({
                   label: formatDiagramRole(role),
                   value: role,
@@ -345,7 +402,7 @@ function DiagramAccessPersonRow({
                 {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
               </Button>
             </WithTooltip>
-          </>
+          </div>
         ) : isDirectEditable ? (
           <div className="text-right">
             <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">Owner</div>
@@ -361,18 +418,49 @@ function DiagramAccessPersonRow({
             </div>
           </div>
         )}
+        {canTransferOwnership ? (
+          <WithTooltip
+            content={
+              confirmTransfer
+                ? `Click again to transfer ownership to ${member.name}`
+                : `Transfer diagram ownership to ${member.name}`
+            }
+          >
+            <Button
+              aria-label={
+                confirmTransfer
+                  ? `Confirm transfer diagram ownership to ${member.name}`
+                  : `Transfer diagram ownership to ${member.name}`
+              }
+              className={cn(
+                'justify-self-start sm:justify-self-end',
+                confirmTransfer && 'border-[rgb(var(--tabliodb-red))] text-[rgb(var(--tabliodb-red))]',
+              )}
+              disabled={isBusy}
+              onClick={() => onTransferOwnership(member)}
+              size="sm"
+              type="button"
+              variant={confirmTransfer ? 'secondary' : 'soft'}
+            >
+              {isTransferring ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {confirmTransfer ? 'Confirm transfer' : 'Transfer ownership'}
+            </Button>
+          </WithTooltip>
+        ) : null}
       </div>
     </article>
   );
 }
 
 function formatDiagramRole(role: string): string {
-  return {
-    [SdkDiagramMemberRole.Commenter]: 'Commenter',
-    [SdkDiagramMemberRole.Editor]: 'Editor',
-    [SdkDiagramMemberRole.Owner]: 'Owner',
-    [SdkDiagramMemberRole.Viewer]: 'Viewer',
-  }[role as SdkDiagramMemberRole];
+  return (
+    {
+      commenter: 'Commenter',
+      editor: 'Editor',
+      owner: 'Owner',
+      viewer: 'Viewer',
+    }[role] ?? role
+  );
 }
 
 function formatAccessSource(sourceType: SdkDiagramAccessSourceType, sourceLabel: string): string {

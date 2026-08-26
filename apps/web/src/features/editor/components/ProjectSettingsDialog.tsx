@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { Permission, ProjectRole, isGranted, permissionsForProjectRole, type ProjectRoleValue } from '@tabliodb/shared';
 import {
-  Role5 as SdkProjectMemberRole,
+  Role8 as SdkProjectMemberRole,
   type ProjectMemberDtoOutput,
   type ProjectResponseDtoOutput,
 } from '@tabliodb/sdk';
@@ -23,7 +23,7 @@ import {
   WithTooltip,
 } from '@tabliodb/ui';
 import { Archive, Loader2, Save, Settings, Trash2, UserPlus, UsersRound } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
@@ -81,13 +81,20 @@ const memberFormDefaults: MemberFormState = {
 
 export function ProjectSettingsDialog({
   onArchived,
+  onOpenChange,
+  open,
   project,
+  trigger,
 }: {
   onArchived: () => void;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   project: ProjectResponseDto;
+  trigger?: ReactNode | null;
 }) {
   const [confirmArchive, setConfirmArchive] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = open ?? internalOpen;
   const canManageProject = hasProjectPermission(project.projectRole, Permission.ProjectUpdate);
   const form = useForm<ProjectFormState>({
     defaultValues: getProjectFormDefaults(project),
@@ -110,37 +117,37 @@ export function ProjectSettingsDialog({
   const membersQuery = useQuery({
     ...membersQueryOptions,
     // Member list hanya dibutuhkan saat modal terbuka, jadi settings dialog menjadi fetch boundary.
-    enabled: open && membersQueryOptions.enabled !== false,
+    enabled: dialogOpen && membersQueryOptions.enabled !== false,
   });
   const projectReviewSettingsQueryOptions = reviewSignalQueries.projectSettings(project.id);
   const projectReviewSettingsQuery = useQuery({
     ...projectReviewSettingsQueryOptions,
     // Review defaults cukup dimuat saat user membuka settings supaya editor utama tetap ringan.
-    enabled: open && projectReviewSettingsQueryOptions.enabled !== false,
+    enabled: dialogOpen && projectReviewSettingsQueryOptions.enabled !== false,
   });
   const members = membersQuery.data?.items ?? [];
 
   useEffect(() => {
-    if (open) {
+    if (dialogOpen) {
       // Saat settings dibuka, form selalu mengikuti project terbaru dari query cache parent.
       form.reset(getProjectFormDefaults(project));
       memberForm.reset(memberFormDefaults);
       reviewSettingsForm.reset(getReviewSignalSettingsDefaults(projectReviewSettingsQuery.data));
       setConfirmArchive(false);
     }
-  }, [form, memberForm, open, project, projectReviewSettingsQuery.data, reviewSettingsForm]);
+  }, [dialogOpen, form, memberForm, project, projectReviewSettingsQuery.data, reviewSettingsForm]);
 
   const updateProjectMutation = useUpdateProjectMutation({
     mutationConfig: {
       onSuccess: () => {
-        setOpen(false);
+        setDialogOpen(false);
       },
     },
   });
   const archiveProjectMutation = useArchiveProjectMutation({
     mutationConfig: {
       onSuccess: () => {
-        setOpen(false);
+        setDialogOpen(false);
         onArchived();
       },
     },
@@ -171,12 +178,17 @@ export function ProjectSettingsDialog({
   const isReviewSettingsMutationPending = updateProjectReviewSettingsMutation.isPending;
   const isReviewSettingsPending = projectReviewSettingsQuery.isFetching || isReviewSettingsMutationPending;
 
+  function setDialogOpen(nextOpen: boolean) {
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  }
+
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && (isProjectMutationPending || isMemberMutationPending || isReviewSettingsMutationPending)) {
       return;
     }
 
-    setOpen(nextOpen);
+    setDialogOpen(nextOpen);
 
     if (!nextOpen) {
       form.reset(getProjectFormDefaults(project));
@@ -254,10 +266,12 @@ export function ProjectSettingsDialog({
   const removingUserId = removeProjectMemberMutation.isPending ? removeProjectMemberMutation.variables?.userId : null;
 
   return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogTrigger asChild>
-        <IconButton icon={Settings} label="Folder settings" variant="ghost" />
-      </DialogTrigger>
+    <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
+      {trigger !== null ? (
+        <DialogTrigger asChild>
+          {trigger ?? <IconButton icon={Settings} label="Folder settings" variant="ghost" />}
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="w-[min(94vw,680px)]">
         <DialogHeader>
           <DialogTitle>Folder settings</DialogTitle>

@@ -1,5 +1,4 @@
 import type { DiagramModel } from '@tabliodb/schema-core';
-import { OrganizationRole, ProjectRole, type OrganizationRoleValue, type ProjectRoleValue } from '@tabliodb/shared';
 import type {
   DiagramResponseDtoOutput,
   OrganizationDtoOutput,
@@ -14,10 +13,8 @@ import { CollaborationPresence, type CollaboratorPresence } from '../collaborati
 import { DiagramAccessDialog } from './DiagramAccessDialog';
 import { NotificationInboxMenu, UserAccountMenu, type NotificationInboxItem } from './EditorHeaderMenus';
 import { EditorMoreActionsMenu } from './EditorMoreActionsMenu';
-import { ProjectSettingsDialog } from './ProjectSettingsDialog';
 import type { AvatarIdentity } from './UserAvatar';
 import { WorkspaceProjectSwitcher } from './WorkspaceProjectSwitcher';
-import { WorkspaceSettingsDialog } from './WorkspaceSettingsDialog';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
@@ -35,7 +32,6 @@ export function EditorHeader({
   canCreateSnapshot,
   canEditDiagram,
   canManageDiagramMembers,
-  canManageProject,
   canManageWorkspace,
   canRedoModelChange,
   canUndoModelChange,
@@ -104,14 +100,13 @@ export function EditorHeader({
   canCreateSnapshot: boolean;
   canEditDiagram: boolean;
   canManageDiagramMembers: boolean;
-  canManageProject: boolean;
   canManageWorkspace: boolean;
   canRedoModelChange: boolean;
   canUndoModelChange: boolean;
   collaborators: CollaboratorPresence[];
   collaborationStatus: DiagramCollaborationStatus;
   currentDraftPersisted: boolean;
-  currentUser: AvatarIdentity & { email: string; instanceRole?: 'owner' | 'admin' | null };
+  currentUser: AvatarIdentity & { email: string; id: string; instanceRole?: 'owner' | 'admin' | null };
   diagramLibraryOpen: boolean;
   diagramLibraryStackOpen: boolean;
   diagrams: DiagramResponseDto[];
@@ -180,6 +175,7 @@ export function EditorHeader({
           canCreateDiagram={canCreateDiagram}
           canCreateProject={canCreateProject}
           canEditDiagram={canEditDiagram}
+          canManageWorkspace={canManageWorkspace}
           diagramLibraryOpen={diagramLibraryOpen}
           diagrams={diagrams}
           model={model}
@@ -190,6 +186,7 @@ export function EditorHeader({
           onDiagramLibraryOpenChange={onDiagramLibraryOpenChange}
           onDiagramUpdated={onDiagramUpdated}
           onOrganizationSelect={onOrganizationSelect}
+          onProjectArchived={onProjectArchived}
           organizations={organizations}
           projects={projects}
           stackedDialogOpen={diagramLibraryStackOpen}
@@ -222,7 +219,11 @@ export function EditorHeader({
           </div>
         ) : null}
         {canManageDiagramMembers ? (
-          <DiagramAccessDialog canManage={canManageDiagramMembers} diagram={activeDiagram} />
+          <DiagramAccessDialog
+            canManage={canManageDiagramMembers}
+            currentUserId={currentUser.id}
+            diagram={activeDiagram}
+          />
         ) : null}
         <NotificationInboxMenu
           error={notificationError}
@@ -243,11 +244,6 @@ export function EditorHeader({
           onClick={onOpenSnapshotHistory}
         />
         <IconButton className="hidden xl:inline-flex" icon={LocateFixed} label="Fit diagram" onClick={onFitDiagram} />
-
-        {canManageWorkspace ? <WorkspaceSettingsDialog organization={activeOrganization} /> : null}
-        {canManageProject && activeProject ? (
-          <ProjectSettingsDialog onArchived={onProjectArchived} project={activeProject} />
-        ) : null}
         {canCreateSnapshot ? (
           <Button className="gap-2 px-3" disabled={snapshotSavePending} onClick={onCreateSnapshot}>
             {snapshotSavePending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
@@ -289,22 +285,4 @@ export function EditorHeader({
       </div>
     </header>
   );
-}
-
-function formatProjectRole(role: ProjectRoleValue): string {
-  return {
-    [ProjectRole.Commenter]: 'Commenter',
-    [ProjectRole.Editor]: 'Editor',
-    [ProjectRole.Owner]: 'Owner',
-    [ProjectRole.Viewer]: 'Viewer',
-  }[role];
-}
-
-function formatOrganizationRole(role: OrganizationRoleValue): string {
-  return {
-    [OrganizationRole.Admin]: 'Admin',
-    [OrganizationRole.Guest]: 'Guest',
-    [OrganizationRole.Member]: 'Member',
-    [OrganizationRole.Owner]: 'Owner',
-  }[role];
 }

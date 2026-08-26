@@ -250,7 +250,6 @@ export function EditorPage() {
     canCreateSnapshot,
     canEditDiagram,
     canManageDiagramMembers,
-    canManageProject,
     canManageWorkspace,
   } = useEditorPermissionFlags({
     activeDiagram,
@@ -1506,7 +1505,6 @@ export function EditorPage() {
         canCreateSnapshot={canCreateSnapshot}
         canEditDiagram={canEditDiagram}
         canManageDiagramMembers={canManageDiagramMembers}
-        canManageProject={canManageProject}
         canManageWorkspace={canManageWorkspace}
         canRedoModelChange={canRedoModelChange}
         canUndoModelChange={canUndoModelChange}

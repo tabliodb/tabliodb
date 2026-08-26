@@ -11,6 +11,7 @@ const DiagramMemberRoleSchema = z.enum([
   ProjectRole.Commenter,
   ProjectRole.Viewer,
 ]);
+const DiagramAssignableMemberRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
 const DiagramEffectiveAccessTypeSchema = z.enum(['direct', 'inherited', 'mixed']);
 const DiagramEffectiveAccessSourceTypeSchema = z.enum([
   'direct',
@@ -139,15 +140,21 @@ const DiagramEffectiveAccessListResponseSchema = z
 const DiagramMemberCreateSchema = z
   .object({
     email: z.email(),
-    role: DiagramMemberRoleSchema.default(ProjectRole.Viewer),
+    role: DiagramAssignableMemberRoleSchema.default(ProjectRole.Viewer),
   })
   .meta({ id: 'DiagramMemberCreateDto' });
 
 const DiagramMemberUpdateSchema = z
   .object({
-    role: DiagramMemberRoleSchema,
+    role: DiagramAssignableMemberRoleSchema,
   })
   .meta({ id: 'DiagramMemberUpdateDto' });
+
+const DiagramOwnershipTransferSchema = z
+  .object({
+    userId: z.uuid(),
+  })
+  .meta({ id: 'DiagramOwnershipTransferDto' });
 
 const DiagramMemberRemoveResponseSchema = z
   .object({
@@ -221,6 +228,7 @@ export class DiagramMemberListQueryDto extends createZodDto(DiagramMemberListQue
 export class DiagramMemberListResponseDto extends createZodDto(DiagramMemberListResponseSchema) {}
 export class DiagramMemberRemoveResponseDto extends createZodDto(DiagramMemberRemoveResponseSchema) {}
 export class DiagramMemberUpdateDto extends createZodDto(DiagramMemberUpdateSchema) {}
+export class DiagramOwnershipTransferDto extends createZodDto(DiagramOwnershipTransferSchema) {}
 export class DiagramResponseDto extends createZodDto(DiagramResponseSchema) {}
 export class DiagramUpdateDto extends createZodDto(DiagramUpdateSchema) {}
 export class WorkspaceDiagramCreateDto extends createZodDto(WorkspaceDiagramCreateSchema) {}

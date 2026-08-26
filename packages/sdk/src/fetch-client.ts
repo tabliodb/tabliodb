@@ -432,11 +432,11 @@ export type DiagramMemberListResponseDtoOutput = {
 };
 export type DiagramMemberCreateDto = {
   email: string;
-  role?: Role;
+  role?: Role2;
 };
 export type DiagramEffectiveAccessSourceDtoOutput = {
   inherited: boolean;
-  role: Role;
+  role: Role3;
   sourceId: string | null;
   sourceLabel: string;
   sourceName: string | null;
@@ -449,7 +449,7 @@ export type DiagramEffectiveAccessDtoOutput = {
   directRole: DirectRole | null;
   email: string;
   name: string;
-  role: Role;
+  role: Role3;
   sources: DiagramEffectiveAccessSourceDtoOutput[];
   userId: string;
 };
@@ -458,8 +458,11 @@ export type DiagramEffectiveAccessListResponseDtoOutput = {
   nextCursor: string | null;
   totalCount: number;
 };
+export type DiagramOwnershipTransferDto = {
+  userId: string;
+};
 export type DiagramMemberUpdateDto = {
-  role: Role;
+  role: Role4;
 };
 export type DiagramMemberRemoveResponseDtoOutput = {
   successful: boolean;
@@ -819,7 +822,7 @@ export type OrganizationDtoOutput = {
   id: string;
   name: string;
   slug: string;
-  role: Role2;
+  role: Role5;
   status: string;
   defaultProjectRole: DefaultProjectRole | null;
   allowMemberProjectCreate: boolean;
@@ -852,7 +855,7 @@ export type OrganizationMemberDtoOutput = {
   email: string;
   joinedAt: string | null;
   name: string;
-  role: Role2;
+  role: Role5;
   status: Status7;
   updatedAt: string;
   userId: string;
@@ -864,10 +867,10 @@ export type OrganizationMemberListResponseDtoOutput = {
 };
 export type OrganizationMemberCreateDto = {
   email: string;
-  role?: Role3;
+  role?: Role6;
 };
 export type OrganizationMemberUpdateDto = {
-  role: Role4;
+  role: Role7;
 };
 export type OrganizationMemberRemoveResponseDtoOutput = {
   successful: boolean;
@@ -931,7 +934,7 @@ export type ProjectMemberDtoOutput = {
   name: string;
   avatarUrl: string | null;
   cursorColor: string;
-  role: Role5;
+  role: Role8;
   createdAt: string;
   updatedAt: string;
 };
@@ -942,10 +945,10 @@ export type ProjectMemberListResponseDtoOutput = {
 };
 export type ProjectMemberCreateDto = {
   email: string;
-  role?: Role5;
+  role?: Role8;
 };
 export type ProjectMemberUpdateDto = {
-  role: Role5;
+  role: Role8;
 };
 export type ProjectMemberRemoveResponseDtoOutput = {
   successful: boolean;
@@ -1618,7 +1621,7 @@ export type TeamProjectAccessDtoOutput = {
   projectId: string;
   projectName: string;
   projectSlug: string;
-  role: Role6;
+  role: Role9;
   createdAt: string;
   updatedAt: string;
 };
@@ -1629,7 +1632,7 @@ export type TeamProjectAccessListResponseDtoOutput = {
 };
 export type TeamProjectAccessUpsertDto = {
   projectId: string;
-  role?: Role6;
+  role?: Role9;
 };
 export type TeamProjectAccessRemoveResponseDtoOutput = {
   successful: boolean;
@@ -1638,7 +1641,7 @@ export type TeamDiagramAccessDtoOutput = {
   diagramId: string;
   diagramName: string;
   projectId: string | null;
-  role: Role6;
+  role: Role9;
   createdAt: string;
   updatedAt: string;
 };
@@ -1649,7 +1652,7 @@ export type TeamDiagramAccessListResponseDtoOutput = {
 };
 export type TeamDiagramAccessUpsertDto = {
   diagramId: string;
-  role?: Role6;
+  role?: Role9;
 };
 export type TeamDiagramAccessRemoveResponseDtoOutput = {
   successful: boolean;
@@ -2633,6 +2636,30 @@ export function getDiagramEffectiveAccess(
       {
         ...opts,
       },
+    ),
+  );
+}
+export function transferDiagramOwnership(
+  {
+    diagramId,
+    diagramOwnershipTransferDto,
+  }: {
+    diagramId: string;
+    diagramOwnershipTransferDto: DiagramOwnershipTransferDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: DiagramMemberDtoOutput;
+    }>(
+      `/diagrams/${encodeURIComponent(diagramId)}/ownership/transfer`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: diagramOwnershipTransferDto,
+      }),
     ),
   );
 }
@@ -4287,12 +4314,23 @@ export enum Role {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
+export enum Role2 {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
 export enum AccessType {
   Direct = 'direct',
   Inherited = 'inherited',
   Mixed = 'mixed',
 }
 export enum DirectRole {
+  Owner = 'owner',
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum Role3 {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',
@@ -4306,6 +4344,11 @@ export enum SourceType {
   WorkspaceAdmin = 'workspace_admin',
   WorkspaceDefault = 'workspace_default',
   WorkspaceMember = 'workspace_member',
+}
+export enum Role4 {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
 }
 export enum Format {
   TabliodbJson = 'tabliodb_json',
@@ -4449,7 +4492,7 @@ export enum Type2 {
   Mention = 'mention',
   Reply = 'reply',
 }
-export enum Role2 {
+export enum Role5 {
   Owner = 'owner',
   Admin = 'admin',
   Member = 'member',
@@ -4465,12 +4508,12 @@ export enum Status7 {
   Active = 'active',
   Suspended = 'suspended',
 }
-export enum Role3 {
+export enum Role6 {
   Admin = 'admin',
   Member = 'member',
   Guest = 'guest',
 }
-export enum Role4 {
+export enum Role7 {
   Owner = 'owner',
   Admin = 'admin',
   Member = 'member',
@@ -4482,7 +4525,7 @@ export enum ProjectRole2 {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Role5 {
+export enum Role8 {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',
@@ -4537,7 +4580,7 @@ export enum Type3 {
   Relationship = 'relationship',
   Table = 'table',
 }
-export enum Role6 {
+export enum Role9 {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',

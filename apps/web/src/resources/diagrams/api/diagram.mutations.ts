@@ -7,12 +7,14 @@ import {
   exportDiagram,
   importDiagram,
   removeDiagramMember,
+  transferDiagramOwnership,
   updateDiagram,
   updateDiagramMember,
   type DiagramCreateDto,
   type DiagramImportDto,
   type DiagramMemberCreateDto,
   type DiagramMemberUpdateDto,
+  type DiagramOwnershipTransferDto,
   type DiagramReviewActionCreateDto,
   type DiagramReviewSummaryDtoOutput,
   type DiagramResponseDtoOutput,
@@ -37,6 +39,11 @@ const addDiagramMemberMutationFn = (input: { body: DiagramMemberCreateDto; diagr
   addDiagramMember({ diagramId: input.diagramId, diagramMemberCreateDto: input.body });
 const updateDiagramMemberMutationFn = (input: { body: DiagramMemberUpdateDto; diagramId: string; userId: string }) =>
   updateDiagramMember({ diagramId: input.diagramId, diagramMemberUpdateDto: input.body, userId: input.userId });
+const transferDiagramOwnershipMutationFn = (input: { body: DiagramOwnershipTransferDto; diagramId: string }) =>
+  transferDiagramOwnership({
+    diagramId: input.diagramId,
+    diagramOwnershipTransferDto: input.body,
+  });
 const removeDiagramMemberMutationFn = (input: { diagramId: string; userId: string }) =>
   removeDiagramMember({ diagramId: input.diagramId, userId: input.userId });
 const importDiagramMutationFn = (input: { body: DiagramImportDto; diagramId: string }) =>
@@ -67,6 +74,10 @@ type UseAddDiagramMemberMutationParams = {
 
 type UseUpdateDiagramMemberMutationParams = {
   mutationConfig?: MutationConfig<typeof updateDiagramMemberMutationFn>;
+};
+
+type UseTransferDiagramOwnershipMutationParams = {
+  mutationConfig?: MutationConfig<typeof transferDiagramOwnershipMutationFn>;
 };
 
 type UseRemoveDiagramMemberMutationParams = {
@@ -131,6 +142,19 @@ export function useUpdateDiagramMemberMutation(params: UseUpdateDiagramMemberMut
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
       // Role changes affect only the sharing panel and downstream permission checks handled by the server.
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.membersRoot(variables.diagramId) });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useTransferDiagramOwnershipMutation(params: UseTransferDiagramOwnershipMutationParams = {}) {
+  return useMutation({
+    mutationFn: transferDiagramOwnershipMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Ownership changes can alter the active user's effective role and every access row, so refresh both diagram lists and sharing caches.
+      queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: diagramsKeys.membersRoot(variables.diagramId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },

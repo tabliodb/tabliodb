@@ -4,9 +4,9 @@ import { OrganizationRole, ProjectRole, type OrganizationRoleValue, type Project
 import {
   DefaultProjectRole as SdkDefaultProjectRole,
   OrganizationRole as SdkInvitationOrganizationRole,
-  Role3 as SdkOrganizationMemberCreateRole,
-  Role4 as SdkOrganizationMemberUpdateRole,
-  Role6 as SdkTeamProjectRole,
+  Role6 as SdkOrganizationMemberCreateRole,
+  Role7 as SdkOrganizationMemberUpdateRole,
+  Role9 as SdkTeamProjectRole,
   type AuditLogDtoOutput,
   type InvitationCreateResponseDtoOutput,
   type OrganizationDtoOutput,
@@ -49,7 +49,7 @@ import {
   UserPlus,
   UsersRound,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledSelect } from '@/features/app/FormControls';
@@ -269,8 +269,19 @@ function WorkspaceSettingsTabList({
   );
 }
 
-export function WorkspaceSettingsDialog({ organization }: { organization: OrganizationDto }) {
-  const [open, setOpen] = useState(false);
+export function WorkspaceSettingsDialog({
+  onOpenChange,
+  open,
+  organization,
+  trigger,
+}: {
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  organization: OrganizationDto;
+  trigger?: ReactNode | null;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = open ?? internalOpen;
   // Dialog besar ini sengaja dipotong menjadi tab agar user tidak harus memindai satu halaman panjang berisi beberapa workflow.
   const [activeSettingsTab, setActiveSettingsTab] = useState<WorkspaceSettingsTab>('general');
   const [createdWorkspaceInvite, setCreatedWorkspaceInvite] = useState<InvitationCreateResponseDto | null>(null);
@@ -322,30 +333,32 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
   const settingsQuery = useQuery({
     ...settingsQueryOptions,
     // Workspace settings tidak perlu di-fetch sebelum user membuka dialog, jadi modal menjadi fetch boundary.
-    enabled: open && settingsQueryOptions.enabled !== false,
+    enabled: dialogOpen && settingsQueryOptions.enabled !== false,
   });
   const auditLogsQueryOptions = organizationsQueries.auditLogs(organization.id, workspaceAuditLogQuery);
   const auditLogsQuery = useQuery({
     ...auditLogsQueryOptions,
-    enabled: open && activeSettingsTab === 'activity' && canManageWorkspace && auditLogsQueryOptions.enabled !== false,
+    enabled:
+      dialogOpen && activeSettingsTab === 'activity' && canManageWorkspace && auditLogsQueryOptions.enabled !== false,
   });
   const membersQueryOptions = organizationsQueries.members(organization.id, workspaceMemberPageQuery);
   const membersQuery = useQuery({
     ...membersQueryOptions,
     // Workspace members are admin-only data, so the dialog becomes the fetch boundary just like audit logs.
-    enabled: open && activeSettingsTab === 'members' && canManageWorkspace && membersQueryOptions.enabled !== false,
+    enabled:
+      dialogOpen && activeSettingsTab === 'members' && canManageWorkspace && membersQueryOptions.enabled !== false,
   });
   const teamsQueryOptions = teamsQueries.list({ ...teamPageQuery, organizationId: organization.id });
   const teamsQuery = useQuery({
     ...teamsQueryOptions,
     // Teams are workspace-admin data and are only needed in the settings dialog.
-    enabled: open && activeSettingsTab === 'teams' && canManageWorkspace && teamsQueryOptions.enabled !== false,
+    enabled: dialogOpen && activeSettingsTab === 'teams' && canManageWorkspace && teamsQueryOptions.enabled !== false,
   });
   const selectedTeamMembersQueryOptions = teamsQueries.members(selectedTeamId ?? '', teamMemberPageQuery);
   const selectedTeamMembersQuery = useQuery({
     ...selectedTeamMembersQueryOptions,
     enabled:
-      open &&
+      dialogOpen &&
       activeSettingsTab === 'teams' &&
       canManageWorkspace &&
       Boolean(selectedTeamId) &&
@@ -358,7 +371,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
   const selectedTeamProjectAccessesQuery = useQuery({
     ...selectedTeamProjectAccessesQueryOptions,
     enabled:
-      open &&
+      dialogOpen &&
       activeSettingsTab === 'teams' &&
       canManageWorkspace &&
       Boolean(selectedTeamId) &&
@@ -371,7 +384,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
   const selectedTeamDiagramAccessesQuery = useQuery({
     ...selectedTeamDiagramAccessesQueryOptions,
     enabled:
-      open &&
+      dialogOpen &&
       activeSettingsTab === 'teams' &&
       canManageWorkspace &&
       Boolean(selectedTeamId) &&
@@ -380,12 +393,12 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
   const teamProjectOptionsQuery = useQuery({
     ...projectsQueries.list({ limit: 50, organizationId: organization.id }),
     // Folder options are backed by the legacy project endpoint while the product language stays diagram-first.
-    enabled: open && activeSettingsTab === 'teams' && canManageWorkspace,
+    enabled: dialogOpen && activeSettingsTab === 'teams' && canManageWorkspace,
   });
   const teamDiagramOptionsQuery = useQuery({
     ...diagramsQueries.listByWorkspace(organization.id, { limit: 50 }),
     // Diagram options are needed only when a workspace admin manages team grants.
-    enabled: open && activeSettingsTab === 'teams' && canManageWorkspace,
+    enabled: dialogOpen && activeSettingsTab === 'teams' && canManageWorkspace,
   });
   const auditLogs = auditLogsQuery.data?.items ?? [];
   const workspaceMembers = membersQuery.data?.items ?? [];
@@ -497,7 +510,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     removeTeamDiagramAccessMutation.isPending;
 
   useEffect(() => {
-    if (open) {
+    if (dialogOpen) {
       form.reset(getWorkspaceSettingsDefaults(organization, settingsQuery.data));
       updateSettingsMutation.reset();
       addMemberMutation.reset();
@@ -514,10 +527,10 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
       upsertTeamDiagramAccessMutation.reset();
       removeTeamDiagramAccessMutation.reset();
     }
-  }, [form, open, organization, settingsQuery.data]);
+  }, [dialogOpen, form, organization, settingsQuery.data]);
 
   useEffect(() => {
-    if (!open) {
+    if (!dialogOpen) {
       return;
     }
 
@@ -528,14 +541,15 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
 
     // Selection drives the detail form, so switching teams always shows the currently saved team metadata.
     selectedTeamForm.reset({ description: selectedTeam.description ?? '', name: selectedTeam.name });
-  }, [open, selectedTeam?.description, selectedTeam?.id, selectedTeam?.name, selectedTeamForm]);
+  }, [dialogOpen, selectedTeam?.description, selectedTeam?.id, selectedTeam?.name, selectedTeamForm]);
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && (updateSettingsMutation.isPending || isWorkspaceMemberMutationPending || isTeamMutationPending)) {
       return;
     }
 
-    setOpen(nextOpen);
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
 
     if (nextOpen) {
       // Setiap sesi dialog mulai dari General supaya user selalu melihat pengaturan paling dasar sebelum workflow lain.
@@ -813,10 +827,12 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     : null;
 
   return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogTrigger asChild>
-        <IconButton icon={Building2} label="Workspace settings" variant="ghost" />
-      </DialogTrigger>
+    <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
+      {trigger !== null ? (
+        <DialogTrigger asChild>
+          {trigger ?? <IconButton icon={Building2} label="Workspace settings" variant="ghost" />}
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[min(96vw,960px)]">
         <DialogHeader>
           <DialogTitle>Workspace settings</DialogTitle>

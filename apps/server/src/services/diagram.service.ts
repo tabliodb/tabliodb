@@ -42,6 +42,7 @@ import {
   DiagramMemberListResponseDto,
   DiagramMemberRemoveResponseDto,
   DiagramMemberUpdateDto,
+  DiagramOwnershipTransferDto,
   DiagramResponseDto,
   DiagramUpdateDto,
   WorkspaceDiagramCreateDto,
@@ -167,6 +168,7 @@ export class DiagramService {
 
   async addMember(auth: AuthContext, diagramId: string, dto: DiagramMemberCreateDto): Promise<DiagramMemberDto> {
     const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+    this.assertAssignableDiagramMemberRole(dto.role ?? ProjectRole.Viewer);
     const user = await this.userRepository.getByEmail(dto.email.trim().toLowerCase());
 
     if (!user) {
@@ -230,6 +232,7 @@ export class DiagramService {
   ): Promise<DiagramMemberDto> {
     const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
     this.assertNotSelfMemberMutation(auth, userId, 'change your own diagram access');
+    this.assertAssignableDiagramMemberRole(dto.role);
     const currentMember = await this.assertCanChangeOwnerRole(diagramId, userId, dto.role);
 
     const member = await this.diagramRepository.updateMember(diagramId, userId, dto.role);
@@ -252,6 +255,60 @@ export class DiagramService {
         },
       });
     }
+
+    return this.serializeMember(member);
+  }
+
+  async transferOwnership(
+    auth: AuthContext,
+    diagramId: string,
+    dto: DiagramOwnershipTransferDto,
+  ): Promise<DiagramMemberDto> {
+    const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+
+    if (auth.user.id === dto.userId) {
+      throw new BadRequestException('Choose another collaborator to receive ownership');
+    }
+
+    const workspaceMember = await this.organizationRepository.getMember(diagram.organizationId, dto.userId);
+    if (!workspaceMember || workspaceMember.status !== 'active') {
+      throw new BadRequestException('New owner must be an active workspace member');
+    }
+
+    const effectiveRole = await this.projectRepository.getDiagramRole(dto.userId, diagramId);
+    if (!effectiveRole) {
+      throw new BadRequestException('New owner must already have diagram access');
+    }
+
+    const currentMember = await this.diagramRepository.getMember(diagramId, dto.userId);
+    if (currentMember?.role === ProjectRole.Owner) {
+      throw new BadRequestException('User already owns this diagram');
+    }
+
+    const member = await this.diagramRepository.transferOwnership(diagramId, {
+      createdById: auth.user.id,
+      userId: dto.userId,
+    });
+
+    if (!member) {
+      throw new NotFoundException('Diagram member not found');
+    }
+
+    await this.recordDiagramMemberAudit(auth, {
+      action: AuditAction.DiagramMemberRoleUpdated,
+      diagram,
+      entityId: dto.userId,
+      metadata: {
+        email: member.email,
+        name: member.name,
+        role: {
+          after: member.role,
+          before: currentMember?.role ?? null,
+        },
+        // Ownership transfer is separated from generic role editing so audits can explain this sensitive permission change.
+        transfer: true,
+      },
+    });
 
     return this.serializeMember(member);
   }
@@ -565,6 +622,15 @@ export class DiagramService {
     }
 
     return currentMember;
+  }
+
+  private assertAssignableDiagramMemberRole(role: ProjectRole): void {
+    if (role !== ProjectRole.Owner) {
+      return;
+    }
+
+    // Owner is intentionally outside the generic role picker/API path; transferOwnership is the auditable owner handoff.
+    throw new BadRequestException('Use transfer ownership to assign a diagram owner');
   }
 
   private assertNotSelfMemberMutation(auth: AuthContext, userId: string, action: string): void {

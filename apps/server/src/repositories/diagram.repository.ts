@@ -629,6 +629,39 @@ export class DiagramRepository {
     return member ? this.getMember(diagramId, member.userId) : undefined;
   }
 
+  async transferOwnership(diagramId: string, options: { createdById: string; userId: string }) {
+    const now = new Date();
+
+    await this.db.transaction().execute(async (tx) => {
+      await tx
+        .updateTable('diagram_members')
+        .set({ role: ProjectRole.Editor, updatedAt: now })
+        .where('diagramId', '=', diagramId)
+        .where('role', '=', ProjectRole.Owner)
+        .where('userId', '!=', options.userId)
+        .execute();
+
+      await tx
+        .insertInto('diagram_members')
+        .values({
+          createdById: options.createdById,
+          diagramId,
+          role: ProjectRole.Owner,
+          userId: options.userId,
+        })
+        .onConflict((conflict) =>
+          conflict.columns(['diagramId', 'userId']).doUpdateSet({
+            role: ProjectRole.Owner,
+            updatedAt: now,
+          }),
+        )
+        .execute();
+    });
+
+    // The returned member is loaded after the transaction so callers receive the same enriched DTO shape as normal member updates.
+    return this.getMember(diagramId, options.userId);
+  }
+
   async removeMember(diagramId: string, userId: string): Promise<boolean> {
     const result = await this.db
       .deleteFrom('diagram_members')
