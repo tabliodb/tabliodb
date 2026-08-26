@@ -26,6 +26,7 @@ type EditorPermissionFlags = {
   canCreateProject: boolean;
   canCreateSnapshot: boolean;
   canEditDiagram: boolean;
+  canManageDiagramMembers: boolean;
   canManageProject: boolean;
   canManageWorkspace: boolean;
 };
@@ -110,30 +111,49 @@ export function useEditorActiveDiagram({
 }
 
 export function useEditorPermissionFlags({
+  activeDiagram,
   activeOrganization,
   activeProject,
 }: {
+  activeDiagram: DiagramResponseDto | null;
   activeOrganization: OrganizationDto | null;
   activeProject: ProjectResponseDto | null;
 }): EditorPermissionFlags {
   return useMemo(
     () => ({
-      canCommentDiagram: activeProject
-        ? hasProjectPermission(activeProject.projectRole, Permission.DiagramComment)
-        : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramComment)),
+      canCommentDiagram: activeDiagram
+        ? hasProjectPermission(activeDiagram.role, Permission.DiagramComment)
+        : activeProject
+          ? hasProjectPermission(activeProject.projectRole, Permission.DiagramComment)
+          : Boolean(
+              activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramComment),
+            ),
       canCreateDiagram: activeProject
         ? hasProjectPermission(activeProject.projectRole, Permission.DiagramCreate)
         : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramCreate)),
       canCreateProject: activeOrganization
         ? hasOrganizationPermission(activeOrganization.role, Permission.ProjectCreate)
         : false,
-      canCreateSnapshot: activeProject
-        ? hasProjectPermission(activeProject.projectRole, Permission.SnapshotCreate)
-        : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.SnapshotCreate)),
-      // Root diagrams are controlled by workspace permissions; foldered diagrams still use folder/project permissions.
-      canEditDiagram: activeProject
-        ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate)
-        : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramUpdate)),
+      canCreateSnapshot: activeDiagram
+        ? hasProjectPermission(activeDiagram.role, Permission.SnapshotCreate)
+        : activeProject
+          ? hasProjectPermission(activeProject.projectRole, Permission.SnapshotCreate)
+          : Boolean(
+              activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.SnapshotCreate),
+            ),
+      // Diagram actions use the effective diagram role returned by the API, so a guest with direct editor access can edit without inheriting broad workspace power.
+      canEditDiagram: activeDiagram
+        ? hasProjectPermission(activeDiagram.role, Permission.DiagramUpdate)
+        : activeProject
+          ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate)
+          : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramUpdate)),
+      canManageDiagramMembers: activeDiagram
+        ? hasProjectPermission(activeDiagram.role, Permission.DiagramMemberManage)
+        : activeProject
+          ? hasProjectPermission(activeProject.projectRole, Permission.DiagramMemberManage)
+          : Boolean(
+              activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramMemberManage),
+            ),
       canManageProject: activeProject
         ? hasProjectPermission(activeProject.projectRole, Permission.ProjectUpdate)
         : false,
@@ -141,7 +161,7 @@ export function useEditorPermissionFlags({
         ? hasOrganizationPermission(activeOrganization.role, Permission.OrganizationManage)
         : false,
     }),
-    [activeOrganization, activeProject],
+    [activeDiagram, activeOrganization, activeProject],
   );
 }
 

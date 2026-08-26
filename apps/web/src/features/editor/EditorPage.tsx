@@ -249,9 +249,11 @@ export function EditorPage() {
     canCreateProject,
     canCreateSnapshot,
     canEditDiagram,
+    canManageDiagramMembers,
     canManageProject,
     canManageWorkspace,
   } = useEditorPermissionFlags({
+    activeDiagram,
     activeOrganization,
     activeProject,
   });
@@ -1503,6 +1505,7 @@ export function EditorPage() {
         canCreateProject={canCreateProject}
         canCreateSnapshot={canCreateSnapshot}
         canEditDiagram={canEditDiagram}
+        canManageDiagramMembers={canManageDiagramMembers}
         canManageProject={canManageProject}
         canManageWorkspace={canManageWorkspace}
         canRedoModelChange={canRedoModelChange}

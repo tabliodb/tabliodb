@@ -218,12 +218,61 @@ const teamProjectAccessPageQuery = { limit: 50 } as const;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 
+const workspaceSettingsTabs = [
+  { label: 'General', value: 'general' },
+  { label: 'Members', value: 'members' },
+  { label: 'Teams', value: 'teams' },
+  { label: 'Activity', value: 'activity' },
+] as const;
+
+type WorkspaceSettingsTab = (typeof workspaceSettingsTabs)[number]['value'];
+
 function isOrganizationManager(organization: OrganizationDto): boolean {
   return organization.role === 'owner' || organization.role === 'admin';
 }
 
+function WorkspaceSettingsTabList({
+  activeTab,
+  onActiveTabChange,
+}: {
+  activeTab: WorkspaceSettingsTab;
+  onActiveTabChange: (tab: WorkspaceSettingsTab) => void;
+}) {
+  return (
+    <div
+      aria-label="Workspace settings sections"
+      className="tabliodb-scrollbar flex shrink-0 gap-1 overflow-x-auto rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-1"
+      role="tablist"
+    >
+      {workspaceSettingsTabs.map((tab) => {
+        const isActive = activeTab === tab.value;
+
+        return (
+          <button
+            aria-selected={isActive}
+            className={cn(
+              'h-9 shrink-0 cursor-pointer rounded-[var(--tabliodb-radius-md)] border px-3 text-xs font-black leading-none transition-[background,border-color,box-shadow,color] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]',
+              isActive
+                ? 'border-[rgb(var(--tabliodb-primary-border))] bg-white text-[rgb(var(--tabliodb-primary-text))] shadow-[0_2px_0_rgb(var(--tabliodb-primary-border))]'
+                : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:bg-white hover:text-[rgb(var(--tabliodb-ink))]',
+            )}
+            key={tab.value}
+            onClick={() => onActiveTabChange(tab.value)}
+            role="tab"
+            type="button"
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function WorkspaceSettingsDialog({ organization }: { organization: OrganizationDto }) {
   const [open, setOpen] = useState(false);
+  // Dialog besar ini sengaja dipotong menjadi tab agar user tidak harus memindai satu halaman panjang berisi beberapa workflow.
+  const [activeSettingsTab, setActiveSettingsTab] = useState<WorkspaceSettingsTab>('general');
   const [createdWorkspaceInvite, setCreatedWorkspaceInvite] = useState<InvitationCreateResponseDto | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const canManageWorkspace = isOrganizationManager(organization);
@@ -278,24 +327,29 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
   const auditLogsQueryOptions = organizationsQueries.auditLogs(organization.id, workspaceAuditLogQuery);
   const auditLogsQuery = useQuery({
     ...auditLogsQueryOptions,
-    enabled: open && canManageWorkspace && auditLogsQueryOptions.enabled !== false,
+    enabled: open && activeSettingsTab === 'activity' && canManageWorkspace && auditLogsQueryOptions.enabled !== false,
   });
   const membersQueryOptions = organizationsQueries.members(organization.id, workspaceMemberPageQuery);
   const membersQuery = useQuery({
     ...membersQueryOptions,
     // Workspace members are admin-only data, so the dialog becomes the fetch boundary just like audit logs.
-    enabled: open && canManageWorkspace && membersQueryOptions.enabled !== false,
+    enabled: open && activeSettingsTab === 'members' && canManageWorkspace && membersQueryOptions.enabled !== false,
   });
   const teamsQueryOptions = teamsQueries.list({ ...teamPageQuery, organizationId: organization.id });
   const teamsQuery = useQuery({
     ...teamsQueryOptions,
     // Teams are workspace-admin data and are only needed in the settings dialog.
-    enabled: open && canManageWorkspace && teamsQueryOptions.enabled !== false,
+    enabled: open && activeSettingsTab === 'teams' && canManageWorkspace && teamsQueryOptions.enabled !== false,
   });
   const selectedTeamMembersQueryOptions = teamsQueries.members(selectedTeamId ?? '', teamMemberPageQuery);
   const selectedTeamMembersQuery = useQuery({
     ...selectedTeamMembersQueryOptions,
-    enabled: open && canManageWorkspace && Boolean(selectedTeamId) && selectedTeamMembersQueryOptions.enabled !== false,
+    enabled:
+      open &&
+      activeSettingsTab === 'teams' &&
+      canManageWorkspace &&
+      Boolean(selectedTeamId) &&
+      selectedTeamMembersQueryOptions.enabled !== false,
   });
   const selectedTeamProjectAccessesQueryOptions = teamsQueries.projectAccesses(
     selectedTeamId ?? '',
@@ -305,6 +359,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     ...selectedTeamProjectAccessesQueryOptions,
     enabled:
       open &&
+      activeSettingsTab === 'teams' &&
       canManageWorkspace &&
       Boolean(selectedTeamId) &&
       selectedTeamProjectAccessesQueryOptions.enabled !== false,
@@ -317,6 +372,7 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     ...selectedTeamDiagramAccessesQueryOptions,
     enabled:
       open &&
+      activeSettingsTab === 'teams' &&
       canManageWorkspace &&
       Boolean(selectedTeamId) &&
       selectedTeamDiagramAccessesQueryOptions.enabled !== false,
@@ -324,12 +380,12 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
   const teamProjectOptionsQuery = useQuery({
     ...projectsQueries.list({ limit: 50, organizationId: organization.id }),
     // Folder options are backed by the legacy project endpoint while the product language stays diagram-first.
-    enabled: open && canManageWorkspace,
+    enabled: open && activeSettingsTab === 'teams' && canManageWorkspace,
   });
   const teamDiagramOptionsQuery = useQuery({
     ...diagramsQueries.listByWorkspace(organization.id, { limit: 50 }),
     // Diagram options are needed only when a workspace admin manages team grants.
-    enabled: open && canManageWorkspace,
+    enabled: open && activeSettingsTab === 'teams' && canManageWorkspace,
   });
   const auditLogs = auditLogsQuery.data?.items ?? [];
   const workspaceMembers = membersQuery.data?.items ?? [];
@@ -480,6 +536,11 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
     }
 
     setOpen(nextOpen);
+
+    if (nextOpen) {
+      // Setiap sesi dialog mulai dari General supaya user selalu melihat pengaturan paling dasar sebelum workflow lain.
+      setActiveSettingsTab('general');
+    }
 
     if (!nextOpen) {
       form.reset(getWorkspaceSettingsDefaults(organization, settingsQuery.data));
@@ -756,648 +817,656 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
       <DialogTrigger asChild>
         <IconButton icon={Building2} label="Workspace settings" variant="ghost" />
       </DialogTrigger>
-      <DialogContent className="w-[min(96vw,920px)]">
+      <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[min(96vw,960px)]">
         <DialogHeader>
           <DialogTitle>Workspace settings</DialogTitle>
           <DialogDescription>Configure the current workspace without changing the Tabliodb brand.</DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="grid gap-5">
-          <form className="grid gap-4" id="workspace-settings-form" onSubmit={form.handleSubmit(handleSubmit)}>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Workspace name
-              </span>
-              <ControlledInput
-                aria-invalid={Boolean(errors.name)}
-                control={form.control}
-                disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
-                name="name"
-              />
-              <FieldError>{errors.name?.message}</FieldError>
-            </label>
+        <DialogBody className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+          <WorkspaceSettingsTabList activeTab={activeSettingsTab} onActiveTabChange={setActiveSettingsTab} />
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Default folder role
-                </span>
-                <ControlledSelect
-                  className={selectClassName}
-                  control={form.control}
-                  disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
-                  name="defaultProjectRole"
-                  options={workspaceDefaultRoleOptions.map((role) => ({
-                    label: role === 'none' ? 'No automatic folder role' : formatProjectRole(role),
-                    value: role,
-                  }))}
-                />
-              </label>
-
-              <label className="mt-6 flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
-                <ControlledCheckbox
-                  control={form.control}
-                  disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
-                  name="allowMemberProjectCreate"
-                />
-                Members can create folders
-              </label>
-            </div>
-
-            {settingsQuery.error || updateSettingsMutation.error ? (
-              <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                {getErrorMessage(settingsQuery.error ?? updateSettingsMutation.error)}
-              </div>
-            ) : null}
-          </form>
-
-          {canManageWorkspace ? (
-            <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="flex items-center gap-2 text-sm font-extrabold">
-                    <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
-                    Workspace members
-                  </h3>
-                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                    {membersQuery.data?.totalCount ?? workspaceMembers.length} people with workspace access
-                  </p>
-                </div>
-                <Badge variant="green">{workspaceMembers.length} shown</Badge>
-              </div>
-
-              <form
-                className="mt-4 grid gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_150px_auto]"
-                onSubmit={workspaceMemberForm.handleSubmit(handleAddWorkspaceMember)}
-              >
+          <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
+            {activeSettingsTab === 'general' ? (
+              <form className="grid gap-4" id="workspace-settings-form" onSubmit={form.handleSubmit(handleSubmit)}>
                 <label className="block text-sm">
                   <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                    Existing user email
+                    Workspace name
                   </span>
                   <ControlledInput
-                    aria-invalid={Boolean(workspaceMemberErrors.email)}
-                    autoComplete="email"
-                    control={workspaceMemberForm.control}
-                    disabled={isWorkspaceMemberMutationPending}
-                    name="email"
-                    placeholder="teammate@company.com"
-                    type="email"
-                  />
-                  <FieldError>{workspaceMemberErrors.email?.message}</FieldError>
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                    Workspace role
-                  </span>
-                  <ControlledSelect
-                    className={selectClassName}
-                    control={workspaceMemberForm.control}
-                    disabled={isWorkspaceMemberMutationPending}
-                    name="role"
-                    options={workspaceMemberRoleOptions.map((role) => ({
-                      label: formatOrganizationRole(role),
-                      value: role,
-                    }))}
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2 self-start sm:mt-6">
-                  <Button className="gap-2" disabled={isWorkspaceMemberMutationPending} type="submit">
-                    {addMemberMutation.isPending ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <UserPlus className="size-4" />
-                    )}
-                    Add
-                  </Button>
-                  <Button
-                    className="gap-2"
-                    disabled={isWorkspaceMemberMutationPending}
-                    onClick={workspaceMemberForm.handleSubmit(handleCreateWorkspaceInvite)}
-                    type="button"
-                    variant="secondary"
-                  >
-                    {createWorkspaceInvitationMutation.isPending ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <MailPlus className="size-4" />
-                    )}
-                    Invite link
-                  </Button>
-                </div>
-              </form>
-
-              {createdWorkspaceInvite ? (
-                <div className="mt-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3">
-                  <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
-                    Invitation link
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input readOnly value={createdWorkspaceInvite.acceptUrl} />
-                    <Button
-                      className="shrink-0 gap-2"
-                      onClick={copyWorkspaceInviteUrl}
-                      type="button"
-                      variant="secondary"
-                    >
-                      <Copy className="size-4" />
-                      Copy
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              {membersQuery.isPending ? (
-                <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  <Loader2 className="size-4 animate-spin" />
-                  Loading members
-                </div>
-              ) : membersQuery.error ? (
-                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(membersQuery.error)}
-                </div>
-              ) : workspaceMembers.length === 0 ? (
-                <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  No workspace members yet
-                </div>
-              ) : (
-                <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
-                  <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                    {workspaceMembers.map((member) => (
-                      <OrganizationMemberRow
-                        isRemoving={removingUserId === member.userId}
-                        isUpdating={updatingUserId === member.userId}
-                        key={member.userId}
-                        member={member}
-                        onRemove={handleRemoveWorkspaceMember}
-                        onRoleChange={handleUpdateWorkspaceMemberRole}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {memberMutationError ? (
-                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(memberMutationError)}
-                </div>
-              ) : null}
-            </section>
-          ) : (
-            <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-              <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                Your workspace role is {formatOrganizationRole(organization.role)}. Owner or Admin access is required to
-                manage workspace settings and members.
-              </div>
-            </section>
-          )}
-
-          {canManageWorkspace ? (
-            <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="flex items-center gap-2 text-sm font-extrabold">
-                    <UsersRound className="size-4 text-[rgb(var(--tabliodb-primary-text))]" />
-                    Teams
-                  </h3>
-                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                    Manage reusable groups before granting folder or diagram access.
-                  </p>
-                </div>
-                <Badge variant="green">{teamsQuery.data?.totalCount ?? teams.length} teams</Badge>
-              </div>
-
-              <form
-                className="mt-4 grid gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-                onSubmit={teamForm.handleSubmit(handleCreateTeam)}
-              >
-                <label className="block text-sm">
-                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                    Team name
-                  </span>
-                  <ControlledInput
-                    aria-invalid={Boolean(teamErrors.name)}
-                    control={teamForm.control}
-                    disabled={isTeamMutationPending}
+                    aria-invalid={Boolean(errors.name)}
+                    control={form.control}
+                    disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
                     name="name"
-                    placeholder="Backend team"
                   />
-                  <FieldError>{teamErrors.name?.message}</FieldError>
+                  <FieldError>{errors.name?.message}</FieldError>
                 </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                    Description
-                  </span>
-                  <ControlledInput
-                    aria-invalid={Boolean(teamErrors.description)}
-                    control={teamForm.control}
-                    disabled={isTeamMutationPending}
-                    name="description"
-                    placeholder="Optional team context"
-                  />
-                  <FieldError>{teamErrors.description?.message}</FieldError>
-                </label>
-                <Button className="self-start sm:mt-6" disabled={isTeamMutationPending} type="submit">
-                  {createTeamMutation.isPending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Plus className="size-4" />
-                  )}
-                  Team
-                </Button>
-              </form>
 
-              {teamsQuery.isPending ? (
-                <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  <Loader2 className="size-4 animate-spin" />
-                  Loading teams
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                      Default folder role
+                    </span>
+                    <ControlledSelect
+                      className={selectClassName}
+                      control={form.control}
+                      disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
+                      name="defaultProjectRole"
+                      options={workspaceDefaultRoleOptions.map((role) => ({
+                        label: role === 'none' ? 'No automatic folder role' : formatProjectRole(role),
+                        value: role,
+                      }))}
+                    />
+                  </label>
+
+                  <label className="mt-6 flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] bg-white px-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
+                    <ControlledCheckbox
+                      control={form.control}
+                      disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
+                      name="allowMemberProjectCreate"
+                    />
+                    Members can create folders
+                  </label>
                 </div>
-              ) : teamsQuery.error ? (
-                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(teamsQuery.error)}
-                </div>
-              ) : (
-                <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-                  <div className="tabliodb-scrollbar max-h-[32rem] overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-2">
-                    {teams.length === 0 ? (
-                      <div className="grid min-h-28 place-items-center rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] px-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                        No teams yet
+
+                {settingsQuery.error || updateSettingsMutation.error ? (
+                  <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                    {getErrorMessage(settingsQuery.error ?? updateSettingsMutation.error)}
+                  </div>
+                ) : null}
+              </form>
+            ) : null}
+
+            {activeSettingsTab === 'members' ? (
+              canManageWorkspace ? (
+                <section className="grid gap-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-sm font-extrabold">
+                        <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+                        Workspace members
+                      </h3>
+                      <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                        {membersQuery.data?.totalCount ?? workspaceMembers.length} people with workspace access
+                      </p>
+                    </div>
+                    <Badge variant="green">{workspaceMembers.length} shown</Badge>
+                  </div>
+
+                  <form
+                    className="mt-4 grid gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_150px_auto]"
+                    onSubmit={workspaceMemberForm.handleSubmit(handleAddWorkspaceMember)}
+                  >
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                        Existing user email
+                      </span>
+                      <ControlledInput
+                        aria-invalid={Boolean(workspaceMemberErrors.email)}
+                        autoComplete="email"
+                        control={workspaceMemberForm.control}
+                        disabled={isWorkspaceMemberMutationPending}
+                        name="email"
+                        placeholder="teammate@company.com"
+                        type="email"
+                      />
+                      <FieldError>{workspaceMemberErrors.email?.message}</FieldError>
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                        Workspace role
+                      </span>
+                      <ControlledSelect
+                        className={selectClassName}
+                        control={workspaceMemberForm.control}
+                        disabled={isWorkspaceMemberMutationPending}
+                        name="role"
+                        options={workspaceMemberRoleOptions.map((role) => ({
+                          label: formatOrganizationRole(role),
+                          value: role,
+                        }))}
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2 self-start sm:mt-6">
+                      <Button className="gap-2" disabled={isWorkspaceMemberMutationPending} type="submit">
+                        {addMemberMutation.isPending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <UserPlus className="size-4" />
+                        )}
+                        Add
+                      </Button>
+                      <Button
+                        className="gap-2"
+                        disabled={isWorkspaceMemberMutationPending}
+                        onClick={workspaceMemberForm.handleSubmit(handleCreateWorkspaceInvite)}
+                        type="button"
+                        variant="secondary"
+                      >
+                        {createWorkspaceInvitationMutation.isPending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <MailPlus className="size-4" />
+                        )}
+                        Invite link
+                      </Button>
+                    </div>
+                  </form>
+
+                  {createdWorkspaceInvite ? (
+                    <div className="mt-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] p-3">
+                      <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-primary-text))]">
+                        Invitation link
                       </div>
-                    ) : (
-                      <div className="grid gap-2">
-                        {teams.map((team) => (
-                          <TeamListItem
-                            isSelected={team.id === selectedTeamId}
-                            key={team.id}
-                            onSelect={(nextTeam) => setSelectedTeamId(nextTeam.id)}
-                            team={team}
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input readOnly value={createdWorkspaceInvite.acceptUrl} />
+                        <Button
+                          className="shrink-0 gap-2"
+                          onClick={copyWorkspaceInviteUrl}
+                          type="button"
+                          variant="secondary"
+                        >
+                          <Copy className="size-4" />
+                          Copy
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {membersQuery.isPending ? (
+                    <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                      <Loader2 className="size-4 animate-spin" />
+                      Loading members
+                    </div>
+                  ) : membersQuery.error ? (
+                    <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                      {getErrorMessage(membersQuery.error)}
+                    </div>
+                  ) : workspaceMembers.length === 0 ? (
+                    <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                      No workspace members yet
+                    </div>
+                  ) : (
+                    <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                      <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                        {workspaceMembers.map((member) => (
+                          <OrganizationMemberRow
+                            isRemoving={removingUserId === member.userId}
+                            isUpdating={updatingUserId === member.userId}
+                            key={member.userId}
+                            member={member}
+                            onRemove={handleRemoveWorkspaceMember}
+                            onRoleChange={handleUpdateWorkspaceMemberRole}
                           />
                         ))}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
-                  <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
-                    {selectedTeam ? (
-                      <div className="grid gap-4 p-4">
-                        <div className="flex flex-col gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] pb-4 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <h4 className="truncate text-sm font-extrabold">{selectedTeam.name}</h4>
-                            <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} folder grants /{' '}
-                              {selectedTeam.diagramAccessCount} diagram grants
-                            </p>
+                  {memberMutationError ? (
+                    <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                      {getErrorMessage(memberMutationError)}
+                    </div>
+                  ) : null}
+                </section>
+              ) : (
+                <section className="grid gap-4">
+                  <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    Your workspace role is {formatOrganizationRole(organization.role)}. Owner or Admin access is
+                    required to manage workspace settings and members.
+                  </div>
+                </section>
+              )
+            ) : null}
+
+            {activeSettingsTab === 'teams' && canManageWorkspace ? (
+              <section className="grid gap-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-sm font-extrabold">
+                      <UsersRound className="size-4 text-[rgb(var(--tabliodb-primary-text))]" />
+                      Teams
+                    </h3>
+                    <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                      Manage reusable groups before granting folder or diagram access.
+                    </p>
+                  </div>
+                  <Badge variant="green">{teamsQuery.data?.totalCount ?? teams.length} teams</Badge>
+                </div>
+
+                <form
+                  className="mt-4 grid gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                  onSubmit={teamForm.handleSubmit(handleCreateTeam)}
+                >
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                      Team name
+                    </span>
+                    <ControlledInput
+                      aria-invalid={Boolean(teamErrors.name)}
+                      control={teamForm.control}
+                      disabled={isTeamMutationPending}
+                      name="name"
+                      placeholder="Backend team"
+                    />
+                    <FieldError>{teamErrors.name?.message}</FieldError>
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                      Description
+                    </span>
+                    <ControlledInput
+                      aria-invalid={Boolean(teamErrors.description)}
+                      control={teamForm.control}
+                      disabled={isTeamMutationPending}
+                      name="description"
+                      placeholder="Optional team context"
+                    />
+                    <FieldError>{teamErrors.description?.message}</FieldError>
+                  </label>
+                  <Button className="self-start sm:mt-6" disabled={isTeamMutationPending} type="submit">
+                    {createTeamMutation.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                    Team
+                  </Button>
+                </form>
+
+                {teamsQuery.isPending ? (
+                  <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading teams
+                  </div>
+                ) : teamsQuery.error ? (
+                  <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                    {getErrorMessage(teamsQuery.error)}
+                  </div>
+                ) : (
+                  <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+                    <div className="tabliodb-scrollbar max-h-[32rem] overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-2">
+                      {teams.length === 0 ? (
+                        <div className="grid min-h-28 place-items-center rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] px-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                          No teams yet
+                        </div>
+                      ) : (
+                        <div className="grid gap-2">
+                          {teams.map((team) => (
+                            <TeamListItem
+                              isSelected={team.id === selectedTeamId}
+                              key={team.id}
+                              onSelect={(nextTeam) => setSelectedTeamId(nextTeam.id)}
+                              team={team}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                      {selectedTeam ? (
+                        <div className="grid gap-4 p-4">
+                          <div className="flex flex-col gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] pb-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <h4 className="truncate text-sm font-extrabold">{selectedTeam.name}</h4>
+                              <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} folder grants /{' '}
+                                {selectedTeam.diagramAccessCount} diagram grants
+                              </p>
+                            </div>
+                            <WithTooltip content={`Archive ${selectedTeam.name}`}>
+                              <Button
+                                aria-label={`Archive ${selectedTeam.name}`}
+                                disabled={isTeamMutationPending}
+                                onClick={() => handleArchiveTeam(selectedTeam)}
+                                size="sm"
+                                type="button"
+                                variant="secondary"
+                              >
+                                {archiveTeamMutation.isPending ? (
+                                  <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                  <Archive className="size-4" />
+                                )}
+                                Archive
+                              </Button>
+                            </WithTooltip>
                           </div>
-                          <WithTooltip content={`Archive ${selectedTeam.name}`}>
+
+                          <form
+                            className="grid min-w-0 gap-3 rounded-[14px] bg-[rgb(var(--tabliodb-surface))] p-3"
+                            onSubmit={selectedTeamForm.handleSubmit(handleUpdateTeam)}
+                          >
+                            <label className="block text-sm">
+                              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                                Name
+                              </span>
+                              <ControlledInput
+                                aria-invalid={Boolean(selectedTeamErrors.name)}
+                                control={selectedTeamForm.control}
+                                disabled={isTeamMutationPending}
+                                name="name"
+                              />
+                              <FieldError>{selectedTeamErrors.name?.message}</FieldError>
+                            </label>
+                            <label className="block text-sm">
+                              <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                                Description
+                              </span>
+                              <ControlledInput
+                                aria-invalid={Boolean(selectedTeamErrors.description)}
+                                control={selectedTeamForm.control}
+                                disabled={isTeamMutationPending}
+                                name="description"
+                                placeholder="Optional team context"
+                              />
+                              <FieldError>{selectedTeamErrors.description?.message}</FieldError>
+                            </label>
                             <Button
-                              aria-label={`Archive ${selectedTeam.name}`}
+                              className="self-start sm:mt-6"
                               disabled={isTeamMutationPending}
-                              onClick={() => handleArchiveTeam(selectedTeam)}
                               size="sm"
-                              type="button"
-                              variant="secondary"
+                              type="submit"
                             >
-                              {archiveTeamMutation.isPending ? (
+                              {updateTeamMutation.isPending ? (
                                 <Loader2 className="size-4 animate-spin" />
                               ) : (
-                                <Archive className="size-4" />
+                                <Save className="size-4" />
                               )}
-                              Archive
+                              Save
                             </Button>
-                          </WithTooltip>
-                        </div>
+                          </form>
 
-                        <form
-                          className="grid gap-3 rounded-[14px] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-                          onSubmit={selectedTeamForm.handleSubmit(handleUpdateTeam)}
-                        >
-                          <label className="block text-sm">
-                            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                              Name
-                            </span>
-                            <ControlledInput
-                              aria-invalid={Boolean(selectedTeamErrors.name)}
-                              control={selectedTeamForm.control}
-                              disabled={isTeamMutationPending}
-                              name="name"
-                            />
-                            <FieldError>{selectedTeamErrors.name?.message}</FieldError>
-                          </label>
-                          <label className="block text-sm">
-                            <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                              Description
-                            </span>
-                            <ControlledInput
-                              aria-invalid={Boolean(selectedTeamErrors.description)}
-                              control={selectedTeamForm.control}
-                              disabled={isTeamMutationPending}
-                              name="description"
-                              placeholder="Optional team context"
-                            />
-                            <FieldError>{selectedTeamErrors.description?.message}</FieldError>
-                          </label>
-                          <Button
-                            className="self-start sm:mt-6"
-                            disabled={isTeamMutationPending}
-                            size="sm"
-                            type="submit"
-                          >
-                            {updateTeamMutation.isPending ? (
-                              <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                              <Save className="size-4" />
-                            )}
-                            Save
-                          </Button>
-                        </form>
-
-                        <div className="grid gap-4 xl:grid-cols-2">
-                          <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <h5 className="text-sm font-extrabold">Members</h5>
-                                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  People who inherit every folder and diagram grant on this team
-                                </p>
-                              </div>
-                              <Badge>{selectedTeamMembers.length} shown</Badge>
-                            </div>
-
-                            <form
-                              className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
-                              onSubmit={teamMemberForm.handleSubmit(handleAddTeamMember)}
-                            >
-                              <label className="block text-sm">
-                                <span className="sr-only">Member email</span>
-                                <ControlledInput
-                                  aria-invalid={Boolean(teamMemberErrors.email)}
-                                  autoComplete="email"
-                                  control={teamMemberForm.control}
-                                  disabled={isTeamMutationPending}
-                                  name="email"
-                                  placeholder="teammate@example.com"
-                                  type="email"
-                                />
-                                <FieldError>{teamMemberErrors.email?.message}</FieldError>
-                              </label>
-                              <Button disabled={isTeamMutationPending} size="sm" type="submit">
-                                {addTeamMemberMutation.isPending ? (
-                                  <Loader2 className="size-4 animate-spin" />
-                                ) : (
-                                  <UserPlus className="size-4" />
-                                )}
-                                Add
-                              </Button>
-                            </form>
-
-                            {selectedTeamMembersQuery.isPending ? (
-                              <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                <Loader2 className="size-4 animate-spin" />
-                                Loading members
-                              </div>
-                            ) : selectedTeamMembers.length === 0 ? (
-                              <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                No members in this team
-                              </div>
-                            ) : (
-                              <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
-                                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                                  {selectedTeamMembers.map((member) => (
-                                    <TeamMemberRow
-                                      isRemoving={removingTeamMemberUserId === member.userId}
-                                      key={member.userId}
-                                      member={member}
-                                      onRemove={handleRemoveTeamMember}
-                                    />
-                                  ))}
+                          <div className="grid min-w-0 gap-4">
+                            <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <h5 className="text-sm font-extrabold">Members</h5>
+                                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                    People who inherit every folder and diagram grant on this team
+                                  </p>
                                 </div>
+                                <Badge>{selectedTeamMembers.length} shown</Badge>
                               </div>
-                            )}
-                          </section>
 
-                          <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <h5 className="text-sm font-extrabold">Folder access</h5>
-                                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  Grants inherited by team members for every diagram inside a folder
-                                </p>
-                              </div>
-                              <Badge>{selectedTeamProjectAccesses.length} shown</Badge>
-                            </div>
+                              <form
+                                className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+                                onSubmit={teamMemberForm.handleSubmit(handleAddTeamMember)}
+                              >
+                                <label className="block text-sm">
+                                  <span className="sr-only">Member email</span>
+                                  <ControlledInput
+                                    aria-invalid={Boolean(teamMemberErrors.email)}
+                                    autoComplete="email"
+                                    control={teamMemberForm.control}
+                                    disabled={isTeamMutationPending}
+                                    name="email"
+                                    placeholder="teammate@example.com"
+                                    type="email"
+                                  />
+                                  <FieldError>{teamMemberErrors.email?.message}</FieldError>
+                                </label>
+                                <Button disabled={isTeamMutationPending} size="sm" type="submit">
+                                  {addTeamMemberMutation.isPending ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                  ) : (
+                                    <UserPlus className="size-4" />
+                                  )}
+                                  Add
+                                </Button>
+                              </form>
 
-                            <form
-                              className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_auto]"
-                              onSubmit={teamProjectAccessForm.handleSubmit(handleUpsertTeamProjectAccess)}
-                            >
-                              <label className="block text-sm">
-                                <span className="sr-only">Project</span>
-                                <ControlledSelect
-                                  aria-invalid={Boolean(teamProjectAccessErrors.projectId)}
-                                  className={selectClassName}
-                                  control={teamProjectAccessForm.control}
-                                  disabled={isTeamMutationPending || teamProjectOptionsQuery.isPending}
-                                  name="projectId"
-                                  options={teamProjectSelectOptions}
-                                  placeholder="Select folder"
-                                />
-                                <FieldError>{teamProjectAccessErrors.projectId?.message}</FieldError>
-                              </label>
-                              <label className="block text-sm">
-                                <span className="sr-only">Role</span>
-                                <ControlledSelect
-                                  aria-invalid={Boolean(teamProjectAccessErrors.role)}
-                                  className={selectClassName}
-                                  control={teamProjectAccessForm.control}
-                                  disabled={isTeamMutationPending}
-                                  name="role"
-                                  options={teamProjectAccessRoleOptions.map((role) => ({
-                                    label: formatProjectRole(role),
-                                    value: role,
-                                  }))}
-                                />
-                              </label>
-                              <Button disabled={isTeamMutationPending} size="sm" type="submit">
-                                {upsertTeamProjectAccessMutation.isPending ? (
+                              {selectedTeamMembersQuery.isPending ? (
+                                <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                                   <Loader2 className="size-4 animate-spin" />
-                                ) : (
-                                  <ShieldCheck className="size-4" />
-                                )}
-                                Grant
-                              </Button>
-                            </form>
-
-                            {selectedTeamProjectAccessesQuery.isPending ? (
-                              <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                <Loader2 className="size-4 animate-spin" />
-                                Loading folder access
-                              </div>
-                            ) : selectedTeamProjectAccesses.length === 0 ? (
-                              <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                No folder grants yet
-                              </div>
-                            ) : (
-                              <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
-                                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                                  {selectedTeamProjectAccesses.map((access) => (
-                                    <TeamProjectAccessRow
-                                      access={access}
-                                      isRemoving={removingTeamProjectId === access.projectId}
-                                      key={access.projectId}
-                                      onRemove={handleRemoveTeamProjectAccess}
-                                      onRoleChange={handleUpdateTeamProjectAccessRole}
-                                    />
-                                  ))}
+                                  Loading members
                                 </div>
-                              </div>
-                            )}
-                          </section>
+                              ) : selectedTeamMembers.length === 0 ? (
+                                <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  No members in this team
+                                </div>
+                              ) : (
+                                <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
+                                  <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                                    {selectedTeamMembers.map((member) => (
+                                      <TeamMemberRow
+                                        isRemoving={removingTeamMemberUserId === member.userId}
+                                        key={member.userId}
+                                        member={member}
+                                        onRemove={handleRemoveTeamMember}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </section>
 
-                          <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 xl:col-span-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <h5 className="text-sm font-extrabold">Diagram access</h5>
-                                <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  Grants inherited by team members for one specific diagram
-                                </p>
+                            <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <h5 className="text-sm font-extrabold">Folder access</h5>
+                                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                    Grants inherited by team members for every diagram inside a folder
+                                  </p>
+                                </div>
+                                <Badge>{selectedTeamProjectAccesses.length} shown</Badge>
                               </div>
-                              <Badge>{selectedTeamDiagramAccesses.length} shown</Badge>
-                            </div>
 
-                            <form
-                              className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_auto]"
-                              onSubmit={teamDiagramAccessForm.handleSubmit(handleUpsertTeamDiagramAccess)}
-                            >
-                              <label className="block text-sm">
-                                <span className="sr-only">Diagram</span>
-                                <ControlledSelect
-                                  aria-invalid={Boolean(teamDiagramAccessErrors.diagramId)}
-                                  className={selectClassName}
-                                  control={teamDiagramAccessForm.control}
-                                  disabled={isTeamMutationPending || teamDiagramOptionsQuery.isPending}
-                                  name="diagramId"
-                                  options={teamDiagramSelectOptions}
-                                  placeholder="Select diagram"
-                                />
-                                <FieldError>{teamDiagramAccessErrors.diagramId?.message}</FieldError>
-                              </label>
-                              <label className="block text-sm">
-                                <span className="sr-only">Role</span>
-                                <ControlledSelect
-                                  aria-invalid={Boolean(teamDiagramAccessErrors.role)}
-                                  className={selectClassName}
-                                  control={teamDiagramAccessForm.control}
-                                  disabled={isTeamMutationPending}
-                                  name="role"
-                                  options={teamProjectAccessRoleOptions.map((role) => ({
-                                    label: formatProjectRole(role),
-                                    value: role,
-                                  }))}
-                                />
-                              </label>
-                              <Button disabled={isTeamMutationPending} size="sm" type="submit">
-                                {upsertTeamDiagramAccessMutation.isPending ? (
+                              <form
+                                className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_auto]"
+                                onSubmit={teamProjectAccessForm.handleSubmit(handleUpsertTeamProjectAccess)}
+                              >
+                                <label className="block text-sm">
+                                  <span className="sr-only">Project</span>
+                                  <ControlledSelect
+                                    aria-invalid={Boolean(teamProjectAccessErrors.projectId)}
+                                    className={selectClassName}
+                                    control={teamProjectAccessForm.control}
+                                    disabled={isTeamMutationPending || teamProjectOptionsQuery.isPending}
+                                    name="projectId"
+                                    options={teamProjectSelectOptions}
+                                    placeholder="Select folder"
+                                  />
+                                  <FieldError>{teamProjectAccessErrors.projectId?.message}</FieldError>
+                                </label>
+                                <label className="block text-sm">
+                                  <span className="sr-only">Role</span>
+                                  <ControlledSelect
+                                    aria-invalid={Boolean(teamProjectAccessErrors.role)}
+                                    className={selectClassName}
+                                    control={teamProjectAccessForm.control}
+                                    disabled={isTeamMutationPending}
+                                    name="role"
+                                    options={teamProjectAccessRoleOptions.map((role) => ({
+                                      label: formatProjectRole(role),
+                                      value: role,
+                                    }))}
+                                  />
+                                </label>
+                                <Button disabled={isTeamMutationPending} size="sm" type="submit">
+                                  {upsertTeamProjectAccessMutation.isPending ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                  ) : (
+                                    <ShieldCheck className="size-4" />
+                                  )}
+                                  Grant
+                                </Button>
+                              </form>
+
+                              {selectedTeamProjectAccessesQuery.isPending ? (
+                                <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                                   <Loader2 className="size-4 animate-spin" />
-                                ) : (
-                                  <ShieldCheck className="size-4" />
-                                )}
-                                Grant
-                              </Button>
-                            </form>
-
-                            {selectedTeamDiagramAccessesQuery.isPending ? (
-                              <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                <Loader2 className="size-4 animate-spin" />
-                                Loading diagram access
-                              </div>
-                            ) : selectedTeamDiagramAccesses.length === 0 ? (
-                              <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                No diagram grants yet
-                              </div>
-                            ) : (
-                              <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
-                                <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                                  {selectedTeamDiagramAccesses.map((access) => (
-                                    <TeamDiagramAccessRow
-                                      access={access}
-                                      isRemoving={removingTeamDiagramId === access.diagramId}
-                                      key={access.diagramId}
-                                      onRemove={handleRemoveTeamDiagramAccess}
-                                      onRoleChange={handleUpdateTeamDiagramAccessRole}
-                                    />
-                                  ))}
+                                  Loading folder access
                                 </div>
+                              ) : selectedTeamProjectAccesses.length === 0 ? (
+                                <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  No folder grants yet
+                                </div>
+                              ) : (
+                                <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
+                                  <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                                    {selectedTeamProjectAccesses.map((access) => (
+                                      <TeamProjectAccessRow
+                                        access={access}
+                                        isRemoving={removingTeamProjectId === access.projectId}
+                                        key={access.projectId}
+                                        onRemove={handleRemoveTeamProjectAccess}
+                                        onRoleChange={handleUpdateTeamProjectAccessRole}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </section>
+
+                            <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 xl:col-span-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <h5 className="text-sm font-extrabold">Diagram access</h5>
+                                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                                    Grants inherited by team members for one specific diagram
+                                  </p>
+                                </div>
+                                <Badge>{selectedTeamDiagramAccesses.length} shown</Badge>
                               </div>
-                            )}
-                          </section>
+
+                              <form
+                                className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_auto]"
+                                onSubmit={teamDiagramAccessForm.handleSubmit(handleUpsertTeamDiagramAccess)}
+                              >
+                                <label className="block text-sm">
+                                  <span className="sr-only">Diagram</span>
+                                  <ControlledSelect
+                                    aria-invalid={Boolean(teamDiagramAccessErrors.diagramId)}
+                                    className={selectClassName}
+                                    control={teamDiagramAccessForm.control}
+                                    disabled={isTeamMutationPending || teamDiagramOptionsQuery.isPending}
+                                    name="diagramId"
+                                    options={teamDiagramSelectOptions}
+                                    placeholder="Select diagram"
+                                  />
+                                  <FieldError>{teamDiagramAccessErrors.diagramId?.message}</FieldError>
+                                </label>
+                                <label className="block text-sm">
+                                  <span className="sr-only">Role</span>
+                                  <ControlledSelect
+                                    aria-invalid={Boolean(teamDiagramAccessErrors.role)}
+                                    className={selectClassName}
+                                    control={teamDiagramAccessForm.control}
+                                    disabled={isTeamMutationPending}
+                                    name="role"
+                                    options={teamProjectAccessRoleOptions.map((role) => ({
+                                      label: formatProjectRole(role),
+                                      value: role,
+                                    }))}
+                                  />
+                                </label>
+                                <Button disabled={isTeamMutationPending} size="sm" type="submit">
+                                  {upsertTeamDiagramAccessMutation.isPending ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                  ) : (
+                                    <ShieldCheck className="size-4" />
+                                  )}
+                                  Grant
+                                </Button>
+                              </form>
+
+                              {selectedTeamDiagramAccessesQuery.isPending ? (
+                                <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  <Loader2 className="size-4 animate-spin" />
+                                  Loading diagram access
+                                </div>
+                              ) : selectedTeamDiagramAccesses.length === 0 ? (
+                                <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  No diagram grants yet
+                                </div>
+                              ) : (
+                                <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
+                                  <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                                    {selectedTeamDiagramAccesses.map((access) => (
+                                      <TeamDiagramAccessRow
+                                        access={access}
+                                        isRemoving={removingTeamDiagramId === access.diagramId}
+                                        key={access.diagramId}
+                                        onRemove={handleRemoveTeamDiagramAccess}
+                                        onRoleChange={handleUpdateTeamDiagramAccessRole}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </section>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="grid min-h-96 place-items-center p-6 text-center">
-                        <div>
-                          <UsersRound className="mx-auto size-8 text-[rgb(var(--tabliodb-primary-text))]" />
-                          <h4 className="mt-3 text-sm font-extrabold">Select a team</h4>
-                          <p className="mt-1 max-w-sm text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                            Pick a team to manage members, folder access, and direct diagram access.
-                          </p>
+                      ) : (
+                        <div className="grid min-h-96 place-items-center p-6 text-center">
+                          <div>
+                            <UsersRound className="mx-auto size-8 text-[rgb(var(--tabliodb-primary-text))]" />
+                            <h4 className="mt-3 text-sm font-extrabold">Select a team</h4>
+                            <p className="mt-1 max-w-sm text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                              Pick a team to manage members, folder access, and direct diagram access.
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {teamMutationError ||
+                selectedTeamMembersQuery.error ||
+                selectedTeamProjectAccessesQuery.error ||
+                selectedTeamDiagramAccessesQuery.error ? (
+                  <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                    {getErrorMessage(
+                      teamMutationError ??
+                        selectedTeamMembersQuery.error ??
+                        selectedTeamProjectAccessesQuery.error ??
+                        selectedTeamDiagramAccessesQuery.error,
                     )}
                   </div>
-                </div>
-              )}
+                ) : null}
+              </section>
+            ) : null}
 
-              {teamMutationError ||
-              selectedTeamMembersQuery.error ||
-              selectedTeamProjectAccessesQuery.error ||
-              selectedTeamDiagramAccessesQuery.error ? (
-                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(
-                    teamMutationError ??
-                      selectedTeamMembersQuery.error ??
-                      selectedTeamProjectAccessesQuery.error ??
-                      selectedTeamDiagramAccessesQuery.error,
-                  )}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {canManageWorkspace ? (
-            <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-extrabold">Recent activity</h3>
-                  <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                    Workspace, folder, team, and diagram access changes recorded by the server
-                  </p>
-                </div>
-                <Badge variant="blue">{auditLogs.length} shown</Badge>
-              </div>
-
-              {auditLogsQuery.isPending ? (
-                <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  <Loader2 className="size-4 animate-spin" />
-                  Loading activity
-                </div>
-              ) : auditLogsQuery.error ? (
-                <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(auditLogsQuery.error)}
-                </div>
-              ) : auditLogs.length === 0 ? (
-                <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  No activity yet
-                </div>
-              ) : (
-                <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
-                  <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                    {auditLogs.map((auditLog) => (
-                      <AuditLogRow auditLog={auditLog} key={auditLog.id} />
-                    ))}
+            {activeSettingsTab === 'activity' && canManageWorkspace ? (
+              <section className="grid gap-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold">Recent activity</h3>
+                    <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                      Workspace, folder, team, and diagram access changes recorded by the server
+                    </p>
                   </div>
+                  <Badge variant="blue">{auditLogs.length} shown</Badge>
                 </div>
-              )}
-            </section>
-          ) : null}
+
+                {auditLogsQuery.isPending ? (
+                  <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading activity
+                  </div>
+                ) : auditLogsQuery.error ? (
+                  <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                    {getErrorMessage(auditLogsQuery.error)}
+                  </div>
+                ) : auditLogs.length === 0 ? (
+                  <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    No activity yet
+                  </div>
+                ) : (
+                  <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+                    <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+                      {auditLogs.map((auditLog) => (
+                        <AuditLogRow auditLog={auditLog} key={auditLog.id} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            ) : null}
+          </div>
         </DialogBody>
 
         <DialogFooter>
@@ -1409,24 +1478,26 @@ export function WorkspaceSettingsDialog({ organization }: { organization: Organi
           >
             Close
           </Button>
-          <Button
-            disabled={
-              settingsQuery.isPending ||
-              updateSettingsMutation.isPending ||
-              isWorkspaceMemberMutationPending ||
-              isTeamMutationPending ||
-              !canManageWorkspace
-            }
-            form="workspace-settings-form"
-            type="submit"
-          >
-            {updateSettingsMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Save className="size-4" />
-            )}
-            Save workspace
-          </Button>
+          {activeSettingsTab === 'general' ? (
+            <Button
+              disabled={
+                settingsQuery.isPending ||
+                updateSettingsMutation.isPending ||
+                isWorkspaceMemberMutationPending ||
+                isTeamMutationPending ||
+                !canManageWorkspace
+              }
+              form="workspace-settings-form"
+              type="submit"
+            >
+              {updateSettingsMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              Save workspace
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

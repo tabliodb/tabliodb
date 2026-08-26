@@ -54,6 +54,7 @@ const DiagramResponseSchema = z
     name: z.string(),
     dialect: DatabaseDialectSchema,
     status: DiagramStatusSchema,
+    role: DiagramMemberRoleSchema,
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,
   })

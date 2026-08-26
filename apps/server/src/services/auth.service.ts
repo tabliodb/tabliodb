@@ -893,6 +893,7 @@ export class AuthService {
       cursorColor: string;
       email: string;
       id: string;
+      instanceRole?: 'owner' | 'admin' | null;
       name: string;
       passwordChangeRequired?: boolean;
     },
@@ -916,6 +917,10 @@ export class AuthService {
       userId: user.id,
     });
 
+    const instanceMember = user.instanceRole
+      ? { role: user.instanceRole }
+      : await this.userRepository.getInstanceRole(user.id);
+
     return {
       accessToken,
       user: {
@@ -924,6 +929,8 @@ export class AuthService {
         name: user.name,
         avatarUrl: user.avatarUrl ?? null,
         cursorColor: user.cursorColor,
+        // Frontend uses instanceRole only for instance-level UX such as the Administration menu; workspace roles remain scoped separately.
+        instanceRole: instanceMember?.role ?? null,
         passwordChangeRequired: user.passwordChangeRequired ?? false,
       },
     };

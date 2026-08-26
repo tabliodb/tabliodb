@@ -153,9 +153,6 @@ function WorkspaceSwitcher({
               >
                 <span className="min-w-0">
                   <span className="block truncate text-[13px] font-extrabold">{organization.name}</span>
-                  <span className="block truncate text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                    {organization.slug}
-                  </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
                   <Badge variant={isOrganizationManager(organization) ? 'blue' : 'neutral'}>

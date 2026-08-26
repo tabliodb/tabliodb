@@ -75,6 +75,7 @@ const AuthUserSchema = z
     name: z.string(),
     avatarUrl: z.string().nullable(),
     cursorColor: z.string(),
+    instanceRole: z.enum(['owner', 'admin']).nullable(),
     passwordChangeRequired: z.boolean(),
   })
   .meta({ id: 'AuthUserDto' });

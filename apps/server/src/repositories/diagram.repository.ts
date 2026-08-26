@@ -106,7 +106,22 @@ export class DiagramRepository {
         ${this.createDiagramAccessSql(options.userId)}
       ),
       effective_access AS (
-        SELECT diagram_id
+        SELECT
+          diagram_id,
+          CASE max(
+            CASE role
+              WHEN 'owner' THEN 4
+              WHEN 'editor' THEN 3
+              WHEN 'commenter' THEN 2
+              WHEN 'viewer' THEN 1
+              ELSE 0
+            END
+          )
+            WHEN 4 THEN 'owner'
+            WHEN 3 THEN 'editor'
+            WHEN 2 THEN 'commenter'
+            ELSE 'viewer'
+          END AS role
         FROM diagram_access
         GROUP BY diagram_id
       )
@@ -117,6 +132,7 @@ export class DiagramRepository {
         diagrams.name,
         diagrams.dialect,
         diagrams.status,
+        effective_access.role,
         diagrams.created_at AS "createdAt",
         diagrams.updated_at AS "updatedAt"
       FROM diagrams
@@ -150,6 +166,8 @@ export class DiagramRepository {
       items: rows.rows.slice(0, options.limit).map((row) => ({
         ...row,
         dialect: row.dialect as DatabaseDialect,
+        // Workspace diagram listing carries the caller's effective role so the UI does not infer access from workspace/folder role alone.
+        role: row.role as ProjectRole,
       })),
       nextCursor: rows.rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
       totalCount: Number(totalRow.rows[0]?.count ?? 0),
@@ -747,6 +765,7 @@ type DiagramListRow = {
   name: string;
   organizationId: string;
   projectId: string | null;
+  role: ProjectRole;
   status: 'draft' | 'reviewed' | 'approved' | 'changes_requested';
   updatedAt: Date;
 };

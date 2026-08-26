@@ -97,6 +97,7 @@ export type AuthUserDtoOutput = {
   name: string;
   avatarUrl: string | null;
   cursorColor: string;
+  instanceRole: InstanceRole | null;
   passwordChangeRequired: boolean;
 };
 export type CurrentUserProfileUpdateDto = {
@@ -401,6 +402,7 @@ export type DiagramResponseDtoOutput = {
   name: string;
   dialect: Dialect;
   status: Status4;
+  role: Role;
   createdAt: string;
   updatedAt: string;
 };
@@ -4204,6 +4206,10 @@ export enum Status {
   Error = 'error',
   Ok = 'ok',
 }
+export enum InstanceRole {
+  Owner = 'owner',
+  Admin = 'admin',
+}
 export enum Algorithm {
   EcdsaP256Sha256 = 'ecdsa-p256-sha256',
 }
@@ -4535,10 +4541,6 @@ export enum Role6 {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
-}
-export enum InstanceRole {
-  Owner = 'owner',
-  Admin = 'admin',
 }
 export enum InstanceRole2 {
   Admin = 'admin',

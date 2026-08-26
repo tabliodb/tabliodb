@@ -92,7 +92,7 @@ export class DiagramService {
       createdById: auth.user.id,
     });
 
-    return this.serializeDiagram(diagram);
+    return this.serializeDiagram({ ...diagram, role: ProjectRole.Owner });
   }
 
   async createInOrganization(
@@ -302,6 +302,8 @@ export class DiagramService {
       ...diagrams,
       items: diagrams.items.map((diagram) => ({
         ...diagram,
+        // The legacy folder endpoint is folder-scoped, so its effective role matches the folder role already authorized above.
+        role: project.projectRole,
         // Response list mengikuti bentuk JSON yang diterima SDK: timestamp ISO string, bukan Date object server-side.
         createdAt: toIsoDateTime(diagram.createdAt),
         updatedAt: toIsoDateTime(diagram.updatedAt),
@@ -322,7 +324,7 @@ export class DiagramService {
       throw new NotFoundException('Diagram not found');
     }
 
-    return diagram;
+    return { ...diagram, role: role.role };
   }
 
   async getCurrentModel(
@@ -346,7 +348,7 @@ export class DiagramService {
     }
 
     // requireDiagram centralizes project-role lookup, archived filtering, and permission enforcement for every diagram write.
-    await this.requireDiagram(auth, diagramId, Permission.DiagramUpdate);
+    const currentDiagram = await this.requireDiagram(auth, diagramId, Permission.DiagramUpdate);
 
     const diagram = await this.diagramRepository.update(diagramId, {
       dialect: dto.dialect,
@@ -357,7 +359,7 @@ export class DiagramService {
       throw new NotFoundException('Diagram not found');
     }
 
-    return this.serializeDiagram(diagram);
+    return this.serializeDiagram({ ...diagram, role: currentDiagram.role });
   }
 
   async exportDiagram(
@@ -445,7 +447,7 @@ export class DiagramService {
     );
 
     return {
-      diagram: this.serializeDiagram(diagramRow),
+      diagram: this.serializeDiagram({ ...diagramRow, role: diagram.role }),
       model,
       warnings: [...imported.warnings, ...getDiagramModelIntegrityWarnings(model).map(normalizeTransferWarning)],
     };
@@ -494,7 +496,7 @@ export class DiagramService {
   }
 
   private serializeDiagram(
-    diagram: NonNullable<Awaited<ReturnType<DiagramRepository['getById']>>>,
+    diagram: NonNullable<Awaited<ReturnType<DiagramRepository['getById']>>> & { role: ProjectRole },
   ): DiagramResponseDto {
     return {
       id: diagram.id,
@@ -504,6 +506,7 @@ export class DiagramService {
       // Kysely membaca kolom dialect sebagai text karena database menyimpannya generik, sedangkan kontrak API mengekspos union dialect canonical.
       dialect: diagram.dialect as DatabaseDialect,
       status: diagram.status,
+      role: diagram.role,
       createdAt: toIsoDateTime(diagram.createdAt),
       updatedAt: toIsoDateTime(diagram.updatedAt),
     };

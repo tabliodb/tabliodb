@@ -21,6 +21,14 @@ export async function loginLoader({ request }: { request: Request }) {
   const url = new URL(request.url);
   const oidcProvider = await loadOidcProvider();
 
+  if (hasRecentUnauthorizedCurrentUserProbe()) {
+    return {
+      oidcError: url.searchParams.get('oidcError') === 'failed',
+      oidcProvider,
+      temporaryUser: null,
+    } satisfies LoginLoaderData;
+  }
+
   try {
     // Guest login route tidak perlu render form kalau session cookie masih valid.
     const user = await queryClient.fetchQuery(authQueries.me());
@@ -54,4 +62,16 @@ async function loadOidcProvider(): Promise<OidcLoginProviderDtoOutput> {
       enabled: false,
     };
   }
+}
+
+function hasRecentUnauthorizedCurrentUserProbe(): boolean {
+  const meQuery = authQueries.me();
+  const state = queryClient.getQueryState(meQuery.queryKey);
+
+  return Boolean(
+    state?.error instanceof TabliodbApiError &&
+    state.error.status === 401 &&
+    // Protected-route redirects already verified that the session is missing; reusing the very recent 401 avoids a duplicate /auth/me call on /login.
+    Date.now() - state.errorUpdatedAt < 2_000,
+  );
 }

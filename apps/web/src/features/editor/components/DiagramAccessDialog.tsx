@@ -173,7 +173,7 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <IconButton disabled={!canManage} icon={UsersRound} label="Diagram access" onClick={() => setOpen(true)} />
-      <DialogContent className="w-[min(94vw,780px)] max-w-none">
+      <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[min(96vw,860px)] max-w-none">
         <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-4">
           <DialogTitle>Diagram access</DialogTitle>
           <DialogDescription>
@@ -182,7 +182,7 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="grid gap-4">
+        <DialogBody className="grid min-h-0 flex-1 gap-4 overflow-y-auto">
           <section className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-4">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -239,6 +239,12 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
                 Add
               </Button>
             </form>
+
+            {mutationError ? (
+              <div className="mt-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+                {getErrorMessage(mutationError)}
+              </div>
+            ) : null}
           </section>
 
           <section className="min-h-0 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white">
@@ -273,7 +279,7 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
                 No effective access found
               </div>
             ) : (
-              <div className="tabliodb-scrollbar max-h-[260px] overflow-y-auto">
+              <div className="tabliodb-scrollbar max-h-[220px] overflow-y-auto">
                 <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
                   {effectiveAccess.map((member) => (
                     <DiagramEffectiveAccessRow key={member.userId} member={member} />
@@ -310,7 +316,7 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
                 No direct members yet
               </div>
             ) : (
-              <div className="tabliodb-scrollbar max-h-[320px] overflow-y-auto">
+              <div className="tabliodb-scrollbar max-h-[260px] overflow-y-auto">
                 <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
                   {members.map((member) => (
                     <DiagramMemberRow
@@ -327,12 +333,6 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
               </div>
             )}
           </section>
-
-          {mutationError ? (
-            <div className="rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-              {getErrorMessage(mutationError)}
-            </div>
-          ) : null}
         </DialogBody>
 
         <DialogFooter>

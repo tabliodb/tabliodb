@@ -58,6 +58,12 @@ export class UserRepository {
         'name',
         'cursorColor',
         'passwordChangeRequired',
+        sql<'owner' | 'admin' | null>`(
+          SELECT instance_members.role
+          FROM instance_members
+          WHERE instance_members.user_id = users.id
+          LIMIT 1
+        )`.as('instanceRole'),
         sql<string | null>`case
           when avatar_file_id is null then null
           else concat('/api/files/', avatar_file_id::text)

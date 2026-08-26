@@ -72,7 +72,11 @@ export class AuthController {
       setCsrfCookie(res, { secure: this.service.getCookieSecureDefault() });
     }
 
-    return auth.user;
+    return {
+      ...auth.user,
+      // Older dev sessions and some API-key contexts may not carry instanceRole in memory; the public DTO stays explicit by normalizing to null.
+      instanceRole: auth.user.instanceRole ?? null,
+    };
   }
 
   @Patch('me/profile')

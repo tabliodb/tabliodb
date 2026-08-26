@@ -31,6 +31,12 @@ export class SessionRepository {
               'users.name',
               'users.cursorColor',
               'users.passwordChangeRequired',
+              sql<'owner' | 'admin' | null>`(
+                SELECT instance_members.role
+                FROM instance_members
+                WHERE instance_members.user_id = users.id
+                LIMIT 1
+              )`.as('instanceRole'),
               sql<string | null>`case
                 when users.avatar_file_id is null then null
                 else concat('/api/files/', users.avatar_file_id::text)

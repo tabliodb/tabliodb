@@ -5726,6 +5726,14 @@
           "cursorColor": {
             "type": "string"
           },
+          "instanceRole": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin"
+            ],
+            "nullable": true
+          },
           "passwordChangeRequired": {
             "type": "boolean"
           }
@@ -5736,6 +5744,7 @@
           "name",
           "avatarUrl",
           "cursorColor",
+          "instanceRole",
           "passwordChangeRequired"
         ],
         "additionalProperties": false
@@ -7358,6 +7367,15 @@
               "changes_requested"
             ]
           },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "editor",
+              "commenter",
+              "viewer"
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -7376,6 +7394,7 @@
           "name",
           "dialect",
           "status",
+          "role",
           "createdAt",
           "updatedAt"
         ],

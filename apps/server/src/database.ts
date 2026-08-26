@@ -7,6 +7,7 @@ export type AuthUser = {
   name: string;
   avatarUrl: string | null;
   cursorColor: string;
+  instanceRole?: 'owner' | 'admin' | null;
   passwordChangeRequired: boolean;
 };
 

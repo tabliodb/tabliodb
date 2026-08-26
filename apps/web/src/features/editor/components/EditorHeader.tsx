@@ -34,6 +34,7 @@ export function EditorHeader({
   canCreateProject,
   canCreateSnapshot,
   canEditDiagram,
+  canManageDiagramMembers,
   canManageProject,
   canManageWorkspace,
   canRedoModelChange,
@@ -102,6 +103,7 @@ export function EditorHeader({
   canCreateProject: boolean;
   canCreateSnapshot: boolean;
   canEditDiagram: boolean;
+  canManageDiagramMembers: boolean;
   canManageProject: boolean;
   canManageWorkspace: boolean;
   canRedoModelChange: boolean;
@@ -109,7 +111,7 @@ export function EditorHeader({
   collaborators: CollaboratorPresence[];
   collaborationStatus: DiagramCollaborationStatus;
   currentDraftPersisted: boolean;
-  currentUser: AvatarIdentity & { email: string };
+  currentUser: AvatarIdentity & { email: string; instanceRole?: 'owner' | 'admin' | null };
   diagramLibraryOpen: boolean;
   diagramLibraryStackOpen: boolean;
   diagrams: DiagramResponseDto[];
@@ -163,6 +165,8 @@ export function EditorHeader({
   snapshotSavePending: boolean;
   unreadNotificationCount: number;
 }) {
+  const canOpenAdmin = currentUser.instanceRole === 'owner' || currentUser.instanceRole === 'admin';
+
   return (
     <header className="flex h-(--tabliodb-header-height) shrink-0 items-center gap-2 border-b border-[rgb(var(--tabliodb-border))] bg-white px-2 sm:gap-3 sm:px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
@@ -217,7 +221,9 @@ export function EditorHeader({
             ) : null}
           </div>
         ) : null}
-        {canEditDiagram ? <DiagramAccessDialog canManage={canEditDiagram} diagram={activeDiagram} /> : null}
+        {canManageDiagramMembers ? (
+          <DiagramAccessDialog canManage={canManageDiagramMembers} diagram={activeDiagram} />
+        ) : null}
         <NotificationInboxMenu
           error={notificationError}
           hasNextPage={notificationHasNextPage}
@@ -253,7 +259,7 @@ export function EditorHeader({
           <span className="hidden xl:inline">SQL</span>
         </Button>
         <UserAccountMenu
-          canOpenAdmin={canManageWorkspace}
+          canOpenAdmin={canOpenAdmin}
           isLoggingOut={logoutPending}
           onAdmin={onAdmin}
           onLogout={onUserLogout}
