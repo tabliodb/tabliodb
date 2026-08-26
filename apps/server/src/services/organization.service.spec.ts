@@ -49,6 +49,7 @@ describe(OrganizationService.name, () => {
     getSettingsForUser: vi.fn(),
     listForUser: vi.fn(),
     removeMember: vi.fn(),
+    transferOwnership: vi.fn(),
     updateMemberRole: vi.fn(),
     updateSettings: vi.fn(),
   };
@@ -138,6 +139,84 @@ describe(OrganizationService.name, () => {
     // Self-management is rejected before member lookup so an owner cannot demote and re-promote themselves.
     expect(organizationRepository.getMember).not.toHaveBeenCalled();
     expect(organizationRepository.updateMemberRole).not.toHaveBeenCalled();
+  });
+
+  it('prevents assigning workspace owner through the generic member create endpoint', async () => {
+    await expect(
+      service.addMember(auth, 'organization-id', {
+        email: 'member@tabliodb.local',
+        // Owner is intentionally tested as an invalid payload because generated clients and malicious callers can drift.
+        role: OrganizationRole.Owner as never,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(userRepository.getByEmail).not.toHaveBeenCalled();
+    expect(organizationRepository.addMemberIfAbsent).not.toHaveBeenCalled();
+  });
+
+  it('prevents assigning workspace owner through the generic member update endpoint', async () => {
+    await expect(
+      service.updateMemberRole(auth, 'organization-id', 'member-id', {
+        // Ownership is not a normal role update; transferOwnership is the only auditable promotion path.
+        role: OrganizationRole.Owner as never,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(organizationRepository.getMember).not.toHaveBeenCalled();
+    expect(organizationRepository.updateMemberRole).not.toHaveBeenCalled();
+  });
+
+  it('prevents workspace admins from transferring workspace ownership', async () => {
+    organizationRepository.getRole.mockResolvedValue({ role: OrganizationRole.Admin });
+
+    await expect(
+      service.transferOwnership(auth, 'organization-id', {
+        userId: 'member-id',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(organizationRepository.getMember).not.toHaveBeenCalled();
+    expect(organizationRepository.transferOwnership).not.toHaveBeenCalled();
+  });
+
+  it('transfers workspace ownership to an existing active workspace member', async () => {
+    organizationRepository.getMember.mockResolvedValue({
+      ...ownerMember,
+      email: 'admin@tabliodb.local',
+      name: 'Admin User',
+      role: OrganizationRole.Admin,
+      userId: 'admin-id',
+    });
+    organizationRepository.transferOwnership.mockResolvedValue({
+      ...ownerMember,
+      email: 'admin@tabliodb.local',
+      name: 'Admin User',
+      role: OrganizationRole.Owner,
+      userId: 'admin-id',
+    });
+
+    await expect(
+      service.transferOwnership(auth, 'organization-id', {
+        userId: 'admin-id',
+      }),
+    ).resolves.toMatchObject({
+      role: OrganizationRole.Owner,
+      userId: 'admin-id',
+    });
+
+    expect(organizationRepository.transferOwnership).toHaveBeenCalledWith('organization-id', 'admin-id');
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'organization.member_role_updated',
+        actorId: 'owner-id',
+        entityId: 'admin-id',
+        entityType: 'organization_member',
+        metadata: expect.objectContaining({
+          transfer: true,
+        }),
+        organizationId: 'organization-id',
+      }),
+    );
   });
 
   it('prevents removing your own workspace access', async () => {

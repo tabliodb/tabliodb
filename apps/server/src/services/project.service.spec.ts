@@ -44,6 +44,7 @@ describe(ProjectService.name, () => {
     createPersonalOrganization: vi.fn(),
     getByIdForUser: vi.fn(),
     getFirstForUser: vi.fn(),
+    getMember: vi.fn(),
     getRole: vi.fn(),
   };
   const projectRepository = {
@@ -52,9 +53,11 @@ describe(ProjectService.name, () => {
     getByIdForUser: vi.fn(),
     getMember: vi.fn(),
     getMembers: vi.fn(),
+    getProjectRole: vi.fn(),
     getProjectOwnerCount: vi.fn(),
     getVisibleToUser: vi.fn(),
     removeMember: vi.fn(),
+    transferOwnership: vi.fn(),
     update: vi.fn(),
     updateMember: vi.fn(),
     upsertMember: vi.fn(),
@@ -231,6 +234,94 @@ describe(ProjectService.name, () => {
     // Self-management is rejected before member lookup so an owner cannot demote and re-promote themselves.
     expect(projectRepository.getMember).not.toHaveBeenCalled();
     expect(projectRepository.updateMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents assigning folder owner through the generic member create endpoint', async () => {
+    await expect(
+      service.addMember(auth, 'project-id', {
+        email: 'editor@tabliodb.local',
+        // This intentionally simulates a stale/generated-client bypass attempt; Owner must only flow through transferOwnership.
+        role: ProjectRole.Owner as never,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(userRepository.getByEmail).not.toHaveBeenCalled();
+    expect(projectRepository.upsertMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents assigning folder owner through the generic member update endpoint', async () => {
+    await expect(
+      service.updateMember(auth, 'project-id', 'editor-id', {
+        // Generic role edits cannot promote Owner because they would bypass the explicit transfer audit trail.
+        role: ProjectRole.Owner as never,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(projectRepository.getMember).not.toHaveBeenCalled();
+    expect(projectRepository.updateMember).not.toHaveBeenCalled();
+  });
+
+  it('transfers folder ownership to an existing active folder collaborator', async () => {
+    organizationRepository.getMember.mockResolvedValue({
+      role: OrganizationRole.Member,
+      status: 'active',
+      userId: 'editor-id',
+    });
+    projectRepository.getProjectRole.mockResolvedValue({ role: ProjectRole.Editor });
+    projectRepository.getMember.mockResolvedValue({
+      role: ProjectRole.Editor,
+      userId: 'editor-id',
+    });
+    projectRepository.transferOwnership.mockResolvedValue({
+      avatarUrl: null,
+      cursorColor: '#1cb0f6',
+      createdAt: new Date('2026-07-29T12:00:00.000Z'),
+      email: 'editor@tabliodb.local',
+      name: 'Editor User',
+      role: ProjectRole.Owner,
+      updatedAt: new Date('2026-07-29T12:00:00.000Z'),
+      userId: 'editor-id',
+    });
+
+    await expect(
+      service.transferOwnership(auth, 'project-id', {
+        userId: 'editor-id',
+      }),
+    ).resolves.toMatchObject({
+      role: ProjectRole.Owner,
+      userId: 'editor-id',
+    });
+
+    expect(projectRepository.transferOwnership).toHaveBeenCalledWith('project-id', {
+      createdById: 'owner-id',
+      userId: 'editor-id',
+    });
+    expect(auditLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'project.member_role_updated',
+        actorId: 'owner-id',
+        entityId: 'editor-id',
+        entityType: 'project_member',
+        metadata: expect.objectContaining({
+          transfer: true,
+        }),
+        organizationId: 'organization-id',
+        projectId: 'project-id',
+      }),
+    );
+  });
+
+  it('prevents transferring folder ownership to a user outside the workspace', async () => {
+    organizationRepository.getMember.mockResolvedValue(undefined);
+
+    await expect(
+      service.transferOwnership(auth, 'project-id', {
+        userId: 'outsider-id',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(projectRepository.getProjectRole).not.toHaveBeenCalled();
+    expect(projectRepository.transferOwnership).not.toHaveBeenCalled();
   });
 
   it('prevents removing your own project folder access', async () => {
