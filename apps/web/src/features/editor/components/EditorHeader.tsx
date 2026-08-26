@@ -176,6 +176,7 @@ export function EditorHeader({
           canCreateProject={canCreateProject}
           canEditDiagram={canEditDiagram}
           canManageWorkspace={canManageWorkspace}
+          currentUserId={currentUser.id}
           diagramLibraryOpen={diagramLibraryOpen}
           diagrams={diagrams}
           model={model}

@@ -15,6 +15,7 @@ import {
   ProjectMemberListResponseDto,
   ProjectMemberRemoveResponseDto,
   ProjectMemberUpdateDto,
+  ProjectOwnershipTransferDto,
   ProjectResponseDto,
   ProjectUpdateDto,
 } from '../dtos/project.dto.js';
@@ -104,6 +105,21 @@ export class ProjectController {
     @Body() dto: ProjectMemberCreateDto,
   ): Promise<ProjectMemberDto> {
     return this.projectService.addMember(auth, projectId, dto);
+  }
+
+  @Post(':projectId/ownership/transfer')
+  @RateLimit(RateLimitPreset.ProjectWrite)
+  @RequirePermission(Permission.ProjectMemberManage, { key: 'projectId', source: 'param', type: 'project' })
+  @ApiParam({ name: 'projectId', type: String })
+  @ApiBody({ type: ProjectOwnershipTransferDto })
+  @ApiOperation({ operationId: 'transferProjectOwnership' })
+  @ZodResponse({ status: HttpStatus.OK, type: ProjectMemberDto })
+  transferProjectOwnership(
+    @Auth() auth: AuthContext,
+    @Param('projectId') projectId: string,
+    @Body() dto: ProjectOwnershipTransferDto,
+  ): Promise<ProjectMemberDto> {
+    return this.projectService.transferOwnership(auth, projectId, dto);
   }
 
   @Patch(':projectId/members/:userId')

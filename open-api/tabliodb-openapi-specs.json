@@ -3062,6 +3062,58 @@
         ]
       }
     },
+    "/organizations/{organizationId}/ownership/transfer": {
+      "post": {
+        "operationId": "transferOrganizationOwnership",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationOwnershipTransferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationMemberDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
     "/organizations/{organizationId}/audit-logs": {
       "get": {
         "operationId": "getOrganizationAuditLogs",
@@ -3392,6 +3444,58 @@
         },
         "responses": {
           "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMemberDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{projectId}/ownership/transfer": {
+      "post": {
+        "operationId": "transferProjectOwnership",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectOwnershipTransferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": "",
             "content": {
               "application/json": {
@@ -9871,7 +9975,6 @@
           "role": {
             "type": "string",
             "enum": [
-              "owner",
               "admin",
               "member",
               "guest"
@@ -9880,6 +9983,19 @@
         },
         "required": [
           "role"
+        ]
+      },
+      "OrganizationOwnershipTransferDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "userId"
         ]
       },
       "OrganizationMemberRemoveResponseDto_Output": {
@@ -10240,7 +10356,6 @@
             "default": "viewer",
             "type": "string",
             "enum": [
-              "owner",
               "editor",
               "commenter",
               "viewer"
@@ -10251,13 +10366,25 @@
           "email"
         ]
       },
+      "ProjectOwnershipTransferDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
       "ProjectMemberUpdateDto": {
         "type": "object",
         "properties": {
           "role": {
             "type": "string",
             "enum": [
-              "owner",
               "editor",
               "commenter",
               "viewer"

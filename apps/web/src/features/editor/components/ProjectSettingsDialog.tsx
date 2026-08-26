@@ -2,7 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { Permission, ProjectRole, isGranted, permissionsForProjectRole, type ProjectRoleValue } from '@tabliodb/shared';
 import {
-  Role8 as SdkProjectMemberRole,
+  Role7 as SdkProjectMemberOutputRole,
+  Role8 as SdkProjectAssignableMemberRole,
   type ProjectMemberDtoOutput,
   type ProjectResponseDtoOutput,
 } from '@tabliodb/sdk';
@@ -21,8 +22,9 @@ import {
   IconButton,
   Select,
   WithTooltip,
+  cn,
 } from '@tabliodb/ui';
-import { Archive, Loader2, Save, Settings, Trash2, UserPlus, UsersRound } from 'lucide-react';
+import { Archive, Loader2, Save, Settings, ShieldCheck, Trash2, UserPlus, UsersRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -33,6 +35,7 @@ import {
   useAddProjectMemberMutation,
   useArchiveProjectMutation,
   useRemoveProjectMemberMutation,
+  useTransferProjectOwnershipMutation,
   useUpdateProjectMemberMutation,
   useUpdateProjectMutation,
 } from '@/resources/projects';
@@ -49,15 +52,15 @@ import { UserAvatar } from './UserAvatar';
 
 type ProjectMemberDto = ProjectMemberDtoOutput;
 type ProjectResponseDto = ProjectResponseDtoOutput;
+type ProjectAssignableRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
 
-const projectRoleOptions = [ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
+const projectAssignableRoleOptions = [ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
 const projectMemberPageQuery = { limit: 50 } as const;
 
-const sdkProjectMemberRoleByValue: Record<ProjectRoleValue, SdkProjectMemberRole> = {
-  [ProjectRole.Commenter]: SdkProjectMemberRole.Commenter,
-  [ProjectRole.Editor]: SdkProjectMemberRole.Editor,
-  [ProjectRole.Owner]: SdkProjectMemberRole.Owner,
-  [ProjectRole.Viewer]: SdkProjectMemberRole.Viewer,
+const sdkProjectMemberRoleByValue: Record<ProjectAssignableRole, SdkProjectAssignableMemberRole> = {
+  [ProjectRole.Commenter]: SdkProjectAssignableMemberRole.Commenter,
+  [ProjectRole.Editor]: SdkProjectAssignableMemberRole.Editor,
+  [ProjectRole.Viewer]: SdkProjectAssignableMemberRole.Viewer,
 };
 
 const projectFormSchema = z.object({
@@ -69,7 +72,7 @@ type ProjectFormState = z.infer<typeof projectFormSchema>;
 
 const memberFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
-  role: z.enum([ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]),
+  role: z.enum(projectAssignableRoleOptions),
 });
 
 type MemberFormState = z.infer<typeof memberFormSchema>;
@@ -80,12 +83,14 @@ const memberFormDefaults: MemberFormState = {
 };
 
 export function ProjectSettingsDialog({
+  currentUserId,
   onArchived,
   onOpenChange,
   open,
   project,
   trigger,
 }: {
+  currentUserId: string;
   onArchived: () => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
@@ -93,7 +98,9 @@ export function ProjectSettingsDialog({
   trigger?: ReactNode | null;
 }) {
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [confirmTransferUserId, setConfirmTransferUserId] = useState<string | null>(null);
   const [internalOpen, setInternalOpen] = useState(false);
+  const [transferringUserId, setTransferringUserId] = useState<string | null>(null);
   const dialogOpen = open ?? internalOpen;
   const canManageProject = hasProjectPermission(project.projectRole, Permission.ProjectUpdate);
   const form = useForm<ProjectFormState>({
@@ -161,6 +168,7 @@ export function ProjectSettingsDialog({
     },
   });
   const updateProjectMemberMutation = useUpdateProjectMemberMutation();
+  const transferProjectOwnershipMutation = useTransferProjectOwnershipMutation();
   const removeProjectMemberMutation = useRemoveProjectMemberMutation();
   const updateProjectReviewSettingsMutation = useUpdateProjectReviewSignalSettingsMutation({
     mutationConfig: {
@@ -174,6 +182,7 @@ export function ProjectSettingsDialog({
   const isMemberMutationPending =
     addProjectMemberMutation.isPending ||
     updateProjectMemberMutation.isPending ||
+    transferProjectOwnershipMutation.isPending ||
     removeProjectMemberMutation.isPending;
   const isReviewSettingsMutationPending = updateProjectReviewSettingsMutation.isPending;
   const isReviewSettingsPending = projectReviewSettingsQuery.isFetching || isReviewSettingsMutationPending;
@@ -199,8 +208,11 @@ export function ProjectSettingsDialog({
       archiveProjectMutation.reset();
       addProjectMemberMutation.reset();
       updateProjectMemberMutation.reset();
+      transferProjectOwnershipMutation.reset();
       removeProjectMemberMutation.reset();
       updateProjectReviewSettingsMutation.reset();
+      setConfirmTransferUserId(null);
+      setTransferringUserId(null);
     }
   }
 
@@ -240,11 +252,12 @@ export function ProjectSettingsDialog({
     });
   }
 
-  function handleUpdateMemberRole(member: ProjectMemberDto, role: ProjectRoleValue) {
-    if (member.role === role) {
+  function handleUpdateMemberRole(member: ProjectMemberDto, role: ProjectAssignableRole) {
+    if (toProjectRoleValue(member.role) === role) {
       return;
     }
 
+    setConfirmTransferUserId(null);
     updateProjectMemberMutation.mutate({
       body: { role: sdkProjectMemberRoleByValue[role] },
       projectId: project.id,
@@ -252,7 +265,30 @@ export function ProjectSettingsDialog({
     });
   }
 
+  function handleTransferOwnership(member: ProjectMemberDto) {
+    if (confirmTransferUserId !== member.userId) {
+      // Folder ownership memakai aksi dua langkah agar user sadar bahwa Owner lama akan otomatis turun menjadi Editor.
+      setConfirmTransferUserId(member.userId);
+      return;
+    }
+
+    setTransferringUserId(member.userId);
+    transferProjectOwnershipMutation.mutate(
+      {
+        body: { userId: member.userId },
+        projectId: project.id,
+      },
+      {
+        onSettled: () => {
+          setConfirmTransferUserId(null);
+          setTransferringUserId(null);
+        },
+      },
+    );
+  }
+
   function handleRemoveMember(member: ProjectMemberDto) {
+    setConfirmTransferUserId(null);
     removeProjectMemberMutation.mutate({
       projectId: project.id,
       userId: member.userId,
@@ -261,7 +297,10 @@ export function ProjectSettingsDialog({
 
   const mutationError = updateProjectMutation.error ?? archiveProjectMutation.error;
   const memberMutationError =
-    addProjectMemberMutation.error ?? updateProjectMemberMutation.error ?? removeProjectMemberMutation.error;
+    addProjectMemberMutation.error ??
+    updateProjectMemberMutation.error ??
+    transferProjectOwnershipMutation.error ??
+    removeProjectMemberMutation.error;
   const updatingUserId = updateProjectMemberMutation.isPending ? updateProjectMemberMutation.variables?.userId : null;
   const removingUserId = removeProjectMemberMutation.isPending ? removeProjectMemberMutation.variables?.userId : null;
 
@@ -398,7 +437,7 @@ export function ProjectSettingsDialog({
                   control={memberForm.control}
                   disabled={isMemberMutationPending}
                   name="role"
-                  options={projectRoleOptions.map((role) => ({
+                  options={projectAssignableRoleOptions.map((role) => ({
                     label: formatProjectRole(role),
                     value: role,
                   }))}
@@ -432,12 +471,16 @@ export function ProjectSettingsDialog({
                 <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
                   {members.map((member) => (
                     <ProjectMemberRow
+                      confirmTransfer={confirmTransferUserId === member.userId}
+                      currentUserId={currentUserId}
                       isRemoving={removingUserId === member.userId}
+                      isTransferring={transferringUserId === member.userId}
                       isUpdating={updatingUserId === member.userId}
                       key={member.userId}
                       member={member}
                       onRemove={handleRemoveMember}
                       onRoleChange={handleUpdateMemberRole}
+                      onTransferOwnership={handleTransferOwnership}
                     />
                   ))}
                 </div>
@@ -494,22 +537,34 @@ export function ProjectSettingsDialog({
 }
 
 function ProjectMemberRow({
+  confirmTransfer,
+  currentUserId,
   isRemoving,
+  isTransferring,
   isUpdating,
   member,
   onRemove,
   onRoleChange,
+  onTransferOwnership,
 }: {
+  confirmTransfer: boolean;
+  currentUserId: string;
   isRemoving: boolean;
+  isTransferring: boolean;
   isUpdating: boolean;
   member: ProjectMemberDto;
   onRemove: (member: ProjectMemberDto) => void;
-  onRoleChange: (member: ProjectMemberDto, role: ProjectRoleValue) => void;
+  onRoleChange: (member: ProjectMemberDto, role: ProjectAssignableRole) => void;
+  onTransferOwnership: (member: ProjectMemberDto) => void;
 }) {
-  const isBusy = isRemoving || isUpdating;
+  const isBusy = isRemoving || isTransferring || isUpdating;
+  const normalizedRole = toProjectRoleValue(member.role);
+  const isOwner = normalizedRole === ProjectRole.Owner;
+  const canRemove = !isOwner;
+  const canTransferOwnership = member.userId !== currentUserId && !isOwner;
 
   return (
-    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center">
+    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_230px_auto] sm:items-center">
       <div className="flex min-w-0 items-center gap-3">
         <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
@@ -520,32 +575,69 @@ function ProjectMemberRow({
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
         </div>
       </div>
-      <Select
-        className={selectClassName}
-        disabled={isBusy}
-        onValueChange={(role) => onRoleChange(member, toProjectRoleValue(role as SdkProjectMemberRole))}
-        options={projectRoleOptions.map((role) => ({
-          label: formatProjectRole(role),
-          value: role,
-        }))}
-        value={member.role}
-      />
-      <WithTooltip content={`Remove ${member.name} from this folder`}>
-        <Button
-          aria-label={`Remove ${member.name}`}
+      {isOwner ? (
+        <div className="text-left sm:text-right">
+          <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">Owner</div>
+          <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">Managed by transfer</div>
+        </div>
+      ) : (
+        <Select
+          className={selectClassName}
           disabled={isBusy}
-          onClick={() => onRemove(member)}
-          size="icon"
-          variant="ghost"
-        >
-          {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-        </Button>
-      </WithTooltip>
+          onValueChange={(role) => onRoleChange(member, role as ProjectAssignableRole)}
+          options={projectAssignableRoleOptions.map((role) => ({
+            label: formatProjectRole(role),
+            value: role,
+          }))}
+          value={normalizedRole}
+        />
+      )}
+      <div className="flex justify-start gap-2 sm:justify-end">
+        {canTransferOwnership ? (
+          <WithTooltip
+            content={
+              confirmTransfer
+                ? `Click again to transfer folder ownership to ${member.name}`
+                : `Transfer folder ownership to ${member.name}`
+            }
+          >
+            <Button
+              aria-label={
+                confirmTransfer
+                  ? `Confirm transfer folder ownership to ${member.name}`
+                  : `Transfer folder ownership to ${member.name}`
+              }
+              className={cn(confirmTransfer && 'border-[rgb(var(--tabliodb-red))] text-[rgb(var(--tabliodb-red))]')}
+              disabled={isBusy}
+              onClick={() => onTransferOwnership(member)}
+              size="sm"
+              type="button"
+              variant={confirmTransfer ? 'secondary' : 'soft'}
+            >
+              {isTransferring ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
+              {confirmTransfer ? 'Confirm transfer' : 'Transfer owner'}
+            </Button>
+          </WithTooltip>
+        ) : null}
+        {canRemove ? (
+          <WithTooltip content={`Remove ${member.name} from this folder`}>
+            <Button
+              aria-label={`Remove ${member.name}`}
+              disabled={isBusy}
+              onClick={() => onRemove(member)}
+              size="icon"
+              variant="ghost"
+            >
+              {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            </Button>
+          </WithTooltip>
+        ) : null}
+      </div>
     </article>
   );
 }
 
-function ProjectRoleBadge({ role }: { role: ProjectRoleValue | SdkProjectMemberRole }) {
+function ProjectRoleBadge({ role }: { role: ProjectRoleValue | SdkProjectMemberOutputRole }) {
   const normalizedRole = toProjectRoleValue(role);
 
   if (normalizedRole === ProjectRole.Owner) {
@@ -579,14 +671,14 @@ function getProjectFormDefaults(project: ProjectResponseDto): ProjectFormState {
   };
 }
 
-function hasProjectPermission(role: ProjectRoleValue | SdkProjectMemberRole, permission: Permission): boolean {
+function hasProjectPermission(role: ProjectRoleValue | SdkProjectMemberOutputRole, permission: Permission): boolean {
   return isGranted({
     current: permissionsForProjectRole(toProjectRoleValue(role)),
     requested: [permission],
   });
 }
 
-function toProjectRoleValue(role: ProjectRoleValue | SdkProjectMemberRole): ProjectRoleValue {
+function toProjectRoleValue(role: ProjectRoleValue | SdkProjectMemberOutputRole): ProjectRoleValue {
   // SDK generated enum dan shared permission enum memakai value string yang sama, tetapi cast eksplisit menjaga boundary tetap terlihat.
   return role as ProjectRoleValue;
 }

@@ -20,6 +20,7 @@ import {
   ProjectMemberListResponseDto,
   ProjectMemberRemoveResponseDto,
   ProjectMemberUpdateDto,
+  ProjectOwnershipTransferDto,
   ProjectResponseDto,
   ProjectUpdateDto,
 } from '../dtos/project.dto.js';
@@ -160,6 +161,7 @@ export class ProjectService {
 
   async addMember(auth: AuthContext, projectId: string, dto: ProjectMemberCreateDto): Promise<ProjectMemberDto> {
     const project = await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
+    this.assertAssignableProjectMemberRole(dto.role ?? ProjectRole.Viewer);
     const user = await this.userRepository.getByEmail(dto.email);
 
     if (!user) {
@@ -224,7 +226,8 @@ export class ProjectService {
   ): Promise<ProjectMemberDto> {
     const project = await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
     this.assertNotSelfMemberMutation(auth, userId, 'change your own folder access');
-    const currentMember = await this.assertCanChangeOwnerRole(projectId, userId, dto.role);
+    this.assertAssignableProjectMemberRole(dto.role);
+    const currentMember = await this.assertCanEditProjectMemberRole(projectId, userId);
 
     const member = await this.projectRepository.updateMember(projectId, userId, dto.role);
     if (!member) {
@@ -248,6 +251,62 @@ export class ProjectService {
         projectId,
       });
     }
+
+    return this.serializeMember(member);
+  }
+
+  async transferOwnership(
+    auth: AuthContext,
+    projectId: string,
+    dto: ProjectOwnershipTransferDto,
+  ): Promise<ProjectMemberDto> {
+    const project = await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
+
+    if (auth.user.id === dto.userId) {
+      throw new BadRequestException('Choose another collaborator to receive folder ownership');
+    }
+
+    const workspaceMember = await this.organizationRepository.getMember(project.organizationId, dto.userId);
+    if (!workspaceMember || workspaceMember.status !== 'active') {
+      throw new BadRequestException('New folder owner must be an active workspace member');
+    }
+
+    const effectiveRole = await this.projectRepository.getProjectRole(dto.userId, projectId);
+    if (!effectiveRole) {
+      throw new BadRequestException('New folder owner must already have folder access');
+    }
+
+    const currentMember = await this.projectRepository.getMember(projectId, dto.userId);
+    if (currentMember?.role === ProjectRole.Owner) {
+      throw new BadRequestException('User already owns this folder');
+    }
+
+    const member = await this.projectRepository.transferOwnership(projectId, {
+      createdById: auth.user.id,
+      userId: dto.userId,
+    });
+
+    if (!member) {
+      throw new NotFoundException('Project member not found');
+    }
+
+    await this.recordProjectAudit(auth, {
+      action: AuditAction.ProjectMemberRoleUpdated,
+      entityId: dto.userId,
+      entityType: 'project_member',
+      metadata: {
+        email: member.email,
+        name: member.name,
+        role: {
+          after: member.role,
+          before: currentMember?.role ?? null,
+        },
+        // Ownership transfer is deliberately separated from regular role changes so audit history can flag it as sensitive.
+        transfer: true,
+      },
+      organizationId: project.organizationId,
+      projectId,
+    });
 
     return this.serializeMember(member);
   }
@@ -365,21 +424,26 @@ export class ProjectService {
     };
   }
 
-  private async assertCanChangeOwnerRole(projectId: string, userId: string, nextRole: ProjectRole) {
+  private async assertCanEditProjectMemberRole(projectId: string, userId: string) {
     const currentMember = await this.projectRepository.getMember(projectId, userId);
     if (!currentMember) {
       throw new NotFoundException('Project member not found');
     }
 
-    if (currentMember.role === ProjectRole.Owner && nextRole !== ProjectRole.Owner) {
-      const ownerCount = await this.projectRepository.getProjectOwnerCount(projectId);
-
-      if (ownerCount <= 1) {
-        throw new BadRequestException('Project must keep at least one owner');
-      }
+    if (currentMember.role === ProjectRole.Owner) {
+      throw new BadRequestException('Use transfer ownership to change a folder owner');
     }
 
     return currentMember;
+  }
+
+  private assertAssignableProjectMemberRole(role: ProjectRole): void {
+    if (role !== ProjectRole.Owner) {
+      return;
+    }
+
+    // Owner stays outside add/update member flows; transferOwnership is the only path that can promote a folder owner.
+    throw new BadRequestException('Use transfer ownership to assign a folder owner');
   }
 
   private assertNotSelfMemberMutation(auth: AuthContext, userId: string, action: string): void {

@@ -1,11 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { diagramReviewSignalCodes, type DiagramModel } from '@tabliodb/schema-core';
-import type {
-  DiagramResponseDtoOutput,
-  ProjectResponseDtoOutput,
-  ReviewSignalEffectiveSettingsDtoOutput,
-} from '@tabliodb/sdk';
+import type { DiagramResponseDtoOutput, ReviewSignalEffectiveSettingsDtoOutput } from '@tabliodb/sdk';
 import {
   Badge,
   Button,
@@ -21,7 +17,7 @@ import {
   IconButton,
 } from '@tabliodb/ui';
 import { Loader2, Save, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledInput, ControlledSelect } from '@/features/app/FormControls';
@@ -40,16 +36,12 @@ import { ReviewSignalSettingsFields, toReviewSignalSettingsDto } from '../review
 import { getDialectSelectOption } from './DialectIcon';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
 type ReviewSignalEffectiveSettingsDto = ReviewSignalEffectiveSettingsDtoOutput;
-
-const rootDiagramLocationValue = '__workspace_root__';
 
 const diagramSettingsFormSchema = z.object({
   dialect: z.enum(diagramDialectOptions),
   disabledRuleKeys: z.array(z.enum(diagramReviewSignalCodes)),
   name: z.string().trim().min(1, 'Diagram name is required.').max(80, 'Keep the name under 80 characters.'),
-  projectId: z.string().min(1, 'Choose where this diagram should live.'),
 });
 
 type DiagramSettingsFormState = z.infer<typeof diagramSettingsFormSchema>;
@@ -61,7 +53,6 @@ export function DiagramSettingsDialog({
   onOpenChange,
   onUpdated,
   open,
-  projects = [],
   trigger,
 }: {
   canEdit: boolean;
@@ -70,7 +61,6 @@ export function DiagramSettingsDialog({
   onOpenChange?: (open: boolean) => void;
   onUpdated: (diagram: DiagramResponseDto) => void;
   open?: boolean;
-  projects?: ProjectResponseDto[];
   trigger?: ReactNode;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -90,10 +80,6 @@ export function DiagramSettingsDialog({
   const updateDiagramMutation = useUpdateDiagramMutation();
   const updateDiagramReviewSettingsMutation = useUpdateDiagramReviewSignalSettingsMutation();
   const isPending = updateDiagramMutation.isPending || updateDiagramReviewSettingsMutation.isPending;
-  const diagramLocationOptions = useMemo(
-    () => getDiagramLocationOptions(projects, diagram.projectId),
-    [diagram.projectId, projects],
-  );
   const liveModelDialect = model?.dialect;
   const hasUnsavedDialectChange = liveModelDialect !== undefined && liveModelDialect !== diagram.dialect;
 
@@ -133,8 +119,6 @@ export function DiagramSettingsDialog({
       body: {
         dialect: sdkDialectByValue[values.dialect],
         name: values.name,
-        // The generated SDK accepts null for a root workspace diagram; the select sentinel is UI-only.
-        projectId: values.projectId === rootDiagramLocationValue ? null : values.projectId,
       },
       diagramId: diagram.id,
     });
@@ -179,20 +163,6 @@ export function DiagramSettingsDialog({
                   name="name"
                 />
                 <FieldError>{errors.name?.message}</FieldError>
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Folder
-                </span>
-                <ControlledSelect
-                  className={selectClassName}
-                  control={form.control}
-                  disabled={isPending || !canEdit}
-                  name="projectId"
-                  options={diagramLocationOptions}
-                />
-                <FieldError>{errors.projectId?.message}</FieldError>
               </label>
 
               <label className="block text-sm">
@@ -270,32 +240,5 @@ function getDiagramSettingsDefaults(
     dialect: toDatabaseDialect(diagram.dialect),
     disabledRuleKeys: reviewSettings?.diagram.disabledRuleKeys.map(toDiagramReviewSignalCode) ?? [],
     name: diagram.name,
-    projectId: diagram.projectId ?? rootDiagramLocationValue,
   };
-}
-
-function getDiagramLocationOptions(projects: ProjectResponseDto[], currentProjectId: string | null) {
-  const options = [
-    {
-      label: 'No folder',
-      textValue: 'No folder',
-      value: rootDiagramLocationValue,
-    },
-    ...projects.map((project) => ({
-      label: project.name,
-      textValue: project.name,
-      value: project.id,
-    })),
-  ];
-
-  if (currentProjectId && !projects.some((project) => project.id === currentProjectId)) {
-    // Direct diagram collaborators may not have folder-list access, but the current select value must still render.
-    options.push({
-      label: 'Current folder',
-      textValue: 'Current folder',
-      value: currentProjectId,
-    });
-  }
-
-  return options;
 }

@@ -871,10 +871,13 @@ export type OrganizationMemberCreateDto = {
   role?: Role6;
 };
 export type OrganizationMemberUpdateDto = {
-  role: Role7;
+  role: Role6;
 };
 export type OrganizationMemberRemoveResponseDtoOutput = {
   successful: boolean;
+};
+export type OrganizationOwnershipTransferDto = {
+  userId: string;
 };
 export type AuditLogDtoOutput = {
   id: string;
@@ -935,7 +938,7 @@ export type ProjectMemberDtoOutput = {
   name: string;
   avatarUrl: string | null;
   cursorColor: string;
-  role: Role8;
+  role: Role7;
   createdAt: string;
   updatedAt: string;
 };
@@ -947,6 +950,9 @@ export type ProjectMemberListResponseDtoOutput = {
 export type ProjectMemberCreateDto = {
   email: string;
   role?: Role8;
+};
+export type ProjectOwnershipTransferDto = {
+  userId: string;
 };
 export type ProjectMemberUpdateDto = {
   role: Role8;
@@ -1622,7 +1628,7 @@ export type TeamProjectAccessDtoOutput = {
   projectId: string;
   projectName: string;
   projectSlug: string;
-  role: Role9;
+  role: Role8;
   createdAt: string;
   updatedAt: string;
 };
@@ -1633,7 +1639,7 @@ export type TeamProjectAccessListResponseDtoOutput = {
 };
 export type TeamProjectAccessUpsertDto = {
   projectId: string;
-  role?: Role9;
+  role?: Role8;
 };
 export type TeamProjectAccessRemoveResponseDtoOutput = {
   successful: boolean;
@@ -1642,7 +1648,7 @@ export type TeamDiagramAccessDtoOutput = {
   diagramId: string;
   diagramName: string;
   projectId: string | null;
-  role: Role9;
+  role: Role8;
   createdAt: string;
   updatedAt: string;
 };
@@ -1653,7 +1659,7 @@ export type TeamDiagramAccessListResponseDtoOutput = {
 };
 export type TeamDiagramAccessUpsertDto = {
   diagramId: string;
-  role?: Role9;
+  role?: Role8;
 };
 export type TeamDiagramAccessRemoveResponseDtoOutput = {
   successful: boolean;
@@ -3161,6 +3167,30 @@ export function removeOrganizationMember(
     }),
   );
 }
+export function transferOrganizationOwnership(
+  {
+    organizationId,
+    organizationOwnershipTransferDto,
+  }: {
+    organizationId: string;
+    organizationOwnershipTransferDto: OrganizationOwnershipTransferDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: OrganizationMemberDtoOutput;
+    }>(
+      `/organizations/${encodeURIComponent(organizationId)}/ownership/transfer`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: organizationOwnershipTransferDto,
+      }),
+    ),
+  );
+}
 export function getOrganizationAuditLogs(
   {
     cursor,
@@ -3333,6 +3363,30 @@ export function addProjectMember(
         ...opts,
         method: 'POST',
         body: projectMemberCreateDto,
+      }),
+    ),
+  );
+}
+export function transferProjectOwnership(
+  {
+    projectId,
+    projectOwnershipTransferDto,
+  }: {
+    projectId: string;
+    projectOwnershipTransferDto: ProjectOwnershipTransferDto;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: ProjectMemberDtoOutput;
+    }>(
+      `/projects/${encodeURIComponent(projectId)}/ownership/transfer`,
+      oazapfts.json({
+        ...opts,
+        method: 'POST',
+        body: projectOwnershipTransferDto,
       }),
     ),
   );
@@ -4514,20 +4568,19 @@ export enum Role6 {
   Member = 'member',
   Guest = 'guest',
 }
-export enum Role7 {
-  Owner = 'owner',
-  Admin = 'admin',
-  Member = 'member',
-  Guest = 'guest',
-}
 export enum ProjectRole2 {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Role8 {
+export enum Role7 {
   Owner = 'owner',
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
+export enum Role8 {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
@@ -4580,11 +4633,6 @@ export enum Type3 {
   Index = 'index',
   Relationship = 'relationship',
   Table = 'table',
-}
-export enum Role9 {
-  Editor = 'editor',
-  Commenter = 'commenter',
-  Viewer = 'viewer',
 }
 export enum InstanceRole2 {
   Admin = 'admin',

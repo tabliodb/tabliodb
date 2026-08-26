@@ -15,6 +15,7 @@ import {
   OrganizationMemberListResponseDto,
   OrganizationMemberRemoveResponseDto,
   OrganizationMemberUpdateDto,
+  OrganizationOwnershipTransferDto,
   OrganizationSettingsDto,
   OrganizationSettingsUpdateDto,
 } from '../dtos/organization.dto.js';
@@ -123,6 +124,21 @@ export class OrganizationController {
     @Body() dto: OrganizationMemberUpdateDto,
   ): Promise<OrganizationMemberDto> {
     return this.organizationService.updateMemberRole(auth, organizationId, userId, dto);
+  }
+
+  @Post(':organizationId/ownership/transfer')
+  @RateLimit(RateLimitPreset.OrganizationWrite)
+  @RequirePermission(Permission.OrganizationManage, { key: 'organizationId', source: 'param', type: 'organization' })
+  @ApiParam({ name: 'organizationId', type: String })
+  @ApiBody({ type: OrganizationOwnershipTransferDto })
+  @ApiOperation({ operationId: 'transferOrganizationOwnership' })
+  @ZodResponse({ status: HttpStatus.OK, type: OrganizationMemberDto })
+  transferOrganizationOwnership(
+    @Auth() auth: AuthContext,
+    @Param('organizationId') organizationId: string,
+    @Body() dto: OrganizationOwnershipTransferDto,
+  ): Promise<OrganizationMemberDto> {
+    return this.organizationService.transferOwnership(auth, organizationId, dto);
   }
 
   @Delete(':organizationId/members/:userId')

@@ -4,6 +4,7 @@ import { ProjectRole } from '@tabliodb/shared';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const ProjectRoleSchema = z.enum([ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
+const ProjectAssignableMemberRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
 
 const ProjectCreateSchema = z
   .object({
@@ -82,15 +83,21 @@ const ProjectMemberListResponseSchema = z
 const ProjectMemberCreateSchema = z
   .object({
     email: z.email(),
-    role: ProjectRoleSchema.default(ProjectRole.Viewer),
+    role: ProjectAssignableMemberRoleSchema.default(ProjectRole.Viewer),
   })
   .meta({ id: 'ProjectMemberCreateDto' });
 
 const ProjectMemberUpdateSchema = z
   .object({
-    role: ProjectRoleSchema,
+    role: ProjectAssignableMemberRoleSchema,
   })
   .meta({ id: 'ProjectMemberUpdateDto' });
+
+const ProjectOwnershipTransferSchema = z
+  .object({
+    userId: z.uuid(),
+  })
+  .meta({ id: 'ProjectOwnershipTransferDto' });
 
 const ProjectMemberRemoveResponseSchema = z
   .object({
@@ -114,5 +121,6 @@ export class ProjectMemberListQueryDto extends createZodDto(ProjectMemberListQue
 export class ProjectMemberListResponseDto extends createZodDto(ProjectMemberListResponseSchema) {}
 export class ProjectMemberRemoveResponseDto extends createZodDto(ProjectMemberRemoveResponseSchema) {}
 export class ProjectMemberUpdateDto extends createZodDto(ProjectMemberUpdateSchema) {}
+export class ProjectOwnershipTransferDto extends createZodDto(ProjectOwnershipTransferSchema) {}
 export class ProjectResponseDto extends createZodDto(ProjectResponseSchema) {}
 export class ProjectUpdateDto extends createZodDto(ProjectUpdateSchema) {}

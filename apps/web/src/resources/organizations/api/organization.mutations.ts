@@ -3,6 +3,7 @@ import {
   addOrganizationMember,
   createOrganization,
   removeOrganizationMember,
+  transferOrganizationOwnership,
   updateOrganizationMember,
   updateOrganizationSettings,
   type OrganizationCreateDto,
@@ -10,6 +11,7 @@ import {
   type OrganizationListResponseDtoOutput,
   type OrganizationMemberCreateDto,
   type OrganizationMemberUpdateDto,
+  type OrganizationOwnershipTransferDto,
   type OrganizationSettingsUpdateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
@@ -34,6 +36,14 @@ const updateOrganizationMemberMutationFn = (input: {
     organizationId: input.organizationId,
     organizationMemberUpdateDto: input.body,
     userId: input.userId,
+  });
+const transferOrganizationOwnershipMutationFn = (input: {
+  body: OrganizationOwnershipTransferDto;
+  organizationId: string;
+}) =>
+  transferOrganizationOwnership({
+    organizationId: input.organizationId,
+    organizationOwnershipTransferDto: input.body,
   });
 const removeOrganizationMemberMutationFn = (input: { organizationId: string; userId: string }) =>
   removeOrganizationMember({ organizationId: input.organizationId, userId: input.userId });
@@ -111,6 +121,10 @@ type UseUpdateOrganizationMemberMutationParams = {
   mutationConfig?: MutationConfig<typeof updateOrganizationMemberMutationFn>;
 };
 
+type UseTransferOrganizationOwnershipMutationParams = {
+  mutationConfig?: MutationConfig<typeof transferOrganizationOwnershipMutationFn>;
+};
+
 export function useUpdateOrganizationMemberMutation(params: UseUpdateOrganizationMemberMutationParams = {}) {
   return useMutation({
     mutationFn: updateOrganizationMemberMutationFn,
@@ -120,6 +134,21 @@ export function useUpdateOrganizationMemberMutation(params: UseUpdateOrganizatio
       queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useTransferOrganizationOwnershipMutation(params: UseTransferOrganizationOwnershipMutationParams = {}) {
+  return useMutation({
+    mutationFn: transferOrganizationOwnershipMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Workspace ownership affects top-level navigation roles and every inherited permission check.
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
+      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

@@ -14,6 +14,7 @@ import {
   OrganizationMemberListResponseDto,
   OrganizationMemberRemoveResponseDto,
   OrganizationMemberUpdateDto,
+  OrganizationOwnershipTransferDto,
   OrganizationSettingsDto,
   OrganizationSettingsUpdateDto,
 } from '../dtos/organization.dto.js';
@@ -156,6 +157,7 @@ export class OrganizationService {
     dto: OrganizationMemberCreateDto,
   ): Promise<OrganizationMemberDto> {
     await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+    this.assertAssignableOrganizationMemberRole(dto.role);
 
     const user = await this.userRepository.getByEmail(dto.email);
     if (!user) {
@@ -205,8 +207,9 @@ export class OrganizationService {
   ): Promise<OrganizationMemberDto> {
     await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
     this.assertNotSelfMemberMutation(auth, userId, 'change your own workspace role');
+    this.assertAssignableOrganizationMemberRole(dto.role);
 
-    const currentMember = await this.assertCanChangeOwnerRole(organizationId, userId, dto.role);
+    const currentMember = await this.assertCanEditOrganizationMemberRole(organizationId, userId);
     const member = await this.organizationRepository.updateMemberRole(organizationId, userId, dto.role);
 
     if (!member) {
@@ -229,6 +232,56 @@ export class OrganizationService {
         organizationId,
       });
     }
+
+    return this.serializeMember(member);
+  }
+
+  async transferOwnership(
+    auth: AuthContext,
+    organizationId: string,
+    dto: OrganizationOwnershipTransferDto,
+  ): Promise<OrganizationMemberDto> {
+    await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+    await this.assertCurrentWorkspaceOwner(auth, organizationId);
+
+    if (auth.user.id === dto.userId) {
+      throw new BadRequestException('Choose another workspace member to receive ownership');
+    }
+
+    const currentMember = await this.organizationRepository.getMember(organizationId, dto.userId);
+    if (!currentMember) {
+      throw new NotFoundException('Workspace member not found');
+    }
+
+    if (currentMember.status !== 'active') {
+      throw new BadRequestException('New workspace owner must be an active member');
+    }
+
+    if (currentMember.role === OrganizationRole.Owner) {
+      throw new BadRequestException('User already owns this workspace');
+    }
+
+    const member = await this.organizationRepository.transferOwnership(organizationId, dto.userId);
+    if (!member || member.role !== OrganizationRole.Owner) {
+      throw new NotFoundException('Workspace member not found');
+    }
+
+    await this.recordOrganizationAudit(auth, {
+      action: AuditAction.OrganizationMemberRoleUpdated,
+      entityId: dto.userId,
+      entityType: 'organization_member',
+      metadata: {
+        email: member.email,
+        name: member.name,
+        role: {
+          after: member.role,
+          before: currentMember.role,
+        },
+        // Workspace owner transfer is auditable and separate from normal role editing because it changes the top tenant authority.
+        transfer: true,
+      },
+      organizationId,
+    });
 
     return this.serializeMember(member);
   }
@@ -354,21 +407,37 @@ export class OrganizationService {
     }
   }
 
-  private async assertCanChangeOwnerRole(organizationId: string, userId: string, nextRole: OrganizationRole) {
+  private async assertCurrentWorkspaceOwner(auth: AuthContext, organizationId: string): Promise<void> {
+    const membership = await this.organizationRepository.getRole(auth.user.id, organizationId);
+
+    if (membership?.role === OrganizationRole.Owner) {
+      return;
+    }
+
+    // Admins can manage workspace settings, but only the current owner can hand over the ownership boundary.
+    throw new ForbiddenException('Only the current workspace owner can transfer workspace ownership');
+  }
+
+  private async assertCanEditOrganizationMemberRole(organizationId: string, userId: string) {
     const currentMember = await this.organizationRepository.getMember(organizationId, userId);
     if (!currentMember) {
       throw new NotFoundException('Workspace member not found');
     }
 
-    if (currentMember.role === OrganizationRole.Owner && nextRole !== OrganizationRole.Owner) {
-      const ownerCount = await this.organizationRepository.getOrganizationOwnerCount(organizationId);
-
-      if (ownerCount <= 1) {
-        throw new BadRequestException('Workspace must keep at least one owner');
-      }
+    if (currentMember.role === OrganizationRole.Owner) {
+      throw new BadRequestException('Use transfer ownership to change a workspace owner');
     }
 
     return currentMember;
+  }
+
+  private assertAssignableOrganizationMemberRole(role: OrganizationRole): void {
+    if (role !== OrganizationRole.Owner) {
+      return;
+    }
+
+    // Owner is intentionally not assignable through add/update member; transferOwnership is the explicit owner handoff.
+    throw new BadRequestException('Use transfer ownership to assign a workspace owner');
   }
 
   private assertNotSelfMemberMutation(auth: AuthContext, userId: string, action: string): void {

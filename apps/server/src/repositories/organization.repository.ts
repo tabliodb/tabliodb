@@ -248,6 +248,31 @@ export class OrganizationRepository {
     return member ? this.getMember(organizationId, member.userId) : undefined;
   }
 
+  async transferOwnership(organizationId: string, userId: string) {
+    await this.db.transaction().execute(async (tx) => {
+      const now = new Date();
+
+      await tx
+        .updateTable('organization_members')
+        .set({ role: OrganizationRole.Admin, updatedAt: now })
+        .where('organizationId', '=', organizationId)
+        .where('role', '=', OrganizationRole.Owner)
+        .where('status', '=', 'active')
+        .execute();
+
+      // Workspace ownership is a single explicit handoff; generic role edits cannot create extra workspace owners.
+      await tx
+        .updateTable('organization_members')
+        .set({ role: OrganizationRole.Owner, updatedAt: now })
+        .where('organizationId', '=', organizationId)
+        .where('userId', '=', userId)
+        .where('status', '=', 'active')
+        .execute();
+    });
+
+    return this.getMember(organizationId, userId);
+  }
+
   async removeMember(organizationId: string, userId: string): Promise<boolean> {
     const result = await this.db.transaction().execute(async (tx) => {
       await sql`

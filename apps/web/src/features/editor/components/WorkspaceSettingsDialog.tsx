@@ -4,9 +4,9 @@ import { OrganizationRole, ProjectRole, type OrganizationRoleValue, type Project
 import {
   DefaultProjectRole as SdkDefaultProjectRole,
   OrganizationRole as SdkInvitationOrganizationRole,
-  Role6 as SdkOrganizationMemberCreateRole,
-  Role7 as SdkOrganizationMemberUpdateRole,
-  Role9 as SdkTeamProjectRole,
+  Role5 as SdkOrganizationMemberRole,
+  Role6 as SdkOrganizationAssignableMemberRole,
+  Role8 as SdkTeamProjectRole,
   type AuditLogDtoOutput,
   type InvitationCreateResponseDtoOutput,
   type OrganizationDtoOutput,
@@ -60,6 +60,7 @@ import {
   organizationsQueries,
   useAddOrganizationMemberMutation,
   useRemoveOrganizationMemberMutation,
+  useTransferOrganizationOwnershipMutation,
   useUpdateOrganizationMemberMutation,
   useUpdateOrganizationSettingsMutation,
 } from '@/resources/organizations';
@@ -99,10 +100,10 @@ const sdkDefaultProjectRoleByValue: Record<WorkspaceDefaultProjectRole, SdkDefau
   [ProjectRole.Viewer]: SdkDefaultProjectRole.Viewer,
 };
 
-const sdkOrganizationMemberCreateRoleByValue: Record<WorkspaceMemberCreateRole, SdkOrganizationMemberCreateRole> = {
-  [OrganizationRole.Admin]: SdkOrganizationMemberCreateRole.Admin,
-  [OrganizationRole.Guest]: SdkOrganizationMemberCreateRole.Guest,
-  [OrganizationRole.Member]: SdkOrganizationMemberCreateRole.Member,
+const sdkOrganizationMemberCreateRoleByValue: Record<WorkspaceMemberCreateRole, SdkOrganizationAssignableMemberRole> = {
+  [OrganizationRole.Admin]: SdkOrganizationAssignableMemberRole.Admin,
+  [OrganizationRole.Guest]: SdkOrganizationAssignableMemberRole.Guest,
+  [OrganizationRole.Member]: SdkOrganizationAssignableMemberRole.Member,
 };
 
 const sdkInvitationOrganizationRoleByValue: Record<WorkspaceMemberCreateRole, SdkInvitationOrganizationRole> = {
@@ -111,11 +112,10 @@ const sdkInvitationOrganizationRoleByValue: Record<WorkspaceMemberCreateRole, Sd
   [OrganizationRole.Member]: SdkInvitationOrganizationRole.Member,
 };
 
-const sdkOrganizationMemberUpdateRoleByValue: Record<OrganizationRoleValue, SdkOrganizationMemberUpdateRole> = {
-  [OrganizationRole.Admin]: SdkOrganizationMemberUpdateRole.Admin,
-  [OrganizationRole.Guest]: SdkOrganizationMemberUpdateRole.Guest,
-  [OrganizationRole.Member]: SdkOrganizationMemberUpdateRole.Member,
-  [OrganizationRole.Owner]: SdkOrganizationMemberUpdateRole.Owner,
+const sdkOrganizationMemberUpdateRoleByValue: Record<WorkspaceMemberCreateRole, SdkOrganizationAssignableMemberRole> = {
+  [OrganizationRole.Admin]: SdkOrganizationAssignableMemberRole.Admin,
+  [OrganizationRole.Guest]: SdkOrganizationAssignableMemberRole.Guest,
+  [OrganizationRole.Member]: SdkOrganizationAssignableMemberRole.Member,
 };
 
 const sdkTeamProjectRoleByValue: Record<TeamProjectRole, SdkTeamProjectRole> = {
@@ -124,7 +124,7 @@ const sdkTeamProjectRoleByValue: Record<TeamProjectRole, SdkTeamProjectRole> = {
   viewer: SdkTeamProjectRole.Viewer,
 };
 
-function toOrganizationRoleValue(role: OrganizationRoleValue | SdkOrganizationMemberUpdateRole): OrganizationRoleValue {
+function toOrganizationRoleValue(role: OrganizationRoleValue | SdkOrganizationMemberRole): OrganizationRoleValue {
   return role as OrganizationRoleValue;
 }
 
@@ -204,13 +204,6 @@ const teamDiagramAccessFormDefaults: TeamDiagramAccessFormState = {
   role: ProjectRole.Viewer,
 };
 
-const organizationRoleOptions = [
-  OrganizationRole.Owner,
-  OrganizationRole.Admin,
-  OrganizationRole.Member,
-  OrganizationRole.Guest,
-] as const;
-
 const teamPageQuery = { limit: 50 } as const;
 const teamMemberPageQuery = { limit: 50 } as const;
 const teamDiagramAccessPageQuery = { limit: 50 } as const;
@@ -270,11 +263,13 @@ function WorkspaceSettingsTabList({
 }
 
 export function WorkspaceSettingsDialog({
+  currentUserId,
   onOpenChange,
   open,
   organization,
   trigger,
 }: {
+  currentUserId: string;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   organization: OrganizationDto;
@@ -284,9 +279,12 @@ export function WorkspaceSettingsDialog({
   const dialogOpen = open ?? internalOpen;
   // Dialog besar ini sengaja dipotong menjadi tab agar user tidak harus memindai satu halaman panjang berisi beberapa workflow.
   const [activeSettingsTab, setActiveSettingsTab] = useState<WorkspaceSettingsTab>('general');
+  const [confirmWorkspaceTransferUserId, setConfirmWorkspaceTransferUserId] = useState<string | null>(null);
   const [createdWorkspaceInvite, setCreatedWorkspaceInvite] = useState<InvitationCreateResponseDto | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [transferringWorkspaceUserId, setTransferringWorkspaceUserId] = useState<string | null>(null);
   const canManageWorkspace = isOrganizationManager(organization);
+  const canTransferWorkspaceOwnership = toOrganizationRoleValue(organization.role) === OrganizationRole.Owner;
   const form = useForm<WorkspaceSettingsFormState>({
     defaultValues: getWorkspaceSettingsDefaults(organization),
     mode: 'onBlur',
@@ -444,11 +442,13 @@ export function WorkspaceSettingsDialog({
     },
   });
   const updateMemberMutation = useUpdateOrganizationMemberMutation();
+  const transferOrganizationOwnershipMutation = useTransferOrganizationOwnershipMutation();
   const removeMemberMutation = useRemoveOrganizationMemberMutation();
   const isWorkspaceMemberMutationPending =
     addMemberMutation.isPending ||
     createWorkspaceInvitationMutation.isPending ||
     updateMemberMutation.isPending ||
+    transferOrganizationOwnershipMutation.isPending ||
     removeMemberMutation.isPending;
   const createTeamMutation = useCreateTeamMutation({
     mutationConfig: {
@@ -516,6 +516,7 @@ export function WorkspaceSettingsDialog({
       addMemberMutation.reset();
       createWorkspaceInvitationMutation.reset();
       updateMemberMutation.reset();
+      transferOrganizationOwnershipMutation.reset();
       removeMemberMutation.reset();
       createTeamMutation.reset();
       updateTeamMutation.reset();
@@ -526,6 +527,8 @@ export function WorkspaceSettingsDialog({
       removeTeamProjectAccessMutation.reset();
       upsertTeamDiagramAccessMutation.reset();
       removeTeamDiagramAccessMutation.reset();
+      setConfirmWorkspaceTransferUserId(null);
+      setTransferringWorkspaceUserId(null);
     }
   }, [dialogOpen, form, organization, settingsQuery.data]);
 
@@ -562,6 +565,7 @@ export function WorkspaceSettingsDialog({
       addMemberMutation.reset();
       createWorkspaceInvitationMutation.reset();
       updateMemberMutation.reset();
+      transferOrganizationOwnershipMutation.reset();
       removeMemberMutation.reset();
       createTeamMutation.reset();
       updateTeamMutation.reset();
@@ -580,6 +584,8 @@ export function WorkspaceSettingsDialog({
       teamMemberForm.reset(teamMemberFormDefaults);
       teamProjectAccessForm.reset(teamProjectAccessFormDefaults);
       teamDiagramAccessForm.reset(teamDiagramAccessFormDefaults);
+      setConfirmWorkspaceTransferUserId(null);
+      setTransferringWorkspaceUserId(null);
     }
   }
 
@@ -636,11 +642,12 @@ export function WorkspaceSettingsDialog({
     await navigator.clipboard.writeText(createdWorkspaceInvite.acceptUrl);
   }
 
-  function handleUpdateWorkspaceMemberRole(member: OrganizationMemberDto, role: OrganizationRoleValue) {
-    if (member.role === role) {
+  function handleUpdateWorkspaceMemberRole(member: OrganizationMemberDto, role: WorkspaceMemberCreateRole) {
+    if (toOrganizationRoleValue(member.role) === role) {
       return;
     }
 
+    setConfirmWorkspaceTransferUserId(null);
     updateMemberMutation.mutate({
       body: { role: sdkOrganizationMemberUpdateRoleByValue[role] },
       organizationId: organization.id,
@@ -648,7 +655,30 @@ export function WorkspaceSettingsDialog({
     });
   }
 
+  function handleTransferWorkspaceOwnership(member: OrganizationMemberDto) {
+    if (confirmWorkspaceTransferUserId !== member.userId) {
+      // Workspace ownership dipindahkan lewat aksi dua tahap supaya Owner tidak tercampur dengan role operasional biasa.
+      setConfirmWorkspaceTransferUserId(member.userId);
+      return;
+    }
+
+    setTransferringWorkspaceUserId(member.userId);
+    transferOrganizationOwnershipMutation.mutate(
+      {
+        body: { userId: member.userId },
+        organizationId: organization.id,
+      },
+      {
+        onSettled: () => {
+          setConfirmWorkspaceTransferUserId(null);
+          setTransferringWorkspaceUserId(null);
+        },
+      },
+    );
+  }
+
   function handleRemoveWorkspaceMember(member: OrganizationMemberDto) {
+    setConfirmWorkspaceTransferUserId(null);
     removeMemberMutation.mutate({
       organizationId: organization.id,
       userId: member.userId,
@@ -803,6 +833,7 @@ export function WorkspaceSettingsDialog({
     addMemberMutation.error ??
     createWorkspaceInvitationMutation.error ??
     updateMemberMutation.error ??
+    transferOrganizationOwnershipMutation.error ??
     removeMemberMutation.error;
   const teamMutationError =
     createTeamMutation.error ??
@@ -1007,12 +1038,17 @@ export function WorkspaceSettingsDialog({
                       <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
                         {workspaceMembers.map((member) => (
                           <OrganizationMemberRow
+                            canTransferOwnership={canTransferWorkspaceOwnership}
+                            confirmTransfer={confirmWorkspaceTransferUserId === member.userId}
+                            currentUserId={currentUserId}
                             isRemoving={removingUserId === member.userId}
+                            isTransferring={transferringWorkspaceUserId === member.userId}
                             isUpdating={updatingUserId === member.userId}
                             key={member.userId}
                             member={member}
                             onRemove={handleRemoveWorkspaceMember}
                             onRoleChange={handleUpdateWorkspaceMemberRole}
+                            onTransferOwnership={handleTransferWorkspaceOwnership}
                           />
                         ))}
                       </div>
@@ -1713,22 +1749,36 @@ function TeamDiagramAccessRow({
 }
 
 function OrganizationMemberRow({
+  canTransferOwnership,
+  confirmTransfer,
+  currentUserId,
   isRemoving,
+  isTransferring,
   isUpdating,
   member,
   onRemove,
   onRoleChange,
+  onTransferOwnership,
 }: {
+  canTransferOwnership: boolean;
+  confirmTransfer: boolean;
+  currentUserId: string;
   isRemoving: boolean;
+  isTransferring: boolean;
   isUpdating: boolean;
   member: OrganizationMemberDto;
   onRemove: (member: OrganizationMemberDto) => void;
-  onRoleChange: (member: OrganizationMemberDto, role: OrganizationRoleValue) => void;
+  onRoleChange: (member: OrganizationMemberDto, role: WorkspaceMemberCreateRole) => void;
+  onTransferOwnership: (member: OrganizationMemberDto) => void;
 }) {
-  const isBusy = isRemoving || isUpdating;
+  const isBusy = isRemoving || isTransferring || isUpdating;
+  const normalizedRole = toOrganizationRoleValue(member.role);
+  const isOwner = normalizedRole === OrganizationRole.Owner;
+  const canRemove = !isOwner;
+  const canTransferThisMember = canTransferOwnership && member.userId !== currentUserId && !isOwner;
 
   return (
-    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center">
+    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_230px_auto] sm:items-center">
       <div className="flex min-w-0 items-center gap-3">
         <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
@@ -1739,45 +1789,84 @@ function OrganizationMemberRow({
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
         </div>
       </div>
-      <Select
-        className={selectClassName}
-        disabled={isBusy}
-        onValueChange={(role) => onRoleChange(member, toOrganizationRoleValue(role as SdkOrganizationMemberUpdateRole))}
-        options={organizationRoleOptions.map((role) => ({
-          label: formatOrganizationRole(role),
-          value: role,
-        }))}
-        value={member.role}
-      />
-      <WithTooltip content={`Remove ${member.name} from this workspace`}>
-        <Button
-          aria-label={`Remove ${member.name}`}
+      {isOwner ? (
+        <div className="text-left sm:text-right">
+          <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">Owner</div>
+          <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">Managed by transfer</div>
+        </div>
+      ) : (
+        <Select
+          className={selectClassName}
           disabled={isBusy}
-          onClick={() => onRemove(member)}
-          size="icon"
-          variant="ghost"
-        >
-          {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-        </Button>
-      </WithTooltip>
+          onValueChange={(role) => onRoleChange(member, role as WorkspaceMemberCreateRole)}
+          options={workspaceMemberRoleOptions.map((role) => ({
+            label: formatOrganizationRole(role),
+            value: role,
+          }))}
+          value={normalizedRole}
+        />
+      )}
+      <div className="flex justify-start gap-2 sm:justify-end">
+        {canTransferThisMember ? (
+          <WithTooltip
+            content={
+              confirmTransfer
+                ? `Click again to transfer workspace ownership to ${member.name}`
+                : `Transfer workspace ownership to ${member.name}`
+            }
+          >
+            <Button
+              aria-label={
+                confirmTransfer
+                  ? `Confirm transfer workspace ownership to ${member.name}`
+                  : `Transfer workspace ownership to ${member.name}`
+              }
+              className={cn(confirmTransfer && 'border-[rgb(var(--tabliodb-red))] text-[rgb(var(--tabliodb-red))]')}
+              disabled={isBusy}
+              onClick={() => onTransferOwnership(member)}
+              size="sm"
+              type="button"
+              variant={confirmTransfer ? 'secondary' : 'soft'}
+            >
+              {isTransferring ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
+              {confirmTransfer ? 'Confirm transfer' : 'Transfer owner'}
+            </Button>
+          </WithTooltip>
+        ) : null}
+        {canRemove ? (
+          <WithTooltip content={`Remove ${member.name} from this workspace`}>
+            <Button
+              aria-label={`Remove ${member.name}`}
+              disabled={isBusy}
+              onClick={() => onRemove(member)}
+              size="icon"
+              variant="ghost"
+            >
+              {isRemoving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            </Button>
+          </WithTooltip>
+        ) : null}
+      </div>
     </article>
   );
 }
 
-function OrganizationRoleBadge({ role }: { role: OrganizationRoleValue }) {
-  if (role === OrganizationRole.Owner) {
-    return <Badge variant="yellow">{formatOrganizationRole(role)}</Badge>;
+function OrganizationRoleBadge({ role }: { role: OrganizationRoleValue | SdkOrganizationMemberRole }) {
+  const normalizedRole = toOrganizationRoleValue(role);
+
+  if (normalizedRole === OrganizationRole.Owner) {
+    return <Badge variant="yellow">{formatOrganizationRole(normalizedRole)}</Badge>;
   }
 
-  if (role === OrganizationRole.Admin) {
-    return <Badge variant="blue">{formatOrganizationRole(role)}</Badge>;
+  if (normalizedRole === OrganizationRole.Admin) {
+    return <Badge variant="blue">{formatOrganizationRole(normalizedRole)}</Badge>;
   }
 
-  if (role === OrganizationRole.Member) {
-    return <Badge variant="green">{formatOrganizationRole(role)}</Badge>;
+  if (normalizedRole === OrganizationRole.Member) {
+    return <Badge variant="green">{formatOrganizationRole(normalizedRole)}</Badge>;
   }
 
-  return <Badge>{formatOrganizationRole(role)}</Badge>;
+  return <Badge>{formatOrganizationRole(normalizedRole)}</Badge>;
 }
 
 function formatProjectRole(role: ProjectRoleValue): string {
@@ -1818,6 +1907,10 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
   }
 
   if (auditLog.action === 'project.member_role_updated') {
+    if (readMetadataBoolean(auditLog.metadata, 'transfer')) {
+      return `Transferred folder ownership to ${readMetadataString(auditLog.metadata, 'email', 'member')}`;
+    }
+
     const role = readMetadataRecord(auditLog.metadata, 'role');
     return `Changed ${readMetadataString(auditLog.metadata, 'email', 'member')} from ${formatProjectRoleValue(
       readMetadataString(role, 'before', ProjectRole.Viewer),
@@ -1829,6 +1922,10 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
   }
 
   if (auditLog.action === 'organization.member_role_updated') {
+    if (readMetadataBoolean(auditLog.metadata, 'transfer')) {
+      return `Transferred workspace ownership to ${readMetadataString(auditLog.metadata, 'email', 'member')}`;
+    }
+
     const role = readMetadataRecord(auditLog.metadata, 'role');
     return `Changed ${readMetadataString(auditLog.metadata, 'email', 'member')} from ${formatOrganizationRoleValue(
       readMetadataString(role, 'before', OrganizationRole.Guest),

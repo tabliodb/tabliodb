@@ -46,6 +46,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode, type RefObject } from 'react';
 import { DiagramSettingsDialog } from './DiagramSettingsDialog';
 import { DialectBadge } from './DialectIcon';
+import { MoveDiagramDialog } from './MoveDiagramDialog';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
 import { WorkspaceSettingsDialog } from './WorkspaceSettingsDialog';
 
@@ -61,6 +62,7 @@ export function WorkspaceProjectSwitcher({
   canCreateProject,
   canEditDiagram,
   canManageWorkspace,
+  currentUserId,
   diagramLibraryOpen,
   diagrams,
   model,
@@ -83,6 +85,7 @@ export function WorkspaceProjectSwitcher({
   canCreateProject: boolean;
   canEditDiagram: boolean;
   canManageWorkspace: boolean;
+  currentUserId: string;
   diagramLibraryOpen: boolean;
   diagrams: DiagramResponseDto[];
   model: DiagramModel;
@@ -103,6 +106,7 @@ export function WorkspaceProjectSwitcher({
       <WorkspaceSwitcher
         activeOrganization={activeOrganization}
         canManageWorkspace={canManageWorkspace}
+        currentUserId={currentUserId}
         onCreateWorkspace={onCreateWorkspace}
         onOrganizationSelect={onOrganizationSelect}
         organizations={organizations}
@@ -113,6 +117,7 @@ export function WorkspaceProjectSwitcher({
         canCreateDiagram={canCreateDiagram}
         canCreateProject={canCreateProject}
         canEditDiagram={canEditDiagram}
+        currentUserId={currentUserId}
         diagrams={diagrams}
         model={model}
         onCreateDiagram={onCreateDiagram}
@@ -132,12 +137,14 @@ export function WorkspaceProjectSwitcher({
 function WorkspaceSwitcher({
   activeOrganization,
   canManageWorkspace,
+  currentUserId,
   onCreateWorkspace,
   onOrganizationSelect,
   organizations,
 }: {
   activeOrganization: OrganizationDto;
   canManageWorkspace: boolean;
+  currentUserId: string;
   onCreateWorkspace: () => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
   organizations: OrganizationDto[];
@@ -229,6 +236,7 @@ function WorkspaceSwitcher({
       </DropdownMenuContent>
       {canManageWorkspace ? (
         <WorkspaceSettingsDialog
+          currentUserId={currentUserId}
           onOpenChange={setWorkspaceSettingsOpen}
           open={workspaceSettingsOpen}
           organization={activeOrganization}
@@ -262,6 +270,7 @@ function DiagramNavigator({
   canCreateDiagram,
   canCreateProject,
   canEditDiagram,
+  currentUserId,
   diagrams,
   model,
   onCreateDiagram,
@@ -279,6 +288,7 @@ function DiagramNavigator({
   canCreateDiagram: boolean;
   canCreateProject: boolean;
   canEditDiagram: boolean;
+  currentUserId: string;
   diagrams: DiagramResponseDto[];
   model: DiagramModel;
   onCreateDiagram: (projectId?: string | null) => void;
@@ -295,6 +305,7 @@ function DiagramNavigator({
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedFolderFilterId, setSelectedFolderFilterId] = useState<string>(allDiagramFilterId);
   const [diagramSettingsDiagramId, setDiagramSettingsDiagramId] = useState<string | null>(null);
+  const [moveDiagramId, setMoveDiagramId] = useState<string | null>(null);
   const [folderSettingsProjectId, setFolderSettingsProjectId] = useState<string | null>(null);
   const [libraryContextMenu, setLibraryContextMenu] = useState<LibraryContextMenuState | null>(null);
   const libraryContextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -302,11 +313,12 @@ function DiagramNavigator({
   const diagramSettingsDiagram = diagramSettingsDiagramId
     ? (diagrams.find((diagram) => diagram.id === diagramSettingsDiagramId) ?? null)
     : null;
+  const moveDiagram = moveDiagramId ? (diagrams.find((diagram) => diagram.id === moveDiagramId) ?? null) : null;
   const folderSettingsProject = folderSettingsProjectId
     ? (projects.find((project) => project.id === folderSettingsProjectId) ?? null)
     : null;
   const isLibraryStackedDialogOpen =
-    stackedDialogOpen || Boolean(diagramSettingsDiagram || folderSettingsProject || libraryContextMenu);
+    stackedDialogOpen || Boolean(diagramSettingsDiagram || moveDiagram || folderSettingsProject || libraryContextMenu);
   const rootDiagramCount = diagrams.filter((diagram) => !diagram.projectId).length;
   const filteredDiagrams = useMemo(() => {
     const search = diagramSearchTerm.trim().toLowerCase();
@@ -422,6 +434,11 @@ function DiagramNavigator({
     setDiagramSettingsDiagramId(diagramId);
   }
 
+  function handleOpenMoveDiagram(diagramId: string) {
+    setLibraryContextMenu(null);
+    setMoveDiagramId(diagramId);
+  }
+
   useEffect(() => {
     if (!libraryContextMenu) {
       return;
@@ -471,13 +488,7 @@ function DiagramNavigator({
               model={model}
               onUpdated={(diagram) => {
                 onDiagramUpdated(diagram);
-
-                if (diagram.projectId !== activeDiagram.projectId) {
-                  // Moving the active diagram changes the canonical route segment, so the editor follows the new folder/root location.
-                  onDiagramSelect(diagram);
-                }
               }}
-              projects={projects}
               trigger={
                 <div className="flex min-w-0 items-center gap-1">
                   <span className="truncate text-[18px] leading-5">{activeDiagram.name}</span>
@@ -718,7 +729,7 @@ function DiagramNavigator({
           <LibraryContextMenuItem
             icon={FolderOpen}
             label="Move to folder"
-            onSelect={() => handleOpenDiagramSettings(libraryContextMenu.diagramId)}
+            onSelect={() => handleOpenMoveDiagram(libraryContextMenu.diagramId)}
           />
         </LibraryContextMenu>
       ) : null}
@@ -736,20 +747,36 @@ function DiagramNavigator({
             if (diagram.id === activeDiagram.id) {
               // Only the active diagram owns the live Yjs model; non-active card edits update list cache through the mutation layer.
               onDiagramUpdated(diagram);
-
-              if (diagram.projectId !== activeDiagram.projectId) {
-                // Keep the URL and active folder label aligned after moving the currently open diagram from the library context menu.
-                onDiagramSelect(diagram);
-              }
             }
           }}
           open={Boolean(diagramSettingsDiagram)}
+          trigger={null}
+        />
+      ) : null}
+      {moveDiagram ? (
+        <MoveDiagramDialog
+          canMove={canEditDiagramSettings(moveDiagram)}
+          diagram={moveDiagram}
+          onMoved={(diagram) => {
+            if (diagram.id === activeDiagram.id) {
+              // Moving the active diagram changes the canonical route segment, so the editor follows the new folder/root location.
+              onDiagramUpdated(diagram);
+              onDiagramSelect(diagram);
+            }
+          }}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) {
+              setMoveDiagramId(null);
+            }
+          }}
+          open={Boolean(moveDiagram)}
           projects={projects}
           trigger={null}
         />
       ) : null}
       {folderSettingsProject ? (
         <ProjectSettingsDialog
+          currentUserId={currentUserId}
           onArchived={() => {
             setFolderSettingsProjectId(null);
             onProjectArchived();

@@ -4,11 +4,13 @@ import {
   archiveProject,
   createProject,
   removeProjectMember,
+  transferProjectOwnership,
   updateProject,
   updateProjectMember,
   type ProjectCreateDto,
   type ProjectMemberCreateDto,
   type ProjectMemberUpdateDto,
+  type ProjectOwnershipTransferDto,
   type ProjectResponseDtoOutput,
   type ProjectUpdateDto,
 } from '@tabliodb/sdk';
@@ -24,6 +26,11 @@ const addProjectMemberMutationFn = (input: { body: ProjectMemberCreateDto; proje
   addProjectMember({ projectId: input.projectId, projectMemberCreateDto: input.body });
 const updateProjectMemberMutationFn = (input: { body: ProjectMemberUpdateDto; projectId: string; userId: string }) =>
   updateProjectMember({ projectId: input.projectId, projectMemberUpdateDto: input.body, userId: input.userId });
+const transferProjectOwnershipMutationFn = (input: { body: ProjectOwnershipTransferDto; projectId: string }) =>
+  transferProjectOwnership({
+    projectId: input.projectId,
+    projectOwnershipTransferDto: input.body,
+  });
 const removeProjectMemberMutationFn = (input: { projectId: string; userId: string }) =>
   removeProjectMember({ projectId: input.projectId, userId: input.userId });
 const getOrganizationProjectItemsKey = (organizationId: string) => projectsKeys.listItemsByOrganization(organizationId);
@@ -108,6 +115,10 @@ type UseUpdateProjectMemberMutationParams = {
   mutationConfig?: MutationConfig<typeof updateProjectMemberMutationFn>;
 };
 
+type UseTransferProjectOwnershipMutationParams = {
+  mutationConfig?: MutationConfig<typeof transferProjectOwnershipMutationFn>;
+};
+
 export function useUpdateProjectMemberMutation(params: UseUpdateProjectMemberMutationParams = {}) {
   return useMutation({
     mutationFn: updateProjectMemberMutationFn,
@@ -115,6 +126,19 @@ export function useUpdateProjectMemberMutation(params: UseUpdateProjectMemberMut
     onSuccess: (data, variables, onMutateResult, context) => {
       // Role change harus muncul segera di settings agar owner tahu perubahan akses sudah diterima server.
       queryClient.invalidateQueries({ queryKey: projectsKeys.membersRoot(variables.projectId) });
+      params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useTransferProjectOwnershipMutation(params: UseTransferProjectOwnershipMutationParams = {}) {
+  return useMutation({
+    mutationFn: transferProjectOwnershipMutationFn,
+    ...params.mutationConfig,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Folder ownership changes effective permissions, so both member rows and folder list role labels must be refreshed.
+      queryClient.invalidateQueries({ queryKey: projectsKeys.membersRoot(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

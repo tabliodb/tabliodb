@@ -523,6 +523,39 @@ export class ProjectRepository {
     return member ? this.getMember(projectId, member.userId) : undefined;
   }
 
+  async transferOwnership(projectId: string, options: { createdById: string; userId: string }) {
+    await this.db.transaction().execute(async (tx) => {
+      const now = new Date();
+
+      await tx
+        .updateTable('project_members')
+        .set({ role: ProjectRole.Editor, updatedAt: now })
+        .where('projectId', '=', projectId)
+        .where('role', '=', ProjectRole.Owner)
+        .execute();
+
+      // Transfer ownership is allowed only through this explicit transaction so generic role edits cannot create extra owners.
+      await tx
+        .insertInto('project_members')
+        .values({
+          createdById: options.createdById,
+          projectId,
+          role: ProjectRole.Owner,
+          updatedAt: now,
+          userId: options.userId,
+        })
+        .onConflict((oc) =>
+          oc.columns(['projectId', 'userId']).doUpdateSet({
+            role: ProjectRole.Owner,
+            updatedAt: now,
+          }),
+        )
+        .execute();
+    });
+
+    return this.getMember(projectId, options.userId);
+  }
+
   async removeMember(projectId: string, userId: string): Promise<boolean> {
     const result = await this.db
       .deleteFrom('project_members')
