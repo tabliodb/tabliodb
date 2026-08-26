@@ -93,11 +93,16 @@ describe(OrganizationService.name, () => {
   });
 
   it('prevents demoting the last workspace owner', async () => {
-    organizationRepository.getMember.mockResolvedValue(ownerMember);
+    organizationRepository.getMember.mockResolvedValue({
+      ...ownerMember,
+      email: 'another-owner@tabliodb.local',
+      name: 'Another Owner',
+      userId: 'another-owner-id',
+    });
     organizationRepository.getOrganizationOwnerCount.mockResolvedValue(1);
 
     await expect(
-      service.updateMemberRole(auth, 'organization-id', 'owner-id', {
+      service.updateMemberRole(auth, 'organization-id', 'another-owner-id', {
         role: OrganizationRole.Member,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -107,12 +112,39 @@ describe(OrganizationService.name, () => {
   });
 
   it('prevents removing the last workspace owner', async () => {
-    organizationRepository.getMember.mockResolvedValue(ownerMember);
+    organizationRepository.getMember.mockResolvedValue({
+      ...ownerMember,
+      email: 'another-owner@tabliodb.local',
+      name: 'Another Owner',
+      userId: 'another-owner-id',
+    });
     organizationRepository.getOrganizationOwnerCount.mockResolvedValue(1);
 
-    await expect(service.removeMember(auth, 'organization-id', 'owner-id')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.removeMember(auth, 'organization-id', 'another-owner-id')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
 
     // Last-owner protection must run before the delete query.
+    expect(organizationRepository.removeMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents changing your own workspace role', async () => {
+    await expect(
+      service.updateMemberRole(auth, 'organization-id', 'owner-id', {
+        role: OrganizationRole.Member,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Self-management is rejected before member lookup so an owner cannot demote and re-promote themselves.
+    expect(organizationRepository.getMember).not.toHaveBeenCalled();
+    expect(organizationRepository.updateMemberRole).not.toHaveBeenCalled();
+  });
+
+  it('prevents removing your own workspace access', async () => {
+    await expect(service.removeMember(auth, 'organization-id', 'owner-id')).rejects.toBeInstanceOf(BadRequestException);
+
+    // Self-removal has to be an explicit transfer/leave flow, not the generic member delete endpoint.
+    expect(organizationRepository.getMember).not.toHaveBeenCalled();
     expect(organizationRepository.removeMember).not.toHaveBeenCalled();
   });
 

@@ -223,6 +223,7 @@ export class ProjectService {
     dto: ProjectMemberUpdateDto,
   ): Promise<ProjectMemberDto> {
     const project = await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
+    this.assertNotSelfMemberMutation(auth, userId, 'change your own folder access');
     const currentMember = await this.assertCanChangeOwnerRole(projectId, userId, dto.role);
 
     const member = await this.projectRepository.updateMember(projectId, userId, dto.role);
@@ -253,6 +254,7 @@ export class ProjectService {
 
   async removeMember(auth: AuthContext, projectId: string, userId: string): Promise<ProjectMemberRemoveResponseDto> {
     const project = await this.requireProject(auth, projectId, Permission.ProjectMemberManage);
+    this.assertNotSelfMemberMutation(auth, userId, 'remove your own folder access');
     const currentMember = await this.projectRepository.getMember(projectId, userId);
     if (!currentMember) {
       throw new NotFoundException('Project member not found');
@@ -378,6 +380,15 @@ export class ProjectService {
     }
 
     return currentMember;
+  }
+
+  private assertNotSelfMemberMutation(auth: AuthContext, userId: string, action: string): void {
+    if (auth.user.id !== userId) {
+      return;
+    }
+
+    // Self role changes create a lockout/privilege loop; ownership transfer should be handled by another owner/admin flow.
+    throw new BadRequestException(`Use another owner account to ${action}`);
   }
 
   private recordProjectAudit(

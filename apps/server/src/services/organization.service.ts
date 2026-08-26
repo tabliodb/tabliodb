@@ -204,6 +204,7 @@ export class OrganizationService {
     dto: OrganizationMemberUpdateDto,
   ): Promise<OrganizationMemberDto> {
     await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+    this.assertNotSelfMemberMutation(auth, userId, 'change your own workspace role');
 
     const currentMember = await this.assertCanChangeOwnerRole(organizationId, userId, dto.role);
     const member = await this.organizationRepository.updateMemberRole(organizationId, userId, dto.role);
@@ -238,6 +239,7 @@ export class OrganizationService {
     userId: string,
   ): Promise<OrganizationMemberRemoveResponseDto> {
     await this.requireOrganizationPermission(auth, organizationId, Permission.OrganizationManage);
+    this.assertNotSelfMemberMutation(auth, userId, 'remove your own workspace access');
 
     const currentMember = await this.organizationRepository.getMember(organizationId, userId);
     if (!currentMember) {
@@ -367,6 +369,15 @@ export class OrganizationService {
     }
 
     return currentMember;
+  }
+
+  private assertNotSelfMemberMutation(auth: AuthContext, userId: string, action: string): void {
+    if (auth.user.id !== userId) {
+      return;
+    }
+
+    // Self role changes create a lockout/privilege loop; ownership transfer should be handled by another owner/admin flow.
+    throw new BadRequestException(`Use another workspace owner account to ${action}`);
   }
 
   private recordOrganizationAudit(

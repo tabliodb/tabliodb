@@ -194,12 +194,12 @@ describe(ProjectService.name, () => {
   it('prevents demoting the last project owner', async () => {
     projectRepository.getMember.mockResolvedValue({
       role: ProjectRole.Owner,
-      userId: 'owner-id',
+      userId: 'another-owner-id',
     });
     projectRepository.getProjectOwnerCount.mockResolvedValue(1);
 
     await expect(
-      service.updateMember(auth, 'project-id', 'owner-id', {
+      service.updateMember(auth, 'project-id', 'another-owner-id', {
         role: ProjectRole.Editor,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -210,12 +210,34 @@ describe(ProjectService.name, () => {
   it('prevents removing the last project owner', async () => {
     projectRepository.getMember.mockResolvedValue({
       role: ProjectRole.Owner,
-      userId: 'owner-id',
+      userId: 'another-owner-id',
     });
     projectRepository.getProjectOwnerCount.mockResolvedValue(1);
 
+    await expect(service.removeMember(auth, 'project-id', 'another-owner-id')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+
+    expect(projectRepository.removeMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents changing your own project folder access', async () => {
+    await expect(
+      service.updateMember(auth, 'project-id', 'owner-id', {
+        role: ProjectRole.Viewer,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Self-management is rejected before member lookup so an owner cannot demote and re-promote themselves.
+    expect(projectRepository.getMember).not.toHaveBeenCalled();
+    expect(projectRepository.updateMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents removing your own project folder access', async () => {
     await expect(service.removeMember(auth, 'project-id', 'owner-id')).rejects.toBeInstanceOf(BadRequestException);
 
+    // Self-removal has to be an explicit transfer/leave flow, not the generic member delete endpoint.
+    expect(projectRepository.getMember).not.toHaveBeenCalled();
     expect(projectRepository.removeMember).not.toHaveBeenCalled();
   });
 

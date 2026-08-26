@@ -67,10 +67,16 @@ describe(DiagramService.name, () => {
     getEffectiveAccess: vi.fn(),
     getByOrganization: vi.fn(),
     getByProject: vi.fn(),
+    getDiagramOwnerCount: vi.fn(),
+    getMember: vi.fn(),
     replaceDocumentModel: vi.fn(),
+    removeMember: vi.fn(),
     update: vi.fn(),
+    updateMember: vi.fn(),
+    upsertMember: vi.fn(),
   };
   const organizationRepository = {
+    addMemberIfAbsent: vi.fn(),
     getByIdForUser: vi.fn(),
     getRole: vi.fn(),
   };
@@ -277,6 +283,32 @@ describe(DiagramService.name, () => {
     });
 
     expect(diagramRepository.getEffectiveAccess).toHaveBeenCalledWith('diagram-id', { cursor: undefined, limit: 10 });
+  });
+
+  it('prevents changing your own direct diagram access', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+
+    await expect(
+      service.updateMember(auth, 'diagram-id', 'user-id', {
+        role: ProjectRole.Viewer,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Self-management is rejected before member lookup so an owner cannot demote and re-promote themselves.
+    expect(diagramRepository.getMember).not.toHaveBeenCalled();
+    expect(diagramRepository.updateMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents removing your own direct diagram access', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+
+    await expect(service.removeMember(auth, 'diagram-id', 'user-id')).rejects.toBeInstanceOf(BadRequestException);
+
+    // Self-removal has to be an explicit transfer/leave flow, not the generic member delete endpoint.
+    expect(diagramRepository.getMember).not.toHaveBeenCalled();
+    expect(diagramRepository.removeMember).not.toHaveBeenCalled();
   });
 
   it('rejects an empty diagram settings update', async () => {

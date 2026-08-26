@@ -8,7 +8,6 @@ import {
   type DiagramResponseDtoOutput,
 } from '@tabliodb/sdk';
 import {
-  Badge,
   Button,
   Dialog,
   DialogBody,
@@ -42,8 +41,7 @@ type DiagramEffectiveAccessDto = DiagramEffectiveAccessDtoOutput;
 type DiagramResponseDto = DiagramResponseDtoOutput;
 
 const diagramAccessPageQuery = { limit: 50 } as const;
-const diagramRoleOptions = [
-  SdkDiagramMemberRole.Owner,
+const diagramAssignableRoleOptions = [
   SdkDiagramMemberRole.Editor,
   SdkDiagramMemberRole.Commenter,
   SdkDiagramMemberRole.Viewer,
@@ -51,12 +49,7 @@ const diagramRoleOptions = [
 
 const shareFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
-  role: z.enum([
-    SdkDiagramMemberRole.Owner,
-    SdkDiagramMemberRole.Editor,
-    SdkDiagramMemberRole.Commenter,
-    SdkDiagramMemberRole.Viewer,
-  ]),
+  role: z.enum(diagramAssignableRoleOptions),
 });
 
 type ShareFormState = z.infer<typeof shareFormSchema>;
@@ -174,54 +167,38 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
         </DialogHeader>
 
         <DialogBody className="grid min-h-0 flex-1 gap-4 overflow-y-auto">
-          <section className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-4">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 className="text-sm font-black">Add direct access</h3>
-                <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                  Use this when a diagram is standalone or needs different access than its folder.
-                </p>
-              </div>
-              <Badge className="shrink-0" variant="neutral">
-                Direct grant
-              </Badge>
-            </div>
-
+          <section className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white p-4">
             <form
-              className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px_auto]"
+              className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
               onSubmit={form.handleSubmit(handleAddMember)}
             >
               <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Email
-                </span>
+                <span className="sr-only">Email</span>
                 <ControlledInput
                   aria-invalid={Boolean(form.formState.errors.email)}
                   autoComplete="email"
                   control={form.control}
                   disabled={isMemberMutationPending}
                   name="email"
-                  placeholder="teammate@example.com"
+                  placeholder="Add email"
                   type="email"
                 />
                 <FieldError>{form.formState.errors.email?.message}</FieldError>
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                  Role
-                </span>
+                <span className="sr-only">Role</span>
                 <ControlledSelect
                   className={selectClassName}
                   control={form.control}
                   disabled={isMemberMutationPending}
                   name="role"
-                  options={diagramRoleOptions.map((role) => ({
+                  options={diagramAssignableRoleOptions.map((role) => ({
                     label: formatDiagramRole(role),
                     value: role,
                   }))}
                 />
               </label>
-              <Button className="self-start sm:mt-6" disabled={!canManage || isMemberMutationPending} type="submit">
+              <Button className="self-start" disabled={!canManage || isMemberMutationPending} type="submit">
                 {addDiagramMemberMutation.isPending ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
@@ -241,15 +218,13 @@ export function DiagramAccessDialog({ canManage, diagram }: { canManage: boolean
           <section className="min-h-0 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white">
             <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] p-4">
               <div>
-                <h3 className="text-sm font-black">People with access</h3>
+                <h3 className="text-sm font-black">Who has access</h3>
                 <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                  Direct grants are editable here. Inherited grants are shown with their source.
+                  Direct permissions are editable here. Inherited permissions show where they come from.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge className="shrink-0" variant="neutral">
-                  {effectiveAccessQuery.data?.totalCount ?? peopleWithAccess.length} people
-                </Badge>
+              <div className="flex items-center gap-2 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                <span>{effectiveAccessQuery.data?.totalCount ?? peopleWithAccess.length} people</span>
                 {effectiveAccessQuery.isFetching ? (
                   <Loader2 className="size-4 animate-spin text-[rgb(var(--tabliodb-ink-muted))]" />
                 ) : null}
@@ -317,48 +292,30 @@ function DiagramAccessPersonRow({
   const isBusy = isRemoving || isUpdating;
   const isDirectEditable = Boolean(member.directRole);
   const directRole = member.directRole ?? member.role;
+  const canEditDirectRole = isDirectEditable && directRole !== SdkDiagramMemberRole.Owner;
 
   return (
-    <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
-      <div className="flex min-w-0 items-start gap-3">
+    <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
+      <div className="flex min-w-0 items-center gap-3">
         <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{member.name}</h4>
-            <DiagramRoleChip label="Effective" role={member.role} />
-            <AccessTypeChip accessType={member.accessType} />
-          </div>
+          <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{member.name}</h4>
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
-          <p className="mt-1 text-xs font-semibold text-[rgb(var(--tabliodb-ink-subtle))]">
-            {formatManagedHint(member)}
+          <p className="mt-1 line-clamp-2 text-xs font-semibold text-[rgb(var(--tabliodb-ink-subtle))]">
+            {formatAccessSummary(member)}
           </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {member.sources.map((source, index) => (
-              <span
-                className={cn(
-                  'inline-flex min-h-6 items-center rounded-full border px-2 text-[11px] font-black leading-tight',
-                  getSourceChipClassName(source.sourceType),
-                )}
-                key={`${member.userId}-${source.sourceType}-${source.sourceId ?? 'workspace'}-${index}`}
-              >
-                {formatAccessSource(source.sourceType, source.sourceLabel)} / {formatDiagramRole(source.role)}
-              </span>
-            ))}
-          </div>
         </div>
       </div>
-      <div className="flex min-w-0 items-start justify-start gap-2 lg:justify-end">
-        {isDirectEditable ? (
+      <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-end">
+        {canEditDirectRole ? (
           <>
-            <label className="min-w-0 flex-1 lg:max-w-[160px]">
-              <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                Direct role
-              </span>
+            <label className="min-w-0 flex-1 sm:max-w-[150px]">
+              <span className="sr-only">Direct role</span>
               <Select
                 className={selectClassName}
                 disabled={isBusy}
                 onValueChange={(role) => onRoleChange(member, role as SdkDiagramMemberRole)}
-                options={diagramRoleOptions.map((role) => ({
+                options={diagramAssignableRoleOptions.map((role) => ({
                   label: formatDiagramRole(role),
                   value: role,
                 }))}
@@ -389,74 +346,24 @@ function DiagramAccessPersonRow({
               </Button>
             </WithTooltip>
           </>
+        ) : isDirectEditable ? (
+          <div className="text-right">
+            <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">Owner</div>
+            <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">Managed separately</div>
+          </div>
         ) : (
-          <Badge className="mt-0.5" variant="neutral">
-            Read-only here
-          </Badge>
+          <div className="text-right">
+            <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">
+              {formatDiagramRole(member.role)}
+            </div>
+            <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+              {formatManagedLocation(member)}
+            </div>
+          </div>
         )}
       </div>
     </article>
   );
-}
-
-function DiagramRoleChip({ label, role }: { label?: string; role: string }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex h-6 items-center rounded-full border px-2 text-[11px] font-black leading-none',
-        getRoleChipClassName(role),
-      )}
-    >
-      {label ? `${label}: ` : null}
-      {formatDiagramRole(role)}
-    </span>
-  );
-}
-
-function AccessTypeChip({ accessType }: { accessType: SdkDiagramAccessType }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex h-6 items-center rounded-full border px-2 text-[11px] font-black leading-none',
-        getAccessTypeChipClassName(accessType),
-      )}
-    >
-      {formatAccessType(accessType)}
-    </span>
-  );
-}
-
-function getRoleChipClassName(role: string): string {
-  return {
-    [SdkDiagramMemberRole.Commenter]: 'border-[#88d8f7] bg-[#effbff] text-[#08729c]',
-    [SdkDiagramMemberRole.Editor]: 'border-[#98df7c] bg-[#f2ffe9] text-[#2d7b0b]',
-    [SdkDiagramMemberRole.Owner]: 'border-[#ffd56a] bg-[#fff8d7] text-[#8a5a00]',
-    [SdkDiagramMemberRole.Viewer]:
-      'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] text-[rgb(var(--tabliodb-ink-muted))]',
-  }[role as SdkDiagramMemberRole];
-}
-
-function getAccessTypeChipClassName(accessType: SdkDiagramAccessType): string {
-  return {
-    [SdkDiagramAccessType.Direct]: 'border-[#98df7c] bg-[#f2ffe9] text-[#2d7b0b]',
-    [SdkDiagramAccessType.Inherited]:
-      'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] text-[rgb(var(--tabliodb-ink-muted))]',
-    [SdkDiagramAccessType.Mixed]: 'border-[#88d8f7] bg-[#effbff] text-[#08729c]',
-  }[accessType];
-}
-
-function getSourceChipClassName(sourceType: SdkDiagramAccessSourceType): string {
-  return {
-    [SdkDiagramAccessSourceType.DiagramTeam]: 'border-[#c8b6ff] bg-[#f6f0ff] text-[#5a39a6]',
-    [SdkDiagramAccessSourceType.Direct]: 'border-[#98df7c] bg-[#f2ffe9] text-[#2d7b0b]',
-    [SdkDiagramAccessSourceType.Folder]: 'border-[#ffd56a] bg-[#fff8d7] text-[#8a5a00]',
-    [SdkDiagramAccessSourceType.FolderTeam]: 'border-[#88d8f7] bg-[#effbff] text-[#08729c]',
-    [SdkDiagramAccessSourceType.WorkspaceAdmin]: 'border-[#ffd56a] bg-[#fff8d7] text-[#8a5a00]',
-    [SdkDiagramAccessSourceType.WorkspaceDefault]:
-      'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] text-[rgb(var(--tabliodb-ink-muted))]',
-    [SdkDiagramAccessSourceType.WorkspaceMember]:
-      'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] text-[rgb(var(--tabliodb-ink-muted))]',
-  }[sourceType];
 }
 
 function formatDiagramRole(role: string): string {
@@ -468,15 +375,11 @@ function formatDiagramRole(role: string): string {
   }[role as SdkDiagramMemberRole];
 }
 
-function formatAccessType(accessType: SdkDiagramAccessType): string {
-  return {
-    [SdkDiagramAccessType.Direct]: 'Direct',
-    [SdkDiagramAccessType.Inherited]: 'Inherited',
-    [SdkDiagramAccessType.Mixed]: 'Direct + inherited',
-  }[accessType];
-}
-
 function formatAccessSource(sourceType: SdkDiagramAccessSourceType, sourceLabel: string): string {
+  if (sourceType === SdkDiagramAccessSourceType.Direct) {
+    return 'Direct access';
+  }
+
   if (sourceType === SdkDiagramAccessSourceType.WorkspaceDefault) {
     return 'Workspace default';
   }
@@ -484,28 +387,51 @@ function formatAccessSource(sourceType: SdkDiagramAccessSourceType, sourceLabel:
   return sourceLabel;
 }
 
-function formatManagedHint(member: DiagramEffectiveAccessDto): string {
+function formatAccessSummary(member: DiagramEffectiveAccessDto): string {
   if (member.accessType === SdkDiagramAccessType.Direct) {
-    return 'Direct access can be edited here.';
+    return 'Direct access';
   }
 
   if (member.accessType === SdkDiagramAccessType.Mixed) {
-    return 'Direct role can be edited here; inherited sources stay managed at their origin.';
+    // Mixed access is shown as one quiet sentence so the list remains readable when workspace/folder/team grants stack up.
+    return `Direct access plus ${formatSourceSummary(member.sources.filter((source) => source.inherited))}`;
   }
 
+  return `Inherited from ${formatSourceSummary(member.sources.filter((source) => source.inherited))}`;
+}
+
+function formatManagedLocation(member: DiagramEffectiveAccessDto): string {
   if (member.sources.some((source) => source.sourceType === SdkDiagramAccessSourceType.DiagramTeam)) {
-    return 'Managed from the team that has direct diagram access.';
+    return 'Team';
   }
 
-  if (
-    member.sources.some(
-      (source) =>
-        source.sourceType === SdkDiagramAccessSourceType.Folder ||
-        source.sourceType === SdkDiagramAccessSourceType.FolderTeam,
-    )
-  ) {
-    return 'Managed from folder or team access settings.';
+  if (member.sources.some((source) => source.sourceType === SdkDiagramAccessSourceType.FolderTeam)) {
+    return 'Team folder';
   }
 
-  return 'Managed from workspace settings.';
+  if (member.sources.some((source) => source.sourceType === SdkDiagramAccessSourceType.Folder)) {
+    return 'Folder';
+  }
+
+  return 'Workspace';
+}
+
+function formatSourceSummary(sources: DiagramEffectiveAccessDto['sources']): string {
+  const labels = Array.from(
+    new Set(sources.map((source) => formatAccessSource(source.sourceType, source.sourceLabel)).filter(Boolean)),
+  );
+
+  if (labels.length === 0) {
+    return 'direct access';
+  }
+
+  if (labels.length === 1) {
+    return labels[0] ?? 'direct access';
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+
+  return `${labels[0]}, ${labels[1]}, and ${labels.length - 2} more`;
 }

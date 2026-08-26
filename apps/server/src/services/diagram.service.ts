@@ -229,6 +229,7 @@ export class DiagramService {
     dto: DiagramMemberUpdateDto,
   ): Promise<DiagramMemberDto> {
     const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+    this.assertNotSelfMemberMutation(auth, userId, 'change your own diagram access');
     const currentMember = await this.assertCanChangeOwnerRole(diagramId, userId, dto.role);
 
     const member = await this.diagramRepository.updateMember(diagramId, userId, dto.role);
@@ -257,6 +258,7 @@ export class DiagramService {
 
   async removeMember(auth: AuthContext, diagramId: string, userId: string): Promise<DiagramMemberRemoveResponseDto> {
     const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
+    this.assertNotSelfMemberMutation(auth, userId, 'remove your own diagram access');
     const currentMember = await this.diagramRepository.getMember(diagramId, userId);
     if (!currentMember) {
       throw new NotFoundException('Diagram member not found');
@@ -563,6 +565,15 @@ export class DiagramService {
     }
 
     return currentMember;
+  }
+
+  private assertNotSelfMemberMutation(auth: AuthContext, userId: string, action: string): void {
+    if (auth.user.id !== userId) {
+      return;
+    }
+
+    // Self role changes create a lockout/privilege loop; ownership transfer should be handled by another owner/admin flow.
+    throw new BadRequestException(`Use another owner account to ${action}`);
   }
 
   private recordDiagramMemberAudit(
