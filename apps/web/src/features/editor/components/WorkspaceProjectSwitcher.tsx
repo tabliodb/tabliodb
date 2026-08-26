@@ -305,7 +305,8 @@ function DiagramNavigator({
   const folderSettingsProject = folderSettingsProjectId
     ? (projects.find((project) => project.id === folderSettingsProjectId) ?? null)
     : null;
-  const isLibraryStackedDialogOpen = stackedDialogOpen || Boolean(diagramSettingsDiagram || folderSettingsProject);
+  const isLibraryStackedDialogOpen =
+    stackedDialogOpen || Boolean(diagramSettingsDiagram || folderSettingsProject || libraryContextMenu);
   const rootDiagramCount = diagrams.filter((diagram) => !diagram.projectId).length;
   const filteredDiagrams = useMemo(() => {
     const search = diagramSearchTerm.trim().toLowerCase();
@@ -468,7 +469,15 @@ function DiagramNavigator({
               canEdit={canEditDiagram}
               diagram={activeDiagram}
               model={model}
-              onUpdated={onDiagramUpdated}
+              onUpdated={(diagram) => {
+                onDiagramUpdated(diagram);
+
+                if (diagram.projectId !== activeDiagram.projectId) {
+                  // Moving the active diagram changes the canonical route segment, so the editor follows the new folder/root location.
+                  onDiagramSelect(diagram);
+                }
+              }}
+              projects={projects}
               trigger={
                 <div className="flex min-w-0 items-center gap-1">
                   <span className="truncate text-[18px] leading-5">{activeDiagram.name}</span>
@@ -706,6 +715,11 @@ function DiagramNavigator({
             label="Edit diagram"
             onSelect={() => handleOpenDiagramSettings(libraryContextMenu.diagramId)}
           />
+          <LibraryContextMenuItem
+            icon={FolderOpen}
+            label="Move to folder"
+            onSelect={() => handleOpenDiagramSettings(libraryContextMenu.diagramId)}
+          />
         </LibraryContextMenu>
       ) : null}
       {diagramSettingsDiagram ? (
@@ -722,9 +736,15 @@ function DiagramNavigator({
             if (diagram.id === activeDiagram.id) {
               // Only the active diagram owns the live Yjs model; non-active card edits update list cache through the mutation layer.
               onDiagramUpdated(diagram);
+
+              if (diagram.projectId !== activeDiagram.projectId) {
+                // Keep the URL and active folder label aligned after moving the currently open diagram from the library context menu.
+                onDiagramSelect(diagram);
+              }
             }
           }}
           open={Boolean(diagramSettingsDiagram)}
+          projects={projects}
           trigger={null}
         />
       ) : null}
@@ -872,7 +892,7 @@ function canEditDiagramSettings(diagram: DiagramResponseDto): boolean {
 
 function getContextMenuPoint(left: number, top: number) {
   const menuWidth = 224;
-  const menuHeight = 64;
+  const menuHeight = 104;
   const viewportPadding = 8;
 
   return {

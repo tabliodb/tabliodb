@@ -470,6 +470,7 @@ export type DiagramMemberRemoveResponseDtoOutput = {
 export type DiagramUpdateDto = {
   name?: string;
   dialect?: Dialect;
+  projectId?: string | null;
 };
 export type DiagramExportResponseDtoOutput = {
   content: string;

@@ -41,9 +41,11 @@ const WorkspaceDiagramCreateSchema = z
 
 const DiagramUpdateSchema = z
   .object({
-    // Diagram settings is a partial update because users may rename the diagram without changing its SQL dialect.
+    // Diagram settings is a partial update because users may rename, move, or change dialect independently.
     name: z.string().trim().min(1).max(80).optional(),
     dialect: DatabaseDialectSchema.optional(),
+    // A null projectId intentionally means a root workspace diagram; folders are optional organization, not required ownership.
+    projectId: z.uuid().nullable().optional(),
   })
   .meta({ id: 'DiagramUpdateDto' });
 

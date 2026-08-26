@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { createStarterDiagramModel, encodeDiagramModelAsYjsUpdate } from '@tabliodb/schema-core';
 import { Permission, ProjectRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -485,6 +485,85 @@ describe(DiagramService.name, () => {
       dialect: 'mysql',
       name: 'Warehouse schema',
     });
+  });
+
+  it('allows a diagram editor to move a diagram into an accessible folder', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    diagramRepository.getById.mockResolvedValue({
+      ...diagram,
+      projectId: null,
+    });
+    projectRepository.getByIdForUser.mockResolvedValue({
+      ...project,
+      id: 'target-project-id',
+      slug: 'target-folder',
+    });
+    diagramRepository.update.mockResolvedValue({
+      ...diagram,
+      projectId: 'target-project-id',
+      updatedAt: new Date('2026-07-29T12:15:00.000Z'),
+    });
+
+    await expect(
+      service.update(auth, 'diagram-id', {
+        projectId: 'target-project-id',
+      }),
+    ).resolves.toMatchObject({
+      id: 'diagram-id',
+      projectId: 'target-project-id',
+      updatedAt: '2026-07-29T12:15:00.000Z',
+    });
+
+    // Destination folder access is checked before the diagram row is moved.
+    expect(projectRepository.getByIdForUser).toHaveBeenCalledWith('user-id', 'target-project-id');
+    expect(diagramRepository.update).toHaveBeenCalledWith('diagram-id', {
+      projectId: 'target-project-id',
+    });
+  });
+
+  it('allows a diagram editor to move a diagram back to the workspace root when the workspace permits creation', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    organizationRepository.getRole.mockResolvedValue({ role: 'member' });
+    diagramRepository.update.mockResolvedValue({
+      ...diagram,
+      projectId: null,
+      updatedAt: new Date('2026-07-29T12:20:00.000Z'),
+    });
+
+    await expect(
+      service.update(auth, 'diagram-id', {
+        projectId: null,
+      }),
+    ).resolves.toMatchObject({
+      id: 'diagram-id',
+      projectId: null,
+    });
+
+    // Root moves use workspace-level diagram creation permission because there is no destination folder role.
+    expect(organizationRepository.getRole).toHaveBeenCalledWith('user-id', 'organization-id');
+    expect(diagramRepository.update).toHaveBeenCalledWith('diagram-id', {
+      projectId: null,
+    });
+  });
+
+  it('blocks moving a diagram into a folder from another workspace or without access', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    projectRepository.getByIdForUser.mockResolvedValue({
+      ...project,
+      id: 'foreign-project-id',
+      organizationId: 'other-organization-id',
+    });
+
+    await expect(
+      service.update(auth, 'diagram-id', {
+        projectId: 'foreign-project-id',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    // The row is not mutated unless the destination is visible and belongs to the same workspace.
+    expect(diagramRepository.update).not.toHaveBeenCalled();
   });
 
   it('allows a project viewer to export a diagram as SQL', async () => {

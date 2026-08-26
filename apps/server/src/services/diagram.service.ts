@@ -397,7 +397,7 @@ export class DiagramService {
   }
 
   async update(auth: AuthContext, diagramId: string, dto: DiagramUpdateDto): Promise<DiagramResponseDto> {
-    if (dto.name === undefined && dto.dialect === undefined) {
+    if (dto.name === undefined && dto.dialect === undefined && dto.projectId === undefined) {
       throw new BadRequestException('At least one diagram field is required');
     }
 
@@ -408,11 +408,30 @@ export class DiagramService {
 
     // requireDiagram centralizes project-role lookup, archived filtering, and permission enforcement for every diagram write.
     const currentDiagram = await this.requireDiagram(auth, diagramId, Permission.DiagramUpdate);
+    const nextProjectId = dto.projectId ?? null;
 
-    const diagram = await this.diagramRepository.update(diagramId, {
-      dialect: dto.dialect,
-      name: nextName,
-    });
+    if (dto.projectId !== undefined && nextProjectId !== currentDiagram.projectId) {
+      // Moving into a location must be authorized against the destination, not only the diagram the user can edit today.
+      await this.assertDiagramMoveTarget(auth, currentDiagram.organizationId, nextProjectId);
+    }
+
+    const updatePayload: { dialect?: DatabaseDialect; name?: string; projectId?: string | null } = {};
+
+    if (dto.dialect !== undefined) {
+      updatePayload.dialect = dto.dialect;
+    }
+
+    if (dto.name !== undefined) {
+      // Keep the repository payload minimal so partial update tests mirror the exact client intent.
+      updatePayload.name = nextName;
+    }
+
+    if (dto.projectId !== undefined) {
+      // Undefined means "do not move"; null means "move to workspace root".
+      updatePayload.projectId = nextProjectId;
+    }
+
+    const diagram = await this.diagramRepository.update(diagramId, updatePayload);
 
     if (!diagram) {
       throw new NotFoundException('Diagram not found');
@@ -552,6 +571,26 @@ export class DiagramService {
     ) {
       throw new ForbiddenException(`${permission} permission is required`);
     }
+  }
+
+  private async assertDiagramMoveTarget(
+    auth: AuthContext,
+    organizationId: string,
+    projectId: string | null,
+  ): Promise<void> {
+    if (!projectId) {
+      // A root diagram belongs directly to the workspace, so the workspace role is the destination permission source.
+      await this.assertOrganizationPermission(auth, organizationId, Permission.DiagramCreate);
+      return;
+    }
+
+    const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
+    if (!project || project.organizationId !== organizationId) {
+      throw new NotFoundException('Folder not found');
+    }
+
+    // Moving into a folder consumes the same capability as creating a diagram there.
+    this.assertProjectPermission(auth, project.projectRole, Permission.DiagramCreate);
   }
 
   private serializeDiagram(

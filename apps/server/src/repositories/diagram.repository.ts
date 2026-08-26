@@ -183,8 +183,8 @@ export class DiagramRepository {
       .executeTakeFirst();
   }
 
-  async update(diagramId: string, dto: { dialect?: DatabaseDialect; name?: string }) {
-    const values: { dialect?: DatabaseDialect; name?: string; updatedAt: Date } = {
+  async update(diagramId: string, dto: { dialect?: DatabaseDialect; name?: string; projectId?: string | null }) {
+    const values: { dialect?: DatabaseDialect; name?: string; projectId?: string | null; updatedAt: Date } = {
       updatedAt: new Date(),
     };
 
@@ -194,6 +194,11 @@ export class DiagramRepository {
 
     if (dto.dialect !== undefined) {
       values.dialect = dto.dialect;
+    }
+
+    if (dto.projectId !== undefined) {
+      // Moving a diagram is a metadata update on the diagram row; permission checks stay in the service layer.
+      values.projectId = dto.projectId;
     }
 
     const diagram = await this.db
