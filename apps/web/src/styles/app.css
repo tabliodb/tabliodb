@@ -183,6 +183,9 @@ body {
 
 .tabliodb-table-node {
   --table-accent: rgb(var(--tabliodb-primary));
+  --table-accent-header: color-mix(in srgb, var(--table-accent) 14%, #ffffff);
+  --table-accent-header-edge: color-mix(in srgb, var(--table-accent) 34%, rgb(var(--tabliodb-border)));
+  --table-accent-title: color-mix(in srgb, var(--table-accent) 68%, rgb(var(--tabliodb-ink)));
   position: relative;
   height: 100%;
   overflow: hidden;
@@ -193,6 +196,18 @@ body {
     0 3px 0 rgb(var(--tabliodb-border-strong)),
     0 10px 20px rgb(15 23 42 / 8%);
   color: rgb(var(--tabliodb-ink));
+}
+
+.tabliodb-table-node::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--table-accent);
+  pointer-events: none;
 }
 
 .tabliodb-table-node.is-selected {
@@ -209,8 +224,8 @@ body {
   align-items: center;
   gap: 7px;
   height: 36px;
-  border-bottom: 1px solid rgb(var(--tabliodb-border));
-  background: linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%);
+  border-bottom: 1px solid var(--table-accent-header-edge);
+  background: linear-gradient(180deg, var(--table-accent-header) 0%, color-mix(in srgb, var(--table-accent) 8%, #ffffff) 100%);
   padding: 0 12px;
   color: rgb(var(--tabliodb-ink));
 }
@@ -243,6 +258,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
+  color: var(--table-accent-title);
 }
 
 .tabliodb-table-node__count {

@@ -38,7 +38,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { formatColumnType } from '../diagram-model';
-import { getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
+import { defaultTableColor, getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
 const columnTypeFamilyOptions = [
   'bigint',
   'boolean',
@@ -61,6 +61,7 @@ const inlineInputClassName =
 const compactSelectClassName =
   'h-[var(--tabliodb-control-sm)] rounded-[var(--tabliodb-radius-sm)] border border-[rgb(var(--tabliodb-border-strong))] px-2.5 text-[13px] shadow-none';
 const unsetGroupValue = '__no_group__';
+const hexColorPattern = /^#[0-9a-fA-F]{6}$/;
 
 const inlineTableNameSchema = z
   .string()
@@ -189,11 +190,13 @@ export function TableStructureSidebar({
   }
 
   function handleColorChange(color: string) {
-    if (color === table.color) {
+    const normalizedColor = normalizeTableColorInput(color);
+
+    if (!normalizedColor || normalizedColor === getEditableTableColor(table.color)) {
       return;
     }
 
-    apply(applyDiagramCommand(model, { type: 'table.changeColor', tableId: table.id, color }));
+    apply(applyDiagramCommand(model, { type: 'table.changeColor', tableId: table.id, color: normalizedColor }));
   }
 
   function handleDisplayModeChange(displayMode: Extract<TableDisplayMode, 'all_columns' | 'pk_fk_only'>) {
@@ -439,29 +442,11 @@ export function TableStructureSidebar({
                           {getTableColorLabel(getDisplayTableColor(table.color))}
                         </div>
                       ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {tableColorOptions.map((color) => {
-                            const colorLabel = getTableColorLabel(color);
-
-                            return (
-                              <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
-                                <button
-                                  aria-label={`Use ${colorLabel}`}
-                                  className="size-6 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
-                                  onClick={() => handleColorChange(color)}
-                                  style={{
-                                    backgroundColor: color,
-                                    boxShadow:
-                                      getDisplayTableColor(table.color) === color
-                                        ? `0 0 0 1px #ffffff, 0 0 0 3px ${color}, 0 1px 0 rgb(var(--tabliodb-border-strong))`
-                                        : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 1px 0 rgb(var(--tabliodb-border-strong))',
-                                  }}
-                                  type="button"
-                                />
-                              </WithTooltip>
-                            );
-                          })}
-                        </div>
+                        <TableColorControls
+                          currentColor={table.color}
+                          onColorChange={handleColorChange}
+                          swatchSize="sm"
+                        />
                       )}
                     </div>
 
@@ -605,29 +590,7 @@ export function TableStructureSidebar({
                     {getTableColorLabel(getDisplayTableColor(table.color))}
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {tableColorOptions.map((color) => {
-                      const colorLabel = getTableColorLabel(color);
-
-                      return (
-                        <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
-                          <button
-                            aria-label={`Use ${colorLabel}`}
-                            className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105"
-                            onClick={() => handleColorChange(color)}
-                            style={{
-                              backgroundColor: color,
-                              boxShadow:
-                                getDisplayTableColor(table.color) === color
-                                  ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 2px 0 rgb(var(--tabliodb-border-strong))`
-                                  : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 2px 0 rgb(var(--tabliodb-border-strong))',
-                            }}
-                            type="button"
-                          />
-                        </WithTooltip>
-                      );
-                    })}
-                  </div>
+                  <TableColorControls currentColor={table.color} onColorChange={handleColorChange} swatchSize="md" />
                 )}
               </div>
               <div className="mt-3">
@@ -816,6 +779,82 @@ export function TableStructureSidebar({
   );
 }
 
+function TableColorControls({
+  currentColor,
+  onColorChange,
+  swatchSize,
+}: {
+  currentColor?: string | null;
+  onColorChange: (color: string) => void;
+  swatchSize: 'sm' | 'md';
+}) {
+  const selectedColor = getEditableTableColor(currentColor);
+  const customSelected = !tableColorOptions.some((color) => color === selectedColor);
+  const swatchClassName = swatchSize === 'sm' ? 'size-6' : 'size-7';
+  const customClassName =
+    swatchSize === 'sm'
+      ? 'h-7 rounded-[10px] px-2 text-[11px]'
+      : 'h-8 rounded-[12px] px-2.5 text-[12px]';
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {tableColorOptions.map((color) => {
+        const colorLabel = getTableColorLabel(color);
+        const isSelected = selectedColor === color;
+
+        return (
+          <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
+            <button
+              aria-label={`Use ${colorLabel}`}
+              aria-pressed={isSelected}
+              className={cn(
+                swatchClassName,
+                'cursor-pointer rounded-full border-2 border-white transition hover:scale-105',
+              )}
+              onClick={() => onColorChange(color)}
+              style={{
+                backgroundColor: color,
+                boxShadow: isSelected
+                  ? `0 0 0 1px #ffffff, 0 0 0 ${swatchSize === 'sm' ? '3px' : '4px'} ${color}, 0 1px 0 rgb(var(--tabliodb-border-strong))`
+                  : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 1px 0 rgb(var(--tabliodb-border-strong))',
+              }}
+              type="button"
+            />
+          </WithTooltip>
+        );
+      })}
+
+      <WithTooltip content="Choose a custom table color">
+        <label
+          className={cn(
+            'inline-flex cursor-pointer items-center gap-1.5 border font-extrabold transition hover:-translate-y-0.5 hover:bg-white',
+            customClassName,
+            customSelected
+              ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))] shadow-[0_1px_0_rgb(var(--tabliodb-primary-border))]'
+              : 'border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink-muted))] shadow-[0_1px_0_rgb(var(--tabliodb-border-strong))]',
+          )}
+        >
+          <span
+            className="size-4 rounded-full border border-white shadow-[0_0_0_1px_rgb(var(--tabliodb-border-strong))]"
+            style={{ backgroundColor: selectedColor }}
+          />
+          <span>Custom</span>
+          <input
+            aria-label="Choose a custom table color"
+            className="sr-only"
+            onChange={(event) => {
+              // Browser color picker only emits valid #rrggbb values, so the canvas can update immediately without a draft state.
+              onColorChange(event.currentTarget.value);
+            }}
+            type="color"
+            value={selectedColor}
+          />
+        </label>
+      </WithTooltip>
+    </div>
+  );
+}
+
 function TableDisplayModeButton({
   active,
   disabled,
@@ -853,6 +892,19 @@ function TableDisplayModeButton({
 
 function getSidebarDisplayMode(table: DatabaseTable): Extract<TableDisplayMode, 'all_columns' | 'pk_fk_only'> {
   return table.displayMode === 'pk_fk_only' ? 'pk_fk_only' : 'all_columns';
+}
+
+function getEditableTableColor(color?: string | null): string {
+  const displayColor = getDisplayTableColor(color);
+
+  // Imported or old diagrams can contain arbitrary color strings; native color inputs require a valid #rrggbb value.
+  return normalizeTableColorInput(displayColor) ?? defaultTableColor;
+}
+
+function normalizeTableColorInput(color: string): string | null {
+  const normalizedColor = color.trim().toLowerCase();
+
+  return hexColorPattern.test(normalizedColor) ? normalizedColor : null;
 }
 
 function isTableDisplayCollapsed(table: DatabaseTable): boolean {
