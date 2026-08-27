@@ -105,18 +105,18 @@ export function WorkspaceProjectSwitcher({
     <div className="flex min-w-0 items-center gap-2 border-l border-[rgb(var(--tabliodb-border))] pl-2 sm:pl-3">
       <WorkspaceSwitcher
         activeOrganization={activeOrganization}
-        canManageWorkspace={canManageWorkspace}
-        currentUserId={currentUserId}
         onCreateWorkspace={onCreateWorkspace}
         onOrganizationSelect={onOrganizationSelect}
         organizations={organizations}
       />
       <DiagramNavigator
         activeDiagram={activeDiagram}
+        activeOrganization={activeOrganization}
         activeProject={activeProject}
         canCreateDiagram={canCreateDiagram}
         canCreateProject={canCreateProject}
         canEditDiagram={canEditDiagram}
+        canManageWorkspace={canManageWorkspace}
         currentUserId={currentUserId}
         diagrams={diagrams}
         model={model}
@@ -136,21 +136,16 @@ export function WorkspaceProjectSwitcher({
 
 function WorkspaceSwitcher({
   activeOrganization,
-  canManageWorkspace,
-  currentUserId,
   onCreateWorkspace,
   onOrganizationSelect,
   organizations,
 }: {
   activeOrganization: OrganizationDto;
-  canManageWorkspace: boolean;
-  currentUserId: string;
   onCreateWorkspace: () => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
   organizations: OrganizationDto[];
 }) {
   const [open, setOpen] = useState(false);
-  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
 
   return (
     <DropdownMenu onOpenChange={setOpen} open={open}>
@@ -217,32 +212,8 @@ function WorkspaceSwitcher({
             <Plus className="size-4" />
             New workspace
           </Button>
-          {canManageWorkspace ? (
-            <button
-              className="mt-1 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--tabliodb-radius-md)] border border-transparent px-3 text-[13px] font-black text-[rgb(var(--tabliodb-ink))] transition hover:border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
-              onClick={(event) => {
-                event.preventDefault();
-                setOpen(false);
-                // Workspace settings lives with the workspace switcher because it configures the container, not the active ERD canvas.
-                setWorkspaceSettingsOpen(true);
-              }}
-              type="button"
-            >
-              <Settings className="size-4" />
-              Workspace settings
-            </button>
-          ) : null}
         </div>
       </DropdownMenuContent>
-      {canManageWorkspace ? (
-        <WorkspaceSettingsDialog
-          currentUserId={currentUserId}
-          onOpenChange={setWorkspaceSettingsOpen}
-          open={workspaceSettingsOpen}
-          organization={activeOrganization}
-          trigger={null}
-        />
-      ) : null}
     </DropdownMenu>
   );
 }
@@ -266,10 +237,12 @@ type LibraryContextMenuState = {
 
 function DiagramNavigator({
   activeDiagram,
+  activeOrganization,
   activeProject,
   canCreateDiagram,
   canCreateProject,
   canEditDiagram,
+  canManageWorkspace,
   currentUserId,
   diagrams,
   model,
@@ -284,10 +257,12 @@ function DiagramNavigator({
   stackedDialogOpen,
 }: {
   activeDiagram: DiagramResponseDto;
+  activeOrganization: OrganizationDto;
   activeProject: ProjectResponseDto | null;
   canCreateDiagram: boolean;
   canCreateProject: boolean;
   canEditDiagram: boolean;
+  canManageWorkspace: boolean;
   currentUserId: string;
   diagrams: DiagramResponseDto[];
   model: DiagramModel;
@@ -307,6 +282,7 @@ function DiagramNavigator({
   const [diagramSettingsDiagramId, setDiagramSettingsDiagramId] = useState<string | null>(null);
   const [moveDiagramId, setMoveDiagramId] = useState<string | null>(null);
   const [folderSettingsProjectId, setFolderSettingsProjectId] = useState<string | null>(null);
+  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [libraryContextMenu, setLibraryContextMenu] = useState<LibraryContextMenuState | null>(null);
   const libraryContextMenuRef = useRef<HTMLDivElement | null>(null);
   const activeFolderName = activeProject?.name ?? 'No folder';
@@ -318,7 +294,10 @@ function DiagramNavigator({
     ? (projects.find((project) => project.id === folderSettingsProjectId) ?? null)
     : null;
   const isLibraryStackedDialogOpen =
-    stackedDialogOpen || Boolean(diagramSettingsDiagram || moveDiagram || folderSettingsProject || libraryContextMenu);
+    stackedDialogOpen ||
+    Boolean(
+      diagramSettingsDiagram || moveDiagram || folderSettingsProject || workspaceSettingsOpen || libraryContextMenu,
+    );
   const rootDiagramCount = diagrams.filter((diagram) => !diagram.projectId).length;
   const filteredDiagrams = useMemo(() => {
     const search = diagramSearchTerm.trim().toLowerCase();
@@ -566,18 +545,32 @@ function DiagramNavigator({
             <section className="flex min-h-0 flex-col rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))]">
               <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h2 className="text-[13px] font-black">Folders</h2>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                      Workspace
+                    </p>
+                    <h2 className="truncate text-[13px] font-black">{activeOrganization.name}</h2>
                     <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Optional grouping for larger workspaces.
+                      Folders are optional filters for larger workspaces.
                     </p>
                   </div>
-                  {canCreateProject ? (
-                    <Button className="shrink-0 gap-1.5" onClick={handleCreateProject} size="sm" variant="secondary">
-                      <FolderPlus className="size-4" />
-                      New
-                    </Button>
-                  ) : null}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {canManageWorkspace ? (
+                      <IconButton
+                        className="size-8"
+                        icon={Settings}
+                        label={`Workspace settings for ${activeOrganization.name}`}
+                        onClick={() => setWorkspaceSettingsOpen(true)}
+                        variant="ghost"
+                      />
+                    ) : null}
+                    {canCreateProject ? (
+                      <Button className="shrink-0 gap-1.5" onClick={handleCreateProject} size="sm" variant="secondary">
+                        <FolderPlus className="size-4" />
+                        New
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="relative mt-3">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
@@ -817,6 +810,15 @@ function DiagramNavigator({
           }}
           open={Boolean(folderSettingsProject)}
           project={folderSettingsProject}
+          trigger={null}
+        />
+      ) : null}
+      {canManageWorkspace ? (
+        <WorkspaceSettingsDialog
+          currentUserId={currentUserId}
+          onOpenChange={setWorkspaceSettingsOpen}
+          open={workspaceSettingsOpen}
+          organization={activeOrganization}
           trigger={null}
         />
       ) : null}

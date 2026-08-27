@@ -10,6 +10,7 @@ import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
 import type { RouteTitleContext } from './route-meta';
 import { adminSettingsLoader } from '@/features/admin/loaders/adminSettingsLoader';
 import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
+import { requireInstanceAdmin } from '@/features/admin/middleware/requireInstanceAdmin';
 import { LoadingState } from '@/features/app/RouteStates';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
 import { oidcCompleteLoader } from '@/features/auth/loaders/oidcCompleteLoader';
@@ -129,7 +130,7 @@ export const router = createBrowserRouter([
           {
             element: <AdminLayout />,
             errorElement: <RouteErrorBoundary />,
-            middleware: [requireSetupComplete, requireAuthenticated],
+            middleware: [requireSetupComplete, requireAuthenticated, requireInstanceAdmin],
             children: [
               {
                 element: <Navigate replace to={routes.adminUsers.to()} />,
