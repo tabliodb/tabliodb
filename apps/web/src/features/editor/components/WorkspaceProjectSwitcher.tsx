@@ -409,6 +409,21 @@ function DiagramNavigator({
     });
   }
 
+  function openDiagramActionMenu(event: MouseEvent<HTMLButtonElement>, diagram: DiagramResponseDto) {
+    if (!canEditDiagramSettings(diagram)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setLibraryContextMenu({
+      kind: 'diagram',
+      ...getContextMenuPoint(rect.right - 220, rect.bottom + 6),
+      diagramId: diagram.id,
+    });
+  }
+
   function openFolderActionMenu(event: MouseEvent<HTMLButtonElement>, project: ProjectResponseDto) {
     if (!canManageProjectSettings(project)) {
       return;
@@ -670,37 +685,51 @@ function DiagramNavigator({
                       const folderName = diagram.projectId
                         ? (projects.find((project) => project.id === diagram.projectId)?.name ?? 'Folder')
                         : 'No folder';
+                      const canOpenDiagramActions = canEditDiagramSettings(diagram);
 
                       return (
-                        <button
-                          className={`flex min-h-28 cursor-pointer flex-col justify-between rounded-[var(--tabliodb-radius-lg)] border p-3 text-left transition ${
+                        <div
+                          className={`group relative flex min-h-28 min-w-0 flex-col rounded-[var(--tabliodb-radius-lg)] border text-left transition ${
                             isActive
                               ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
                               : 'border-[rgb(var(--tabliodb-border))] bg-white hover:border-[rgb(var(--tabliodb-primary-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]'
                           }`}
                           key={diagram.id}
-                          onClick={() => {
-                            if (!isActive) {
-                              onDiagramLibraryOpenChange(false);
-                              onDiagramSelect(diagram);
-                            }
-                          }}
                           onContextMenu={(event) => openDiagramContextMenu(event, diagram)}
-                          type="button"
                         >
-                          <span className="min-w-0">
-                            <span className="block truncate text-[14px] font-black">{diagram.name}</span>
-                            <span className="mt-1 block text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                              {folderName}
+                          <button
+                            className="flex min-h-28 w-full min-w-0 cursor-pointer flex-1 flex-col justify-between rounded-[var(--tabliodb-radius-lg)] p-3 text-left outline-none transition focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
+                            onClick={() => {
+                              if (!isActive) {
+                                onDiagramLibraryOpenChange(false);
+                                onDiagramSelect(diagram);
+                              }
+                            }}
+                            type="button"
+                          >
+                            <span className="min-w-0 pr-9">
+                              <span className="block truncate text-[14px] font-black">{diagram.name}</span>
+                              <span className="mt-1 block text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
+                                {folderName}
+                              </span>
                             </span>
-                          </span>
-                          <span className="mt-3 flex items-center justify-between gap-2">
-                            <DialectBadge className="min-w-0 shrink" dialect={diagram.dialect} />
-                            {isActive ? (
-                              <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" />
-                            ) : null}
-                          </span>
-                        </button>
+                            <span className="mt-3 flex items-center justify-between gap-2">
+                              <DialectBadge className="min-w-0 shrink" dialect={diagram.dialect} />
+                              {isActive ? (
+                                <Check className="size-4 shrink-0 text-[rgb(var(--tabliodb-primary-text))]" />
+                              ) : null}
+                            </span>
+                          </button>
+                          {canOpenDiagramActions ? (
+                            <IconButton
+                              className="absolute right-2 top-2 size-8 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                              icon={MoreHorizontal}
+                              label={`Diagram actions for ${diagram.name}`}
+                              onClick={(event) => openDiagramActionMenu(event, diagram)}
+                              variant="ghost"
+                            />
+                          ) : null}
+                        </div>
                       );
                     })}
                   </div>
