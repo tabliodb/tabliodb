@@ -15,6 +15,7 @@ import {
   type ProjectUpdateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
+import { organizationsKeys } from '@/resources/organizations';
 import { projectsKeys } from './project.keys';
 
 const createProjectMutationFn = (body: ProjectCreateDto) => createProject({ projectCreateDto: body });
@@ -22,7 +23,7 @@ const updateProjectMutationFn = (input: { body: ProjectUpdateDto; projectId: str
   updateProject({ projectId: input.projectId, projectUpdateDto: input.body });
 const archiveProjectMutationFn = (input: { organizationId: string; projectId: string }) =>
   archiveProject({ projectId: input.projectId });
-const addProjectMemberMutationFn = (input: { body: ProjectMemberCreateDto; projectId: string }) =>
+const addProjectMemberMutationFn = (input: { body: ProjectMemberCreateDto; organizationId: string; projectId: string }) =>
   addProjectMember({ projectId: input.projectId, projectMemberCreateDto: input.body });
 const updateProjectMemberMutationFn = (input: { body: ProjectMemberUpdateDto; projectId: string; userId: string }) =>
   updateProjectMember({ projectId: input.projectId, projectMemberUpdateDto: input.body, userId: input.userId });
@@ -104,8 +105,9 @@ export function useAddProjectMemberMutation(params: UseAddProjectMemberMutationP
     mutationFn: addProjectMemberMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Member management memakai query terpisah dari project list agar cache sidebar tidak ikut churn.
+      // Folder-level invite may implicitly add an existing user as a workspace guest, so the workspace member list must refresh too.
       queryClient.invalidateQueries({ queryKey: projectsKeys.membersRoot(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

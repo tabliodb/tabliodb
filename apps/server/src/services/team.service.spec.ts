@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { Permission, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
@@ -66,6 +66,7 @@ describe(TeamService.name, () => {
     create: vi.fn(),
   };
   const organizationRepository = {
+    addMemberIfAbsent: vi.fn(),
     getMember: vi.fn(),
   };
   const permissionService = {
@@ -118,7 +119,11 @@ describe(TeamService.name, () => {
       id: member.userId,
       name: member.name,
     });
-    organizationRepository.getMember.mockResolvedValue({ status: 'active', userId: member.userId });
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Member,
+      status: 'active',
+      userId: member.userId,
+    });
     teamRepository.getMember.mockResolvedValue(undefined);
     teamRepository.addMember.mockResolvedValue(member);
 
@@ -133,6 +138,12 @@ describe(TeamService.name, () => {
         id: 'organization-id',
         type: 'organization',
       },
+    });
+    expect(organizationRepository.addMemberIfAbsent).toHaveBeenCalledWith({
+      createdById: 'owner-id',
+      organizationId: 'organization-id',
+      role: OrganizationRole.Guest,
+      userId: member.userId,
     });
     expect(teamRepository.addMember).toHaveBeenCalledWith('team-id', {
       createdById: 'owner-id',
@@ -149,19 +160,61 @@ describe(TeamService.name, () => {
     );
   });
 
-  it('rejects adding users that are not active workspace members', async () => {
+  it('anchors an existing user as a workspace guest before adding team membership', async () => {
     userRepository.getByEmail.mockResolvedValue({
       email: 'outsider@tabliodb.local',
       id: 'outsider-id',
       name: 'Outsider User',
     });
-    organizationRepository.getMember.mockResolvedValue(null);
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Guest,
+      status: 'active',
+      userId: 'outsider-id',
+    });
+    teamRepository.getMember.mockResolvedValue(undefined);
+    teamRepository.addMember.mockResolvedValue({
+      avatarUrl: null,
+      createdAt: new Date('2026-08-02T08:30:00.000Z'),
+      cursorColor: '#1cb0f6',
+      email: 'outsider@tabliodb.local',
+      name: 'Outsider User',
+      userId: 'outsider-id',
+    });
 
-    await expect(service.addMember(auth, 'team-id', { email: 'outsider@tabliodb.local' })).rejects.toBeInstanceOf(
+    await expect(service.addMember(auth, 'team-id', { email: 'outsider@tabliodb.local' })).resolves.toMatchObject({
+      email: 'outsider@tabliodb.local',
+      userId: 'outsider-id',
+    });
+
+    expect(organizationRepository.addMemberIfAbsent).toHaveBeenCalledWith({
+      createdById: 'owner-id',
+      organizationId: 'organization-id',
+      role: OrganizationRole.Guest,
+      userId: 'outsider-id',
+    });
+    expect(teamRepository.addMember).toHaveBeenCalledWith('team-id', {
+      createdById: 'owner-id',
+      userId: 'outsider-id',
+    });
+  });
+
+  it('rejects adding suspended workspace users to a team', async () => {
+    userRepository.getByEmail.mockResolvedValue({
+      email: 'suspended@tabliodb.local',
+      id: 'suspended-id',
+      name: 'Suspended User',
+    });
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Guest,
+      status: 'suspended',
+      userId: 'suspended-id',
+    });
+
+    await expect(service.addMember(auth, 'team-id', { email: 'suspended@tabliodb.local' })).rejects.toBeInstanceOf(
       BadRequestException,
     );
 
-    // A team must never become a shortcut around workspace membership.
+    // Suspended/pending workspace rows stay inactive; team membership cannot be used as a reactivation shortcut.
     expect(teamRepository.addMember).not.toHaveBeenCalled();
     expect(auditLogRepository.create).not.toHaveBeenCalled();
   });
@@ -172,7 +225,11 @@ describe(TeamService.name, () => {
       id: member.userId,
       name: member.name,
     });
-    organizationRepository.getMember.mockResolvedValue({ status: 'active', userId: member.userId });
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Member,
+      status: 'active',
+      userId: member.userId,
+    });
     teamRepository.getMember.mockResolvedValue(member);
     teamRepository.addMember.mockResolvedValue(member);
 

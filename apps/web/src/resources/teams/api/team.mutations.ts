@@ -107,6 +107,8 @@ export function useAddTeamMemberMutation(params: UseAddTeamMemberMutationParams 
       queryClient.invalidateQueries({ queryKey: teamsKeys.membersRoot(variables.teamId) });
       queryClient.invalidateQueries({ queryKey: teamsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      // Team member add also anchors existing users as workspace guests, so workspace settings must not show stale membership.
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },

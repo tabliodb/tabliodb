@@ -172,16 +172,28 @@ export class DiagramService {
     const user = await this.userRepository.getByEmail(dto.email.trim().toLowerCase());
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('User not found. Create an invitation for new users first.');
+    }
+
+    if (user.id === auth.user.id) {
+      throw new BadRequestException('You already have access to this diagram');
     }
 
     // Direct diagram access still anchors the invited user inside the workspace as a guest tenant member.
-    await this.organizationRepository.addMemberIfAbsent({
+    const workspaceMember = await this.organizationRepository.addMemberIfAbsent({
       createdById: auth.user.id,
       organizationId: diagram.organizationId,
       role: OrganizationRole.Guest,
       userId: user.id,
     });
+
+    if (!workspaceMember) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    if (workspaceMember.status !== 'active') {
+      throw new BadRequestException('User is not an active workspace member');
+    }
 
     const existingMember = await this.diagramRepository.getMember(diagramId, user.id);
     const member = await this.diagramRepository.upsertMember(diagramId, {

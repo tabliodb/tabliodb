@@ -41,6 +41,7 @@ describe(ProjectService.name, () => {
     create: vi.fn(),
   };
   const organizationRepository = {
+    addMemberIfAbsent: vi.fn(),
     createPersonalOrganization: vi.fn(),
     getByIdForUser: vi.fn(),
     getFirstForUser: vi.fn(),
@@ -116,7 +117,11 @@ describe(ProjectService.name, () => {
       id: 'editor-id',
       name: 'Editor User',
     });
-    organizationRepository.getByIdForUser.mockResolvedValue({ id: 'organization-id' });
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Member,
+      status: 'active',
+      userId: 'editor-id',
+    });
     projectRepository.upsertMember.mockResolvedValue({
       avatarUrl: null,
       cursorColor: '#58cc02',
@@ -139,6 +144,12 @@ describe(ProjectService.name, () => {
       userId: 'editor-id',
     });
 
+    expect(organizationRepository.addMemberIfAbsent).toHaveBeenCalledWith({
+      createdById: 'owner-id',
+      organizationId: 'organization-id',
+      role: OrganizationRole.Guest,
+      userId: 'editor-id',
+    });
     expect(projectRepository.upsertMember).toHaveBeenCalledWith('project-id', {
       createdById: 'owner-id',
       role: ProjectRole.Editor,
@@ -175,22 +186,73 @@ describe(ProjectService.name, () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('rejects adding a user that is not in the project workspace', async () => {
+  it('anchors an existing user as a workspace guest before adding folder access', async () => {
     userRepository.getByEmail.mockResolvedValue({
       email: 'outsider@tabliodb.local',
       id: 'outsider-id',
       name: 'Outsider User',
     });
-    organizationRepository.getByIdForUser.mockResolvedValue(undefined);
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Guest,
+      status: 'active',
+      userId: 'outsider-id',
+    });
+    projectRepository.upsertMember.mockResolvedValue({
+      avatarUrl: null,
+      cursorColor: '#1cb0f6',
+      createdAt: new Date('2026-07-29T11:30:00.000Z'),
+      email: 'outsider@tabliodb.local',
+      name: 'Outsider User',
+      role: ProjectRole.Viewer,
+      updatedAt: new Date('2026-07-29T11:30:00.000Z'),
+      userId: 'outsider-id',
+    });
 
     await expect(
       service.addMember(auth, 'project-id', {
         email: 'outsider@tabliodb.local',
         role: ProjectRole.Viewer,
       }),
+    ).resolves.toMatchObject({
+      email: 'outsider@tabliodb.local',
+      role: ProjectRole.Viewer,
+      userId: 'outsider-id',
+    });
+
+    // Folder grants pull existing users into the workspace as guests, matching the direct diagram invite flow.
+    expect(organizationRepository.addMemberIfAbsent).toHaveBeenCalledWith({
+      createdById: 'owner-id',
+      organizationId: 'organization-id',
+      role: OrganizationRole.Guest,
+      userId: 'outsider-id',
+    });
+    expect(projectRepository.upsertMember).toHaveBeenCalledWith('project-id', {
+      createdById: 'owner-id',
+      role: ProjectRole.Viewer,
+      userId: 'outsider-id',
+    });
+  });
+
+  it('rejects adding a suspended workspace user to a folder', async () => {
+    userRepository.getByEmail.mockResolvedValue({
+      email: 'suspended@tabliodb.local',
+      id: 'suspended-id',
+      name: 'Suspended User',
+    });
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Guest,
+      status: 'suspended',
+      userId: 'suspended-id',
+    });
+
+    await expect(
+      service.addMember(auth, 'project-id', {
+        email: 'suspended@tabliodb.local',
+        role: ProjectRole.Viewer,
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    // Cross-workspace membership must fail before writing project_members.
+    // Existing suspended/pending workspace rows are never reactivated through lower-scope grants.
     expect(projectRepository.upsertMember).not.toHaveBeenCalled();
   });
 
@@ -246,6 +308,25 @@ describe(ProjectService.name, () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(userRepository.getByEmail).not.toHaveBeenCalled();
+    expect(projectRepository.upsertMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents adding yourself through the generic folder access endpoint', async () => {
+    userRepository.getByEmail.mockResolvedValue({
+      email: auth.user.email,
+      id: auth.user.id,
+      name: auth.user.name,
+    });
+
+    await expect(
+      service.addMember(auth, 'project-id', {
+        email: auth.user.email,
+        role: ProjectRole.Viewer,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Folder owner/admin self role changes must stay out of the generic add/upsert path.
+    expect(organizationRepository.addMemberIfAbsent).not.toHaveBeenCalled();
     expect(projectRepository.upsertMember).not.toHaveBeenCalled();
   });
 

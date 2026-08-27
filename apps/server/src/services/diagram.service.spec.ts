@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { createStarterDiagramModel, encodeDiagramModelAsYjsUpdate } from '@tabliodb/schema-core';
-import { Permission, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { DiagramService } from './diagram.service.js';
@@ -330,6 +330,101 @@ describe(DiagramService.name, () => {
 
     // The email is not resolved when the role itself is invalid for this generic endpoint.
     expect(userRepository.getByEmail).not.toHaveBeenCalled();
+    expect(diagramRepository.upsertMember).not.toHaveBeenCalled();
+  });
+
+  it('anchors an existing user as a workspace guest before adding direct diagram access', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    userRepository.getByEmail.mockResolvedValue({
+      email: 'viewer@tabliodb.local',
+      id: 'viewer-id',
+      name: 'Viewer User',
+    });
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Guest,
+      status: 'active',
+      userId: 'viewer-id',
+    });
+    diagramRepository.getMember.mockResolvedValue(undefined);
+    diagramRepository.upsertMember.mockResolvedValue({
+      avatarUrl: null,
+      createdAt: new Date('2026-07-29T11:45:00.000Z'),
+      cursorColor: '#1cb0f6',
+      email: 'viewer@tabliodb.local',
+      name: 'Viewer User',
+      role: ProjectRole.Viewer,
+      updatedAt: new Date('2026-07-29T11:45:00.000Z'),
+      userId: 'viewer-id',
+    });
+
+    await expect(
+      service.addMember(auth, 'diagram-id', {
+        email: 'viewer@tabliodb.local',
+        role: ProjectRole.Viewer,
+      }),
+    ).resolves.toMatchObject({
+      email: 'viewer@tabliodb.local',
+      role: ProjectRole.Viewer,
+      userId: 'viewer-id',
+    });
+
+    expect(organizationRepository.addMemberIfAbsent).toHaveBeenCalledWith({
+      createdById: 'user-id',
+      organizationId: 'organization-id',
+      role: OrganizationRole.Guest,
+      userId: 'viewer-id',
+    });
+    expect(diagramRepository.upsertMember).toHaveBeenCalledWith('diagram-id', {
+      createdById: 'user-id',
+      role: ProjectRole.Viewer,
+      userId: 'viewer-id',
+    });
+  });
+
+  it('rejects adding suspended workspace users to direct diagram access', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    userRepository.getByEmail.mockResolvedValue({
+      email: 'suspended@tabliodb.local',
+      id: 'suspended-id',
+      name: 'Suspended User',
+    });
+    organizationRepository.addMemberIfAbsent.mockResolvedValue({
+      role: OrganizationRole.Guest,
+      status: 'suspended',
+      userId: 'suspended-id',
+    });
+
+    await expect(
+      service.addMember(auth, 'diagram-id', {
+        email: 'suspended@tabliodb.local',
+        role: ProjectRole.Viewer,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Existing suspended/pending workspace rows are not reactivated by a direct diagram grant.
+    expect(diagramRepository.upsertMember).not.toHaveBeenCalled();
+  });
+
+  it('prevents adding yourself through the generic direct diagram access endpoint', async () => {
+    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    diagramRepository.getById.mockResolvedValue(diagram);
+    userRepository.getByEmail.mockResolvedValue({
+      email: auth.user.email,
+      id: auth.user.id,
+      name: auth.user.name,
+    });
+
+    await expect(
+      service.addMember(auth, 'diagram-id', {
+        email: auth.user.email,
+        role: ProjectRole.Viewer,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // Self role changes belong to explicit ownership/leave flows, not the generic add/upsert route.
+    expect(organizationRepository.addMemberIfAbsent).not.toHaveBeenCalled();
     expect(diagramRepository.upsertMember).not.toHaveBeenCalled();
   });
 

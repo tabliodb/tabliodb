@@ -241,6 +241,7 @@ export function ProjectSettingsDialog({
         email: values.email,
         role: sdkProjectMemberRoleByValue[values.role],
       },
+      organizationId: project.organizationId,
       projectId: project.id,
     });
   }

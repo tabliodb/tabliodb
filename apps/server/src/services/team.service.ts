@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Permission, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import {
@@ -161,12 +161,23 @@ export class TeamService {
     const user = await this.userRepository.getByEmail(dto.email);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('User not found. Create an invitation for new users first.');
     }
 
-    const organizationMember = await this.organizationRepository.getMember(team.organizationId, user.id);
-    if (!organizationMember || organizationMember.status !== 'active') {
-      throw new BadRequestException('User must be an active workspace member before joining a team');
+    const workspaceMember = await this.organizationRepository.addMemberIfAbsent({
+      createdById: auth.user.id,
+      organizationId: team.organizationId,
+      // Team membership must still be tenant-anchored; guests only receive permissions through explicit team grants.
+      role: OrganizationRole.Guest,
+      userId: user.id,
+    });
+
+    if (!workspaceMember) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    if (workspaceMember.status !== 'active') {
+      throw new BadRequestException('User is not an active workspace member');
     }
 
     const existingMember = await this.teamRepository.getMember(teamId, user.id);

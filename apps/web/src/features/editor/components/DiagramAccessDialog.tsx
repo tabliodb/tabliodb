@@ -126,6 +126,7 @@ export function DiagramAccessDialog({
           role: values.role,
         },
         diagramId: diagram.id,
+        organizationId: diagram.organizationId,
       },
       {
         onSuccess: () => {

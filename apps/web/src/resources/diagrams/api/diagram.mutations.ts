@@ -23,6 +23,7 @@ import {
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { commentKeys } from '@/resources/comments';
+import { organizationsKeys } from '@/resources/organizations';
 import { projectsKeys } from '@/resources/projects';
 import { reviewSignalKeys } from '@/resources/review-signals';
 import { diagramsKeys, type DiagramExportQuery } from './diagram.keys';
@@ -35,7 +36,7 @@ const createWorkspaceDiagramMutationFn = (input: { body: WorkspaceDiagramCreateD
   });
 const updateDiagramMutationFn = (input: { body: DiagramUpdateDto; diagramId: string }) =>
   updateDiagram({ diagramId: input.diagramId, diagramUpdateDto: input.body });
-const addDiagramMemberMutationFn = (input: { body: DiagramMemberCreateDto; diagramId: string }) =>
+const addDiagramMemberMutationFn = (input: { body: DiagramMemberCreateDto; diagramId: string; organizationId: string }) =>
   addDiagramMember({ diagramId: input.diagramId, diagramMemberCreateDto: input.body });
 const updateDiagramMemberMutationFn = (input: { body: DiagramMemberUpdateDto; diagramId: string; userId: string }) =>
   updateDiagramMember({ diagramId: input.diagramId, diagramMemberUpdateDto: input.body, userId: input.userId });
@@ -129,8 +130,9 @@ export function useAddDiagramMemberMutation(params: UseAddDiagramMemberMutationP
     mutationFn: addDiagramMemberMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Diagram sharing has its own cache root so access changes do not churn the full diagram list.
+      // Direct diagram invite can create a workspace guest membership; refresh both access views so settings stay honest.
       queryClient.invalidateQueries({ queryKey: diagramsKeys.membersRoot(variables.diagramId) });
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
