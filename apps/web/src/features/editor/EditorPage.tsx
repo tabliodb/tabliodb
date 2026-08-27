@@ -179,6 +179,7 @@ export function EditorPage() {
   } = useEditorModelHistory();
   const persistedDraftSignatureRef = useRef<string | null>(null);
   const loadedSnapshotIdRef = useRef<string | null>(null);
+  const loadedModelDiagramIdRef = useRef<string | null>(null);
   const canvasViewportRef = useRef<CanvasViewportRect | null>(null);
   const {
     applyRemoteSelectionFallback,
@@ -410,10 +411,11 @@ export function EditorPage() {
 
     modelRef.current = nextModel;
     snapshotRecoveryModelRef.current = nextModel;
+    loadedModelDiagramIdRef.current = activeDiagram?.id ?? loadedModelDiagramIdRef.current;
     setModel(nextModel);
     syncModelToCollaboration(nextModel);
     reconcileModelSelection(nextModel);
-  }, [canEditDiagram, reconcileModelSelection, syncModelToCollaboration, undoModelHistory]);
+  }, [activeDiagram?.id, canEditDiagram, reconcileModelSelection, syncModelToCollaboration, undoModelHistory]);
 
   const handleRedoModelChange = useCallback(() => {
     if (!canEditDiagram) {
@@ -428,10 +430,11 @@ export function EditorPage() {
 
     modelRef.current = nextModel;
     snapshotRecoveryModelRef.current = nextModel;
+    loadedModelDiagramIdRef.current = activeDiagram?.id ?? loadedModelDiagramIdRef.current;
     setModel(nextModel);
     syncModelToCollaboration(nextModel);
     reconcileModelSelection(nextModel);
-  }, [canEditDiagram, reconcileModelSelection, redoModelHistory, syncModelToCollaboration]);
+  }, [activeDiagram?.id, canEditDiagram, reconcileModelSelection, redoModelHistory, syncModelToCollaboration]);
 
   const saveSnapshotMutation = useCreateSnapshotMutation({
     mutationConfig: {
@@ -443,12 +446,18 @@ export function EditorPage() {
         });
       },
       onSuccess: (snapshot) => {
+        if (activeDiagram?.id && snapshot.diagramId !== activeDiagram.id) {
+          // Request snapshot bisa selesai setelah user pindah diagram; response lama tidak boleh mengganti canvas aktif.
+          return;
+        }
+
         const snapshotModel = normalizeEditorDiagramModel(snapshot.snapshot);
 
         // Snapshot creation returns the canonical versioned model while live editing remains a separate persistence concern.
         loadedSnapshotIdRef.current = snapshot.id;
         modelRef.current = snapshotModel;
         snapshotRecoveryModelRef.current = snapshotModel;
+        loadedModelDiagramIdRef.current = snapshot.diagramId;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshotModel);
         setModel(snapshotModel);
         syncModelToCollaboration(snapshotModel);
@@ -458,12 +467,18 @@ export function EditorPage() {
   const restoreSnapshotMutation = useRestoreSnapshotMutation({
     mutationConfig: {
       onSuccess: (snapshot) => {
+        if (activeDiagram?.id && snapshot.diagramId !== activeDiagram.id) {
+          // Restore juga asynchronous; guard ini mencegah snapshot diagram lama muncul di route diagram baru.
+          return;
+        }
+
         const snapshotModel = normalizeEditorDiagramModel(snapshot.snapshot);
 
         // Restore membuat snapshot baru dari versi lama; local draft langsung mengikuti checkpoint baru itu.
         loadedSnapshotIdRef.current = snapshot.id;
         modelRef.current = snapshotModel;
         snapshotRecoveryModelRef.current = snapshotModel;
+        loadedModelDiagramIdRef.current = snapshot.diagramId;
         persistedDraftSignatureRef.current = createDiagramModelSignature(snapshotModel);
         setModel(snapshotModel);
         syncModelToCollaboration(snapshotModel);
@@ -479,12 +494,19 @@ export function EditorPage() {
   const importDiagramMutation = useImportDiagramMutation({
     mutationConfig: {
       onSuccess: (response) => {
+        if (activeDiagram?.id && response.diagram.id !== activeDiagram.id) {
+          // Import replace harus tetap scoped ke diagram pemanggil, terutama saat user berpindah route ketika upload besar sedang berjalan.
+          return;
+        }
+
         const importedModel = normalizeEditorDiagramModel(parseDiagramModel(response.model));
 
         // Server import writes the same model into diagram_documents, so this signature marks the local draft as persisted.
         loadedSnapshotIdRef.current = latestSnapshot?.id ?? loadedSnapshotIdRef.current;
         modelRef.current = importedModel;
         snapshotRecoveryModelRef.current = importedModel;
+        // Import tidak selalu membuat snapshot; tanda diagram ini mencegah fallback "empty diagram" menimpa hasil import saat cache list di-refresh.
+        loadedModelDiagramIdRef.current = response.diagram.id;
         persistedDraftSignatureRef.current = createDiagramModelSignature(importedModel);
         setModel(importedModel);
         syncModelToCollaboration(importedModel);
@@ -542,10 +564,11 @@ export function EditorPage() {
       // Keep the latest draft model synchronously available for snapshot clicks that happen immediately after an input blur.
       modelRef.current = safeNextModel;
       snapshotRecoveryModelRef.current = safeNextModel;
+      loadedModelDiagramIdRef.current = activeDiagram?.id ?? loadedModelDiagramIdRef.current;
       setModel(safeNextModel);
       syncModelToCollaboration(safeNextModel, currentModel);
     },
-    [canEditDiagram, recordModelHistory, syncModelToCollaboration],
+    [activeDiagram?.id, canEditDiagram, recordModelHistory, syncModelToCollaboration],
   );
 
   useEffect(() => {
@@ -562,10 +585,11 @@ export function EditorPage() {
     // Model lama atau echo Yjs yang kehilangan column entity langsung direpair di state utama agar canvas, sidebar, inspector, dan snapshot membaca struktur yang sama.
     modelRef.current = safeModel;
     snapshotRecoveryModelRef.current = safeModel;
+    loadedModelDiagramIdRef.current = activeDiagram?.id ?? loadedModelDiagramIdRef.current;
     setModel(safeModel);
     reconcileModelSelection(safeModel);
     syncModelToCollaboration(safeModel);
-  }, [model, reconcileModelSelection, syncModelToCollaboration]);
+  }, [activeDiagram?.id, model, reconcileModelSelection, syncModelToCollaboration]);
 
   const handleCanvasViewportChange = useCallback((viewport: CanvasViewportRect) => {
     // Disimpan di ref supaya tombol Add Table/Note bisa membaca viewport terbaru tanpa membuat editor re-render tiap pan/zoom.
@@ -614,8 +638,11 @@ export function EditorPage() {
 
   useEffect(() => {
     loadedSnapshotIdRef.current = null;
+    loadedModelDiagramIdRef.current = null;
+    modelRef.current = null;
     snapshotRecoveryModelRef.current = null;
     canvasViewportRef.current = null;
+    setModel(null);
   }, [activeDiagram?.id]);
 
   useEffect(() => {
@@ -893,6 +920,7 @@ export function EditorPage() {
         // Remote Yjs updates become the visible editor model, but they do not enter this user's local undo stack.
         modelRef.current = safeNextModel;
         snapshotRecoveryModelRef.current = safeNextModel;
+        loadedModelDiagramIdRef.current = activeDiagram.id;
         persistedDraftSignatureRef.current = null;
         setModel(safeNextModel);
         if (remoteSelectionConflict) {
@@ -1126,6 +1154,11 @@ export function EditorPage() {
       return;
     }
 
+    if (activeDiagram?.id && latestSnapshot.diagramId !== activeDiagram.id) {
+      // React Query bisa masih menyimpan data lama sebentar saat key berubah; snapshot dari diagram lain tidak boleh di-apply.
+      return;
+    }
+
     const currentModel = modelRef.current;
     const currentDraftIsDirty =
       currentModel && persistedDraftSignatureRef.current !== createDiagramModelSignature(currentModel);
@@ -1141,6 +1174,7 @@ export function EditorPage() {
     loadedSnapshotIdRef.current = latestSnapshot.id;
     modelRef.current = snapshotModel;
     snapshotRecoveryModelRef.current = snapshotModel;
+    loadedModelDiagramIdRef.current = latestSnapshot.diagramId;
     persistedDraftSignatureRef.current = snapshotSignature;
     setModel(snapshotModel);
     if (createDiagramModelSignature(latestSnapshot.snapshot) !== snapshotSignature) {
@@ -1149,10 +1183,15 @@ export function EditorPage() {
     }
     clearSelection();
     resetModelHistory();
-  }, [clearSelection, latestSnapshot, resetModelHistory, syncModelToCollaboration]);
+  }, [activeDiagram?.id, clearSelection, latestSnapshot, resetModelHistory, syncModelToCollaboration]);
 
   useEffect(() => {
     if (!activeDiagram || snapshotsQuery.isPending || snapshotsQuery.data === undefined || latestSnapshot) {
+      return;
+    }
+
+    if (modelRef.current && loadedModelDiagramIdRef.current === activeDiagram.id) {
+      // Import/realtime dapat mengisi diagram baru sebelum ada snapshot; fallback kosong hanya boleh jalan jika diagram ini belum punya model aktif.
       return;
     }
 
@@ -1163,6 +1202,7 @@ export function EditorPage() {
     loadedSnapshotIdRef.current = null;
     modelRef.current = seedModel;
     snapshotRecoveryModelRef.current = seedModel;
+    loadedModelDiagramIdRef.current = activeDiagram.id;
     persistedDraftSignatureRef.current = null;
     setModel(seedModel);
     clearSelection();
@@ -1578,6 +1618,7 @@ export function EditorPage() {
             }
 
             const nextModel = updateLiveModelFromDiagram(current, diagram, modelRef);
+            loadedModelDiagramIdRef.current = diagram.id;
             snapshotRecoveryModelRef.current = nextModel;
 
             syncModelToCollaboration(nextModel);
