@@ -1,7 +1,7 @@
 import { TabliodbApiError, getTabliodbApiErrorMessage, getTabliodbApiErrorRequestId } from '@tabliodb/sdk';
 import { Button, Surface, cn } from '@tabliodb/ui';
 import { AlertCircle, Inbox, Loader2, RefreshCw } from 'lucide-react';
-import type { ComponentType, ReactNode } from 'react';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { isRouteErrorResponse } from 'react-router';
 import LOGO from '@/assets/logo.svg';
 
@@ -22,6 +22,14 @@ export function LoadingState({
 }) {
   const loadingProgress = progress ?? getFallbackLoadingProgress(message);
   const progressValue = clampProgressValue(loadingProgress.value);
+  const [displayedProgressValue, setDisplayedProgressValue] = useState(() => Math.max(4, Math.min(progressValue, 12)));
+
+  useEffect(() => {
+    // Progress value datang dari tahapan data loading editor; requestAnimationFrame memberi browser satu frame awal supaya perubahan berikutnya bisa dianimasikan halus.
+    const frameId = window.requestAnimationFrame(() => setDisplayedProgressValue(progressValue));
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [progressValue]);
 
   return (
     <main
@@ -44,28 +52,63 @@ export function LoadingState({
         </div>
         <div className="hidden min-w-0 shrink-0 items-center gap-2 lg:flex">
           {Array.from({ length: 5 }, (_, index) => (
-            <LoadingSkeletonBlock className="size-10 rounded-[var(--tabliodb-radius-md)]" key={index} />
+            <LoadingSkeletonBlock
+              className="size-[var(--tabliodb-control-lg)] rounded-[var(--tabliodb-radius-md)]"
+              key={index}
+            />
           ))}
-          <LoadingSkeletonBlock className="h-11 w-32 rounded-[var(--tabliodb-radius-lg)]" />
-          <LoadingSkeletonBlock className="h-11 w-24 rounded-[var(--tabliodb-radius-lg)]" />
-          <LoadingSkeletonBlock className="h-11 w-44 rounded-[var(--tabliodb-radius-lg)]" />
+          <LoadingSkeletonBlock className="h-[var(--tabliodb-control-lg)] w-32 rounded-[var(--tabliodb-radius-lg)]" />
+          <LoadingSkeletonBlock className="h-[var(--tabliodb-control-lg)] w-24 rounded-[var(--tabliodb-radius-lg)]" />
+          <LoadingSkeletonBlock className="h-[var(--tabliodb-control-lg)] w-44 rounded-[var(--tabliodb-radius-lg)]" />
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(300px,400px)_minmax(0,1fr)] xl:grid-cols-[minmax(300px,400px)_minmax(0,1fr)_400px]">
-        <aside className="hidden min-h-0 border-r border-[rgb(var(--tabliodb-border))] bg-white md:flex md:flex-col">
-          <div className="flex h-18 shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4">
-            <LoadingSkeletonBlock className="size-11 rounded-[16px]" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <LoadingSkeletonBlock className="h-4 w-24 rounded-[6px]" />
-              <LoadingSkeletonBlock className="h-3 w-16 rounded-[5px]" />
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <section className="absolute inset-0 min-w-0 overflow-hidden bg-white">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgb(203_213_225)_1px,transparent_0)] [background-size:16px_16px]" />
+          <div className="absolute inset-y-0 left-0 right-0 md:left-[var(--tabliodb-sidebar-width)] md:right-[44px]">
+            {/* Floating tools memakai offset yang sama dengan editor: sidebar kiri overlay tidak mendorong canvas, hanya menggeser kontrol agar tidak tertutup panel. */}
+            <div className="absolute left-5 top-5 flex rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))]">
+              <LoadingSkeletonBlock className="h-[var(--tabliodb-control-lg)] w-28 rounded-[var(--tabliodb-radius-md)]" />
+              <LoadingSkeletonBlock className="ml-2 h-[var(--tabliodb-control-lg)] w-24 rounded-[var(--tabliodb-radius-md)]" />
             </div>
-            <LoadingSkeletonBlock className="size-9 rounded-[var(--tabliodb-radius-md)]" />
+
+            <div className="absolute left-1/2 top-1/2 grid w-[min(72vw,360px)] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-4 text-center">
+              <img alt="" className="h-12 w-auto" src={LOGO} />
+              <p className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">{message}</p>
+              <div className="w-full max-w-xs text-left">
+                <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  <span className="truncate">{loadingProgress.label}</span>
+                  <span>{progressValue}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[rgb(var(--tabliodb-primary-soft))] shadow-[inset_0_0_0_1px_rgb(var(--tabliodb-primary-border))]">
+                  <div
+                    className="h-full rounded-full bg-[rgb(var(--tabliodb-primary))] transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[width]"
+                    style={{ width: `${displayedProgressValue}%` }}
+                  />
+                </div>
+                {loadingProgress.detail ? (
+                  <p className="mt-2 text-center text-xs font-semibold text-[rgb(var(--tabliodb-ink-subtle))]">
+                    {loadingProgress.detail}
+                  </p>
+                ) : null}
+              </div>
+            </div>
           </div>
-          <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-4">
-            <LoadingSkeletonBlock className="h-11 rounded-[var(--tabliodb-radius-md)]" />
+        </section>
+
+        <aside className="hidden h-full min-h-0 flex-col overflow-hidden border-r border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] md:absolute md:inset-y-0 md:left-0 md:z-30 md:flex md:w-[var(--tabliodb-sidebar-width)]">
+          <div className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-2.5 border-b border-[rgb(var(--tabliodb-border))] bg-white/80 px-3 backdrop-blur">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <LoadingSkeletonBlock className="h-3 w-16 rounded-[5px]" />
+              <LoadingSkeletonBlock className="h-4 w-20 rounded-[6px]" />
+            </div>
+            <LoadingSkeletonBlock className="size-[var(--tabliodb-control-lg)] rounded-[var(--tabliodb-radius-md)]" />
           </div>
-          <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-2 overflow-hidden p-3">
+          <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] bg-white/60 p-3">
+            <LoadingSkeletonBlock className="h-9 rounded-[var(--tabliodb-radius-md)]" />
+          </div>
+          <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-2 overflow-hidden p-2">
             {Array.from({ length: 8 }, (_, index) => (
               <div
                 className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3"
@@ -84,56 +127,9 @@ export function LoadingState({
           </div>
         </aside>
 
-        <section className="relative min-w-0 overflow-hidden bg-white">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgb(203_213_225)_1px,transparent_0)] [background-size:16px_16px]" />
-          <div className="absolute left-5 top-5 flex rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))]">
-            <LoadingSkeletonBlock className="h-10 w-28 rounded-[var(--tabliodb-radius-md)]" />
-            <LoadingSkeletonBlock className="ml-2 h-10 w-24 rounded-[var(--tabliodb-radius-md)]" />
-          </div>
-          <div className="absolute left-1/2 top-1/2 grid w-[min(72vw,360px)] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-4 text-center">
-            <img alt="" className="h-12 w-auto" src={LOGO} />
-            <p className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">{message}</p>
-            <div className="w-full max-w-xs text-left">
-              <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                <span className="truncate">{loadingProgress.label}</span>
-                <span>{progressValue}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full border border-[rgb(var(--tabliodb-primary-border))] bg-white">
-                <div
-                  className="h-full rounded-full bg-[rgb(var(--tabliodb-primary))] transition-[width] duration-300 ease-out"
-                  style={{ width: `${progressValue}%` }}
-                />
-              </div>
-              {loadingProgress.detail ? (
-                <p className="mt-2 text-center text-xs font-semibold text-[rgb(var(--tabliodb-ink-subtle))]">
-                  {loadingProgress.detail}
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </section>
-
-        <aside className="hidden min-h-0 border-l border-[rgb(var(--tabliodb-border))] bg-white xl:flex xl:flex-col">
-          <div className="flex h-18 shrink-0 items-center border-b border-[rgb(var(--tabliodb-border))] px-5">
-            <LoadingSkeletonBlock className="h-5 w-24 rounded-[6px]" />
-            <LoadingSkeletonBlock className="ml-auto size-8 rounded-[var(--tabliodb-radius-md)]" />
-          </div>
-          <div className="space-y-5 p-5">
-            <div className="flex gap-2">
-              <LoadingSkeletonBlock className="h-7 w-24 rounded-full" />
-              <LoadingSkeletonBlock className="h-7 w-14 rounded-full" />
-            </div>
-            {Array.from({ length: 3 }, (_, index) => (
-              <div
-                className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-4"
-                key={index}
-              >
-                <LoadingSkeletonBlock className="h-4 w-28 rounded-[6px]" />
-                <LoadingSkeletonBlock className="mt-3 h-3 w-44 rounded-[5px]" />
-                <LoadingSkeletonBlock className="mt-4 h-11 rounded-[var(--tabliodb-radius-md)]" />
-              </div>
-            ))}
-          </div>
+        <aside className="hidden h-full min-h-0 overflow-hidden border-l border-[rgb(var(--tabliodb-border))] bg-white/70 backdrop-blur md:absolute md:inset-y-0 md:right-0 md:z-30 md:flex md:w-[44px] md:items-start md:justify-center md:pt-3">
+          {/* Right sidebar default editor adalah collapsed rail 44px, jadi loading tidak lagi memakai panel inspector palsu 400px. */}
+          <LoadingSkeletonBlock className="size-[var(--tabliodb-control-lg)] rounded-[var(--tabliodb-radius-md)]" />
         </aside>
       </div>
     </main>
