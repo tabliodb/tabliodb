@@ -111,9 +111,6 @@ export function LoadingState({
               ) : null}
             </div>
           </div>
-          <LoadingTableCard className="left-[18%] top-[24%] hidden lg:block" />
-          <LoadingTableCard className="right-[16%] top-[28%] hidden lg:block" />
-          <LoadingTableCard className="bottom-[18%] left-[38%] hidden lg:block" />
         </section>
 
         <aside className="hidden min-h-0 border-l border-[rgb(var(--tabliodb-border))] bg-white xl:flex xl:flex-col">
@@ -140,31 +137,6 @@ export function LoadingState({
         </aside>
       </div>
     </main>
-  );
-}
-
-function LoadingTableCard({ className }: { className: string }) {
-  return (
-    <div
-      className={cn(
-        'absolute w-72 overflow-hidden rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white shadow-[0_4px_0_rgb(var(--tabliodb-border))]',
-        className,
-      )}
-    >
-      <div className="flex h-11 items-center gap-2 border-b border-[rgb(var(--tabliodb-border))] px-3">
-        <LoadingSkeletonBlock className="size-3 rounded-full" />
-        <LoadingSkeletonBlock className="h-4 w-28 rounded-[6px]" />
-        <LoadingSkeletonBlock className="ml-auto h-4 w-6 rounded-[5px]" />
-      </div>
-      <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-        {Array.from({ length: 3 }, (_, index) => (
-          <div className="grid h-9 grid-cols-[1fr_92px] items-center px-3" key={index}>
-            <LoadingSkeletonBlock className="h-3 w-24 rounded-[5px]" />
-            <LoadingSkeletonBlock className="h-3 w-16 justify-self-end rounded-[5px]" />
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
