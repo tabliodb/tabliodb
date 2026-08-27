@@ -789,18 +789,57 @@ function TableColorControls({
   swatchSize: 'sm' | 'md';
 }) {
   const selectedColor = getEditableTableColor(currentColor);
-  const customSelected = !tableColorOptions.some((color) => color === selectedColor);
+  const [draftColor, setDraftColor] = useState(selectedColor);
+  const committedColorRef = useRef(selectedColor);
+  const pickerColor = getEditableTableColor(draftColor);
+  const customSelected = !tableColorOptions.some((color) => color === pickerColor);
   const swatchClassName = swatchSize === 'sm' ? 'size-6' : 'size-7';
   const customClassName =
     swatchSize === 'sm'
       ? 'h-7 rounded-[10px] px-2 text-[11px]'
       : 'h-8 rounded-[12px] px-2.5 text-[12px]';
 
+  useEffect(() => {
+    setDraftColor(selectedColor);
+    committedColorRef.current = selectedColor;
+  }, [selectedColor]);
+
+  useEffect(() => {
+    const normalizedColor = normalizeTableColorInput(draftColor);
+
+    if (!normalizedColor || normalizedColor === selectedColor) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (committedColorRef.current === normalizedColor) {
+        return;
+      }
+
+      committedColorRef.current = normalizedColor;
+      onColorChange(normalizedColor);
+    }, 180);
+
+    // Dragging native color pickers can emit many values; debounce keeps graph/model writes out of the hot pointer path.
+    return () => window.clearTimeout(timeoutId);
+  }, [draftColor, onColorChange, selectedColor]);
+
+  function commitCustomColor(color: string) {
+    const normalizedColor = normalizeTableColorInput(color);
+
+    if (!normalizedColor || committedColorRef.current === normalizedColor) {
+      return;
+    }
+
+    committedColorRef.current = normalizedColor;
+    onColorChange(normalizedColor);
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       {tableColorOptions.map((color) => {
         const colorLabel = getTableColorLabel(color);
-        const isSelected = selectedColor === color;
+        const isSelected = pickerColor === color;
 
         return (
           <WithTooltip content={`Set table color to ${colorLabel}`} key={color}>
@@ -811,7 +850,10 @@ function TableColorControls({
                 swatchClassName,
                 'cursor-pointer rounded-full border-2 border-white transition hover:scale-105',
               )}
-              onClick={() => onColorChange(color)}
+              onClick={() => {
+                setDraftColor(color);
+                commitCustomColor(color);
+              }}
               style={{
                 backgroundColor: color,
                 boxShadow: isSelected
@@ -836,18 +878,18 @@ function TableColorControls({
         >
           <span
             className="size-4 rounded-full border border-white shadow-[0_0_0_1px_rgb(var(--tabliodb-border-strong))]"
-            style={{ backgroundColor: selectedColor }}
+            style={{ backgroundColor: pickerColor }}
           />
           <span>Custom</span>
           <input
             aria-label="Choose a custom table color"
             className="sr-only"
+            onBlur={(event) => commitCustomColor(event.currentTarget.value)}
             onChange={(event) => {
-              // Browser color picker only emits valid #rrggbb values, so the canvas can update immediately without a draft state.
-              onColorChange(event.currentTarget.value);
+              setDraftColor(event.currentTarget.value.toLowerCase());
             }}
             type="color"
-            value={selectedColor}
+            value={pickerColor}
           />
         </label>
       </WithTooltip>
