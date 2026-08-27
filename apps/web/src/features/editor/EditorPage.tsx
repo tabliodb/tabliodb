@@ -36,7 +36,13 @@ import type {
   DiagramCollaborationStatus,
   RemoteAwarenessState,
 } from '@/features/collaboration/collaboration-client';
-import { EmptyState, ErrorState, LoadingState, getErrorMessage } from '@/features/app/RouteStates';
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  getErrorMessage,
+  type LoadingProgress,
+} from '@/features/app/RouteStates';
 import { authQueries, useLogoutMutation, useUpdateCurrentUserEditorPreferenceMutation } from '@/resources/auth';
 import { diagramsQueries, useImportDiagramMutation } from '@/resources/diagrams';
 import { organizationsQueries } from '@/resources/organizations';
@@ -1407,7 +1413,21 @@ export function EditorPage() {
     Boolean(activeDiagram && !model);
 
   if (isLoadingWorkspace) {
-    return <LoadingState message="Loading diagram workspace" />;
+    return (
+      <LoadingState
+        message="Loading diagram workspace"
+        progress={getEditorLoadingProgress({
+          activeDiagramReady: Boolean(activeDiagram),
+          activeOrganizationReady: Boolean(activeOrganization),
+          currentUserReady: Boolean(currentUser) && !currentUserQuery.isPending,
+          diagramsReady: !diagramsQuery.isPending,
+          modelReady: Boolean(model),
+          organizationsReady: !organizationsQuery.isPending,
+          projectsReady: !projectsQuery.isPending,
+          snapshotsReady: !snapshotsQuery.isPending,
+        })}
+      />
+    );
   }
 
   if (!diagramsQuery.isPending && activeOrganization && diagrams.length === 0) {
@@ -1448,7 +1468,16 @@ export function EditorPage() {
   }
 
   if (!currentUser || !activeOrganization || !activeDiagram || !model) {
-    return <LoadingState message="Preparing editor" />;
+    return (
+      <LoadingState
+        message="Preparing editor"
+        progress={{
+          detail: 'Finalizing the active diagram canvas.',
+          label: 'Preparing canvas',
+          value: 92,
+        }}
+      />
+    );
   }
 
   const selectedTable = selectedTableId ? (model.tables[selectedTableId] ?? null) : null;
@@ -2133,6 +2162,86 @@ function isReviewSignalTargetType(value: string): value is DiagramEntityKind {
 
 function isReviewSignalSeverity(value: string): value is DiagramReviewSignal['severity'] {
   return (reviewSignalSeverities as readonly string[]).includes(value);
+}
+
+function getEditorLoadingProgress({
+  activeDiagramReady,
+  activeOrganizationReady,
+  currentUserReady,
+  diagramsReady,
+  modelReady,
+  organizationsReady,
+  projectsReady,
+  snapshotsReady,
+}: {
+  activeDiagramReady: boolean;
+  activeOrganizationReady: boolean;
+  currentUserReady: boolean;
+  diagramsReady: boolean;
+  modelReady: boolean;
+  organizationsReady: boolean;
+  projectsReady: boolean;
+  snapshotsReady: boolean;
+}): LoadingProgress {
+  const phases: Array<{
+    detail: string;
+    label: string;
+    ready: boolean;
+    weight: number;
+  }> = [
+    {
+      detail: 'Checking your session and profile.',
+      label: 'Loading account',
+      ready: currentUserReady,
+      weight: 14,
+    },
+    {
+      detail: 'Finding the workspace you can access.',
+      label: 'Loading workspaces',
+      ready: organizationsReady && activeOrganizationReady,
+      weight: 18,
+    },
+    {
+      detail: 'Loading folders for the active workspace.',
+      label: 'Loading folders',
+      ready: projectsReady,
+      weight: 14,
+    },
+    {
+      detail: 'Loading diagrams and selecting the active ERD.',
+      label: 'Loading diagrams',
+      ready: diagramsReady && activeDiagramReady,
+      weight: 20,
+    },
+    {
+      detail: 'Loading snapshots for the active diagram.',
+      label: 'Loading snapshots',
+      ready: snapshotsReady,
+      weight: 18,
+    },
+    {
+      detail: 'Parsing the schema model for the canvas.',
+      label: 'Preparing model',
+      ready: modelReady,
+      weight: 16,
+    },
+  ];
+  const activePhase = phases.find((phase) => !phase.ready) ?? phases[phases.length - 1];
+  let completedWeight = 0;
+
+  for (const phase of phases) {
+    if (!phase.ready) {
+      break;
+    }
+
+    completedWeight += phase.weight;
+  }
+
+  return {
+    detail: activePhase.detail,
+    label: activePhase.label,
+    value: Math.max(8, Math.min(96, completedWeight)),
+  };
 }
 
 function isUnauthorized(error: unknown): boolean {

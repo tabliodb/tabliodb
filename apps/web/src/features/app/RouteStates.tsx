@@ -7,78 +7,197 @@ import LOGO from '@/assets/logo.svg';
 
 type StateIcon = ComponentType<{ className?: string }>;
 
-export function LoadingState({ message = 'Loading workspace' }: { message?: string }) {
+export type LoadingProgress = {
+  detail?: string;
+  label: string;
+  value: number;
+};
+
+export function LoadingState({
+  message = 'Loading workspace',
+  progress,
+}: {
+  message?: string;
+  progress?: LoadingProgress;
+}) {
+  const loadingProgress = progress ?? getFallbackLoadingProgress(message);
+  const progressValue = clampProgressValue(loadingProgress.value);
+
   return (
     <main
       aria-busy="true"
       aria-live="polite"
-      className="relative flex h-dvh overflow-hidden bg-[#202020] text-white"
+      className="flex h-dvh flex-col overflow-hidden bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]"
       role="status"
     >
       <span className="sr-only">{message}</span>
 
-      {/* The global fallback mirrors the editor chrome so lazy-loaded routes feel like the same app shell while data/code loads. */}
-      <section className="hidden w-[78px] shrink-0 border-r border-white/10 bg-[#252525] p-4 md:flex md:flex-col md:items-center md:gap-6">
-        <LoadingSkeletonBlock className="size-11 rounded-[10px]" />
-        <LoadingSkeletonDivider />
-        {Array.from({ length: 5 }, (_, index) => (
-          <LoadingSkeletonBlock className="size-11 rounded-[10px]" key={index} />
-        ))}
-        <LoadingSkeletonDivider />
-        <LoadingSkeletonBlock className="size-11 rounded-[10px]" />
-      </section>
+      {/* The shell follows TablioDB's editor layout instead of a generic app skeleton, so loading keeps the same spatial model as the real canvas. */}
+      <header className="flex h-[var(--tabliodb-header-height)] shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] bg-white px-3 sm:px-4">
+        <div className="flex h-9 w-32 shrink-0 items-center overflow-hidden max-[560px]:w-9">
+          <img alt="Tabliodb" className="h-9 w-32 max-w-none" src={LOGO} />
+        </div>
+        <div className="h-10 w-px shrink-0 bg-[rgb(var(--tabliodb-border))]" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <LoadingSkeletonBlock className="h-4 w-[min(42vw,220px)] rounded-[6px]" />
+          <LoadingSkeletonBlock className="h-3 w-[min(52vw,320px)] rounded-[5px]" />
+        </div>
+        <div className="hidden min-w-0 shrink-0 items-center gap-2 lg:flex">
+          {Array.from({ length: 5 }, (_, index) => (
+            <LoadingSkeletonBlock className="size-10 rounded-[var(--tabliodb-radius-md)]" key={index} />
+          ))}
+          <LoadingSkeletonBlock className="h-11 w-32 rounded-[var(--tabliodb-radius-lg)]" />
+          <LoadingSkeletonBlock className="h-11 w-24 rounded-[var(--tabliodb-radius-lg)]" />
+          <LoadingSkeletonBlock className="h-11 w-44 rounded-[var(--tabliodb-radius-lg)]" />
+        </div>
+      </header>
 
-      <section className="hidden w-[332px] shrink-0 border-r border-white/10 bg-[#2b2b2b] md:block">
-        <div className="flex h-18 items-center gap-7 border-b border-white/10 px-4">
-          <LoadingSkeletonBlock className="size-11 rounded-[10px]" />
-          <LoadingSkeletonBlock className="h-11 w-16 rounded-[8px]" />
-          <LoadingSkeletonBlock className="ml-auto size-11 rounded-[10px]" />
-        </div>
-        <div className="border-b border-white/10 px-4 py-5">
-          <LoadingSkeletonBlock className="h-5 w-32 rounded-[6px]" />
-        </div>
-        <div className="space-y-6 px-14 py-5">
-          <LoadingSkeletonBlock className="h-6 w-44 rounded-[7px]" />
-          <LoadingSkeletonBlock className="h-6 w-32 rounded-[7px]" />
-          <LoadingSkeletonBlock className="h-6 w-20 rounded-[7px]" />
-          <LoadingSkeletonBlock className="h-6 w-44 rounded-[7px]" />
-          <LoadingSkeletonBlock className="h-6 w-20 rounded-[7px]" />
-        </div>
-      </section>
-
-      <section className="relative min-w-0 flex-1 bg-[#1f1f1f]">
-        <div className="flex h-18 items-center justify-between border-b border-white/10 px-4 md:hidden">
-          <LoadingSkeletonBlock className="h-11 w-32 rounded-[10px]" />
-          <LoadingSkeletonBlock className="size-11 rounded-[10px]" />
-        </div>
-        <div className="absolute left-1/2 top-1/2 grid w-[min(74vw,300px)] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-7">
-          <img alt="" className="h-10 w-auto brightness-0 invert" src={LOGO} />
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/15">
-            <div className="h-full w-[48%] rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.28)]" />
+      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(300px,400px)_minmax(0,1fr)] xl:grid-cols-[minmax(300px,400px)_minmax(0,1fr)_400px]">
+        <aside className="hidden min-h-0 border-r border-[rgb(var(--tabliodb-border))] bg-white md:flex md:flex-col">
+          <div className="flex h-18 shrink-0 items-center gap-3 border-b border-[rgb(var(--tabliodb-border))] px-4">
+            <LoadingSkeletonBlock className="size-11 rounded-[16px]" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <LoadingSkeletonBlock className="h-4 w-24 rounded-[6px]" />
+              <LoadingSkeletonBlock className="h-3 w-16 rounded-[5px]" />
+            </div>
+            <LoadingSkeletonBlock className="size-9 rounded-[var(--tabliodb-radius-md)]" />
           </div>
-        </div>
-      </section>
+          <div className="shrink-0 border-b border-[rgb(var(--tabliodb-border))] p-4">
+            <LoadingSkeletonBlock className="h-11 rounded-[var(--tabliodb-radius-md)]" />
+          </div>
+          <div className="tabliodb-scrollbar min-h-0 flex-1 space-y-2 overflow-hidden p-3">
+            {Array.from({ length: 8 }, (_, index) => (
+              <div
+                className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3"
+                key={index}
+              >
+                <div className="flex items-center gap-3">
+                  <LoadingSkeletonBlock className="size-3 rounded-full" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <LoadingSkeletonBlock className="h-4 w-[70%] rounded-[6px]" />
+                    <LoadingSkeletonBlock className="h-3 w-[48%] rounded-[5px]" />
+                  </div>
+                  <LoadingSkeletonBlock className="h-6 w-10 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
 
-      <section className="hidden w-[330px] shrink-0 border-l border-white/10 bg-[#2b2b2b] xl:block">
-        <div className="grid h-[116px] grid-cols-[68px_1fr_1fr] gap-3 border-b border-white/10 p-4">
-          <LoadingSkeletonBlock className="h-8 rounded-full" />
-          <LoadingSkeletonBlock className="h-11 rounded-[8px]" />
-          <LoadingSkeletonBlock className="h-11 rounded-[8px]" />
-          <LoadingSkeletonBlock className="h-8 rounded-[7px]" />
-          <LoadingSkeletonBlock className="h-8 rounded-[7px]" />
-          <LoadingSkeletonBlock className="h-8 rounded-[7px]" />
-        </div>
-      </section>
+        <section className="relative min-w-0 overflow-hidden bg-white">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgb(203_213_225)_1px,transparent_0)] [background-size:16px_16px]" />
+          <div className="absolute left-5 top-5 flex rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-2 shadow-[0_3px_0_rgb(var(--tabliodb-border-strong))]">
+            <LoadingSkeletonBlock className="h-10 w-28 rounded-[var(--tabliodb-radius-md)]" />
+            <LoadingSkeletonBlock className="ml-2 h-10 w-24 rounded-[var(--tabliodb-radius-md)]" />
+          </div>
+          <div className="absolute left-1/2 top-1/2 grid w-[min(72vw,360px)] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-4 text-center">
+            <img alt="" className="h-12 w-auto" src={LOGO} />
+            <p className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">{message}</p>
+            <div className="w-full max-w-xs text-left">
+              <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                <span className="truncate">{loadingProgress.label}</span>
+                <span>{progressValue}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full border border-[rgb(var(--tabliodb-primary-border))] bg-white">
+                <div
+                  className="h-full rounded-full bg-[rgb(var(--tabliodb-primary))] transition-[width] duration-300 ease-out"
+                  style={{ width: `${progressValue}%` }}
+                />
+              </div>
+              {loadingProgress.detail ? (
+                <p className="mt-2 text-center text-xs font-semibold text-[rgb(var(--tabliodb-ink-subtle))]">
+                  {loadingProgress.detail}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <LoadingTableCard className="left-[18%] top-[24%] hidden lg:block" />
+          <LoadingTableCard className="right-[16%] top-[28%] hidden lg:block" />
+          <LoadingTableCard className="bottom-[18%] left-[38%] hidden lg:block" />
+        </section>
+
+        <aside className="hidden min-h-0 border-l border-[rgb(var(--tabliodb-border))] bg-white xl:flex xl:flex-col">
+          <div className="flex h-18 shrink-0 items-center border-b border-[rgb(var(--tabliodb-border))] px-5">
+            <LoadingSkeletonBlock className="h-5 w-24 rounded-[6px]" />
+            <LoadingSkeletonBlock className="ml-auto size-8 rounded-[var(--tabliodb-radius-md)]" />
+          </div>
+          <div className="space-y-5 p-5">
+            <div className="flex gap-2">
+              <LoadingSkeletonBlock className="h-7 w-24 rounded-full" />
+              <LoadingSkeletonBlock className="h-7 w-14 rounded-full" />
+            </div>
+            {Array.from({ length: 3 }, (_, index) => (
+              <div
+                className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-4"
+                key={index}
+              >
+                <LoadingSkeletonBlock className="h-4 w-28 rounded-[6px]" />
+                <LoadingSkeletonBlock className="mt-3 h-3 w-44 rounded-[5px]" />
+                <LoadingSkeletonBlock className="mt-4 h-11 rounded-[var(--tabliodb-radius-md)]" />
+              </div>
+            ))}
+          </div>
+        </aside>
+      </div>
     </main>
   );
 }
 
-function LoadingSkeletonBlock({ className }: { className: string }) {
-  return <div className={cn('animate-pulse bg-white/[0.075]', className)} />;
+function LoadingTableCard({ className }: { className: string }) {
+  return (
+    <div
+      className={cn(
+        'absolute w-72 overflow-hidden rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white shadow-[0_4px_0_rgb(var(--tabliodb-border))]',
+        className,
+      )}
+    >
+      <div className="flex h-11 items-center gap-2 border-b border-[rgb(var(--tabliodb-border))] px-3">
+        <LoadingSkeletonBlock className="size-3 rounded-full" />
+        <LoadingSkeletonBlock className="h-4 w-28 rounded-[6px]" />
+        <LoadingSkeletonBlock className="ml-auto h-4 w-6 rounded-[5px]" />
+      </div>
+      <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div className="grid h-9 grid-cols-[1fr_92px] items-center px-3" key={index}>
+            <LoadingSkeletonBlock className="h-3 w-24 rounded-[5px]" />
+            <LoadingSkeletonBlock className="h-3 w-16 justify-self-end rounded-[5px]" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function LoadingSkeletonDivider() {
-  return <div className="h-px w-6 bg-white/10" />;
+function LoadingSkeletonBlock({ className }: { className: string }) {
+  return <div className={cn('animate-pulse bg-[rgb(var(--tabliodb-skeleton))]', className)} />;
+}
+
+function getFallbackLoadingProgress(message: string): LoadingProgress {
+  if (/sso|sign-in/i.test(message)) {
+    return {
+      detail: 'Waiting for the identity provider callback.',
+      label: 'Authenticating',
+      value: 35,
+    };
+  }
+
+  if (/preparing/i.test(message)) {
+    return {
+      detail: 'Preparing the editor canvas.',
+      label: 'Preparing editor',
+      value: 88,
+    };
+  }
+
+  return {
+    detail: 'Loading the application shell.',
+    label: 'Loading shell',
+    value: 24,
+  };
+}
+
+function clampProgressValue(value: number): number {
+  return Math.max(0, Math.min(99, Math.round(value)));
 }
 
 export function ErrorState({
