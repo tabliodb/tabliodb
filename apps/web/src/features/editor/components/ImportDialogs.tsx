@@ -133,7 +133,8 @@ export function ImportJsonDialog({
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
+    const inputElement = event.currentTarget;
+    const file = inputElement.files?.[0];
 
     if (!file) {
       return;
@@ -143,7 +144,8 @@ export function ImportJsonDialog({
 
     // File upload hanya mengisi textarea; validasi dan preview tetap melalui jalur paste yang sama.
     form.setValue('json', content, { shouldDirty: true, shouldValidate: true });
-    event.currentTarget.value = '';
+    // React clears currentTarget after the async boundary, so the DOM input is captured before awaiting file.text().
+    inputElement.value = '';
   }
 
   async function handleSubmit() {
@@ -289,7 +291,8 @@ export function ImportSqlDialog({
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
+    const inputElement = event.currentTarget;
+    const file = inputElement.files?.[0];
 
     if (!file) {
       return;
@@ -299,7 +302,8 @@ export function ImportSqlDialog({
 
     // Upload .sql hanya mengisi textarea supaya paste dan file tetap memakai validator serta preview yang sama.
     form.setValue('sql', content, { shouldDirty: true, shouldValidate: true });
-    event.currentTarget.value = '';
+    // React clears currentTarget after the async boundary, so the DOM input is captured before awaiting file.text().
+    inputElement.value = '';
   }
 
   async function handleSubmit() {
