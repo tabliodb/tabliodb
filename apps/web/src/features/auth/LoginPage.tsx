@@ -36,8 +36,8 @@ const temporaryPasswordFormSchema = z
 type TemporaryPasswordFormState = z.infer<typeof temporaryPasswordFormSchema>;
 
 const loginDefaults: LoginFormState = {
-  email: 'owner@tabliodb.local',
-  password: 'tabliodb-dev',
+  email: '',
+  password: '',
 };
 
 export function LoginPage() {

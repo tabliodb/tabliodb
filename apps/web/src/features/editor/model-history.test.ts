@@ -1,6 +1,5 @@
-import { applyDiagramCommand } from '@tabliodb/schema-core';
+import { applyDiagramCommand, createStarterDiagramModel } from '@tabliodb/schema-core';
 import { describe, expect, it } from 'vitest';
-import { createSeedDiagramModel } from './diagram-model';
 import {
   createDiagramModelSignature,
   createEmptyEditorModelHistory,
@@ -8,6 +7,8 @@ import {
   recordLocalModelChange,
   undoLocalModelChange,
 } from './model-history';
+
+const createSeedDiagramModel = createStarterDiagramModel;
 
 describe('editor model history', () => {
   it('records only changed local models and clears redo after a new local edit', () => {

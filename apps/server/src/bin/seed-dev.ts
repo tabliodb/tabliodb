@@ -15,6 +15,7 @@ import { slugify } from '../utils/slug.js';
 const seedOwnerEmail = process.env.TABLIODB_DEV_OWNER_EMAIL ?? 'owner@tabliodb.local';
 const seedOwnerName = process.env.TABLIODB_DEV_OWNER_NAME ?? 'Tabliodb Owner';
 const seedOwnerPassword = process.env.TABLIODB_DEV_OWNER_PASSWORD ?? 'tabliodb-dev';
+// Demo values below are only written by the explicit db:seed/db:fresh:seed development scripts; production setup never imports this seed path.
 const seedWorkspaceName = process.env.TABLIODB_DEV_WORKSPACE_NAME ?? 'Personal Workspace';
 const seedProjectName = process.env.TABLIODB_DEV_PROJECT_NAME ?? 'Library System';
 const seedDiagramName = process.env.TABLIODB_DEV_DIAGRAM_NAME ?? 'Main schema';

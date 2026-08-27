@@ -275,7 +275,7 @@ export function CreateProjectDialog({
                   control={form.control}
                   disabled={!organizationId || createProjectMutation.isPending}
                   name="name"
-                  placeholder="Library System"
+                  placeholder="Backend schema"
                 />
                 <FieldError>{errors.name?.message}</FieldError>
               </label>
@@ -534,11 +534,7 @@ export function CreateDiagramDialog({
               Cancel
             </Button>
             <Button disabled={!canCreateInContext || isCreatingDiagram} type="submit">
-              {isCreatingDiagram ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <FileText className="size-4" />
-              )}
+              {isCreatingDiagram ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
               Create diagram
             </Button>
           </DialogFooter>

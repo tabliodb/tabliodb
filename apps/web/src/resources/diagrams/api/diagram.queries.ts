@@ -20,7 +20,7 @@ import type { PaginationQuery } from '@tabliodb/shared';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { diagramsKeys, type DiagramExportQuery } from './diagram.keys';
 
-export const defaultDiagramName = 'Main schema';
+export const defaultDiagramName = 'Untitled diagram';
 
 type DiagramsQueries = {
   effectiveAccess: (

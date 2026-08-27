@@ -124,7 +124,7 @@ export function SetupPage() {
   const setupMutation = useCompleteSetupMutation({
     mutationConfig: {
       onSuccess: () => {
-        // Setelah owner/workspace pertama dibuat, editor branch loader akan mengambil project starter yang valid.
+        // Setelah owner/workspace pertama dibuat, editor branch loader membuka workspace kosong agar user membuat diagram sendiri.
         navigate(routes.home.to(), { replace: true });
       },
     },

@@ -1,4 +1,4 @@
-import { applyDiagramCommand, getTableColumns } from '@tabliodb/schema-core';
+import { applyDiagramCommand, createStarterDiagramModel, getTableColumns } from '@tabliodb/schema-core';
 import { describe, expect, it } from 'vitest';
 import {
   addTableToDiagramModel,
@@ -8,11 +8,12 @@ import {
   createRealtimeRelationshipPatch,
   createRealtimeTablePatch,
   createRemoteSelectionConflict,
-  createSeedDiagramModel,
   createSnapshotSaveModel,
   normalizeEditorDiagramModel,
   shouldKeepLocalDiagramModelOverRealtime,
 } from './diagram-model';
+
+const createSeedDiagramModel = createStarterDiagramModel;
 
 describe('editor diagram model helpers', () => {
   it('adds a new table with persisted default columns', () => {

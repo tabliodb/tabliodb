@@ -1,10 +1,11 @@
 import {
   applyDiagramCommand,
+  createEmptyDiagramModel,
   createDiagramEntityId,
-  createStarterDiagramModel,
   getTableColumns,
   normalizeDiagramModel,
   type ColumnTypeSpec,
+  type DatabaseDialect,
   type CreateTableColumnInput,
   type DatabaseColumn,
   type DatabaseIndex,
@@ -112,9 +113,12 @@ export function formatColumnType(type: ColumnTypeSpec): string {
   return type.family;
 }
 
-export function createSeedDiagramModel(name = 'Library System'): DiagramModel {
-  // Frontend initial snapshots and server dev seed now share the same canonical starter diagram from schema-core.
-  return createStarterDiagramModel(name);
+export function createEmptyEditorDiagramModel(
+  name = 'Untitled diagram',
+  dialect: DatabaseDialect = 'postgresql',
+): DiagramModel {
+  // Production editor bootstraps unsaved diagrams as truly empty drafts; demo schemas belong only to explicit dev seed scripts.
+  return createEmptyDiagramModel(name, dialect);
 }
 
 export function addTableToDiagramModel(

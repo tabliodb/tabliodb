@@ -10,8 +10,6 @@ import {
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { projectsKeys, type ProjectListQuery } from './project.keys';
 
-export const defaultProjectName = 'Library System';
-
 type ProjectsQueries = {
   list: (
     query?: ProjectListQuery,

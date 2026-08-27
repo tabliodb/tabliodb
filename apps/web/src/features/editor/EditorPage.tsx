@@ -64,7 +64,7 @@ import {
   createRealtimeRelationshipPatch,
   createRealtimeTablePatch,
   createRemoteSelectionConflict,
-  createSeedDiagramModel,
+  createEmptyEditorDiagramModel,
   createSnapshotSaveModel,
   normalizeEditorDiagramModel,
   shouldKeepLocalDiagramModelOverRealtime,
@@ -264,11 +264,7 @@ export function EditorPage() {
   });
   const currentUser = currentUserQuery.data ?? null;
 
-  const snapshotsQuery = useQuery(
-    snapshotsQueries.listOrCreateInitial(activeDiagram, activeProject, (diagram) =>
-      createSeedDiagramModel(diagram.name),
-    ),
-  );
+  const snapshotsQuery = useQuery(snapshotsQueries.listByDiagram(activeDiagram?.id ?? '', { limit: 20 }));
   const reviewSignalsQuery = useQuery(
     reviewSignalQueries.listByDiagram(activeDiagram?.id ?? '', reviewSignalPageQuery),
   );
@@ -319,7 +315,7 @@ export function EditorPage() {
     projectName: activeProject?.name,
   });
 
-  const snapshots = snapshotsQuery.data ?? emptySnapshots;
+  const snapshots = snapshotsQuery.data?.items ?? emptySnapshots;
   const latestSnapshot = snapshots[0] ?? null;
   const currentDraftPersisted = model ? isCurrentDraftPersisted(model) : false;
   const shareLinks = shareLinksQuery.data?.items ?? [];
@@ -1160,8 +1156,10 @@ export function EditorPage() {
       return;
     }
 
-    // Empty read-only diagrams cannot create an initial snapshot, so the editor renders an unsaved empty model instead of spinning forever.
-    const seedModel = normalizeEditorDiagramModel(createSeedDiagramModel(activeDiagram.name));
+    // Diagram baru tidak boleh membawa template demo; editor merender draft kosong sampai user menambah table/note dan menyimpan snapshot pertama.
+    const seedModel = normalizeEditorDiagramModel(
+      createEmptyEditorDiagramModel(activeDiagram.name, toDatabaseDialect(activeDiagram.dialect)),
+    );
     loadedSnapshotIdRef.current = null;
     modelRef.current = seedModel;
     snapshotRecoveryModelRef.current = seedModel;
