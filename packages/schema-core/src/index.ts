@@ -368,13 +368,18 @@ export function createEmptyDiagramModel(
   };
 }
 
+/**
+ * @deprecated Use this only for explicit development seeds, documentation examples, and tests.
+ * Production diagram creation must start from createEmptyDiagramModel() so a new self-hosted
+ * workspace never receives prototype Library System data by accident.
+ */
 export function createStarterDiagramModel(
   name = 'Library System',
   dialect: DatabaseDialect = 'postgresql',
 ): DiagramModel {
   const now = new Date().toISOString();
 
-  // Starter model lives in schema-core so dev seed, server defaults, and frontend empty-state creation share one canonical shape.
+  // Starter model stays in schema-core so dev seed, docs examples, and tests share one canonical prototype shape.
   return applyDiagramCommands(
     createEmptyDiagramModel(name, dialect),
     [

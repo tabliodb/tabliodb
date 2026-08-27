@@ -384,7 +384,7 @@ export function CreateDiagramDialog({
   const createDiagramMutation = useCreateDiagramMutation({
     mutationConfig: {
       onSuccess: (diagram) => {
-        // New diagram becomes the active route; the editor will create its first snapshot through the existing snapshot flow.
+        // New diagram becomes an empty unsaved draft; the first persisted snapshot is created only when the user clicks Snapshot.
         form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
         handleOpenChange(false);
         onCreated(diagram);
