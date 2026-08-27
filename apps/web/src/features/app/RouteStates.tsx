@@ -3,18 +3,82 @@ import { Button, Surface, cn } from '@tabliodb/ui';
 import { AlertCircle, Inbox, Loader2, RefreshCw } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
 import { isRouteErrorResponse } from 'react-router';
+import LOGO from '@/assets/logo.svg';
 
 type StateIcon = ComponentType<{ className?: string }>;
 
 export function LoadingState({ message = 'Loading workspace' }: { message?: string }) {
   return (
-    <main className="grid h-screen place-items-center bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink-muted))]">
-      <Surface className="flex items-center gap-2 p-4 text-sm font-extrabold">
-        <Loader2 className="size-4 animate-spin" />
-        {message}
-      </Surface>
+    <main
+      aria-busy="true"
+      aria-live="polite"
+      className="relative flex h-dvh overflow-hidden bg-[#202020] text-white"
+      role="status"
+    >
+      <span className="sr-only">{message}</span>
+
+      {/* The global fallback mirrors the editor chrome so lazy-loaded routes feel like the same app shell while data/code loads. */}
+      <section className="hidden w-[78px] shrink-0 border-r border-white/10 bg-[#252525] p-4 md:flex md:flex-col md:items-center md:gap-6">
+        <LoadingSkeletonBlock className="size-11 rounded-[10px]" />
+        <LoadingSkeletonDivider />
+        {Array.from({ length: 5 }, (_, index) => (
+          <LoadingSkeletonBlock className="size-11 rounded-[10px]" key={index} />
+        ))}
+        <LoadingSkeletonDivider />
+        <LoadingSkeletonBlock className="size-11 rounded-[10px]" />
+      </section>
+
+      <section className="hidden w-[332px] shrink-0 border-r border-white/10 bg-[#2b2b2b] md:block">
+        <div className="flex h-18 items-center gap-7 border-b border-white/10 px-4">
+          <LoadingSkeletonBlock className="size-11 rounded-[10px]" />
+          <LoadingSkeletonBlock className="h-11 w-16 rounded-[8px]" />
+          <LoadingSkeletonBlock className="ml-auto size-11 rounded-[10px]" />
+        </div>
+        <div className="border-b border-white/10 px-4 py-5">
+          <LoadingSkeletonBlock className="h-5 w-32 rounded-[6px]" />
+        </div>
+        <div className="space-y-6 px-14 py-5">
+          <LoadingSkeletonBlock className="h-6 w-44 rounded-[7px]" />
+          <LoadingSkeletonBlock className="h-6 w-32 rounded-[7px]" />
+          <LoadingSkeletonBlock className="h-6 w-20 rounded-[7px]" />
+          <LoadingSkeletonBlock className="h-6 w-44 rounded-[7px]" />
+          <LoadingSkeletonBlock className="h-6 w-20 rounded-[7px]" />
+        </div>
+      </section>
+
+      <section className="relative min-w-0 flex-1 bg-[#1f1f1f]">
+        <div className="flex h-18 items-center justify-between border-b border-white/10 px-4 md:hidden">
+          <LoadingSkeletonBlock className="h-11 w-32 rounded-[10px]" />
+          <LoadingSkeletonBlock className="size-11 rounded-[10px]" />
+        </div>
+        <div className="absolute left-1/2 top-1/2 grid w-[min(74vw,300px)] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-7">
+          <img alt="" className="h-10 w-auto brightness-0 invert" src={LOGO} />
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+            <div className="h-full w-[48%] rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.28)]" />
+          </div>
+        </div>
+      </section>
+
+      <section className="hidden w-[330px] shrink-0 border-l border-white/10 bg-[#2b2b2b] xl:block">
+        <div className="grid h-[116px] grid-cols-[68px_1fr_1fr] gap-3 border-b border-white/10 p-4">
+          <LoadingSkeletonBlock className="h-8 rounded-full" />
+          <LoadingSkeletonBlock className="h-11 rounded-[8px]" />
+          <LoadingSkeletonBlock className="h-11 rounded-[8px]" />
+          <LoadingSkeletonBlock className="h-8 rounded-[7px]" />
+          <LoadingSkeletonBlock className="h-8 rounded-[7px]" />
+          <LoadingSkeletonBlock className="h-8 rounded-[7px]" />
+        </div>
+      </section>
     </main>
   );
+}
+
+function LoadingSkeletonBlock({ className }: { className: string }) {
+  return <div className={cn('animate-pulse bg-white/[0.075]', className)} />;
+}
+
+function LoadingSkeletonDivider() {
+  return <div className="h-px w-6 bg-white/10" />;
 }
 
 export function ErrorState({

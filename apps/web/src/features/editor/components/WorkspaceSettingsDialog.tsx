@@ -1772,10 +1772,12 @@ function OrganizationMemberRow({
   onTransferOwnership: (member: OrganizationMemberDto) => void;
 }) {
   const isBusy = isRemoving || isTransferring || isUpdating;
+  const isSelf = member.userId === currentUserId;
   const normalizedRole = toOrganizationRoleValue(member.role);
   const isOwner = normalizedRole === OrganizationRole.Owner;
-  const canRemove = !isOwner;
-  const canTransferThisMember = canTransferOwnership && member.userId !== currentUserId && !isOwner;
+  const canEditRole = !isOwner && !isSelf;
+  const canRemove = !isOwner && !isSelf;
+  const canTransferThisMember = canTransferOwnership && !isSelf && !isOwner;
 
   return (
     <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_230px_auto] sm:items-center">
@@ -1789,10 +1791,14 @@ function OrganizationMemberRow({
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
         </div>
       </div>
-      {isOwner ? (
+      {!canEditRole ? (
         <div className="text-left sm:text-right">
-          <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">Owner</div>
-          <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">Managed by transfer</div>
+          <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">
+            {formatOrganizationRole(normalizedRole)}
+          </div>
+          <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+            {isSelf ? 'Your access' : 'Managed by transfer'}
+          </div>
         </div>
       ) : (
         <Select

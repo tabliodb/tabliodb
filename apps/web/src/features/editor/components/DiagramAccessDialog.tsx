@@ -346,10 +346,11 @@ function DiagramAccessPersonRow({
   onTransferOwnership: (member: DiagramEffectiveAccessDto) => void;
 }) {
   const isBusy = isRemoving || isTransferring || isUpdating;
+  const isSelf = member.userId === currentUserId;
   const isDirectEditable = Boolean(member.directRole);
   const directRole = member.directRole ?? member.role;
-  const canEditDirectRole = isDirectEditable && directRole !== 'owner';
-  const canTransferOwnership = member.userId !== currentUserId && member.role !== 'owner';
+  const canEditDirectRole = isDirectEditable && directRole !== 'owner' && !isSelf;
+  const canTransferOwnership = !isSelf && member.role !== 'owner';
 
   return (
     <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
@@ -405,8 +406,12 @@ function DiagramAccessPersonRow({
           </div>
         ) : isDirectEditable ? (
           <div className="text-right">
-            <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">Owner</div>
-            <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">Managed separately</div>
+            <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">
+              {formatDiagramRole(directRole)}
+            </div>
+            <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+              {isSelf ? 'Your access' : 'Managed separately'}
+            </div>
           </div>
         ) : (
           <div className="text-right">
