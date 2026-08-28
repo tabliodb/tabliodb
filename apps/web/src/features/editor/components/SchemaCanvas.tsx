@@ -56,6 +56,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -1476,14 +1477,49 @@ export function SchemaCanvas({
     });
   }
 
-  function handleRelationshipCardinalityChange(cardinality: DatabaseRelationship['cardinality']) {
-    if (!activeRelationship || readOnly || activeRelationship.cardinality === cardinality) {
+  function handleRelationshipCardinalityChange(intent: RelationshipQuickCardinalityIntent) {
+    if (!activeRelationship || readOnly) {
       return;
     }
 
+    if (intent === 'one_to_one') {
+      if (activeRelationship.cardinality === 'one_to_one') {
+        return;
+      }
+
+      onModelChange(
+        applyDiagramCommand(model, {
+          changes: { cardinality: 'one_to_one' },
+          relationshipId: activeRelationship.id,
+          type: 'relationship.update',
+        }),
+      );
+      return;
+    }
+
+    const sourceIsVisuallyFirst = isRelationshipSourceVisuallyFirst(model, activeRelationship);
+    const sourceShouldBeVisuallyFirst = intent === 'one_to_many';
+    const shouldReverseEndpoints = sourceIsVisuallyFirst !== sourceShouldBeVisuallyFirst;
+
+    if (activeRelationship.cardinality === 'one_to_many' && !shouldReverseEndpoints) {
+      return;
+    }
+
+    // 1:N and N:1 are UI intents relative to the visible left-to-right order.
+    // The stored model remains normalized: source is the referenced side, target is the FK side.
+    const changes: Partial<Omit<DatabaseRelationship, 'id'>> = shouldReverseEndpoints
+      ? {
+          cardinality: 'one_to_many',
+          sourceColumnIds: activeRelationship.targetColumnIds,
+          sourceTableId: activeRelationship.targetTableId,
+          targetColumnIds: activeRelationship.sourceColumnIds,
+          targetTableId: activeRelationship.sourceTableId,
+        }
+      : { cardinality: 'one_to_many' };
+
     onModelChange(
       applyDiagramCommand(model, {
-        changes: { cardinality },
+        changes,
         relationshipId: activeRelationship.id,
         type: 'relationship.update',
       }),
@@ -1823,19 +1859,23 @@ function RelationshipQuickEditor({
 }: {
   left: number;
   model: DiagramModel;
-  onCardinalityChange: (cardinality: DatabaseRelationship['cardinality']) => void;
+  onCardinalityChange: (intent: RelationshipQuickCardinalityIntent) => void;
   onClose: () => void;
   onDelete: () => void;
   readOnly: boolean;
   relationship: DatabaseRelationship;
   top: number;
 }) {
-  const sourceLabel = getRelationshipEndpointLabel(model, relationship, 'source');
-  const targetLabel = getRelationshipEndpointLabel(model, relationship, 'target');
-  const cardinalityOptions: Array<{ label: string; value: DatabaseRelationship['cardinality'] }> = [
-    { label: '1:1', value: 'one_to_one' },
-    { label: '1:N', value: 'one_to_many' },
-    { label: 'N:N', value: 'many_to_many' },
+  const sourceEndpoint = getRelationshipQuickEndpoint(model, relationship, 'source');
+  const targetEndpoint = getRelationshipQuickEndpoint(model, relationship, 'target');
+  const sourceIsVisuallyFirst = isRelationshipSourceVisuallyFirst(model, relationship);
+  const leftEndpoint = sourceIsVisuallyFirst ? sourceEndpoint : targetEndpoint;
+  const rightEndpoint = sourceIsVisuallyFirst ? targetEndpoint : sourceEndpoint;
+  const activeIntent = getRelationshipQuickCardinalityIntent(model, relationship);
+  const cardinalityOptions: RelationshipQuickCardinalityOption[] = [
+    { intent: 'one_to_one', label: '1:1' },
+    { intent: 'one_to_many', label: '1:N' },
+    { intent: 'many_to_one', label: 'N:1' },
   ];
 
   return (
@@ -1847,9 +1887,9 @@ function RelationshipQuickEditor({
       style={{ left, top }}
     >
       <div className="grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)_28px] items-center gap-2">
-        <RelationshipEndpointPill label={sourceLabel} tone="source" />
+        <RelationshipEndpointPill color={leftEndpoint.color} label={leftEndpoint.label} />
         <ArrowRight className="mx-auto size-4 text-[rgb(var(--tabliodb-ink-subtle))]" />
-        <RelationshipEndpointPill label={targetLabel} tone="target" />
+        <RelationshipEndpointPill color={rightEndpoint.color} label={rightEndpoint.label} />
         <button
           aria-label="Close relationship actions"
           className="grid size-7 cursor-pointer place-items-center rounded-full text-[rgb(var(--tabliodb-ink-muted))] outline-none transition hover:bg-[rgb(var(--tabliodb-surface))] hover:text-[rgb(var(--tabliodb-ink))] focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
@@ -1863,16 +1903,16 @@ function RelationshipQuickEditor({
         <div className="inline-flex rounded-[14px] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-1">
           {cardinalityOptions.map((option) => (
             <button
-              aria-pressed={relationship.cardinality === option.value}
+              aria-pressed={activeIntent === option.intent}
               className={cn(
                 'h-8 min-w-12 cursor-pointer rounded-[10px] px-3 text-xs font-black outline-none transition-[background,border-color,box-shadow,color,transform] focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50',
-                relationship.cardinality === option.value
+                activeIntent === option.intent
                   ? 'bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_2px_0_rgb(var(--tabliodb-primary-shadow))]'
                   : 'text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-primary-soft))] hover:text-[rgb(var(--tabliodb-primary-text))]',
               )}
               disabled={readOnly}
-              key={option.value}
-              onClick={() => onCardinalityChange(option.value)}
+              key={option.label}
+              onClick={() => onCardinalityChange(option.intent)}
               type="button"
             >
               {option.label}
@@ -1893,28 +1933,90 @@ function RelationshipQuickEditor({
   );
 }
 
-function RelationshipEndpointPill({ label, tone }: { label: string; tone: 'source' | 'target' }) {
+type RelationshipQuickCardinalityIntent = 'one_to_one' | 'one_to_many' | 'many_to_one';
+
+type RelationshipQuickCardinalityOption = {
+  intent: RelationshipQuickCardinalityIntent;
+  label: string;
+};
+
+type RelationshipQuickEndpoint = {
+  color: string;
+  label: string;
+};
+
+function getRelationshipQuickEndpoint(
+  model: DiagramModel,
+  relationship: DatabaseRelationship,
+  role: 'source' | 'target',
+): RelationshipQuickEndpoint {
+  const tableId = role === 'source' ? relationship.sourceTableId : relationship.targetTableId;
+
+  return {
+    // Endpoint pills mirror the actual table color so relationship editing keeps the same visual language as the canvas.
+    color: getDisplayTableColor(model.tables[tableId]?.color),
+    label: getRelationshipEndpointLabel(model, relationship, role),
+  };
+}
+
+function getRelationshipQuickCardinalityIntent(
+  model: DiagramModel,
+  relationship: DatabaseRelationship,
+): RelationshipQuickCardinalityIntent | null {
+  if (relationship.cardinality === 'one_to_one') {
+    return 'one_to_one';
+  }
+
+  if (relationship.cardinality !== 'one_to_many') {
+    return null;
+  }
+
+  // DrawSQL reads the popover from the visible left endpoint to the visible right endpoint.
+  // When the normalized source is on the right, the user-facing relationship becomes N:1.
+  return isRelationshipSourceVisuallyFirst(model, relationship) ? 'one_to_many' : 'many_to_one';
+}
+
+function isRelationshipSourceVisuallyFirst(model: DiagramModel, relationship: DatabaseRelationship): boolean {
+  const sourceCenter = getRelationshipTableVisualCenter(model.tables[relationship.sourceTableId]);
+  const targetCenter = getRelationshipTableVisualCenter(model.tables[relationship.targetTableId]);
+
+  if (sourceCenter.x !== targetCenter.x) {
+    return sourceCenter.x < targetCenter.x;
+  }
+
+  if (sourceCenter.y !== targetCenter.y) {
+    return sourceCenter.y < targetCenter.y;
+  }
+
+  return relationship.sourceTableId.localeCompare(relationship.targetTableId) <= 0;
+}
+
+function getRelationshipTableVisualCenter(table?: DatabaseTable): { x: number; y: number } {
+  if (!table) {
+    return { x: 0, y: 0 };
+  }
+
+  return {
+    x: table.position.x + (table.width ?? defaultTableMinWidth) / 2,
+    y: table.position.y,
+  };
+}
+
+function RelationshipEndpointPill({ color, label }: { color: string; label: string }) {
+  const style = {
+    '--relationship-accent': color,
+    backgroundColor: `color-mix(in srgb, ${color} 10%, white)`,
+    borderColor: `color-mix(in srgb, ${color} 42%, rgb(var(--tabliodb-border-strong)))`,
+    color: `color-mix(in srgb, ${color} 62%, rgb(var(--tabliodb-ink)))`,
+  } as CSSProperties;
+
   return (
     <div
-      className={cn(
-        'min-w-0 rounded-[13px] border px-3 py-2 shadow-[0_1px_0_rgb(var(--tabliodb-border))]',
-        tone === 'source'
-          ? 'border-[rgb(var(--tabliodb-lavender-border))] bg-[rgb(var(--tabliodb-lavender-soft))]'
-          : 'border-[rgb(var(--tabliodb-teal-border))] bg-[rgb(var(--tabliodb-teal-soft))]',
-      )}
+      className="min-w-0 rounded-[13px] border px-3 py-2 shadow-[0_1px_0_rgb(var(--tabliodb-border))]"
+      style={style}
     >
-      <span
-        className={cn(
-          'mb-1 block size-1.5 rounded-full',
-          tone === 'source' ? 'bg-[rgb(var(--tabliodb-lavender))]' : 'bg-[rgb(var(--tabliodb-teal))]',
-        )}
-      />
-      <span
-        className={cn(
-          'block truncate font-mono text-[11px] font-black leading-none',
-          tone === 'source' ? 'text-[rgb(var(--tabliodb-lavender-text))]' : 'text-[rgb(var(--tabliodb-teal-text))]',
-        )}
-      >
+      <span className="mb-1 block size-1.5 rounded-full" style={{ backgroundColor: color }} />
+      <span className="block truncate font-mono text-[11px] font-black leading-none">
         {label}
       </span>
     </div>
