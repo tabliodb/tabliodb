@@ -53,8 +53,9 @@ export function Select({
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
         <SelectPrimitive.Content
+          data-tabliodb-select-content=""
           className={cn(
-            'z-[80] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_32px_rgb(15_23_42/0.12)]',
+            'z-[120] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_14px_32px_rgb(15_23_42/0.12)]',
             contentClassName,
           )}
           position="popper"

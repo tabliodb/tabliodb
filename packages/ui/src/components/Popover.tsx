@@ -43,7 +43,7 @@ PopoverTrigger.displayName = PopoverPrimitive.Trigger.displayName;
 export const PopoverContent = forwardRef<
   ElementRef<typeof PopoverPrimitive.Content>,
   ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ align = 'start', className, sideOffset = 10, ...props }, ref) => (
+>(({ align = 'start', className, onFocusOutside, onInteractOutside, sideOffset = 10, ...props }, ref) => (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       align={align}
@@ -52,6 +52,20 @@ export const PopoverContent = forwardRef<
         'z-[90] w-80 origin-[var(--radix-popover-content-transform-origin)] rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-3 text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_16px_38px_rgb(15_23_42/0.13)] outline-none transition-[opacity,transform] data-[state=open]:scale-100 data-[state=open]:opacity-100 data-[state=closed]:scale-95 data-[state=closed]:opacity-0',
         className,
       )}
+      onFocusOutside={(event) => {
+        if (isNestedSelectInteraction(event.target)) {
+          event.preventDefault();
+        }
+
+        onFocusOutside?.(event);
+      }}
+      onInteractOutside={(event) => {
+        if (isNestedSelectInteraction(event.target)) {
+          event.preventDefault();
+        }
+
+        onInteractOutside?.(event);
+      }}
       ref={ref}
       sideOffset={sideOffset}
       {...props}
@@ -59,3 +73,7 @@ export const PopoverContent = forwardRef<
   </PopoverPrimitive.Portal>
 ));
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
+
+function isNestedSelectInteraction(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest('[data-tabliodb-select-content]'));
+}
