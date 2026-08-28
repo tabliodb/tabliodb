@@ -103,6 +103,8 @@ const relationshipConnectorName = 'tabliodb-relationship-orthogonal-rounded';
 const relationshipConnectorRadius = 10;
 const relationshipNeutralColor = '#A0A0A0';
 const relationshipPortRadius = 4;
+const relationshipQuickEditorHeight = 156;
+const relationshipQuickEditorWidth = 360;
 
 const relationshipObstaclePadding = 12;
 const relationshipRouteFanLength = 18;
@@ -355,6 +357,7 @@ export function SchemaCanvas({
   const floatingInsetLeftRef = useRef(floatingInsetLeft);
   const floatingInsetRightRef = useRef(floatingInsetRight);
   const modelRef = useRef(model);
+  const pendingRelationshipMenuRef = useRef<RelationshipMenuState | null>(null);
   const selectedTableIdRef = useRef(selectedTableId);
   const selectedRelationshipIdRef = useRef<string | null>(null);
   const resizingTableIdRef = useRef<string | null>(null);
@@ -434,6 +437,19 @@ export function SchemaCanvas({
   }, [remoteCursors]);
 
   useEffect(() => {
+    const pendingRelationshipMenu = pendingRelationshipMenuRef.current;
+
+    if (!pendingRelationshipMenu || !model.relationships[pendingRelationshipMenu.relationshipId]) {
+      return;
+    }
+
+    // Auto-open relationship actions only after React receives the created relationship in the canonical model.
+    // This avoids a transient render where the menu points to an ID that still looks missing.
+    pendingRelationshipMenuRef.current = null;
+    setRelationshipMenu(pendingRelationshipMenu);
+  }, [model.relationships]);
+
+  useEffect(() => {
     if (relationshipMenu && !model.relationships[relationshipMenu.relationshipId]) {
       // Popup relationship ikut ditutup saat relationship dihapus dari model agar UI tidak menunjuk edge stale.
       setRelationshipMenu(null);
@@ -507,6 +523,10 @@ export function SchemaCanvas({
           },
         },
         connectionPoint: 'boundary',
+        createEdge() {
+          // The temporary drag edge should look like Tabliodb relationships, not X6's black arrow default.
+          return this.createEdge(createDraftRelationshipEdgeMetadata());
+        },
         highlight: true,
         router: { name: 'manhattan', args: buildManhattanRouterArgs() },
         snap: { radius: 24 },
@@ -543,6 +563,31 @@ export function SchemaCanvas({
 
     // X6 couples node movement snapping to the visible grid size; keeping the visual grid at 24px while snapping at 1px makes drag placement precise.
     graph.getGridSize = () => diagramDragGridSize;
+
+    const createRelationshipMenuStateFromEvent = (
+      event: MouseEvent,
+      relationshipId: string,
+    ): RelationshipMenuState => {
+      const containerRect = container.getBoundingClientRect();
+      const safeMinLeft = Math.min(
+        floatingInsetLeftRef.current + 12,
+        Math.max(12, containerRect.width - relationshipQuickEditorWidth - 12),
+      );
+      const safeMaxLeft = Math.max(
+        safeMinLeft,
+        containerRect.width - floatingInsetRightRef.current - relationshipQuickEditorWidth - 12,
+      );
+
+      return {
+        left: clamp(event.clientX - containerRect.left - relationshipQuickEditorWidth / 2, safeMinLeft, safeMaxLeft),
+        relationshipId,
+        top: clamp(
+          event.clientY - containerRect.top - relationshipQuickEditorHeight / 2,
+          12,
+          containerRect.height - relationshipQuickEditorHeight - 12,
+        ),
+      };
+    };
 
     const getCommentMarkerFromEvent = (event: MouseEvent) => {
       const target = getElementFromEventTarget(event.target);
@@ -659,25 +704,13 @@ export function SchemaCanvas({
         return;
       }
 
-      const containerRect = container.getBoundingClientRect();
       const event = e as unknown as MouseEvent;
-      const menuWidth = 360;
-      const menuHeight = 156;
-      const safeMinLeft = Math.min(
-        floatingInsetLeftRef.current + 12,
-        Math.max(12, containerRect.width - menuWidth - 12),
-      );
-      const safeMaxLeft = Math.max(safeMinLeft, containerRect.width - floatingInsetRightRef.current - menuWidth - 12);
 
-      setRelationshipMenu({
-        left: clamp(event.clientX - containerRect.left - menuWidth / 2, safeMinLeft, safeMaxLeft),
-        relationshipId: relationship.id,
-        top: clamp(event.clientY - containerRect.top - menuHeight / 2, 12, containerRect.height - menuHeight - 12),
-      });
+      setRelationshipMenu(createRelationshipMenuStateFromEvent(event, relationship.id));
       setTableContextMenu(null);
     });
 
-    graph.on('edge:connected', ({ edge, isNew }) => {
+    graph.on('edge:connected', ({ edge, e, isNew }) => {
       if (!isNew || readOnly) {
         return;
       }
@@ -698,9 +731,15 @@ export function SchemaCanvas({
         return;
       }
 
+      // The quick editor opens after the new relationship appears in React state, so the menu always points to a real edge.
+      pendingRelationshipMenuRef.current = createRelationshipMenuStateFromEvent(
+        e as unknown as MouseEvent,
+        nextRelationshipCommand.relationshipId,
+      );
       onModelChangeRef.current(applyDiagramCommand(modelRef.current, nextRelationshipCommand));
       onSelectedTableChangeRef.current(nextRelationshipCommand.targetTableId);
       onColumnSelectRef.current?.(nextRelationshipCommand.targetColumnIds[0]);
+      setTableContextMenu(null);
     });
 
     const handleCommentMarkerMouseDown = (event: MouseEvent) => {
@@ -3087,6 +3126,33 @@ function syncRelationshipEdge(graph: Graph, metadata: EdgeMetadata): void {
   existing.setZIndex(metadata.zIndex ?? 0);
 }
 
+function createDraftRelationshipEdgeMetadata(): EdgeMetadata {
+  return {
+    attrs: {
+      line: {
+        // Draft edges use the same neutral language as saved relationships and explicitly remove X6's default arrow marker.
+        sourceMarker: null,
+        stroke: relationshipNeutralColor,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        strokeWidth: 1.5,
+        targetMarker: null,
+      },
+    },
+    connector: {
+      name: relationshipConnectorName,
+      args: {
+        minimumRoundedSegment: relationshipConnectorMinimumRoundedSegment,
+        radius: relationshipConnectorRadius,
+        straightEndpointVertices: relationshipConnectorStraightEndpointVertices,
+      },
+    },
+    labels: [],
+    router: { name: 'manhattan', args: buildManhattanRouterArgs() },
+    zIndex: 2,
+  };
+}
+
 function getRelationshipTerminalSignature(terminal: unknown): string {
   if (typeof terminal === 'string') {
     return `cell:${terminal}`;
@@ -3934,7 +4000,10 @@ function createRelationshipCommandFromPorts(
   }
 
   return {
-    cardinality: 'one_to_many' as const,
+    // New drag-created relationships start as 1:1 so the visual result is a plain line first.
+    // The quick editor opens immediately after creation for choosing 1:N or N:1 when needed.
+    cardinality: 'one_to_one' as const,
+    relationshipId: createDiagramEntityId('relationship'),
     sourceColumnIds: [primaryPort.columnId],
     sourceTableId: primaryPort.tableId,
     targetColumnIds: [foreignPort.columnId],
