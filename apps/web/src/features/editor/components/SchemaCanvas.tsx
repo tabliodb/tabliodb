@@ -391,6 +391,7 @@ export function SchemaCanvas({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const fitKeyRef = useRef<string | null>(null);
+  const pendingFitFrameRef = useRef(0);
   const floatingInsetLeftRef = useRef(floatingInsetLeft);
   const floatingInsetRightRef = useRef(floatingInsetRight);
   const modelRef = useRef(model);
@@ -1629,6 +1630,11 @@ export function SchemaCanvas({
         window.cancelAnimationFrame(localCursorFrameRef.current);
         localCursorFrameRef.current = 0;
       }
+      if (pendingFitFrameRef.current) {
+        // Fit bisa dijadwalkan dua frame setelah sync model; cleanup ini mencegah graph lama dipakai setelah diagram berpindah.
+        window.cancelAnimationFrame(pendingFitFrameRef.current);
+        pendingFitFrameRef.current = 0;
+      }
       graph.dispose();
       graphRef.current = null;
 
@@ -1662,7 +1668,7 @@ export function SchemaCanvas({
 
     if (fitKeyRef.current !== fitKey) {
       fitKeyRef.current = fitKey;
-      fitGraphContent(graph);
+      requestGraphContentFit();
     }
   }, [
     commentTargetSummaries,
@@ -1679,7 +1685,7 @@ export function SchemaCanvas({
     const graph = graphRef.current;
 
     if (graph && fitSignal > 0) {
-      fitGraphContent(graph);
+      requestGraphContentFit();
     }
   }, [fitSignal]);
 
@@ -1801,6 +1807,34 @@ export function SchemaCanvas({
 
   function handleMinimapCenter(x: number, y: number) {
     graphRef.current?.centerPoint(x, y);
+  }
+
+  function requestGraphContentFit() {
+    const graph = graphRef.current;
+    const container = containerRef.current;
+
+    if (!graph || !container || typeof window === 'undefined') {
+      return;
+    }
+
+    if (pendingFitFrameRef.current) {
+      window.cancelAnimationFrame(pendingFitFrameRef.current);
+    }
+
+    pendingFitFrameRef.current = window.requestAnimationFrame(() => {
+      pendingFitFrameRef.current = window.requestAnimationFrame(() => {
+        pendingFitFrameRef.current = 0;
+
+        if (graphRef.current !== graph || containerRef.current !== container) {
+          return;
+        }
+
+        fitGraphContent(graph, container, {
+          left: floatingInsetLeftRef.current,
+          right: floatingInsetRightRef.current,
+        });
+      });
+    });
   }
 
   const activeRelationship = relationshipMenu ? (model.relationships[relationshipMenu.relationshipId] ?? null) : null;
@@ -5080,12 +5114,34 @@ function areNoteNodeDataEqual(current: NoteNodeData | undefined, next: NoteNodeD
   );
 }
 
-function fitGraphContent(graph: Graph): void {
-  graph.zoomToFit({
-    maxScale: 1,
-    padding: 80,
-  });
-  graph.centerContent();
+function fitGraphContent(graph: Graph, container: HTMLElement, inset: { left: number; right: number }): void {
+  const contentArea = graph.getContentArea({ useCellGeometry: true });
+  const contentWidth = Number(contentArea.width);
+  const contentHeight = Number(contentArea.height);
+
+  if (!Number.isFinite(contentWidth) || !Number.isFinite(contentHeight) || contentWidth <= 0 || contentHeight <= 0) {
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const visibleLeft = Math.min(containerRect.width - 1, Math.max(0, inset.left));
+  const visibleRight = Math.max(visibleLeft + 1, containerRect.width - Math.max(0, inset.right));
+  const visibleWidth = Math.max(1, visibleRight - visibleLeft);
+  const visibleHeight = Math.max(1, containerRect.height);
+  const horizontalPadding = Math.min(80, Math.max(36, visibleWidth * 0.12));
+  const verticalPadding = Math.min(80, Math.max(36, visibleHeight * 0.12));
+  const availableWidth = Math.max(1, visibleWidth - horizontalPadding * 2);
+  const availableHeight = Math.max(1, visibleHeight - verticalPadding * 2);
+  const rawScale = Math.min(availableWidth / contentWidth, availableHeight / contentHeight);
+  const nextScale = Math.min(1, Math.max(0.02, Number.isFinite(rawScale) ? rawScale : 1));
+  const centerX = Number(contentArea.x) + contentWidth / 2;
+  const centerY = Number(contentArea.y) + contentHeight / 2;
+  const visibleCenterX = visibleLeft + visibleWidth / 2;
+  const visibleCenterY = visibleHeight / 2;
+
+  graph.scale(nextScale, nextScale);
+  // Fit harus menempatkan pusat content ke pusat area yang benar-benar terlihat, bukan pusat container yang tertutup sidebar overlay.
+  graph.translate(visibleCenterX - centerX * nextScale, visibleCenterY - centerY * nextScale);
 }
 
 function getRelationshipEndpointLabel(
