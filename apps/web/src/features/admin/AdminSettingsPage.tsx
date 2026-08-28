@@ -15,7 +15,7 @@ import {
   ShieldCheck,
   UserPlus,
 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
@@ -38,6 +38,27 @@ const signupPolicyOptions = [
 const oidcAutoJoinRoleOptions = [AutoJoinOrganizationRole.Member, AutoJoinOrganizationRole.Guest] as const;
 const oidcAutoJoinNoneValue = '__none__';
 const smtpSecurityOptions = [SmtpSecurity.Starttls, SmtpSecurity.Tls, SmtpSecurity.None] as const;
+const settingsSections = [
+  {
+    description: 'Password entry, invites, and allowed domains',
+    icon: UserPlus,
+    id: 'signup',
+    label: 'Sign-up',
+  },
+  {
+    description: 'OIDC login and workspace auto-join',
+    icon: ShieldCheck,
+    id: 'oidc',
+    label: 'SSO',
+  },
+  {
+    description: 'SMTP delivery for invites and notifications',
+    icon: MailCheck,
+    id: 'smtp',
+    label: 'Mail',
+  },
+] as const;
+type SettingsSectionId = (typeof settingsSections)[number]['id'];
 
 const authSettingsFormSchema = z
   .object({
@@ -181,6 +202,7 @@ const selectClassName =
   'h-[var(--tabliodb-control-md)] w-full cursor-pointer rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50';
 
 export function AdminSettingsPage() {
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>('signup');
   const authSettingsQuery = useQuery(setupQueries.authSettings());
   const oidcProviderQuery = useQuery(setupQueries.oidcProvider());
   const smtpSettingsQuery = useQuery(setupQueries.smtpSettings());
@@ -412,512 +434,570 @@ export function AdminSettingsPage() {
   return (
     <div className="mx-auto grid min-w-0 w-full max-w-5xl gap-6 px-4 py-4 sm:px-5 sm:py-5">
       <SettingsHeader
-        description="Control how new employees can enter this self-hosted Tabliodb instance."
-        title="Sign-up policy"
+        description="Configure instance-wide entry, SSO, and mail delivery without mixing workspace sharing rules."
+        title="Instance settings"
       />
 
-      <form className="grid gap-5" onSubmit={authForm.handleSubmit(handleAuthSubmit)}>
-        <Surface className="grid gap-4 p-4" depth="md">
-          <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <label className="block text-sm">
-              <FieldLabel>Policy</FieldLabel>
-              <ControlledSelect
-                className={selectClassName}
-                control={authForm.control}
-                disabled={updateAuthSettingsMutation.isPending}
-                name="signupPolicy"
-                options={signupPolicyOptions.map((policy) => ({
-                  label: formatSignupPolicy(policy),
-                  value: policy,
-                }))}
-              />
-              <FieldError>{authErrors.signupPolicy?.message}</FieldError>
-            </label>
+      <SettingsTabList activeSection={activeSection} onSectionChange={setActiveSection} />
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              {signupPolicyOptions.map((policy) => (
-                <div
-                  className={cn(
-                    'rounded-[var(--tabliodb-radius-lg)] border-2 p-3 text-left transition',
-                    selectedPolicy === policy
-                      ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))]'
-                      : 'border-[rgb(var(--tabliodb-border))] bg-white',
-                  )}
-                  key={policy}
-                >
-                  <div className="mb-2 flex items-center gap-2 text-sm font-extrabold">
-                    <SignupPolicyIcon policy={policy} />
-                    {formatSignupPolicy(policy)}
-                  </div>
-                  <p className="text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                    {describeSignupPolicy(policy)}
+      {activeSection === 'signup' ? (
+        <section className="grid gap-5">
+          <SettingsHeader
+            description="Control how new employees can enter this self-hosted Tabliodb instance."
+            title="Sign-up policy"
+          />
+
+          <form className="grid gap-5" onSubmit={authForm.handleSubmit(handleAuthSubmit)}>
+            <Surface className="grid gap-4 p-4" depth="md">
+              <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
+                <label className="block text-sm">
+                  <FieldLabel>Policy</FieldLabel>
+                  <ControlledSelect
+                    className={selectClassName}
+                    control={authForm.control}
+                    disabled={updateAuthSettingsMutation.isPending}
+                    name="signupPolicy"
+                    options={signupPolicyOptions.map((policy) => ({
+                      label: formatSignupPolicy(policy),
+                      value: policy,
+                    }))}
+                  />
+                  <FieldError>{authErrors.signupPolicy?.message}</FieldError>
+                </label>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {signupPolicyOptions.map((policy) => (
+                    <div
+                      className={cn(
+                        'rounded-[var(--tabliodb-radius-lg)] border-2 p-3 text-left transition',
+                        selectedPolicy === policy
+                          ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-primary-soft))]'
+                          : 'border-[rgb(var(--tabliodb-border))] bg-white',
+                      )}
+                      key={policy}
+                    >
+                      <div className="mb-2 flex items-center gap-2 text-sm font-extrabold">
+                        <SignupPolicyIcon policy={policy} />
+                        {formatSignupPolicy(policy)}
+                      </div>
+                      <p className="text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                        {describeSignupPolicy(policy)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Surface>
+
+            <Surface className="grid gap-4 p-4" depth="md">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold">Allowed email domains</h3>
+                  <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
+                    Used only when policy is set to allowed domains.
                   </p>
                 </div>
-              ))}
+                <Badge variant={parsedDomains.length > 0 ? 'blue' : 'neutral'}>{parsedDomains.length} domains</Badge>
+              </div>
+
+              <label className="block text-sm">
+                <FieldLabel>Domains</FieldLabel>
+                <ControlledTextarea
+                  aria-invalid={Boolean(authErrors.allowedDomainsText)}
+                  className="min-h-36 w-full resize-y rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-3 text-[13px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60"
+                  control={authForm.control}
+                  disabled={updateAuthSettingsMutation.isPending}
+                  name="allowedDomainsText"
+                  placeholder={'company.com\nteam.company.com'}
+                />
+                <FieldError>{authErrors.allowedDomainsText?.message}</FieldError>
+              </label>
+
+              {updateAuthSettingsMutation.error ? (
+                <InlineErrorState error={updateAuthSettingsMutation.error} title="Could not save sign-up settings" />
+              ) : null}
+            </Surface>
+
+            <div className="flex justify-end">
+              <Button disabled={updateAuthSettingsMutation.isPending || !authForm.formState.isDirty} type="submit">
+                {updateAuthSettingsMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
+                Save sign-up settings
+              </Button>
             </div>
-          </div>
-        </Surface>
+          </form>
+        </section>
+      ) : null}
 
-        <Surface className="grid gap-4 p-4" depth="md">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-base font-extrabold">Allowed email domains</h3>
-              <p className="text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                Used only when policy is set to allowed domains.
-              </p>
+      {activeSection === 'oidc' ? (
+        <section className="grid gap-5">
+          <SettingsHeader
+            description="Prepare generic OIDC for company identity providers and decide where SSO users should land."
+            title="OIDC provider"
+          />
+
+          <form className="grid gap-5" onSubmit={oidcForm.handleSubmit(handleOidcSubmit)}>
+            <Surface className="grid gap-4 p-4" depth="md">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <label className="flex cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
+                  <ControlledCheckbox
+                    aria-label="Enable OIDC provider"
+                    control={oidcForm.control}
+                    disabled={updateOidcProviderMutation.isPending}
+                    name="enabled"
+                  />
+                  <span>
+                    <span className="block text-sm font-extrabold">Enable OIDC provider</span>
+                    <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      Keep disabled until issuer, client ID, and client secret are ready.
+                    </span>
+                  </span>
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={oidcEnabled ? 'green' : 'neutral'}>{oidcEnabled ? 'Enabled' : 'Disabled'}</Badge>
+                  <SecretStatus
+                    configured={oidcProviderQuery.data.clientSecretConfigured}
+                    updatedAt={oidcProviderQuery.data.clientSecretUpdatedAt}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block text-sm md:col-span-2">
+                  <FieldLabel>Issuer URL</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(oidcErrors.issuerUrl)}
+                    control={oidcForm.control}
+                    disabled={updateOidcProviderMutation.isPending}
+                    name="issuerUrl"
+                    placeholder="https://id.company.com"
+                    type="url"
+                  />
+                  <FieldError>{oidcErrors.issuerUrl?.message}</FieldError>
+                </label>
+
+                <label className="block text-sm">
+                  <FieldLabel>Client ID</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(oidcErrors.clientId)}
+                    control={oidcForm.control}
+                    disabled={updateOidcProviderMutation.isPending}
+                    name="clientId"
+                    placeholder="tabliodb"
+                  />
+                  <FieldError>{oidcErrors.clientId?.message}</FieldError>
+                </label>
+
+                <label className="block text-sm">
+                  <FieldLabel>Button label</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(oidcErrors.buttonLabel)}
+                    control={oidcForm.control}
+                    disabled={updateOidcProviderMutation.isPending}
+                    name="buttonLabel"
+                    placeholder="Continue with SSO"
+                  />
+                  <FieldError>{oidcErrors.buttonLabel?.message}</FieldError>
+                </label>
+
+                <label className="block text-sm md:col-span-2">
+                  <FieldLabel>Scopes</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(oidcErrors.scopesText)}
+                    control={oidcForm.control}
+                    disabled={updateOidcProviderMutation.isPending}
+                    name="scopesText"
+                    placeholder="openid email profile"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {oidcScopes.map((scope) => (
+                      <Badge key={scope} variant={scope === 'openid' ? 'green' : 'blue'}>
+                        {scope}
+                      </Badge>
+                    ))}
+                  </div>
+                  <FieldError>{oidcErrors.scopesText?.message}</FieldError>
+                </label>
+
+                <label className="block text-sm md:col-span-2">
+                  <FieldLabel>Client secret</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(oidcErrors.clientSecret)}
+                    autoComplete="new-password"
+                    control={oidcForm.control}
+                    disabled={updateOidcProviderMutation.isPending}
+                    name="clientSecret"
+                    placeholder={
+                      oidcProviderQuery.data.clientSecretConfigured
+                        ? 'Leave blank to keep the current secret'
+                        : 'Paste OIDC client secret'
+                    }
+                    type="password"
+                  />
+                  <FieldError>{oidcErrors.clientSecret?.message}</FieldError>
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
+                  <ControlledCheckbox
+                    aria-label="Automatically create users from OIDC"
+                    control={oidcForm.control}
+                    disabled={updateOidcProviderMutation.isPending}
+                    name="autoCreateUsers"
+                  />
+                  <span>
+                    <span className="block text-sm font-extrabold">Create users automatically</span>
+                    <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      Future OIDC login can create a user when the identity provider email is accepted.
+                    </span>
+                  </span>
+                </label>
+
+                <label
+                  className={cn(
+                    'flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] border p-3',
+                    oidcProviderQuery.data.clientSecretConfigured
+                      ? 'cursor-pointer border-[rgb(var(--tabliodb-border))] bg-white'
+                      : 'cursor-not-allowed border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] opacity-70',
+                  )}
+                >
+                  <ControlledCheckbox
+                    aria-label="Clear existing OIDC client secret"
+                    control={oidcForm.control}
+                    disabled={!oidcProviderQuery.data.clientSecretConfigured || updateOidcProviderMutation.isPending}
+                    name="clearClientSecret"
+                  />
+                  <span>
+                    <span className="block text-sm font-extrabold">Clear stored secret</span>
+                    <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      Use this when rotating away from a retired OIDC client.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              <div className="rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+                <div className="mb-3 flex items-start gap-2">
+                  <div className="grid size-9 shrink-0 place-items-center rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
+                    <Building2 className="size-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-extrabold">Workspace mapping</h3>
+                    <p className="mt-0.5 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      Auto-created SSO users can land in a shared company workspace instead of a personal workspace.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+                  <label className="block text-sm">
+                    <FieldLabel>Auto-join workspace</FieldLabel>
+                    <ControlledSelect
+                      className={selectClassName}
+                      control={oidcForm.control}
+                      disabled={updateOidcProviderMutation.isPending}
+                      name="autoJoinOrganizationId"
+                      options={autoJoinWorkspaceOptions}
+                    />
+                  </label>
+
+                  <label className="block text-sm">
+                    <FieldLabel>Workspace role</FieldLabel>
+                    <ControlledSelect
+                      className={selectClassName}
+                      control={oidcForm.control}
+                      disabled={
+                        updateOidcProviderMutation.isPending || autoJoinOrganizationId === oidcAutoJoinNoneValue
+                      }
+                      name="autoJoinOrganizationRole"
+                      options={oidcAutoJoinRoleOptions.map((role) => ({
+                        label: formatAutoJoinRole(role),
+                        value: role,
+                      }))}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {updateOidcProviderMutation.error ? (
+                <InlineErrorState error={updateOidcProviderMutation.error} title="Could not save OIDC provider" />
+              ) : null}
+            </Surface>
+
+            <div className="flex justify-end">
+              <Button disabled={updateOidcProviderMutation.isPending || !oidcForm.formState.isDirty} type="submit">
+                {updateOidcProviderMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
+                Save OIDC provider
+              </Button>
             </div>
-            <Badge variant={parsedDomains.length > 0 ? 'blue' : 'neutral'}>{parsedDomains.length} domains</Badge>
-          </div>
+          </form>
+        </section>
+      ) : null}
 
-          <label className="block text-sm">
-            <FieldLabel>Domains</FieldLabel>
-            <ControlledTextarea
-              aria-invalid={Boolean(authErrors.allowedDomainsText)}
-              className="min-h-36 w-full resize-y rounded-(--tabliodb-radius-lg) border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-3 text-[13px] font-semibold leading-5 text-[rgb(var(--tabliodb-ink))] outline-none transition placeholder:text-[rgb(var(--tabliodb-ink-subtle))] focus:border-[rgb(var(--tabliodb-primary))] focus:ring-[3px] focus:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-60"
-              control={authForm.control}
-              disabled={updateAuthSettingsMutation.isPending}
-              name="allowedDomainsText"
-              placeholder={'company.com\nteam.company.com'}
-            />
-            <FieldError>{authErrors.allowedDomainsText?.message}</FieldError>
-          </label>
+      {activeSection === 'smtp' ? (
+        <section className="grid gap-5">
+          <SettingsHeader
+            description="Prepare the mail server used by invitations, password recovery, and collaboration notifications."
+            title="SMTP mail"
+          />
 
-          {updateAuthSettingsMutation.error ? (
-            <InlineErrorState error={updateAuthSettingsMutation.error} title="Could not save sign-up settings" />
-          ) : null}
-        </Surface>
+          <form className="grid gap-5" onSubmit={smtpForm.handleSubmit(handleSmtpSubmit)}>
+            <Surface className="grid gap-4 p-4" depth="md">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <label className="flex cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
+                  <ControlledCheckbox
+                    aria-label="Enable SMTP mail delivery"
+                    control={smtpForm.control}
+                    disabled={updateSmtpSettingsMutation.isPending}
+                    name="enabled"
+                  />
+                  <span>
+                    <span className="block text-sm font-extrabold">Enable SMTP mail</span>
+                    <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      Keep disabled until host, sender, and optional credentials are verified.
+                    </span>
+                  </span>
+                </label>
 
-        <div className="flex justify-end">
-          <Button disabled={updateAuthSettingsMutation.isPending || !authForm.formState.isDirty} type="submit">
-            {updateAuthSettingsMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Save className="size-4" />
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={smtpEnabled ? 'green' : 'neutral'}>{smtpEnabled ? 'Enabled' : 'Disabled'}</Badge>
+                  <SecretStatus
+                    configured={smtpSettingsQuery.data.passwordConfigured}
+                    updatedAt={smtpSettingsQuery.data.passwordUpdatedAt}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3">
+                <div className="mb-3 flex items-start gap-2">
+                  <div className="grid size-9 shrink-0 place-items-center rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
+                    <ServerCog className="size-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-extrabold">SMTP server</h3>
+                    <p className="mt-0.5 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      StartTLS on port 587 is the safest default for most company mail relays.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_180px]">
+                  <label className="block text-sm">
+                    <FieldLabel>Host</FieldLabel>
+                    <ControlledInput
+                      aria-invalid={Boolean(smtpErrors.host)}
+                      control={smtpForm.control}
+                      disabled={updateSmtpSettingsMutation.isPending}
+                      name="host"
+                      placeholder="smtp.company.com"
+                    />
+                    <FieldError>{smtpErrors.host?.message}</FieldError>
+                  </label>
+
+                  <label className="block text-sm">
+                    <FieldLabel>Port</FieldLabel>
+                    <ControlledInput
+                      aria-invalid={Boolean(smtpErrors.portText)}
+                      control={smtpForm.control}
+                      disabled={updateSmtpSettingsMutation.isPending}
+                      inputMode="numeric"
+                      name="portText"
+                      placeholder="587"
+                    />
+                    <FieldError>{smtpErrors.portText?.message}</FieldError>
+                  </label>
+
+                  <label className="block text-sm">
+                    <FieldLabel>Security</FieldLabel>
+                    <ControlledSelect
+                      className={selectClassName}
+                      control={smtpForm.control}
+                      disabled={updateSmtpSettingsMutation.isPending}
+                      name="security"
+                      options={smtpSecurityOptions.map((security) => ({
+                        label: formatSmtpSecurity(security),
+                        value: security,
+                      }))}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block text-sm">
+                  <FieldLabel>From email</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(smtpErrors.fromEmail)}
+                    autoComplete="email"
+                    control={smtpForm.control}
+                    disabled={updateSmtpSettingsMutation.isPending}
+                    name="fromEmail"
+                    placeholder="noreply@company.com"
+                    type="email"
+                  />
+                  <FieldError>{smtpErrors.fromEmail?.message}</FieldError>
+                </label>
+
+                <label className="block text-sm">
+                  <FieldLabel>From name</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(smtpErrors.fromName)}
+                    control={smtpForm.control}
+                    disabled={updateSmtpSettingsMutation.isPending}
+                    name="fromName"
+                    placeholder="Tabliodb"
+                  />
+                  <FieldError>{smtpErrors.fromName?.message}</FieldError>
+                </label>
+
+                <label className="block text-sm md:col-span-2">
+                  <FieldLabel>Reply-to email</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(smtpErrors.replyToEmail)}
+                    autoComplete="email"
+                    control={smtpForm.control}
+                    disabled={updateSmtpSettingsMutation.isPending}
+                    name="replyToEmail"
+                    placeholder="support@company.com"
+                    type="email"
+                  />
+                  <FieldError>{smtpErrors.replyToEmail?.message}</FieldError>
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block text-sm">
+                  <FieldLabel>Username</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(smtpErrors.username)}
+                    autoComplete="username"
+                    control={smtpForm.control}
+                    disabled={updateSmtpSettingsMutation.isPending}
+                    name="username"
+                    placeholder="mailer"
+                  />
+                  <FieldError>{smtpErrors.username?.message}</FieldError>
+                </label>
+
+                <label className="block text-sm">
+                  <FieldLabel>Password</FieldLabel>
+                  <ControlledInput
+                    aria-invalid={Boolean(smtpErrors.password)}
+                    autoComplete="new-password"
+                    control={smtpForm.control}
+                    disabled={updateSmtpSettingsMutation.isPending}
+                    name="password"
+                    placeholder={
+                      smtpSettingsQuery.data.passwordConfigured
+                        ? 'Leave blank to keep the current password'
+                        : 'Paste SMTP password'
+                    }
+                    type="password"
+                  />
+                  <FieldError>{smtpErrors.password?.message}</FieldError>
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label
+                  className={cn(
+                    'flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] border p-3',
+                    smtpSettingsQuery.data.passwordConfigured
+                      ? 'cursor-pointer border-[rgb(var(--tabliodb-border))] bg-white'
+                      : 'cursor-not-allowed border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] opacity-70',
+                  )}
+                >
+                  <ControlledCheckbox
+                    aria-label="Clear existing SMTP password"
+                    control={smtpForm.control}
+                    disabled={!smtpSettingsQuery.data.passwordConfigured || updateSmtpSettingsMutation.isPending}
+                    name="clearPassword"
+                  />
+                  <span>
+                    <span className="block text-sm font-extrabold">Clear stored password</span>
+                    <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      Use this when rotating away from an old mail credential.
+                    </span>
+                  </span>
+                </label>
+
+                <div className="flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
+                  <div className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
+                    <Send className="size-3.5" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-extrabold">Delivery boundary ready</span>
+                    <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                      Mail sending can consume this config later without exposing secrets to the browser.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {updateSmtpSettingsMutation.error ? (
+                <InlineErrorState error={updateSmtpSettingsMutation.error} title="Could not save SMTP settings" />
+              ) : null}
+            </Surface>
+
+            <div className="flex justify-end">
+              <Button disabled={updateSmtpSettingsMutation.isPending || !smtpForm.formState.isDirty} type="submit">
+                {updateSmtpSettingsMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
+                Save SMTP settings
+              </Button>
+            </div>
+          </form>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function SettingsTabList({
+  activeSection,
+  onSectionChange,
+}: {
+  activeSection: SettingsSectionId;
+  onSectionChange: (section: SettingsSectionId) => void;
+}) {
+  return (
+    <div className="tabliodb-scrollbar flex gap-2 overflow-x-auto rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
+      {settingsSections.map((section) => {
+        const Icon = section.icon;
+        const selected = activeSection === section.id;
+
+        return (
+          <button
+            className={cn(
+              'flex min-w-[180px] cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border px-3 py-2.5 text-left transition',
+              selected
+                ? 'border-[rgb(var(--tabliodb-primary-border))] bg-[rgb(var(--tabliodb-active-chip-bg))] text-[rgb(var(--tabliodb-primary-text))]'
+                : 'border-transparent text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-surface-raised))] hover:text-[rgb(var(--tabliodb-ink))]',
             )}
-            Save sign-up settings
-          </Button>
-        </div>
-      </form>
-
-      <SettingsHeader
-        description="Prepare generic OIDC for company identity providers and decide where SSO users should land."
-        title="OIDC provider"
-      />
-
-      <form className="grid gap-5" onSubmit={oidcForm.handleSubmit(handleOidcSubmit)}>
-        <Surface className="grid gap-4 p-4" depth="md">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <label className="flex cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
-              <ControlledCheckbox
-                aria-label="Enable OIDC provider"
-                control={oidcForm.control}
-                disabled={updateOidcProviderMutation.isPending}
-                name="enabled"
-              />
-              <span>
-                <span className="block text-sm font-extrabold">Enable OIDC provider</span>
-                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  Keep disabled until issuer, client ID, and client secret are ready.
-                </span>
-              </span>
-            </label>
-
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={oidcEnabled ? 'green' : 'neutral'}>{oidcEnabled ? 'Enabled' : 'Disabled'}</Badge>
-              <SecretStatus
-                configured={oidcProviderQuery.data.clientSecretConfigured}
-                updatedAt={oidcProviderQuery.data.clientSecretUpdatedAt}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block text-sm md:col-span-2">
-              <FieldLabel>Issuer URL</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(oidcErrors.issuerUrl)}
-                control={oidcForm.control}
-                disabled={updateOidcProviderMutation.isPending}
-                name="issuerUrl"
-                placeholder="https://id.company.com"
-                type="url"
-              />
-              <FieldError>{oidcErrors.issuerUrl?.message}</FieldError>
-            </label>
-
-            <label className="block text-sm">
-              <FieldLabel>Client ID</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(oidcErrors.clientId)}
-                control={oidcForm.control}
-                disabled={updateOidcProviderMutation.isPending}
-                name="clientId"
-                placeholder="tabliodb"
-              />
-              <FieldError>{oidcErrors.clientId?.message}</FieldError>
-            </label>
-
-            <label className="block text-sm">
-              <FieldLabel>Button label</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(oidcErrors.buttonLabel)}
-                control={oidcForm.control}
-                disabled={updateOidcProviderMutation.isPending}
-                name="buttonLabel"
-                placeholder="Continue with SSO"
-              />
-              <FieldError>{oidcErrors.buttonLabel?.message}</FieldError>
-            </label>
-
-            <label className="block text-sm md:col-span-2">
-              <FieldLabel>Scopes</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(oidcErrors.scopesText)}
-                control={oidcForm.control}
-                disabled={updateOidcProviderMutation.isPending}
-                name="scopesText"
-                placeholder="openid email profile"
-              />
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {oidcScopes.map((scope) => (
-                  <Badge key={scope} variant={scope === 'openid' ? 'green' : 'blue'}>
-                    {scope}
-                  </Badge>
-                ))}
-              </div>
-              <FieldError>{oidcErrors.scopesText?.message}</FieldError>
-            </label>
-
-            <label className="block text-sm md:col-span-2">
-              <FieldLabel>Client secret</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(oidcErrors.clientSecret)}
-                autoComplete="new-password"
-                control={oidcForm.control}
-                disabled={updateOidcProviderMutation.isPending}
-                name="clientSecret"
-                placeholder={
-                  oidcProviderQuery.data.clientSecretConfigured
-                    ? 'Leave blank to keep the current secret'
-                    : 'Paste OIDC client secret'
-                }
-                type="password"
-              />
-              <FieldError>{oidcErrors.clientSecret?.message}</FieldError>
-            </label>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
-              <ControlledCheckbox
-                aria-label="Automatically create users from OIDC"
-                control={oidcForm.control}
-                disabled={updateOidcProviderMutation.isPending}
-                name="autoCreateUsers"
-              />
-              <span>
-                <span className="block text-sm font-extrabold">Create users automatically</span>
-                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  Future OIDC login can create a user when the identity provider email is accepted.
-                </span>
-              </span>
-            </label>
-
-            <label
-              className={cn(
-                'flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] border p-3',
-                oidcProviderQuery.data.clientSecretConfigured
-                  ? 'cursor-pointer border-[rgb(var(--tabliodb-border))] bg-white'
-                  : 'cursor-not-allowed border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] opacity-70',
-              )}
-            >
-              <ControlledCheckbox
-                aria-label="Clear existing OIDC client secret"
-                control={oidcForm.control}
-                disabled={!oidcProviderQuery.data.clientSecretConfigured || updateOidcProviderMutation.isPending}
-                name="clearClientSecret"
-              />
-              <span>
-                <span className="block text-sm font-extrabold">Clear stored secret</span>
-                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  Use this when rotating away from a retired OIDC client.
-                </span>
-              </span>
-            </label>
-          </div>
-
-          <div className="rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3">
-            <div className="mb-3 flex items-start gap-2">
-              <div className="grid size-9 shrink-0 place-items-center rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
-                <Building2 className="size-4" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-extrabold">Workspace mapping</h3>
-                <p className="mt-0.5 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  Auto-created SSO users can land in a shared company workspace instead of a personal workspace.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-              <label className="block text-sm">
-                <FieldLabel>Auto-join workspace</FieldLabel>
-                <ControlledSelect
-                  className={selectClassName}
-                  control={oidcForm.control}
-                  disabled={updateOidcProviderMutation.isPending}
-                  name="autoJoinOrganizationId"
-                  options={autoJoinWorkspaceOptions}
-                />
-              </label>
-
-              <label className="block text-sm">
-                <FieldLabel>Default role</FieldLabel>
-                <ControlledSelect
-                  className={selectClassName}
-                  control={oidcForm.control}
-                  disabled={updateOidcProviderMutation.isPending || autoJoinOrganizationId === oidcAutoJoinNoneValue}
-                  name="autoJoinOrganizationRole"
-                  options={oidcAutoJoinRoleOptions.map((role) => ({
-                    label: formatAutoJoinRole(role),
-                    value: role,
-                  }))}
-                />
-              </label>
-            </div>
-          </div>
-
-          {updateOidcProviderMutation.error ? (
-            <InlineErrorState error={updateOidcProviderMutation.error} title="Could not save OIDC provider" />
-          ) : null}
-        </Surface>
-
-        <div className="flex justify-end">
-          <Button disabled={updateOidcProviderMutation.isPending || !oidcForm.formState.isDirty} type="submit">
-            {updateOidcProviderMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Save className="size-4" />
-            )}
-            Save OIDC provider
-          </Button>
-        </div>
-      </form>
-
-      <SettingsHeader
-        description="Prepare the mail server used by invitations, password recovery, and collaboration notifications."
-        title="SMTP mail"
-      />
-
-      <form className="grid gap-5" onSubmit={smtpForm.handleSubmit(handleSmtpSubmit)}>
-        <Surface className="grid gap-4 p-4" depth="md">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <label className="flex cursor-pointer items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
-              <ControlledCheckbox
-                aria-label="Enable SMTP mail delivery"
-                control={smtpForm.control}
-                disabled={updateSmtpSettingsMutation.isPending}
-                name="enabled"
-              />
-              <span>
-                <span className="block text-sm font-extrabold">Enable SMTP mail</span>
-                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  Keep disabled until host, sender, and optional credentials are verified.
-                </span>
-              </span>
-            </label>
-
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={smtpEnabled ? 'green' : 'neutral'}>{smtpEnabled ? 'Enabled' : 'Disabled'}</Badge>
-              <SecretStatus
-                configured={smtpSettingsQuery.data.passwordConfigured}
-                updatedAt={smtpSettingsQuery.data.passwordUpdatedAt}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-[var(--tabliodb-radius-lg)] border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3">
-            <div className="mb-3 flex items-start gap-2">
-              <div className="grid size-9 shrink-0 place-items-center rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-sky-soft))] text-[rgb(var(--tabliodb-sky-text))]">
-                <ServerCog className="size-4" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-extrabold">SMTP server</h3>
-                <p className="mt-0.5 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  StartTLS on port 587 is the safest default for most company mail relays.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_180px]">
-              <label className="block text-sm">
-                <FieldLabel>Host</FieldLabel>
-                <ControlledInput
-                  aria-invalid={Boolean(smtpErrors.host)}
-                  control={smtpForm.control}
-                  disabled={updateSmtpSettingsMutation.isPending}
-                  name="host"
-                  placeholder="smtp.company.com"
-                />
-                <FieldError>{smtpErrors.host?.message}</FieldError>
-              </label>
-
-              <label className="block text-sm">
-                <FieldLabel>Port</FieldLabel>
-                <ControlledInput
-                  aria-invalid={Boolean(smtpErrors.portText)}
-                  control={smtpForm.control}
-                  disabled={updateSmtpSettingsMutation.isPending}
-                  inputMode="numeric"
-                  name="portText"
-                  placeholder="587"
-                />
-                <FieldError>{smtpErrors.portText?.message}</FieldError>
-              </label>
-
-              <label className="block text-sm">
-                <FieldLabel>Security</FieldLabel>
-                <ControlledSelect
-                  className={selectClassName}
-                  control={smtpForm.control}
-                  disabled={updateSmtpSettingsMutation.isPending}
-                  name="security"
-                  options={smtpSecurityOptions.map((security) => ({
-                    label: formatSmtpSecurity(security),
-                    value: security,
-                  }))}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block text-sm">
-              <FieldLabel>From email</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(smtpErrors.fromEmail)}
-                autoComplete="email"
-                control={smtpForm.control}
-                disabled={updateSmtpSettingsMutation.isPending}
-                name="fromEmail"
-                placeholder="noreply@company.com"
-                type="email"
-              />
-              <FieldError>{smtpErrors.fromEmail?.message}</FieldError>
-            </label>
-
-            <label className="block text-sm">
-              <FieldLabel>From name</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(smtpErrors.fromName)}
-                control={smtpForm.control}
-                disabled={updateSmtpSettingsMutation.isPending}
-                name="fromName"
-                placeholder="Tabliodb"
-              />
-              <FieldError>{smtpErrors.fromName?.message}</FieldError>
-            </label>
-
-            <label className="block text-sm md:col-span-2">
-              <FieldLabel>Reply-to email</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(smtpErrors.replyToEmail)}
-                autoComplete="email"
-                control={smtpForm.control}
-                disabled={updateSmtpSettingsMutation.isPending}
-                name="replyToEmail"
-                placeholder="support@company.com"
-                type="email"
-              />
-              <FieldError>{smtpErrors.replyToEmail?.message}</FieldError>
-            </label>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block text-sm">
-              <FieldLabel>Username</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(smtpErrors.username)}
-                autoComplete="username"
-                control={smtpForm.control}
-                disabled={updateSmtpSettingsMutation.isPending}
-                name="username"
-                placeholder="mailer"
-              />
-              <FieldError>{smtpErrors.username?.message}</FieldError>
-            </label>
-
-            <label className="block text-sm">
-              <FieldLabel>Password</FieldLabel>
-              <ControlledInput
-                aria-invalid={Boolean(smtpErrors.password)}
-                autoComplete="new-password"
-                control={smtpForm.control}
-                disabled={updateSmtpSettingsMutation.isPending}
-                name="password"
-                placeholder={
-                  smtpSettingsQuery.data.passwordConfigured
-                    ? 'Leave blank to keep the current password'
-                    : 'Paste SMTP password'
-                }
-                type="password"
-              />
-              <FieldError>{smtpErrors.password?.message}</FieldError>
-            </label>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label
-              className={cn(
-                'flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] border p-3',
-                smtpSettingsQuery.data.passwordConfigured
-                  ? 'cursor-pointer border-[rgb(var(--tabliodb-border))] bg-white'
-                  : 'cursor-not-allowed border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] opacity-70',
-              )}
-            >
-              <ControlledCheckbox
-                aria-label="Clear existing SMTP password"
-                control={smtpForm.control}
-                disabled={!smtpSettingsQuery.data.passwordConfigured || updateSmtpSettingsMutation.isPending}
-                name="clearPassword"
-              />
-              <span>
-                <span className="block text-sm font-extrabold">Clear stored password</span>
-                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  Use this when rotating away from an old mail credential.
-                </span>
-              </span>
-            </label>
-
-            <div className="flex items-start gap-3 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-3">
-              <div className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-[rgb(var(--tabliodb-primary-soft))] text-[rgb(var(--tabliodb-primary-text))]">
-                <Send className="size-3.5" />
-              </div>
-              <div>
-                <span className="block text-sm font-extrabold">Delivery boundary ready</span>
-                <span className="block text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
-                  Mail sending can consume this config later without exposing secrets to the browser.
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {updateSmtpSettingsMutation.error ? (
-            <InlineErrorState error={updateSmtpSettingsMutation.error} title="Could not save SMTP settings" />
-          ) : null}
-        </Surface>
-
-        <div className="flex justify-end">
-          <Button disabled={updateSmtpSettingsMutation.isPending || !smtpForm.formState.isDirty} type="submit">
-            {updateSmtpSettingsMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Save className="size-4" />
-            )}
-            Save SMTP settings
-          </Button>
-        </div>
-      </form>
+            key={section.id}
+            onClick={() => onSectionChange(section.id)}
+            type="button"
+          >
+            <Icon className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0">
+              <span className="block text-sm font-extrabold">{section.label}</span>
+              <span className="mt-0.5 block text-xs font-bold leading-4 opacity-75">{section.description}</span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -4128,7 +4128,7 @@ export function getUsers(
     cursor,
   }: {
     search?: string;
-    role?: 'owner' | 'instance-admin' | 'org-admin' | 'member';
+    role?: 'owner' | 'instance-admin' | 'workspace-manager' | 'member';
     limit?: number;
     cursor?: string;
   },

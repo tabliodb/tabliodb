@@ -29,7 +29,7 @@ export class UserController {
   @RequirePermission(Permission.OrganizationManage)
   @ApiQuery({ name: 'cursor', required: false, type: String })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ enum: ['owner', 'instance-admin', 'org-admin', 'member'], name: 'role', required: false })
+  @ApiQuery({ enum: ['owner', 'instance-admin', 'workspace-manager', 'member'], name: 'role', required: false })
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiOperation({ operationId: 'getUsers' })
   @ZodResponse({ status: HttpStatus.OK, type: UserListResponseDto })

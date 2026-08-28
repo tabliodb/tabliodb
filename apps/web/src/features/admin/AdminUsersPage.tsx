@@ -30,6 +30,7 @@ import {
 } from '@tabliodb/ui';
 import {
   Copy,
+  Building2,
   Crown,
   KeyRound,
   Loader2,
@@ -46,9 +47,11 @@ import {
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { ControlledCheckbox, ControlledInput, ControlledTextarea } from '@/features/app/FormControls';
+import { ControlledCheckbox, ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { EmptyState, InlineErrorState, InlineLoadingState } from '@/features/app/RouteStates';
+import { authQueries } from '@/resources/auth';
 import { useCreateInvitationMutation } from '@/resources/invitations';
+import { organizationsQueries } from '@/resources/organizations';
 import {
   type UserListQuery,
   useCreateUserMutation,
@@ -78,6 +81,7 @@ const inviteUserFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
   expiresInDays: z.number().int().min(1, 'Minimum 1 day.').max(30, 'Maximum 30 days.'),
   message: z.string().trim().max(500, 'Message is too long.').optional(),
+  organizationId: z.string().min(1, 'Choose a workspace.'),
   organizationRole: z.enum(SdkOrganizationRole),
 });
 
@@ -87,6 +91,7 @@ const inviteUserDefaults: InviteUserFormState = {
   email: '',
   expiresInDays: 7,
   message: '',
+  organizationId: '',
   organizationRole: SdkOrganizationRole.Member,
 };
 const resetPasswordFormSchema = z.object({
@@ -99,7 +104,7 @@ const resetPasswordDefaults: ResetPasswordFormState = {
   password: '',
 };
 
-const roleFilters = ['all', 'owner', 'instance-admin', 'org-admin', 'member'] as const;
+const roleFilters = ['all', 'owner', 'instance-admin', 'workspace-manager', 'member'] as const;
 type RoleFilter = (typeof roleFilters)[number];
 const userPageSize = 20;
 
@@ -118,20 +123,22 @@ export function AdminUsersPage() {
     }),
     [pageCursor, roleFilter, searchTerm],
   );
+  const currentUserQuery = useQuery(authQueries.me());
+  const currentUser = currentUserQuery.data ?? null;
   const usersQuery = useQuery(usersQueries.list(userListQuery));
   const users = usersQuery.data?.items ?? [];
   const updateUserStatusMutation = useUpdateUserStatusMutation();
   const revokeUserSessionsMutation = useRevokeUserSessionsMutation();
   const userActionError = updateUserStatusMutation.error ?? revokeUserSessionsMutation.error;
+  const canManageInstanceAdmins = currentUser?.instanceRole === 'owner';
 
   const stats = useMemo(
     () => ({
       active: users.filter((user) => !user.isDisabled).length,
-      instanceAdmins: users.filter((user) => user.instanceRole === 'owner' || user.instanceRole === 'admin').length,
-      organizationAdmins: users.filter((user) =>
-        user.organizations.some((organization) => organization.role === SdkOrganizationRole.Admin),
+      instanceManagers: users.filter((user) => user.instanceRole === 'owner' || user.instanceRole === 'admin').length,
+      workspaceManagers: users.filter((user) =>
+        user.organizations.some((organization) => isWorkspaceManagerMembershipRole(organization.role)),
       ).length,
-      total: users.length,
     }),
     [users],
   );
@@ -170,20 +177,20 @@ export function AdminUsersPage() {
         <div>
           <h2 className="text-2xl font-extrabold tracking-normal text-[rgb(var(--tabliodb-ink))]">Manage users</h2>
           <p className="mt-1 max-w-2xl text-sm font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-            Create instance accounts, review workspace access, and grant instance admin access.
+            Manage instance accounts. Workspace, folder, and diagram access stay in their own sharing settings.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <InviteUserDialog />
-          <CreateUserDialog />
+          <CreateUserDialog canGrantInstanceAdmin={canManageInstanceAdmins} />
         </div>
       </section>
 
       <section className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Matching users" value={totalCount} />
-        <StatCard label="Showing now" value={stats.total} tone="green" />
-        <StatCard label="Instance admins on page" value={stats.instanceAdmins} tone="blue" />
-        <StatCard label="Workspace admins on page" value={stats.organizationAdmins} tone="yellow" />
+        <StatCard label="Active accounts on page" value={stats.active} tone="green" />
+        <StatCard label="Instance managers on page" value={stats.instanceManagers} tone="blue" />
+        <StatCard label="Workspace managers on page" value={stats.workspaceManagers} tone="yellow" />
       </section>
 
       {userActionError ? <InlineErrorState error={userActionError} title="User action failed" /> : null}
@@ -248,6 +255,8 @@ export function AdminUsersPage() {
             {users.map((user) => (
               <UserRow
                 isBusy={isUserActionPending(user.id)}
+                canManageInstanceAdmins={canManageInstanceAdmins}
+                currentUserId={currentUser?.id ?? null}
                 key={user.id}
                 onResetPassword={setResetPasswordUser}
                 onRevokeSessions={handleRevokeUserSessions}
@@ -304,6 +313,14 @@ export function AdminUsersPage() {
 function InviteUserDialog() {
   const [open, setOpen] = useState(false);
   const [createdInvite, setCreatedInvite] = useState<InvitationCreateResponseDtoOutput | null>(null);
+  const organizationsQuery = useQuery(organizationsQueries.list({ limit: 100 }));
+  const workspaceOptions =
+    organizationsQuery.data?.items.map((organization) => ({
+      label: `${organization.name} (${formatWorkspaceMembershipRole(organization.role)})`,
+      textValue: organization.name,
+      value: organization.id,
+    })) ?? [];
+  const hasWorkspaceOptions = workspaceOptions.length > 0;
   const form = useForm<InviteUserFormState>({
     defaultValues: inviteUserDefaults,
     mode: 'onBlur',
@@ -335,6 +352,8 @@ function InviteUserDialog() {
       email: values.email,
       expiresInDays: values.expiresInDays,
       message: values.message?.trim() || undefined,
+      // Admin page has no active workspace context, so the target workspace is explicit instead of falling back to the first workspace.
+      organizationId: values.organizationId,
       organizationRole: values.organizationRole,
     });
   }
@@ -350,18 +369,35 @@ function InviteUserDialog() {
       <DialogTrigger asChild>
         <Button className="gap-2" variant="secondary">
           <MailPlus className="size-4" />
-          Invite user
+          Workspace invite
         </Button>
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,560px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
-            <DialogTitle>Invite user</DialogTitle>
-            <DialogDescription>Create a one-time invitation link for a new teammate.</DialogDescription>
+            <DialogTitle>Invite to workspace</DialogTitle>
+            <DialogDescription>
+              Create a one-time link that signs up a new user and adds them to one selected workspace.
+            </DialogDescription>
           </DialogHeader>
 
           <DialogBody>
             <div className="grid gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+                  Workspace
+                </span>
+                <ControlledSelect
+                  aria-invalid={Boolean(errors.organizationId)}
+                  control={form.control}
+                  disabled={createInvitationMutation.isPending || organizationsQuery.isPending || !hasWorkspaceOptions}
+                  name="organizationId"
+                  options={workspaceOptions}
+                  placeholder={organizationsQuery.isPending ? 'Loading workspaces' : 'Choose workspace'}
+                />
+                <FieldError>{errors.organizationId?.message}</FieldError>
+              </label>
+
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Email
@@ -385,7 +421,7 @@ function InviteUserDialog() {
                   <div className="grid gap-2 sm:grid-cols-2">
                     <RoleOption
                       checked={form.watch('organizationRole') === SdkOrganizationRole.Member}
-                      description="Can join workspace folders."
+                      description="Can work inside folders and diagrams they can access."
                       label="Member"
                       onClick={() =>
                         form.setValue('organizationRole', SdkOrganizationRole.Member, { shouldDirty: true })
@@ -393,8 +429,8 @@ function InviteUserDialog() {
                     />
                     <RoleOption
                       checked={form.watch('organizationRole') === SdkOrganizationRole.Admin}
-                      description="Can help manage users."
-                      label="Admin"
+                      description="Can manage workspace settings and members."
+                      label="Workspace admin"
                       onClick={() =>
                         form.setValue('organizationRole', SdkOrganizationRole.Admin, { shouldDirty: true })
                       }
@@ -447,6 +483,14 @@ function InviteUserDialog() {
                 </div>
               ) : null}
 
+              {!organizationsQuery.isPending && !hasWorkspaceOptions ? (
+                <EmptyState
+                  description="Create or join a workspace before sending workspace invitations from the admin console."
+                  icon={Building2}
+                  title="No workspace available"
+                />
+              ) : null}
+
               {createInvitationMutation.error ? (
                 <InlineErrorState error={createInvitationMutation.error} title="Could not create invitation" />
               ) : null}
@@ -462,7 +506,10 @@ function InviteUserDialog() {
             >
               Close
             </Button>
-            <Button disabled={createInvitationMutation.isPending} type="submit">
+            <Button
+              disabled={createInvitationMutation.isPending || organizationsQuery.isPending || !hasWorkspaceOptions}
+              type="submit"
+            >
               {createInvitationMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -477,7 +524,7 @@ function InviteUserDialog() {
   );
 }
 
-function CreateUserDialog() {
+function CreateUserDialog({ canGrantInstanceAdmin }: { canGrantInstanceAdmin: boolean }) {
   const [open, setOpen] = useState(false);
   const form = useForm<CreateUserFormState>({
     defaultValues: createUserDefaults,
@@ -508,7 +555,8 @@ function CreateUserDialog() {
   function handleSubmit(values: CreateUserFormState) {
     createUserMutation.mutate({
       email: values.email,
-      instanceRole: values.grantInstanceAdmin ? InstanceRole2.Admin : undefined,
+      // Instance admin is only submitted when the signed-in actor is an instance owner; regular instance admins get a standard account form.
+      instanceRole: canGrantInstanceAdmin && values.grantInstanceAdmin ? InstanceRole2.Admin : undefined,
       name: values.name,
       password: values.password,
     });
@@ -519,14 +567,16 @@ function CreateUserDialog() {
       <DialogTrigger asChild>
         <Button className="gap-2">
           <UserPlus className="size-4" />
-          Add user
+          Create account
         </Button>
       </DialogTrigger>
       <DialogContent className="w-[min(94vw,560px)]">
         <form className="contents" onSubmit={form.handleSubmit(handleSubmit)}>
           <DialogHeader>
-            <DialogTitle>Create user</DialogTitle>
-            <DialogDescription>Create an instance account. Workspace access is assigned separately.</DialogDescription>
+            <DialogTitle>Create account</DialogTitle>
+            <DialogDescription>
+              Create an instance account with a temporary password. Workspace access is assigned separately.
+            </DialogDescription>
           </DialogHeader>
 
           <DialogBody>
@@ -576,17 +626,24 @@ function CreateUserDialog() {
                 <FieldError>{errors.password?.message}</FieldError>
               </label>
 
-              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
-                <ControlledCheckbox
-                  control={form.control}
-                  disabled={createUserMutation.isPending}
-                  name="grantInstanceAdmin"
-                />
-                <span className="flex min-w-0 flex-1 items-center gap-2">
-                  <ShieldCheck className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
-                  Instance admin
-                </span>
-              </label>
+              {canGrantInstanceAdmin ? (
+                <label className="flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-extrabold transition hover:bg-[rgb(var(--tabliodb-surface))]">
+                  <ControlledCheckbox
+                    control={form.control}
+                    disabled={createUserMutation.isPending}
+                    name="grantInstanceAdmin"
+                  />
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <ShieldCheck className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
+                    Instance admin
+                  </span>
+                </label>
+              ) : null}
+
+              <div className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))] p-3 text-xs font-bold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
+                The user must replace this temporary password on first login. Add workspace, folder, or diagram access
+                from the relevant sharing settings.
+              </div>
 
               {createUserMutation.error ? (
                 <InlineErrorState error={createUserMutation.error} title="Could not create user" />
@@ -605,7 +662,7 @@ function CreateUserDialog() {
             </Button>
             <Button disabled={createUserMutation.isPending} type="submit">
               {createUserMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-              Create user
+              Create account
             </Button>
           </DialogFooter>
         </form>
@@ -747,12 +804,16 @@ function RoleOption({
 }
 
 function UserRow({
+  canManageInstanceAdmins,
+  currentUserId,
   isBusy,
   onResetPassword,
   onRevokeSessions,
   onToggleStatus,
   user,
 }: {
+  canManageInstanceAdmins: boolean;
+  currentUserId: string | null;
   isBusy: boolean;
   onResetPassword: (user: UserResponseDtoOutput) => void;
   onRevokeSessions: (user: UserResponseDtoOutput) => void;
@@ -760,6 +821,9 @@ function UserRow({
   user: UserResponseDtoOutput;
 }) {
   const bucket = getUserRoleBucket(user);
+  const isSelf = user.id === currentUserId;
+  const needsInstanceOwner = Boolean(user.instanceRole) && !canManageInstanceAdmins;
+  const canRunSensitiveAction = !isBusy && !isSelf && !needsInstanceOwner;
 
   return (
     <article className="grid gap-3 p-4 transition hover:bg-[rgb(var(--tabliodb-surface))] lg:grid-cols-[minmax(0,1.2fr)_minmax(180px,0.8fr)_auto_auto] lg:items-center">
@@ -781,6 +845,7 @@ function UserRow({
       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
         <RoleBadge bucket={bucket} />
         {user.isDisabled ? <Badge>Disabled</Badge> : <Badge variant="green">Active</Badge>}
+        {user.passwordChangeRequired ? <Badge variant="yellow">Needs password change</Badge> : null}
       </div>
       <div className="flex justify-start lg:justify-end">
         <DropdownMenu>
@@ -792,23 +857,32 @@ function UserRow({
             </DropdownMenuTrigger>
           </WithTooltip>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled={isBusy} onSelect={() => onResetPassword(user)}>
+            <DropdownMenuItem disabled={!canRunSensitiveAction} onSelect={() => onResetPassword(user)}>
               <KeyRound className="size-4" />
               Reset password
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={isBusy} onSelect={() => onRevokeSessions(user)}>
+            <DropdownMenuItem disabled={!canRunSensitiveAction} onSelect={() => onRevokeSessions(user)}>
               <RotateCcw className="size-4" />
               Revoke sessions
             </DropdownMenuItem>
             <DropdownMenuSeparatorItem />
             <DropdownMenuItem
               className={user.isDisabled ? undefined : 'text-[rgb(var(--tabliodb-danger-text))]'}
-              disabled={isBusy}
+              disabled={!canRunSensitiveAction}
               onSelect={() => onToggleStatus(user)}
             >
               <Power className="size-4" />
               {user.isDisabled ? 'Enable user' : 'Disable user'}
             </DropdownMenuItem>
+            {needsInstanceOwner ? (
+              <>
+                <DropdownMenuSeparatorItem />
+                <DropdownMenuItem disabled>
+                  <ShieldCheck className="size-4" />
+                  Instance owner required
+                </DropdownMenuItem>
+              </>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -821,7 +895,7 @@ function RoleBadge({ bucket }: { bucket: RoleFilter }) {
     return (
       <Badge variant="yellow">
         <Crown className="mr-1 size-3" />
-        Owner
+        Instance owner
       </Badge>
     );
   }
@@ -835,8 +909,8 @@ function RoleBadge({ bucket }: { bucket: RoleFilter }) {
     );
   }
 
-  if (bucket === 'org-admin') {
-    return <Badge variant="blue">Org admin</Badge>;
+  if (bucket === 'workspace-manager') {
+    return <Badge variant="blue">Workspace manager</Badge>;
   }
 
   return <Badge>Member</Badge>;
@@ -877,8 +951,8 @@ function getUserRoleBucket(user: UserResponseDtoOutput): RoleFilter {
     return 'instance-admin';
   }
 
-  if (user.organizations.some((organization) => organization.role === SdkOrganizationRole.Admin)) {
-    return 'org-admin';
+  if (user.organizations.some((organization) => isWorkspaceManagerMembershipRole(organization.role))) {
+    return 'workspace-manager';
   }
 
   return 'member';
@@ -887,19 +961,36 @@ function getUserRoleBucket(user: UserResponseDtoOutput): RoleFilter {
 function formatRoleFilter(filter: RoleFilter): string {
   return {
     all: 'All',
-    member: 'Members',
-    owner: 'Owners',
+    member: 'Standard users',
+    owner: 'Instance owners',
     'instance-admin': 'Instance admins',
-    'org-admin': 'Org admins',
+    'workspace-manager': 'Workspace managers',
   }[filter];
+}
+
+function formatWorkspaceMembershipRole(role: string): string {
+  return (
+    {
+      admin: 'admin',
+      guest: 'guest',
+      member: 'member',
+      owner: 'owner',
+    }[role] ?? role
+  );
+}
+
+function isWorkspaceManagerMembershipRole(role: string): boolean {
+  return role === 'owner' || role === SdkOrganizationRole.Admin;
 }
 
 function formatOrganizations(user: UserResponseDtoOutput): string {
   if (user.organizations.length === 0) {
-    return 'No workspace';
+    return 'No workspace access';
   }
 
-  return user.organizations.map((organization) => organization.name).join(', ');
+  return user.organizations
+    .map((organization) => `${organization.name} (${formatWorkspaceMembershipRole(organization.role)})`)
+    .join(', ');
 }
 
 function UserAvatar({ user }: { user: Pick<UserResponseDtoOutput, 'avatarUrl' | 'name'> }) {

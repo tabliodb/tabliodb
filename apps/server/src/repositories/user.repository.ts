@@ -14,7 +14,7 @@ export type ManagedUserCreateOptions = {
   passwordHash: string;
 };
 
-export type ManagedUserRoleFilter = 'owner' | 'instance-admin' | 'org-admin' | 'member';
+export type ManagedUserRoleFilter = 'owner' | 'instance-admin' | 'workspace-manager' | 'member';
 
 export type ManagedUserListOptions = {
   cursor?: string;
@@ -244,14 +244,14 @@ export class UserRepository {
       )
       .$if(options.role === 'owner', (query) => query.where('instance_members.role', '=', 'owner'))
       .$if(options.role === 'instance-admin', (query) => query.where('instance_members.role', '=', 'admin'))
-      .$if(options.role === 'org-admin', (query) =>
-        // Role filter memakai EXISTS agar user dengan banyak membership tidak salah masuk karena row join lain.
+      .$if(options.role === 'workspace-manager', (query) =>
+        // Workspace manager mencakup owner dan admin workspace; keduanya punya hak kelola workspace di alur domain baru.
         query.where(
           sql<boolean>`exists (
             select 1
             from organization_members role_filter_members
             where role_filter_members.user_id = users.id
-              and role_filter_members.role = ${OrganizationRole.Admin}
+              and role_filter_members.role in (${OrganizationRole.Owner}, ${OrganizationRole.Admin})
           )`,
         ),
       )
@@ -261,7 +261,7 @@ export class UserRepository {
             select 1
             from organization_members role_filter_members
             where role_filter_members.user_id = users.id
-              and role_filter_members.role = ${OrganizationRole.Admin}
+              and role_filter_members.role in (${OrganizationRole.Owner}, ${OrganizationRole.Admin})
           )`,
         ),
       );

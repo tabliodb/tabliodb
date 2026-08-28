@@ -10,6 +10,9 @@ import LOGO from '@/assets/logo.svg';
 const adminNavigationItems = [
   { icon: <UsersRound className="size-4" />, label: 'Users', to: routes.adminUsers.to() },
   { icon: <Settings className="size-4" />, label: 'Settings', to: routes.adminSettings.to() },
+] as const;
+
+const adminUtilityItems = [
   { icon: <UserRound className="size-4" />, label: 'Profile', to: routes.profile.to() },
   { icon: <LayoutDashboard className="size-4" />, label: 'Editor', to: routes.home.to() },
 ] as const;
@@ -29,7 +32,16 @@ export function AdminLayout() {
     <main className="flex h-dvh min-h-0 overflow-hidden bg-[rgb(var(--tabliodb-surface))] text-[rgb(var(--tabliodb-ink))]">
       <aside className="hidden h-full w-[272px] shrink-0 flex-col overflow-hidden border-r border-[rgb(var(--tabliodb-border))] bg-white lg:flex">
         <AdminBrand />
-        <AdminNavigation className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-3" />
+        <AdminNavigation
+          className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-3"
+          items={adminNavigationItems}
+        />
+        <div className="grid gap-2 border-t border-[rgb(var(--tabliodb-border))] p-3">
+          <div className="px-3 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-subtle))]">
+            Account
+          </div>
+          <AdminNavigation className="grid gap-1" items={adminUtilityItems} />
+        </div>
         <AdminLogoutButton disabled={logoutMutation.isPending} onLogout={() => logoutMutation.mutate(undefined)} />
       </aside>
 
@@ -47,6 +59,7 @@ export function AdminLayout() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <AdminNavigation className="hidden gap-2 md:flex lg:hidden" compact items={adminUtilityItems} />
               <Button
                 className="hidden sm:inline-flex"
                 disabled={logoutMutation.isPending}
@@ -73,6 +86,7 @@ export function AdminLayout() {
           <AdminNavigation
             className="tabliodb-scrollbar flex gap-2 overflow-x-auto border-t border-[rgb(var(--tabliodb-border))] p-2 lg:hidden"
             compact
+            items={adminNavigationItems}
           />
         </header>
 
@@ -102,10 +116,18 @@ function AdminBrand() {
   );
 }
 
-function AdminNavigation({ className, compact = false }: { className?: string; compact?: boolean }) {
+function AdminNavigation({
+  className,
+  compact = false,
+  items,
+}: {
+  className?: string;
+  compact?: boolean;
+  items: ReadonlyArray<{ icon: ReactNode; label: string; to: string }>;
+}) {
   return (
     <nav aria-label="Admin navigation" className={className}>
-      {adminNavigationItems.map((item) => (
+      {items.map((item) => (
         <AdminNavLink compact={compact} icon={item.icon} key={item.to} label={item.label} to={item.to} />
       ))}
     </nav>

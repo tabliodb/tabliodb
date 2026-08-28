@@ -56,7 +56,7 @@ export class InvitationService {
     }
 
     if (dto.folderId && dto.diagramId) {
-      throw new BadRequestException('Invitation can target either a folder folder or a diagram, not both');
+      throw new BadRequestException('Invitation can target either a folder or a diagram, not both');
     }
 
     const diagram = dto.diagramId ? await this.resolveDiagram(dto.diagramId) : null;

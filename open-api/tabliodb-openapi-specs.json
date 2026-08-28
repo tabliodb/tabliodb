@@ -5114,7 +5114,7 @@
               "enum": [
                 "owner",
                 "instance-admin",
-                "org-admin",
+                "workspace-manager",
                 "member"
               ],
               "type": "string"

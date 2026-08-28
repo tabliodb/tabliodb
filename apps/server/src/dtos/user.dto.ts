@@ -2,7 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 const InstanceRoleSchema = z.enum(['owner', 'admin']);
-const UserRoleFilterSchema = z.enum(['owner', 'instance-admin', 'org-admin', 'member']);
+const UserRoleFilterSchema = z.enum(['owner', 'instance-admin', 'workspace-manager', 'member']);
 const DateTimeSchema = z.iso.datetime({ offset: true });
 
 const UserCreateSchema = z
