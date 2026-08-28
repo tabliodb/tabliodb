@@ -121,7 +121,7 @@ export class CommentRepository {
     return this.db
       .selectFrom('comment_threads')
       .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
-      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('folders', 'folders.id', 'diagrams.folderId')
       .select([
         'comment_threads.id',
         'comment_threads.diagramId',
@@ -133,12 +133,12 @@ export class CommentRepository {
         'comment_threads.createdById',
         'comment_threads.createdAt',
         'comment_threads.updatedAt',
-        'diagrams.projectId',
+        'diagrams.folderId',
         'diagrams.organizationId',
       ])
       .where('comment_threads.id', '=', threadId)
       .where('diagrams.archivedAt', 'is', null)
-      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
+      .where((eb) => eb.or([eb('diagrams.folderId', 'is', null), eb('folders.archivedAt', 'is', null)]))
       .executeTakeFirst();
   }
 
@@ -157,7 +157,7 @@ export class CommentRepository {
       .selectFrom('comments')
       .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
       .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
-      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('folders', 'folders.id', 'diagrams.folderId')
       .select([
         'comments.id',
         'comments.threadId',
@@ -165,13 +165,13 @@ export class CommentRepository {
         'comments.createdById',
         'comments.deletedAt',
         'comment_threads.diagramId',
-        'diagrams.projectId',
+        'diagrams.folderId',
         'diagrams.organizationId',
       ])
       .where('comments.id', '=', commentId)
       .where('comments.deletedAt', 'is', null)
       .where('diagrams.archivedAt', 'is', null)
-      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
+      .where((eb) => eb.or([eb('diagrams.folderId', 'is', null), eb('folders.archivedAt', 'is', null)]))
       .executeTakeFirst();
   }
 
@@ -181,19 +181,19 @@ export class CommentRepository {
         .selectFrom('comments')
         .innerJoin('comment_threads', 'comment_threads.id', 'comments.threadId')
         .innerJoin('diagrams', 'diagrams.id', 'comment_threads.diagramId')
-        .leftJoin('projects', 'projects.id', 'diagrams.projectId')
+        .leftJoin('folders', 'folders.id', 'diagrams.folderId')
         .select([
           'comments.id',
           'comments.threadId',
           'comments.deletedAt',
           'comment_threads.diagramId',
-          'diagrams.projectId',
+          'diagrams.folderId',
           'diagrams.organizationId',
         ])
         // Replies to deleted tombstones still need to be readable so the nested tree does not collapse.
         .where('comments.id', '=', commentId)
         .where('diagrams.archivedAt', 'is', null)
-        .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
+        .where((eb) => eb.or([eb('diagrams.folderId', 'is', null), eb('folders.archivedAt', 'is', null)]))
         .executeTakeFirst()
     );
   }
@@ -288,14 +288,14 @@ export class CommentRepository {
   getMentionableUsersForDiagram(diagramId: string) {
     return sql<{ email: string; name: string; userId: string }>`
       WITH diagram_scope AS (
-        SELECT diagrams.id, diagrams.organization_id, diagrams.project_id
+        SELECT diagrams.id, diagrams.organization_id, diagrams.folder_id
         FROM diagrams
-        LEFT JOIN projects ON projects.id = diagrams.project_id
+        LEFT JOIN folders ON folders.id = diagrams.folder_id
         INNER JOIN organizations ON organizations.id = diagrams.organization_id
         WHERE diagrams.id = ${diagramId}
           AND diagrams.archived_at IS NULL
           AND organizations.archived_at IS NULL
-          AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+          AND (diagrams.folder_id IS NULL OR folders.archived_at IS NULL)
       ),
       access_users AS (
         SELECT diagram_members.user_id
@@ -317,18 +317,18 @@ export class CommentRepository {
           AND organization_members.user_id = team_members.user_id
           AND organization_members.status = 'active'
         UNION
-        SELECT project_members.user_id
-        FROM project_members
-        INNER JOIN diagram_scope ON diagram_scope.project_id = project_members.project_id
+        SELECT folder_access.user_id
+        FROM folder_access
+        INNER JOIN diagram_scope ON diagram_scope.folder_id = folder_access.folder_id
         INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
-        WHERE organization_members.user_id = project_members.user_id
+        WHERE organization_members.user_id = folder_access.user_id
           AND organization_members.status = 'active'
         UNION
         SELECT team_members.user_id
-        FROM project_team_access
-        INNER JOIN diagram_scope ON diagram_scope.project_id = project_team_access.project_id
-        INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
-        INNER JOIN teams ON teams.id = project_team_access.team_id
+        FROM folder_team_access
+        INNER JOIN diagram_scope ON diagram_scope.folder_id = folder_team_access.folder_id
+        INNER JOIN team_members ON team_members.team_id = folder_team_access.team_id
+        INNER JOIN teams ON teams.id = folder_team_access.team_id
         INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
         WHERE teams.archived_at IS NULL
           -- Folder-team inheritance must stay inside the diagram workspace even if an old row was written incorrectly.
@@ -347,19 +347,19 @@ export class CommentRepository {
         SELECT organization_members.user_id
         FROM organization_members
         INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
-        WHERE diagram_scope.project_id IS NULL
+        WHERE diagram_scope.folder_id IS NULL
           AND organization_members.status = 'active'
           AND organization_members.role = 'member'
         UNION
-        -- Workspace default project access contributes mention candidates for folder diagrams without individual rows.
+        -- Workspace default folder access contributes mention candidates for folder diagrams without individual rows.
         SELECT organization_members.user_id
         FROM organization_members
         INNER JOIN diagram_scope ON diagram_scope.organization_id = organization_members.organization_id
         INNER JOIN organizations ON organizations.id = diagram_scope.organization_id
-        WHERE diagram_scope.project_id IS NOT NULL
+        WHERE diagram_scope.folder_id IS NOT NULL
           AND organization_members.status = 'active'
           AND organization_members.role IN ('owner', 'admin', 'member')
-          AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
+          AND organizations.default_folder_role IN ('editor', 'commenter', 'viewer')
       )
       SELECT DISTINCT
         users.id AS "userId",

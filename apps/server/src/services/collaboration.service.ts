@@ -6,13 +6,13 @@ import { Redis as RedisClient } from 'ioredis';
 import type { IncomingHttpHeaders } from 'node:http';
 import {
   Permission,
-  ProjectRole,
+  AccessRole,
   REALTIME_PERSISTED_ACK_TYPE,
   REALTIME_SESSION_PROOF_TOKEN_TYPE,
   diagramDocumentName,
   isGranted,
   parseDiagramDocumentName,
-  permissionsForProjectRole,
+  permissionsForAccessRole,
   realtimeSessionProofPath,
   type AwarenessState,
   type RealtimePersistedAckMessage,
@@ -24,7 +24,7 @@ import {
   type StoredRealtimeDocumentReceipt,
 } from '../repositories/collaboration.repository.js';
 import { ConfigRepository } from '../repositories/config.repository.js';
-import { ProjectRepository } from '../repositories/project.repository.js';
+import { FolderRepository } from '../repositories/folder.repository.js';
 import { MetricsService } from './metrics.service.js';
 
 @Injectable()
@@ -39,7 +39,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
     private readonly collaborationRepository: CollaborationRepository,
     private readonly configRepository: ConfigRepository,
     private readonly metricsService: MetricsService,
-    private readonly projectRepository: ProjectRepository,
+    private readonly folderRepository: FolderRepository,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -457,7 +457,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async createConnectionContext(auth: AuthContext, diagramId: string): Promise<CollaborationContext> {
-    const role = await this.projectRepository.getDiagramRole(auth.user.id, diagramId);
+    const role = await this.folderRepository.getDiagramRole(auth.user.id, diagramId);
     if (!role) {
       throw new UnauthorizedException('Diagram access denied');
     }
@@ -466,7 +466,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
 
     const readOnly =
       !isGranted({
-        current: permissionsForProjectRole(role.role),
+        current: permissionsForAccessRole(role.role),
         requested: [Permission.DiagramUpdate],
       }) || !this.isApiKeyGranted(auth, Permission.DiagramUpdate);
 
@@ -499,7 +499,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
 type CollaborationContext = {
   diagramId: string;
   readOnly: boolean;
-  role: ProjectRole;
+  role: AccessRole;
   user: AwarenessState['user'];
   userId: string;
 };
@@ -522,7 +522,7 @@ function readCollaborationContext(value: unknown): CollaborationContext | null {
     typeof context.userId === 'string' &&
     isAwarenessUser(context.user) &&
     context.role &&
-    Object.values(ProjectRole).includes(context.role)
+    Object.values(AccessRole).includes(context.role)
   ) {
     return context as CollaborationContext;
   }

@@ -6,7 +6,7 @@ import {
   type DatabaseDialect,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import { ProjectRole } from '@tabliodb/shared';
+import { AccessRole } from '@tabliodb/shared';
 import { Insertable, Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, DiagramTable, JsonValue } from '../schema/index.js';
@@ -44,13 +44,13 @@ export class DiagramRepository {
       // Every diagram gets a row for Yjs persistence on creation, even before the first realtime update arrives.
       await tx.insertInto('diagram_documents').values({ diagramId: diagram.id, yjsState: null }).execute();
 
-      // Direct diagram ownership makes root diagrams shareable without forcing a synthetic project/folder row.
+      // Direct diagram ownership makes root diagrams shareable without forcing a synthetic folder/folder row.
       await tx
         .insertInto('diagram_members')
         .values({
           createdById: dto.createdById,
           diagramId: diagram.id,
-          role: ProjectRole.Owner,
+          role: AccessRole.Owner,
           userId: dto.createdById,
         })
         .onConflict((conflict) => conflict.columns(['diagramId', 'userId']).doNothing())
@@ -60,12 +60,12 @@ export class DiagramRepository {
     });
   }
 
-  async getByProject(projectId: string, options: DiagramListOptions) {
+  async getByFolder(folderId: string, options: DiagramListOptions) {
     const offset = decodeOffsetCursor(options.cursor);
     const rows = await this.db
       .selectFrom('diagrams')
-      .select(['id', 'organizationId', 'projectId', 'name', 'dialect', 'status', 'createdAt', 'updatedAt'])
-      .where('projectId', '=', projectId)
+      .select(['id', 'organizationId', 'folderId', 'name', 'dialect', 'status', 'createdAt', 'updatedAt'])
+      .where('folderId', '=', folderId)
       .where('archivedAt', 'is', null)
       .orderBy('updatedAt', 'desc')
       .limit(options.limit + 1)
@@ -74,7 +74,7 @@ export class DiagramRepository {
     const totalRow = await this.db
       .selectFrom('diagrams')
       .select((eb) => eb.fn.countAll<number>().as('count'))
-      .where('projectId', '=', projectId)
+      .where('folderId', '=', folderId)
       .where('archivedAt', 'is', null)
       .executeTakeFirstOrThrow();
 
@@ -92,15 +92,15 @@ export class DiagramRepository {
 
   async getByOrganization(
     organizationId: string,
-    options: DiagramListOptions & { projectId?: string | null; userId: string },
+    options: DiagramListOptions & { folderId?: string | null; userId: string },
   ) {
     const offset = decodeOffsetCursor(options.cursor);
-    const projectFilter =
-      options.projectId === undefined
+    const folderFilter =
+      options.folderId === undefined
         ? sql``
-        : options.projectId === null
-          ? sql`AND diagrams.project_id IS NULL`
-          : sql`AND diagrams.project_id = ${options.projectId}`;
+        : options.folderId === null
+          ? sql`AND diagrams.folder_id IS NULL`
+          : sql`AND diagrams.folder_id = ${options.folderId}`;
     const rows = await sql<DiagramListRow>`
       WITH diagram_access AS (
         ${this.createDiagramAccessSql(options.userId)}
@@ -128,7 +128,7 @@ export class DiagramRepository {
       SELECT
         diagrams.id,
         diagrams.organization_id AS "organizationId",
-        diagrams.project_id AS "projectId",
+        diagrams.folder_id AS "folderId",
         diagrams.name,
         diagrams.dialect,
         diagrams.status,
@@ -139,7 +139,7 @@ export class DiagramRepository {
       INNER JOIN effective_access ON effective_access.diagram_id = diagrams.id
       WHERE diagrams.organization_id = ${organizationId}
         AND diagrams.archived_at IS NULL
-        ${projectFilter}
+        ${folderFilter}
       ORDER BY diagrams.updated_at DESC, diagrams.id DESC
       LIMIT ${options.limit + 1}
       OFFSET ${offset}
@@ -158,7 +158,7 @@ export class DiagramRepository {
       INNER JOIN effective_access ON effective_access.diagram_id = diagrams.id
       WHERE diagrams.organization_id = ${organizationId}
         AND diagrams.archived_at IS NULL
-        ${projectFilter}
+        ${folderFilter}
     `.execute(this.db);
 
     return {
@@ -167,7 +167,7 @@ export class DiagramRepository {
         ...row,
         dialect: row.dialect as DatabaseDialect,
         // Workspace diagram listing carries the caller's effective role so the UI does not infer access from workspace/folder role alone.
-        role: row.role as ProjectRole,
+        role: row.role as AccessRole,
       })),
       nextCursor: rows.rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
       totalCount: Number(totalRow.rows[0]?.count ?? 0),
@@ -183,8 +183,8 @@ export class DiagramRepository {
       .executeTakeFirst();
   }
 
-  async update(diagramId: string, dto: { dialect?: DatabaseDialect; name?: string; projectId?: string | null }) {
-    const values: { dialect?: DatabaseDialect; name?: string; projectId?: string | null; updatedAt: Date } = {
+  async update(diagramId: string, dto: { dialect?: DatabaseDialect; name?: string; folderId?: string | null }) {
+    const values: { dialect?: DatabaseDialect; name?: string; folderId?: string | null; updatedAt: Date } = {
       updatedAt: new Date(),
     };
 
@@ -196,9 +196,9 @@ export class DiagramRepository {
       values.dialect = dto.dialect;
     }
 
-    if (dto.projectId !== undefined) {
+    if (dto.folderId !== undefined) {
       // Moving a diagram is a metadata update on the diagram row; permission checks stay in the service layer.
-      values.projectId = dto.projectId;
+      values.folderId = dto.folderId;
     }
 
     const diagram = await this.db
@@ -287,13 +287,13 @@ export class DiagramRepository {
           diagrams.id,
           diagrams.name,
           diagrams.organization_id,
-          diagrams.project_id,
+          diagrams.folder_id,
           organizations.name AS organization_name,
-          organizations.default_project_role,
-          projects.name AS project_name
+          organizations.default_folder_role,
+          folders.name AS folder_name
         FROM diagrams
         INNER JOIN organizations ON organizations.id = diagrams.organization_id
-        LEFT JOIN projects ON projects.id = diagrams.project_id AND projects.archived_at IS NULL
+        LEFT JOIN folders ON folders.id = diagrams.folder_id AND folders.archived_at IS NULL
         WHERE diagrams.id = ${diagramId}
           AND diagrams.archived_at IS NULL
           AND organizations.archived_at IS NULL
@@ -339,26 +339,26 @@ export class DiagramRepository {
         UNION ALL
 
         SELECT
-          project_members.user_id,
-          project_members.role::text AS role,
+          folder_access.user_id,
+          folder_access.role::text AS role,
           'folder'::text AS source_type,
-          diagram_scope.project_id AS source_id,
-          diagram_scope.project_name AS source_name,
-          concat('Folder: ', diagram_scope.project_name)::text AS source_label,
+          diagram_scope.folder_id AS source_id,
+          diagram_scope.folder_name AS source_name,
+          concat('Folder: ', diagram_scope.folder_name)::text AS source_label,
           false AS is_direct,
           30 AS source_priority
         FROM diagram_scope
-        INNER JOIN project_members ON project_members.project_id = diagram_scope.project_id
+        INNER JOIN folder_access ON folder_access.folder_id = diagram_scope.folder_id
         INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
-        WHERE diagram_scope.project_id IS NOT NULL
-          AND organization_members.user_id = project_members.user_id
+        WHERE diagram_scope.folder_id IS NOT NULL
+          AND organization_members.user_id = folder_access.user_id
           AND organization_members.status = 'active'
 
         UNION ALL
 
         SELECT
           team_members.user_id,
-          project_team_access.role::text AS role,
+          folder_team_access.role::text AS role,
           'folder_team'::text AS source_type,
           teams.id AS source_id,
           teams.name AS source_name,
@@ -366,11 +366,11 @@ export class DiagramRepository {
           false AS is_direct,
           40 AS source_priority
         FROM diagram_scope
-        INNER JOIN project_team_access ON project_team_access.project_id = diagram_scope.project_id
-        INNER JOIN teams ON teams.id = project_team_access.team_id
+        INNER JOIN folder_team_access ON folder_team_access.folder_id = diagram_scope.folder_id
+        INNER JOIN teams ON teams.id = folder_team_access.team_id
         INNER JOIN team_members ON team_members.team_id = teams.id
         INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
-        WHERE diagram_scope.project_id IS NOT NULL
+        WHERE diagram_scope.folder_id IS NOT NULL
           AND teams.archived_at IS NULL
           -- Folder team inheritance must not cross tenant boundaries even if a stale row exists.
           AND teams.organization_id = diagram_scope.organization_id
@@ -406,7 +406,7 @@ export class DiagramRepository {
           60 AS source_priority
         FROM diagram_scope
         INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
-        WHERE diagram_scope.project_id IS NULL
+        WHERE diagram_scope.folder_id IS NULL
           AND organization_members.status = 'active'
           AND organization_members.role = 'member'
 
@@ -414,7 +414,7 @@ export class DiagramRepository {
 
         SELECT
           organization_members.user_id,
-          diagram_scope.default_project_role::text AS role,
+          diagram_scope.default_folder_role::text AS role,
           'workspace_default'::text AS source_type,
           diagram_scope.organization_id AS source_id,
           diagram_scope.organization_name AS source_name,
@@ -423,10 +423,10 @@ export class DiagramRepository {
           70 AS source_priority
         FROM diagram_scope
         INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
-        WHERE diagram_scope.project_id IS NOT NULL
+        WHERE diagram_scope.folder_id IS NOT NULL
           AND organization_members.status = 'active'
           AND organization_members.role = 'member'
-          AND diagram_scope.default_project_role IN ('editor', 'commenter', 'viewer')
+          AND diagram_scope.default_folder_role IN ('editor', 'commenter', 'viewer')
       ),
       access_with_users AS (
         SELECT
@@ -499,10 +499,10 @@ export class DiagramRepository {
     `.execute(this.db);
     const totalRow = await sql<{ count: number }>`
       WITH diagram_scope AS (
-        SELECT diagrams.id, diagrams.organization_id, diagrams.project_id, organizations.default_project_role
+        SELECT diagrams.id, diagrams.organization_id, diagrams.folder_id, organizations.default_folder_role
         FROM diagrams
         INNER JOIN organizations ON organizations.id = diagrams.organization_id
-        LEFT JOIN projects ON projects.id = diagrams.project_id AND projects.archived_at IS NULL
+        LEFT JOIN folders ON folders.id = diagrams.folder_id AND folders.archived_at IS NULL
         WHERE diagrams.id = ${diagramId}
           AND diagrams.archived_at IS NULL
           AND organizations.archived_at IS NULL
@@ -530,23 +530,23 @@ export class DiagramRepository {
 
         UNION
 
-        SELECT project_members.user_id
+        SELECT folder_access.user_id
         FROM diagram_scope
-        INNER JOIN project_members ON project_members.project_id = diagram_scope.project_id
+        INNER JOIN folder_access ON folder_access.folder_id = diagram_scope.folder_id
         INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
-        WHERE diagram_scope.project_id IS NOT NULL
-          AND organization_members.user_id = project_members.user_id
+        WHERE diagram_scope.folder_id IS NOT NULL
+          AND organization_members.user_id = folder_access.user_id
           AND organization_members.status = 'active'
 
         UNION
 
         SELECT team_members.user_id
         FROM diagram_scope
-        INNER JOIN project_team_access ON project_team_access.project_id = diagram_scope.project_id
-        INNER JOIN teams ON teams.id = project_team_access.team_id
+        INNER JOIN folder_team_access ON folder_team_access.folder_id = diagram_scope.folder_id
+        INNER JOIN teams ON teams.id = folder_team_access.team_id
         INNER JOIN team_members ON team_members.team_id = teams.id
         INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
-        WHERE diagram_scope.project_id IS NOT NULL
+        WHERE diagram_scope.folder_id IS NOT NULL
           AND teams.archived_at IS NULL
           AND teams.organization_id = diagram_scope.organization_id
           AND organization_members.user_id = team_members.user_id
@@ -565,7 +565,7 @@ export class DiagramRepository {
         SELECT organization_members.user_id
         FROM diagram_scope
         INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
-        WHERE diagram_scope.project_id IS NULL
+        WHERE diagram_scope.folder_id IS NULL
           AND organization_members.status = 'active'
           AND organization_members.role = 'member'
 
@@ -574,10 +574,10 @@ export class DiagramRepository {
         SELECT organization_members.user_id
         FROM diagram_scope
         INNER JOIN organization_members ON organization_members.organization_id = diagram_scope.organization_id
-        WHERE diagram_scope.project_id IS NOT NULL
+        WHERE diagram_scope.folder_id IS NOT NULL
           AND organization_members.status = 'active'
           AND organization_members.role = 'member'
-          AND diagram_scope.default_project_role IN ('editor', 'commenter', 'viewer')
+          AND diagram_scope.default_folder_role IN ('editor', 'commenter', 'viewer')
       )
       SELECT count(*)::int AS count
       FROM access_user_ids
@@ -589,8 +589,8 @@ export class DiagramRepository {
       items: rows.rows.slice(0, options.limit).map((row) => ({
         ...row,
         accessType: row.accessType as DiagramEffectiveAccessType,
-        directRole: row.directRole ? (row.directRole as ProjectRole) : null,
-        role: row.role as ProjectRole,
+        directRole: row.directRole ? (row.directRole as AccessRole) : null,
+        role: row.role as AccessRole,
         sources: normalizeEffectiveAccessSources(row.sources),
       })),
       nextCursor: rows.rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
@@ -602,7 +602,7 @@ export class DiagramRepository {
     return this.createMemberQuery(diagramId).where('diagram_members.userId', '=', userId).executeTakeFirst();
   }
 
-  async upsertMember(diagramId: string, options: { createdById: string; role: ProjectRole; userId: string }) {
+  async upsertMember(diagramId: string, options: { createdById: string; role: AccessRole; userId: string }) {
     await this.db
       .insertInto('diagram_members')
       .values({
@@ -622,7 +622,7 @@ export class DiagramRepository {
     return this.getMember(diagramId, options.userId);
   }
 
-  async updateMember(diagramId: string, userId: string, role: ProjectRole) {
+  async updateMember(diagramId: string, userId: string, role: AccessRole) {
     const member = await this.db
       .updateTable('diagram_members')
       .set({ role, updatedAt: new Date() })
@@ -640,9 +640,9 @@ export class DiagramRepository {
     await this.db.transaction().execute(async (tx) => {
       await tx
         .updateTable('diagram_members')
-        .set({ role: ProjectRole.Editor, updatedAt: now })
+        .set({ role: AccessRole.Editor, updatedAt: now })
         .where('diagramId', '=', diagramId)
-        .where('role', '=', ProjectRole.Owner)
+        .where('role', '=', AccessRole.Owner)
         .where('userId', '!=', options.userId)
         .execute();
 
@@ -651,12 +651,12 @@ export class DiagramRepository {
         .values({
           createdById: options.createdById,
           diagramId,
-          role: ProjectRole.Owner,
+          role: AccessRole.Owner,
           userId: options.userId,
         })
         .onConflict((conflict) =>
           conflict.columns(['diagramId', 'userId']).doUpdateSet({
-            role: ProjectRole.Owner,
+            role: AccessRole.Owner,
             updatedAt: now,
           }),
         )
@@ -682,7 +682,7 @@ export class DiagramRepository {
       .selectFrom('diagram_members')
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .where('diagramId', '=', diagramId)
-      .where('role', '=', ProjectRole.Owner)
+      .where('role', '=', AccessRole.Owner)
       .executeTakeFirstOrThrow();
 
     return Number(row.count);
@@ -710,7 +710,7 @@ export class DiagramRepository {
   }
 
   private createDiagramAccessSql(userId: string) {
-    return sql<{ diagram_id: string; role: ProjectRole }>`
+    return sql<{ diagram_id: string; role: AccessRole }>`
       SELECT diagram_members.diagram_id, diagram_members.role
       FROM diagram_members
       INNER JOIN diagrams ON diagrams.id = diagram_members.diagram_id
@@ -733,29 +733,29 @@ export class DiagramRepository {
         AND teams.archived_at IS NULL
         AND teams.organization_id = diagrams.organization_id
       UNION ALL
-      SELECT diagrams.id AS diagram_id, project_members.role
+      SELECT diagrams.id AS diagram_id, folder_access.role
       FROM diagrams
-      INNER JOIN projects ON projects.id = diagrams.project_id
-      INNER JOIN project_members ON project_members.project_id = projects.id
+      INNER JOIN folders ON folders.id = diagrams.folder_id
+      INNER JOIN folder_access ON folder_access.folder_id = folders.id
       INNER JOIN organization_members ON organization_members.organization_id = diagrams.organization_id
-      WHERE project_members.user_id = ${userId}
+      WHERE folder_access.user_id = ${userId}
         AND organization_members.user_id = ${userId}
         AND organization_members.status = 'active'
         AND diagrams.archived_at IS NULL
-        AND projects.archived_at IS NULL
+        AND folders.archived_at IS NULL
       UNION ALL
-      SELECT diagrams.id AS diagram_id, project_team_access.role
+      SELECT diagrams.id AS diagram_id, folder_team_access.role
       FROM diagrams
-      INNER JOIN projects ON projects.id = diagrams.project_id
-      INNER JOIN project_team_access ON project_team_access.project_id = projects.id
-      INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
-      INNER JOIN teams ON teams.id = project_team_access.team_id
+      INNER JOIN folders ON folders.id = diagrams.folder_id
+      INNER JOIN folder_team_access ON folder_team_access.folder_id = folders.id
+      INNER JOIN team_members ON team_members.team_id = folder_team_access.team_id
+      INNER JOIN teams ON teams.id = folder_team_access.team_id
       INNER JOIN organization_members ON organization_members.organization_id = teams.organization_id
       WHERE team_members.user_id = ${userId}
         AND organization_members.user_id = ${userId}
         AND organization_members.status = 'active'
         AND diagrams.archived_at IS NULL
-        AND projects.archived_at IS NULL
+        AND folders.archived_at IS NULL
         AND teams.archived_at IS NULL
         AND teams.organization_id = diagrams.organization_id
       UNION ALL
@@ -773,24 +773,24 @@ export class DiagramRepository {
       FROM diagrams
       INNER JOIN organizations ON organizations.id = diagrams.organization_id
       INNER JOIN organization_members ON organization_members.organization_id = organizations.id
-      WHERE diagrams.project_id IS NULL
+      WHERE diagrams.folder_id IS NULL
         AND organization_members.user_id = ${userId}
         AND organization_members.status = 'active'
         AND organization_members.role = 'member'
         AND diagrams.archived_at IS NULL
         AND organizations.archived_at IS NULL
       UNION ALL
-      SELECT diagrams.id AS diagram_id, organizations.default_project_role AS role
+      SELECT diagrams.id AS diagram_id, organizations.default_folder_role AS role
       FROM diagrams
-      INNER JOIN projects ON projects.id = diagrams.project_id
+      INNER JOIN folders ON folders.id = diagrams.folder_id
       INNER JOIN organizations ON organizations.id = diagrams.organization_id
       INNER JOIN organization_members ON organization_members.organization_id = organizations.id
       WHERE organization_members.user_id = ${userId}
         AND organization_members.status = 'active'
         AND organization_members.role IN ('owner', 'admin', 'member')
-        AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
+        AND organizations.default_folder_role IN ('editor', 'commenter', 'viewer')
         AND diagrams.archived_at IS NULL
-        AND projects.archived_at IS NULL
+        AND folders.archived_at IS NULL
         AND organizations.archived_at IS NULL
     `;
   }
@@ -802,8 +802,8 @@ type DiagramListRow = {
   id: string;
   name: string;
   organizationId: string;
-  projectId: string | null;
-  role: ProjectRole;
+  folderId: string | null;
+  role: AccessRole;
   status: 'draft' | 'reviewed' | 'approved' | 'changes_requested';
   updatedAt: Date;
 };
@@ -812,7 +812,7 @@ type DiagramEffectiveAccessType = 'direct' | 'inherited' | 'mixed';
 
 type DiagramEffectiveAccessSource = {
   inherited: boolean;
-  role: ProjectRole;
+  role: AccessRole;
   sourceId: string | null;
   sourceLabel: string;
   sourceName: string | null;
@@ -847,7 +847,7 @@ function normalizeEffectiveAccessSources(value: unknown): DiagramEffectiveAccess
     return [
       {
         inherited: Boolean(source.inherited),
-        role: normalizeProjectRole(source.role),
+        role: normalizeAccessRole(source.role),
         sourceId: typeof source.sourceId === 'string' ? source.sourceId : null,
         sourceLabel: typeof source.sourceLabel === 'string' ? source.sourceLabel : 'Inherited access',
         sourceName: typeof source.sourceName === 'string' ? source.sourceName : null,
@@ -861,17 +861,17 @@ function isEffectiveAccessSourceObject(source: unknown): source is Record<string
   return Boolean(source && typeof source === 'object');
 }
 
-function normalizeProjectRole(role: unknown): ProjectRole {
+function normalizeAccessRole(role: unknown): AccessRole {
   if (
-    role === ProjectRole.Owner ||
-    role === ProjectRole.Editor ||
-    role === ProjectRole.Commenter ||
-    role === ProjectRole.Viewer
+    role === AccessRole.Owner ||
+    role === AccessRole.Editor ||
+    role === AccessRole.Commenter ||
+    role === AccessRole.Viewer
   ) {
     return role;
   }
 
-  return ProjectRole.Viewer;
+  return AccessRole.Viewer;
 }
 
 function normalizeEffectiveAccessSourceType(sourceType: unknown): DiagramEffectiveAccessSource['sourceType'] {

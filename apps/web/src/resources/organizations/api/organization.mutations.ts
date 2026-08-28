@@ -15,7 +15,7 @@ import {
   type OrganizationSettingsUpdateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { projectsKeys } from '@/resources/projects';
+import { foldersKeys } from '@/resources/folders';
 import { organizationsKeys } from './organization.keys';
 
 const createOrganizationMutationFn = (body: OrganizationCreateDto) =>
@@ -77,10 +77,10 @@ export function useUpdateOrganizationSettingsMutation(params: UseUpdateOrganizat
     mutationFn: updateOrganizationSettingsMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Workspace settings affect project list labels/slugs and the settings dialog itself, so both caches are refreshed.
+      // Workspace settings affect folder list labels/slugs and the settings dialog itself, so both caches are refreshed.
       queryClient.setQueryData(organizationsKeys.settings(variables.organizationId), data);
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -148,7 +148,7 @@ export function useTransferOrganizationOwnershipMutation(params: UseTransferOrga
       queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -163,10 +163,10 @@ export function useRemoveOrganizationMemberMutation(params: UseRemoveOrganizatio
     mutationFn: removeOrganizationMemberMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Removing a workspace member can remove their project visibility too, so project lists are refreshed after success.
+      // Removing a workspace member can remove their folder visibility too, so folder lists are refreshed after success.
       queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

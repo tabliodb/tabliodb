@@ -16,7 +16,7 @@ export const permissionMetadataKey = 'tabliodb:permission';
 export type PermissionTargetSource = 'body' | 'param' | 'query';
 
 export type PermissionTargetSelector =
-  { type: 'global' } | { key: string; source: PermissionTargetSource; type: 'diagram' | 'organization' | 'project' };
+  { type: 'global' } | { key: string; source: PermissionTargetSource; type: 'diagram' | 'organization' | 'folder' };
 
 export type PermissionMetadata = {
   permission: Permission;

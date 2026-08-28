@@ -134,15 +134,15 @@ export class NotificationService {
       id: item.id,
       isUnread: item.isUnread,
       parentComment,
-      project:
-        item.projectId && item.projectName && item.projectSlug
+      folder:
+        item.folderId && item.folderName && item.folderSlug
           ? {
-              id: item.projectId,
-              name: item.projectName,
+              id: item.folderId,
+              name: item.folderName,
               organizationId: item.organizationId,
               organizationName: item.organizationName,
               organizationSlug: item.organizationSlug,
-              slug: item.projectSlug,
+              slug: item.folderSlug,
             }
           : null,
       thread: {

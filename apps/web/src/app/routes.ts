@@ -2,11 +2,11 @@ type WorkspaceParams = {
   workspaceSlug: string;
 };
 
-type ProjectParams = WorkspaceParams & {
-  projectId: string;
+type FolderParams = WorkspaceParams & {
+  folderId: string;
 };
 
-type DiagramParams = ProjectParams & {
+type DiagramParams = FolderParams & {
   diagramId: string;
 };
 
@@ -93,15 +93,15 @@ export const routes = {
     path: '/workspaces/:workspaceSlug',
     to: ({ workspaceSlug }: WorkspaceParams) => `/workspaces/${encodePathSegment(workspaceSlug)}`,
   },
-  project: {
-    path: '/workspaces/:workspaceSlug/projects/:projectId',
-    to: ({ projectId, workspaceSlug }: ProjectParams) =>
-      `/workspaces/${encodePathSegment(workspaceSlug)}/projects/${encodePathSegment(projectId)}`,
+  folder: {
+    path: '/workspaces/:workspaceSlug/folders/:folderId',
+    to: ({ folderId, workspaceSlug }: FolderParams) =>
+      `/workspaces/${encodePathSegment(workspaceSlug)}/folders/${encodePathSegment(folderId)}`,
   },
   diagram: {
-    path: '/workspaces/:workspaceSlug/projects/:projectId/diagrams/:diagramId',
-    to: ({ diagramId, projectId, workspaceSlug }: DiagramParams) =>
-      `/workspaces/${encodePathSegment(workspaceSlug)}/projects/${encodePathSegment(projectId)}/diagrams/${encodePathSegment(diagramId)}`,
+    path: '/workspaces/:workspaceSlug/folders/:folderId/diagrams/:diagramId',
+    to: ({ diagramId, folderId, workspaceSlug }: DiagramParams) =>
+      `/workspaces/${encodePathSegment(workspaceSlug)}/folders/${encodePathSegment(folderId)}/diagrams/${encodePathSegment(diagramId)}`,
   },
   workspaceDiagram: {
     path: '/workspaces/:workspaceSlug/diagrams/:diagramId',

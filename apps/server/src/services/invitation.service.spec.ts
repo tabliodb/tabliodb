@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, AccessRole } from '@tabliodb/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import type { InvitationRecord } from '../repositories/invitation.repository.js';
@@ -33,9 +33,9 @@ const pendingInvitation: InvitationRecord = {
   organizationName: 'Default Workspace',
   organizationRole: OrganizationRole.Member,
   organizationSlug: 'default-workspace',
-  projectId: null,
-  projectName: null,
-  projectRole: null,
+  folderId: null,
+  folderName: null,
+  folderRole: null,
   revokedAt: null,
 };
 
@@ -66,10 +66,10 @@ describe(InvitationService.name, () => {
     getFirstForUser: vi.fn(),
     getRole: vi.fn(),
   };
-  const projectRepository = {
+  const folderRepository = {
     getByIdForUser: vi.fn(),
     getDiagramRole: vi.fn(),
-    getProjectRole: vi.fn(),
+    getAccessRole: vi.fn(),
   };
   const userRepository = {
     getAnyByEmail: vi.fn(),
@@ -89,7 +89,7 @@ describe(InvitationService.name, () => {
       diagramRepository as never,
       invitationRepository as never,
       organizationRepository as never,
-      projectRepository as never,
+      folderRepository as never,
       userRepository as never,
     );
 
@@ -140,8 +140,8 @@ describe(InvitationService.name, () => {
       message: 'Welcome aboard',
       organizationId: 'organization-id',
       organizationRole: OrganizationRole.Member,
-      projectId: null,
-      projectRole: null,
+      folderId: null,
+      folderRole: null,
       tokenHash: Buffer.from('hashed-token'),
     });
   });
@@ -203,7 +203,7 @@ describe(InvitationService.name, () => {
         email: 'new.user@tabliodb.local',
         expiresInDays: 7,
         organizationRole: OrganizationRole.Member,
-        projectRole: ProjectRole.Viewer,
+        folderRole: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
 

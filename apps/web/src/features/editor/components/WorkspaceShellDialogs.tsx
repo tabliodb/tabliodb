@@ -4,7 +4,7 @@ import {
   Dialect as SdkDialect,
   type DiagramResponseDtoOutput,
   type OrganizationDtoOutput,
-  type ProjectResponseDtoOutput,
+  type FolderResponseDtoOutput,
 } from '@tabliodb/sdk';
 import {
   Button,
@@ -26,12 +26,12 @@ import { ControlledInput, ControlledSelect, ControlledTextarea } from '@/feature
 import { getErrorMessage } from '@/features/app/RouteStates';
 import { defaultDiagramName, useCreateDiagramMutation, useCreateWorkspaceDiagramMutation } from '@/resources/diagrams';
 import { useCreateOrganizationMutation } from '@/resources/organizations';
-import { useCreateProjectMutation } from '@/resources/projects';
+import { useCreateFolderMutation } from '@/resources/folders';
 import { getDialectSelectOption } from './DialectIcon';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
 const rootDiagramLocationValue = '__workspace_root__';
 
 const diagramDialectOptions = [
@@ -56,16 +56,16 @@ const workspaceCreateFormSchema = z.object({
 
 type WorkspaceCreateFormState = z.infer<typeof workspaceCreateFormSchema>;
 
-const projectCreateFormSchema = z.object({
+const folderCreateFormSchema = z.object({
   description: z.string().trim().max(240, 'Keep the description under 240 characters.').optional(),
   name: z.string().trim().min(1, 'Folder name is required.').max(80, 'Keep the name under 80 characters.'),
 });
 
-type ProjectCreateFormState = z.infer<typeof projectCreateFormSchema>;
+type FolderCreateFormState = z.infer<typeof folderCreateFormSchema>;
 
 const diagramCreateFormSchema = z.object({
   dialect: z.enum(diagramDialectOptions),
-  projectId: z.string().min(1, 'Choose where this diagram should live.'),
+  folderId: z.string().min(1, 'Choose where this diagram should live.'),
   name: z.string().trim().min(1, 'Diagram name is required.').max(80, 'Keep the name under 80 characters.'),
 });
 
@@ -186,14 +186,14 @@ export function CreateWorkspaceDialog({
   );
 }
 
-export function CreateProjectDialog({
+export function CreateFolderDialog({
   onCreated,
   onOpenChange,
   open,
   organizationId,
   trigger,
 }: {
-  onCreated: (project: ProjectResponseDto) => void;
+  onCreated: (folder: FolderResponseDto) => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   organizationId: string | null;
@@ -201,23 +201,23 @@ export function CreateProjectDialog({
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const dialogOpen = open ?? internalOpen;
-  const form = useForm<ProjectCreateFormState>({
+  const form = useForm<FolderCreateFormState>({
     defaultValues: {
       description: '',
       name: '',
     },
     mode: 'onBlur',
-    resolver: zodResolver(projectCreateFormSchema),
+    resolver: zodResolver(folderCreateFormSchema),
   });
   const { errors } = form.formState;
 
-  const createProjectMutation = useCreateProjectMutation({
+  const createFolderMutation = useCreateFolderMutation({
     mutationConfig: {
-      onSuccess: (project) => {
+      onSuccess: (folder) => {
         // Folder creation updates the folder list; the current canvas should stay focused on the open diagram.
         form.reset({ description: '', name: '' });
         handleOpenChange(false);
-        onCreated(project);
+        onCreated(folder);
       },
     },
   });
@@ -226,18 +226,18 @@ export function CreateProjectDialog({
     setInternalOpen(nextOpen);
     onOpenChange?.(nextOpen);
 
-    if (!nextOpen && !createProjectMutation.isPending) {
+    if (!nextOpen && !createFolderMutation.isPending) {
       form.reset({ description: '', name: '' });
-      createProjectMutation.reset();
+      createFolderMutation.reset();
     }
   }
 
-  function handleSubmit(values: ProjectCreateFormState) {
+  function handleSubmit(values: FolderCreateFormState) {
     if (!organizationId) {
       return;
     }
 
-    createProjectMutation.mutate({
+    createFolderMutation.mutate({
       description: toOptionalDescription(values.description),
       name: values.name,
       organizationId,
@@ -273,7 +273,7 @@ export function CreateProjectDialog({
                   autoFocus
                   aria-invalid={Boolean(errors.name)}
                   control={form.control}
-                  disabled={!organizationId || createProjectMutation.isPending}
+                  disabled={!organizationId || createFolderMutation.isPending}
                   name="name"
                   placeholder="Backend schema"
                 />
@@ -288,16 +288,16 @@ export function CreateProjectDialog({
                   aria-invalid={Boolean(errors.description)}
                   className="min-h-24 w-full resize-none rounded-2xl border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                   control={form.control}
-                  disabled={!organizationId || createProjectMutation.isPending}
+                  disabled={!organizationId || createFolderMutation.isPending}
                   name="description"
                   placeholder="Diagrams for the main database, reporting schema, or future redesign."
                 />
                 <FieldError>{errors.description?.message}</FieldError>
               </label>
 
-              {createProjectMutation.error ? (
+              {createFolderMutation.error ? (
                 <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                  {getErrorMessage(createProjectMutation.error)}
+                  {getErrorMessage(createFolderMutation.error)}
                 </div>
               ) : null}
             </div>
@@ -305,15 +305,15 @@ export function CreateProjectDialog({
 
           <DialogFooter>
             <Button
-              disabled={createProjectMutation.isPending}
+              disabled={createFolderMutation.isPending}
               onClick={() => handleOpenChange(false)}
               type="button"
               variant="secondary"
             >
               Cancel
             </Button>
-            <Button disabled={!organizationId || createProjectMutation.isPending} type="submit">
-              {createProjectMutation.isPending ? (
+            <Button disabled={!organizationId || createFolderMutation.isPending} type="submit">
+              {createFolderMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <FolderPlus className="size-4" />
@@ -329,35 +329,35 @@ export function CreateProjectDialog({
 
 export function CreateDiagramDialog({
   defaultDialect,
-  defaultProjectId,
+  defaultFolderId,
   onCreated,
   onOpenChange,
   open,
   organizationId,
-  projects = [],
+  folders = [],
   trigger,
 }: {
   defaultDialect: DatabaseDialect;
-  defaultProjectId?: string | null;
+  defaultFolderId?: string | null;
   onCreated: (diagram: DiagramResponseDto) => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   organizationId: string | null;
-  projects?: ProjectResponseDto[];
+  folders?: FolderResponseDto[];
   trigger?: ReactNode | null;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const dialogOpen = open ?? internalOpen;
   const canCreateInContext = Boolean(organizationId);
-  const selectedDefaultProjectId =
-    defaultProjectId && projects.some((project) => project.id === defaultProjectId)
-      ? defaultProjectId
+  const selectedDefaultFolderId =
+    defaultFolderId && folders.some((folder) => folder.id === defaultFolderId)
+      ? defaultFolderId
       : rootDiagramLocationValue;
   const form = useForm<DiagramCreateFormState>({
     defaultValues: {
       dialect: defaultDialect,
       name: '',
-      projectId: selectedDefaultProjectId,
+      folderId: selectedDefaultFolderId,
     },
     mode: 'onBlur',
     resolver: zodResolver(diagramCreateFormSchema),
@@ -366,8 +366,8 @@ export function CreateDiagramDialog({
   const createWorkspaceDiagramMutation = useCreateWorkspaceDiagramMutation({
     mutationConfig: {
       onSuccess: (diagram) => {
-        // Workspace-level diagram creation has the same UX contract as project-level creation: close and open the new ERD.
-        form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
+        // Workspace-level diagram creation has the same UX contract as folder-level creation: close and open the new ERD.
+        form.reset({ dialect: defaultDialect, name: '', folderId: selectedDefaultFolderId });
         handleOpenChange(false);
         onCreated(diagram);
       },
@@ -377,15 +377,15 @@ export function CreateDiagramDialog({
   useEffect(() => {
     if (dialogOpen) {
       // Opening the dialog respects the active dialect and the folder filter selected in the diagram library.
-      form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
+      form.reset({ dialect: defaultDialect, name: '', folderId: selectedDefaultFolderId });
     }
-  }, [defaultDialect, dialogOpen, form, selectedDefaultProjectId]);
+  }, [defaultDialect, dialogOpen, form, selectedDefaultFolderId]);
 
   const createDiagramMutation = useCreateDiagramMutation({
     mutationConfig: {
       onSuccess: (diagram) => {
         // New diagram becomes an empty unsaved draft; the first persisted saved version is created only when the user clicks Save.
-        form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
+        form.reset({ dialect: defaultDialect, name: '', folderId: selectedDefaultFolderId });
         handleOpenChange(false);
         onCreated(diagram);
       },
@@ -397,7 +397,7 @@ export function CreateDiagramDialog({
     onOpenChange?.(nextOpen);
 
     if (!nextOpen && !createDiagramMutation.isPending && !createWorkspaceDiagramMutation.isPending) {
-      form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
+      form.reset({ dialect: defaultDialect, name: '', folderId: selectedDefaultFolderId });
       createDiagramMutation.reset();
       createWorkspaceDiagramMutation.reset();
     }
@@ -409,9 +409,9 @@ export function CreateDiagramDialog({
     }
 
     try {
-      const selectedProjectId = values.projectId === rootDiagramLocationValue ? null : values.projectId;
+      const selectedFolderId = values.folderId === rootDiagramLocationValue ? null : values.folderId;
 
-      if (!selectedProjectId) {
+      if (!selectedFolderId) {
         await createWorkspaceDiagramMutation.mutateAsync({
           body: {
             dialect: sdkDialectByValue[values.dialect],
@@ -426,9 +426,9 @@ export function CreateDiagramDialog({
       await createDiagramMutation.mutateAsync({
         dialect: sdkDialectByValue[values.dialect],
         name: values.name,
-        // Diagram tetap milik workspace; projectId hanya metadata folder opsional untuk organisasi daftar.
+        // Diagram tetap milik workspace; folderId hanya metadata folder opsional untuk organisasi daftar.
         organizationId: organizationId!,
-        projectId: selectedProjectId,
+        folderId: selectedFolderId,
       });
     } catch {
       // React Query keeps the failed mutation in state; the dialog renders that message without throwing into react-hook-form.
@@ -495,22 +495,22 @@ export function CreateDiagramDialog({
                   Location
                 </span>
                 <ControlledSelect
-                  aria-invalid={Boolean(errors.projectId)}
+                  aria-invalid={Boolean(errors.folderId)}
                   control={form.control}
                   disabled={!canCreateInContext || isCreatingDiagram}
-                  name="projectId"
+                  name="folderId"
                   options={[
                     {
                       label: 'No folder',
                       value: rootDiagramLocationValue,
                     },
-                    ...projects.map((project) => ({
-                      label: project.name,
-                      value: project.id,
+                    ...folders.map((folder) => ({
+                      label: folder.name,
+                      value: folder.id,
                     })),
                   ]}
                 />
-                <FieldError>{errors.projectId?.message}</FieldError>
+                <FieldError>{errors.folderId?.message}</FieldError>
                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
                   Folders are optional. Choose one only when this diagram should be grouped with related ERDs.
                 </p>

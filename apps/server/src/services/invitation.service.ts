@@ -8,10 +8,10 @@ import {
 import {
   OrganizationRole,
   Permission,
-  ProjectRole,
+  AccessRole,
   isGranted,
   permissionsForOrganizationRole,
-  permissionsForProjectRole,
+  permissionsForAccessRole,
 } from '@tabliodb/shared';
 import { SALT_ROUNDS } from '../constants.js';
 import type { AuthContext } from '../database.js';
@@ -28,7 +28,7 @@ import { CryptoRepository } from '../repositories/crypto.repository.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
 import { InvitationRecord, InvitationRepository } from '../repositories/invitation.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
-import { ProjectRepository } from '../repositories/project.repository.js';
+import { FolderRepository } from '../repositories/folder.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import { toIsoDateTime, toNullableIsoDateTime } from '../utils/date-time.js';
 import { AuthService } from './auth.service.js';
@@ -44,7 +44,7 @@ export class InvitationService {
     private readonly diagramRepository: DiagramRepository,
     private readonly invitationRepository: InvitationRepository,
     private readonly organizationRepository: OrganizationRepository,
-    private readonly projectRepository: ProjectRepository,
+    private readonly folderRepository: FolderRepository,
     private readonly userRepository: UserRepository,
   ) {}
 
@@ -55,36 +55,36 @@ export class InvitationService {
       throw new ConflictException('A user with this email already exists');
     }
 
-    if (dto.projectId && dto.diagramId) {
-      throw new BadRequestException('Invitation can target either a project folder or a diagram, not both');
+    if (dto.folderId && dto.diagramId) {
+      throw new BadRequestException('Invitation can target either a folder folder or a diagram, not both');
     }
 
     const diagram = dto.diagramId ? await this.resolveDiagram(dto.diagramId) : null;
     const organization = await this.resolveOrganization(auth, dto, diagram?.organizationId);
-    const project = dto.projectId ? await this.resolveProject(auth, dto.projectId, organization.id) : null;
+    const folder = dto.folderId ? await this.resolveFolder(auth, dto.folderId, organization.id) : null;
     if (diagram && diagram.organizationId !== organization.id) {
       throw new BadRequestException('Diagram does not belong to the selected organization');
     }
     await this.requireInviteTargetPermission(auth, {
       diagramId: diagram?.id ?? null,
       organizationId: organization.id,
-      projectId: project?.id ?? null,
+      folderId: folder?.id ?? null,
     });
 
     const token = this.cryptoRepository.randomBytesAsText(32);
     const invitation = await this.invitationRepository.create({
       diagramId: diagram?.id ?? null,
       // Diagram-only invites default to viewer so a share token does not grant write access by surprise.
-      diagramRole: diagram ? (dto.diagramRole ?? ProjectRole.Viewer) : null,
+      diagramRole: diagram ? (dto.diagramRole ?? AccessRole.Viewer) : null,
       email,
       expiresAt: new Date(Date.now() + dto.expiresInDays * ONE_DAY_MS),
       invitedById: auth.user.id,
       message: dto.message?.trim() || null,
       organizationId: organization.id,
       organizationRole: dto.organizationRole ?? (diagram ? OrganizationRole.Guest : OrganizationRole.Member),
-      projectId: project?.id ?? null,
-      // Project invite default sengaja editor agar invite ke project langsung bisa produktif, sementara workspace-only invite tetap tanpa project role.
-      projectRole: project ? (dto.projectRole ?? ProjectRole.Editor) : null,
+      folderId: folder?.id ?? null,
+      // Folder invite default sengaja editor agar invite ke folder langsung bisa produktif, sementara workspace-only invite tetap tanpa folder role.
+      folderRole: folder ? (dto.folderRole ?? AccessRole.Editor) : null,
       tokenHash: this.cryptoRepository.hashSha256(token),
     });
 
@@ -152,17 +152,17 @@ export class InvitationService {
     return diagram;
   }
 
-  private async resolveProject(auth: AuthContext, projectId: string, organizationId: string) {
-    const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
-    if (!project) {
-      throw new NotFoundException('Project not found');
+  private async resolveFolder(auth: AuthContext, folderId: string, organizationId: string) {
+    const folder = await this.folderRepository.getByIdForUser(auth.user.id, folderId);
+    if (!folder) {
+      throw new NotFoundException('Folder not found');
     }
 
-    if (project.organizationId !== organizationId) {
-      throw new BadRequestException('Project does not belong to the selected organization');
+    if (folder.organizationId !== organizationId) {
+      throw new BadRequestException('Folder does not belong to the selected organization');
     }
 
-    return project;
+    return folder;
   }
 
   private async loadByToken(token: string): Promise<InvitationRecord> {
@@ -188,19 +188,19 @@ export class InvitationService {
 
   private async requireInviteTargetPermission(
     auth: AuthContext,
-    target: { diagramId: string | null; organizationId: string; projectId: string | null },
+    target: { diagramId: string | null; organizationId: string; folderId: string | null },
   ): Promise<void> {
     if (target.diagramId) {
       this.assertApiKeyScope(auth, Permission.DiagramMemberManage);
-      const role = await this.projectRepository.getDiagramRole(auth.user.id, target.diagramId);
-      this.assertProjectPermission(role?.role ?? null, Permission.DiagramMemberManage);
+      const role = await this.folderRepository.getDiagramRole(auth.user.id, target.diagramId);
+      this.assertFolderPermission(role?.role ?? null, Permission.DiagramMemberManage);
       return;
     }
 
-    if (target.projectId) {
-      this.assertApiKeyScope(auth, Permission.ProjectMemberManage);
-      const role = await this.projectRepository.getProjectRole(auth.user.id, target.projectId);
-      this.assertProjectPermission(role?.role ?? null, Permission.ProjectMemberManage);
+    if (target.folderId) {
+      this.assertApiKeyScope(auth, Permission.FolderAccessManage);
+      const role = await this.folderRepository.getAccessRole(auth.user.id, target.folderId);
+      this.assertFolderPermission(role?.role ?? null, Permission.FolderAccessManage);
       return;
     }
 
@@ -218,11 +218,11 @@ export class InvitationService {
     }
   }
 
-  private assertProjectPermission(role: ProjectRole | null, permission: Permission): void {
+  private assertFolderPermission(role: AccessRole | null, permission: Permission): void {
     if (
       !role ||
       !isGranted({
-        current: permissionsForProjectRole(role),
+        current: permissionsForAccessRole(role),
         requested: [permission],
       })
     ) {
@@ -268,8 +268,8 @@ export class InvitationService {
       organizationRole: serialized.organizationRole,
       diagramName: serialized.diagramName,
       diagramRole: serialized.diagramRole,
-      projectName: serialized.projectName,
-      projectRole: serialized.projectRole,
+      folderName: serialized.folderName,
+      folderRole: serialized.folderRole,
       status: serialized.status,
     };
   }

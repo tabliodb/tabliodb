@@ -109,8 +109,8 @@ const CurrentUserEditorPreferenceSchema = z
     diagramName: z.string().nullable(),
     organizationId: z.uuid().nullable(),
     organizationName: z.string().nullable(),
-    projectId: z.uuid().nullable(),
-    projectName: z.string().nullable(),
+    folderId: z.uuid().nullable(),
+    folderName: z.string().nullable(),
     updatedAt: DateTimeSchema.nullable(),
     workspaceSlug: z.string().nullable(),
   })
@@ -120,7 +120,7 @@ const CurrentUserEditorPreferenceUpdateSchema = z
   .object({
     diagramId: z.uuid().nullable().optional(),
     organizationId: z.uuid(),
-    projectId: z.uuid().nullable().optional(),
+    folderId: z.uuid().nullable().optional(),
   })
   .meta({ id: 'CurrentUserEditorPreferenceUpdateDto' });
 

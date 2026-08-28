@@ -6,7 +6,7 @@ import type { DB } from '../schema/index.js';
 export type EditorPreferenceTarget = {
   lastOpenedDiagramId: string | null;
   lastOpenedOrganizationId: string;
-  lastOpenedProjectId: string | null;
+  lastOpenedFolderId: string | null;
 };
 
 @Injectable()
@@ -26,14 +26,14 @@ export class UserPreferenceRepository {
         userId,
         lastOpenedDiagramId: target.lastOpenedDiagramId,
         lastOpenedOrganizationId: target.lastOpenedOrganizationId,
-        lastOpenedProjectId: target.lastOpenedProjectId,
+        lastOpenedFolderId: target.lastOpenedFolderId,
         updatedAt: now,
       })
       .onConflict((oc) =>
         oc.column('userId').doUpdateSet({
           lastOpenedDiagramId: target.lastOpenedDiagramId,
           lastOpenedOrganizationId: target.lastOpenedOrganizationId,
-          lastOpenedProjectId: target.lastOpenedProjectId,
+          lastOpenedFolderId: target.lastOpenedFolderId,
           updatedAt: now,
         }),
       )

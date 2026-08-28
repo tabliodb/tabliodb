@@ -47,7 +47,7 @@ import {
 import { authQueries, useLogoutMutation, useUpdateCurrentUserEditorPreferenceMutation } from '@/resources/auth';
 import { diagramsQueries, useImportDiagramMutation } from '@/resources/diagrams';
 import { organizationsQueries } from '@/resources/organizations';
-import { projectsQueries } from '@/resources/projects';
+import { foldersQueries } from '@/resources/folders';
 import { commentKeys, commentQueries } from '@/resources/comments';
 import { notificationKeys, notificationQueries, subscribeNotificationEvents } from '@/resources/notifications';
 import { snapshotsQueries, useCreateSnapshotMutation, useRestoreSnapshotMutation } from '@/resources/snapshots';
@@ -93,7 +93,7 @@ import {
   KeyboardShortcutsDialog,
   type EditorConfirmAction,
 } from './components/EditorShellDialogs';
-import { CreateDiagramDialog, CreateProjectDialog, CreateWorkspaceDialog } from './components/WorkspaceShellDialogs';
+import { CreateDiagramDialog, CreateFolderDialog, CreateWorkspaceDialog } from './components/WorkspaceShellDialogs';
 import {
   ImportJsonDialog,
   ImportSqlDialog,
@@ -122,7 +122,7 @@ import { useDiagramExportActions } from './useDiagramExportActions';
 import {
   useEditorActiveDiagram,
   useEditorActiveOrganization,
-  useEditorActiveProject,
+  useEditorActiveFolder,
   useEditorPermissionFlags,
 } from './useEditorActiveTarget';
 import { useEditorModelHistory } from './useEditorModelHistory';
@@ -160,9 +160,9 @@ export function EditorPage() {
   const [importSqlOpen, setImportSqlOpen] = useState(false);
   const [shareLinksOpen, setShareLinksOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
-  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [createDiagramOpen, setCreateDiagramOpen] = useState(false);
-  const [createDiagramDefaultProjectId, setCreateDiagramDefaultProjectId] = useState<string | null>(null);
+  const [createDiagramDefaultFolderId, setCreateDiagramDefaultFolderId] = useState<string | null>(null);
   const [diagramLibraryOpen, setDiagramLibraryOpen] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [minimapToggleSignal, setMinimapToggleSignal] = useState(0);
@@ -227,7 +227,7 @@ export function EditorPage() {
   const organizationsQuery = useQuery(organizationsQueries.list({ limit: 50 }));
   const organizations = organizationsQuery.data?.items ?? [];
   const routeWorkspaceSlug = params.workspaceSlug ?? null;
-  const routeProjectId = params.projectId ?? null;
+  const routeFolderId = params.folderId ?? null;
   const routeDiagramId = params.diagramId ?? null;
   const rememberedEditorTarget = editorPreferenceQuery.data ?? null;
   const activeOrganization = useEditorActiveOrganization({
@@ -236,11 +236,11 @@ export function EditorPage() {
     routeWorkspaceSlug,
   });
 
-  const projectsQuery = useQuery(projectsQueries.listByOrganization(activeOrganization));
-  const projects = projectsQuery.data ?? [];
-  const activeProject = useEditorActiveProject({
-    projects,
-    routeProjectId,
+  const foldersQuery = useQuery(foldersQueries.listByOrganization(activeOrganization));
+  const folders = foldersQuery.data ?? [];
+  const activeFolder = useEditorActiveFolder({
+    folders,
+    routeFolderId,
   });
   const workspaceDiagramsQueryOptions = diagramsQueries.listForWorkspace(activeOrganization);
   const diagramsQuery = useQuery({
@@ -256,7 +256,7 @@ export function EditorPage() {
   const {
     canCommentDiagram,
     canCreateDiagram,
-    canCreateProject,
+    canCreateFolder,
     canCreateSnapshot,
     canEditDiagram,
     canManageDiagramMembers,
@@ -264,7 +264,7 @@ export function EditorPage() {
   } = useEditorPermissionFlags({
     activeDiagram,
     activeOrganization,
-    activeProject,
+    activeFolder,
   });
   const currentUser = currentUserQuery.data ?? null;
 
@@ -316,7 +316,7 @@ export function EditorPage() {
     model,
     // Signature persisted disimpan di ref karena update-nya mengikuti lifecycle snapshot/import, bukan input form biasa.
     persistedDraftSignature: persistedDraftSignatureRef.current,
-    projectName: activeProject?.name,
+    folderName: activeFolder?.name,
   });
 
   const snapshots = snapshotsQuery.data?.items ?? emptySnapshots;
@@ -901,9 +901,9 @@ export function EditorPage() {
         targetType: notification.thread.targetType,
       };
 
-      const notificationProjectId = notification.project?.id ?? null;
+      const notificationFolderId = notification.folder?.id ?? null;
 
-      if ((activeProject?.id ?? null) === notificationProjectId && activeDiagram?.id === notification.diagram.id) {
+      if ((activeFolder?.id ?? null) === notificationFolderId && activeDiagram?.id === notification.diagram.id) {
         const tableId = modelRef.current ? getCommentTargetTableId(modelRef.current, target) : null;
 
         if (tableId) {
@@ -923,7 +923,7 @@ export function EditorPage() {
       editorRouteActions.goToDiagram(
         {
           diagramId: notification.diagram.id,
-          projectId: notificationProjectId,
+          folderId: notificationFolderId,
           workspaceSlug: notification.workspace.slug || notification.workspace.id,
         },
         { clearSelection: false },
@@ -931,7 +931,7 @@ export function EditorPage() {
     },
     [
       activeDiagram?.id,
-      activeProject?.id,
+      activeFolder?.id,
       editorRouteActions,
       requestCommentThreadOpen,
       setSelectedCommentTarget,
@@ -1099,16 +1099,16 @@ export function EditorPage() {
   ]);
 
   useEffect(() => {
-    if (!activeOrganization || projectsQuery.isPending) {
+    if (!activeOrganization || foldersQuery.isPending) {
       return;
     }
 
-    if (routeProjectId && !projects.some((project) => project.id === routeProjectId)) {
+    if (routeFolderId && !folders.some((folder) => folder.id === routeFolderId)) {
       navigate(routes.workspace.to({ workspaceSlug: getOrganizationSlug(activeOrganization) }), {
         replace: true,
       });
     }
-  }, [activeOrganization, navigate, projects, projectsQuery.isPending, routeProjectId]);
+  }, [activeOrganization, navigate, folders, foldersQuery.isPending, routeFolderId]);
 
   useEffect(() => {
     if (!activeOrganization || diagramsQuery.isPending) {
@@ -1121,9 +1121,9 @@ export function EditorPage() {
 
     if (routeDiagramId && !diagrams.some((diagram) => diagram.id === routeDiagramId)) {
       navigate(
-        activeProject
-          ? routes.project.to({
-              projectId: activeProject.id,
+        activeFolder
+          ? routes.folder.to({
+              folderId: activeFolder.id,
               workspaceSlug: getOrganizationSlug(activeOrganization),
             })
           : routes.workspace.to({ workspaceSlug: getOrganizationSlug(activeOrganization) }),
@@ -1141,10 +1141,10 @@ export function EditorPage() {
       const diagram = rememberedDiagram ?? diagrams[0];
 
       navigate(
-        diagram.projectId
+        diagram.folderId
           ? routes.diagram.to({
               diagramId: diagram.id,
-              projectId: diagram.projectId,
+              folderId: diagram.folderId,
               workspaceSlug: getOrganizationSlug(activeOrganization),
             })
           : routes.workspaceDiagram.to({
@@ -1156,7 +1156,7 @@ export function EditorPage() {
     }
   }, [
     activeOrganization,
-    activeProject,
+    activeFolder,
     diagrams,
     diagramsQuery.isPending,
     editorPreferenceQuery.isPending,
@@ -1170,7 +1170,7 @@ export function EditorPage() {
       return;
     }
 
-    if (routeProjectId && !activeProject) {
+    if (routeFolderId && !activeFolder) {
       return;
     }
 
@@ -1181,15 +1181,15 @@ export function EditorPage() {
     const target: CurrentUserEditorPreferenceUpdateDtoInput = {
       diagramId: activeDiagram?.id ?? null,
       organizationId: activeOrganization.id,
-      // Root diagrams persist with projectId null; foldered diagrams persist their owning folder id.
-      projectId: activeDiagram?.projectId ?? activeProject?.id ?? null,
+      // Root diagrams persist with folderId null; foldered diagrams persist their owning folder id.
+      folderId: activeDiagram?.folderId ?? activeFolder?.id ?? null,
     };
     const targetKey = createEditorPreferenceKey(target);
     const currentKey = rememberedEditorTarget?.organizationId
       ? createEditorPreferenceKey({
           diagramId: rememberedEditorTarget.diagramId,
           organizationId: rememberedEditorTarget.organizationId,
-          projectId: rememberedEditorTarget.projectId,
+          folderId: rememberedEditorTarget.folderId,
         })
       : null;
 
@@ -1208,14 +1208,14 @@ export function EditorPage() {
   }, [
     activeDiagram?.id,
     activeOrganization?.id,
-    activeProject?.id,
-    projects.length,
-    projectsQuery.isPending,
+    activeFolder?.id,
+    folders.length,
+    foldersQuery.isPending,
     rememberedEditorTarget?.diagramId,
     rememberedEditorTarget?.organizationId,
-    rememberedEditorTarget?.projectId,
+    rememberedEditorTarget?.folderId,
     routeDiagramId,
-    routeProjectId,
+    routeFolderId,
     updateEditorPreference,
   ]);
 
@@ -1493,7 +1493,7 @@ export function EditorPage() {
     }
   }
 
-  if (isUnauthorized(projectsQuery.error)) {
+  if (isUnauthorized(foldersQuery.error)) {
     return <Navigate replace to={routes.login.to()} />;
   }
 
@@ -1508,7 +1508,7 @@ export function EditorPage() {
   const blockingError =
     currentUserQuery.error ??
     organizationsQuery.error ??
-    projectsQuery.error ??
+    foldersQuery.error ??
     diagramsQuery.error ??
     snapshotsQuery.error;
 
@@ -1546,7 +1546,7 @@ export function EditorPage() {
   const isLoadingWorkspace =
     currentUserQuery.isPending ||
     organizationsQuery.isPending ||
-    Boolean(activeOrganization && projectsQuery.isPending) ||
+    Boolean(activeOrganization && foldersQuery.isPending) ||
     Boolean(activeOrganization && diagramsQuery.isPending) ||
     Boolean(activeDiagram && snapshotsQuery.isPending) ||
     Boolean(activeDiagram && !model);
@@ -1562,7 +1562,7 @@ export function EditorPage() {
           diagramsReady: !diagramsQuery.isPending,
           modelReady: Boolean(model),
           organizationsReady: !organizationsQuery.isPending,
-          projectsReady: !projectsQuery.isPending,
+          foldersReady: !foldersQuery.isPending,
           snapshotsReady: !snapshotsQuery.isPending,
         })}
       />
@@ -1579,12 +1579,12 @@ export function EditorPage() {
               onCreated={(diagram) => {
                 editorRouteActions.goToDiagram({
                   diagramId: diagram.id,
-                  projectId: diagram.projectId,
+                  folderId: diagram.folderId,
                   workspaceSlug: getOrganizationSlug(activeOrganization),
                 });
               }}
               organizationId={activeOrganization.id}
-              projects={projects}
+              folders={folders}
               trigger={
                 <Button className="gap-2">
                   <FileText className="size-4" />
@@ -1666,10 +1666,10 @@ export function EditorPage() {
       <EditorHeader
         activeDiagram={activeDiagram}
         activeOrganization={activeOrganization}
-        activeProject={activeProject}
+        activeFolder={activeFolder}
         canCommentDiagram={canCommentDiagram}
         canCreateDiagram={canCreateDiagram}
-        canCreateProject={canCreateProject}
+        canCreateFolder={canCreateFolder}
         canCreateSnapshot={canCreateSnapshot}
         canEditDiagram={canEditDiagram}
         canManageDiagramMembers={canManageDiagramMembers}
@@ -1681,7 +1681,7 @@ export function EditorPage() {
         currentDraftPersisted={currentDraftPersisted}
         currentUser={currentUser}
         diagramLibraryOpen={diagramLibraryOpen}
-        diagramLibraryStackOpen={createDiagramOpen || createProjectOpen}
+        diagramLibraryStackOpen={createDiagramOpen || createFolderOpen}
         diagrams={diagrams}
         importDiagramPending={importDiagramMutation.isPending}
         isExporting={diagramExportActions.isExporting}
@@ -1695,19 +1695,19 @@ export function EditorPage() {
         notificationsOpen={notificationsOpen}
         onAdmin={editorRouteActions.goToAdminSettings}
         onCopySql={diagramExportActions.copySql}
-        onCreateDiagram={(projectId = null) => {
+        onCreateDiagram={(folderId = null) => {
           // The diagram library can suggest a folder, but the create dialog still exposes "No folder" explicitly.
-          setCreateDiagramDefaultProjectId(projectId);
+          setCreateDiagramDefaultFolderId(folderId);
           setCreateDiagramOpen(true);
         }}
-        onCreateProject={() => setCreateProjectOpen(true)}
+        onCreateFolder={() => setCreateFolderOpen(true)}
         onCreateSnapshot={() => handleSaveSnapshot()}
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         onDiagramSelect={(diagram) => {
           setDiagramLibraryOpen(false);
           editorRouteActions.goToDiagram({
             diagramId: diagram.id,
-            projectId: diagram.projectId,
+            folderId: diagram.folderId,
             workspaceSlug: getOrganizationSlug(activeOrganization),
           });
         }}
@@ -1754,7 +1754,7 @@ export function EditorPage() {
         onOrganizationSelect={(organization) => {
           editorRouteActions.goToWorkspace(organization);
         }}
-        onProjectArchived={() => {
+        onFolderArchived={() => {
           editorRouteActions.goHome({ replace: true });
         }}
         onRedo={handleRedoModelChange}
@@ -1763,7 +1763,7 @@ export function EditorPage() {
         onUserLogout={() => logoutMutation.mutate(undefined)}
         openCommentThreadCount={openCommentThreadCount}
         organizations={organizations}
-        projects={projects}
+        folders={folders}
         snapshotHistoryLoading={snapshotsQuery.isPending}
         snapshotSavePending={saveSnapshotMutation.isPending}
         unreadNotificationCount={unreadNotificationCount}
@@ -1923,7 +1923,7 @@ export function EditorPage() {
         onOpenChange={setCommentsOpen}
         onTypingChange={handleCommentTypingChange}
         open={commentsOpen}
-        projectId={activeDiagram.projectId}
+        folderId={activeDiagram.folderId}
         remoteTypingPresences={remoteCommentTypingPresences}
         selectedCommentTarget={selectedCommentTarget}
         selectedTableId={selectedTable?.id ?? null}
@@ -1939,15 +1939,15 @@ export function EditorPage() {
         trigger={null}
       />
 
-      {canCreateProject ? (
-        <CreateProjectDialog
+      {canCreateFolder ? (
+        <CreateFolderDialog
           onCreated={() => {
-            setCreateProjectOpen(false);
+            setCreateFolderOpen(false);
             // Folder creation is organization-only now; the active canvas stays put until the user opens a diagram.
             setDiagramLibraryOpen(true);
           }}
-          onOpenChange={setCreateProjectOpen}
-          open={createProjectOpen}
+          onOpenChange={setCreateFolderOpen}
+          open={createFolderOpen}
           organizationId={activeOrganization.id}
           trigger={null}
         />
@@ -1956,14 +1956,14 @@ export function EditorPage() {
       {canCreateDiagram ? (
         <CreateDiagramDialog
           defaultDialect={model.dialect}
-          defaultProjectId={createDiagramDefaultProjectId}
+          defaultFolderId={createDiagramDefaultFolderId}
           onCreated={(diagram) => {
             setCreateDiagramOpen(false);
             setDiagramLibraryOpen(false);
-            setCreateDiagramDefaultProjectId(null);
+            setCreateDiagramDefaultFolderId(null);
             editorRouteActions.goToDiagram({
               diagramId: diagram.id,
-              projectId: diagram.projectId,
+              folderId: diagram.folderId,
               workspaceSlug: getOrganizationSlug(activeOrganization),
             });
           }}
@@ -1971,12 +1971,12 @@ export function EditorPage() {
             setCreateDiagramOpen(open);
 
             if (!open) {
-              setCreateDiagramDefaultProjectId(null);
+              setCreateDiagramDefaultFolderId(null);
             }
           }}
           open={createDiagramOpen}
           organizationId={activeOrganization.id}
-          projects={projects}
+          folders={folders}
           trigger={null}
         />
       ) : null}
@@ -2324,7 +2324,7 @@ function getEditorLoadingProgress({
   diagramsReady,
   modelReady,
   organizationsReady,
-  projectsReady,
+  foldersReady,
   snapshotsReady,
 }: {
   activeDiagramReady: boolean;
@@ -2333,7 +2333,7 @@ function getEditorLoadingProgress({
   diagramsReady: boolean;
   modelReady: boolean;
   organizationsReady: boolean;
-  projectsReady: boolean;
+  foldersReady: boolean;
   snapshotsReady: boolean;
 }): LoadingProgress {
   const phases: Array<{
@@ -2357,7 +2357,7 @@ function getEditorLoadingProgress({
     {
       detail: 'Loading folders for the active workspace.',
       label: 'Loading folders',
-      ready: projectsReady,
+      ready: foldersReady,
       weight: 14,
     },
     {

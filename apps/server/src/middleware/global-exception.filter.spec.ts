@@ -18,7 +18,7 @@ describe(GlobalExceptionFilter.name, () => {
     filter.catch(
       new BadRequestException({
         code: 'validation_failed',
-        message: ['Project name is required', 'Project slug is invalid'],
+        message: ['Folder name is required', 'Folder slug is invalid'],
       }),
       host,
     );
@@ -27,11 +27,11 @@ describe(GlobalExceptionFilter.name, () => {
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({
         code: 'validation_failed',
-        details: ['Project name is required', 'Project slug is invalid'],
+        details: ['Folder name is required', 'Folder slug is invalid'],
         error: 'Bad Request',
-        message: 'Project name is required Project slug is invalid',
+        message: 'Folder name is required Folder slug is invalid',
         method: 'POST',
-        path: '/api/projects',
+        path: '/api/folders',
         requestId: 'request-id',
         statusCode: 400,
         timestamp: expect.any(String),
@@ -98,8 +98,8 @@ function createHttpHost(): {
       [TabliodbHeader.RequestId]: 'request-id',
     },
     method: 'POST',
-    originalUrl: '/api/projects',
-    url: '/api/projects',
+    originalUrl: '/api/folders',
+    url: '/api/folders',
   };
   const response = {
     json: vi.fn(),

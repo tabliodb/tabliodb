@@ -9,7 +9,7 @@ import {
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { authKeys } from '@/resources/auth';
-import { projectsKeys } from '@/resources/projects';
+import { foldersKeys } from '@/resources/folders';
 import { invitationsKeys } from './invitation.keys';
 
 const acceptInvitationMutationFn = async (body: InvitationAcceptDto) => {
@@ -40,7 +40,7 @@ export function useAcceptInvitationMutation(params: UseAcceptInvitationMutationP
       // Accept invite langsung membuat session cookie; cache auth disiapkan agar route berikutnya tidak perlu probe ulang.
       queryClient.setQueryData(authKeys.me(), data.user);
       queryClient.invalidateQueries({ queryKey: invitationsKeys.token(variables.token) });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

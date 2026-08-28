@@ -137,7 +137,7 @@ export class DiagramShareLinkService {
         id: shareLink.diagramId,
         name: shareLink.diagramName,
         organizationName: shareLink.organizationName,
-        projectName: shareLink.projectName,
+        folderName: shareLink.folderName,
       },
       model,
       share: {
@@ -261,7 +261,7 @@ export class DiagramShareLinkService {
       ipAddress: auth.request?.ipAddress ?? null,
       metadata: options.metadata,
       organizationId: diagram.organizationId,
-      projectId: diagram.projectId,
+      folderId: diagram.folderId,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });

@@ -23,26 +23,26 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       PRIMARY KEY (team_id, user_id)
     );
 
-    CREATE TABLE IF NOT EXISTS project_team_access (
-      project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    CREATE TABLE IF NOT EXISTS folder_team_access (
+      folder_id uuid NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
       team_id uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
       role text NOT NULL CHECK (role IN ('editor', 'commenter', 'viewer')),
       created_by_id uuid REFERENCES users(id) ON DELETE SET NULL,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now(),
-      PRIMARY KEY (project_id, team_id)
+      PRIMARY KEY (folder_id, team_id)
     );
 
     CREATE INDEX IF NOT EXISTS teams_organization_id_idx ON teams(organization_id);
     CREATE INDEX IF NOT EXISTS team_members_user_id_idx ON team_members(user_id);
-    CREATE INDEX IF NOT EXISTS project_team_access_team_id_idx ON project_team_access(team_id);
-    CREATE INDEX IF NOT EXISTS project_team_access_project_id_idx ON project_team_access(project_id);
+    CREATE INDEX IF NOT EXISTS folder_team_access_team_id_idx ON folder_team_access(team_id);
+    CREATE INDEX IF NOT EXISTS folder_team_access_folder_id_idx ON folder_team_access(folder_id);
   `.execute(db);
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
   await sql`
-    DROP TABLE IF EXISTS project_team_access;
+    DROP TABLE IF EXISTS folder_team_access;
     DROP TABLE IF EXISTS team_members;
     DROP TABLE IF EXISTS teams;
   `.execute(db);

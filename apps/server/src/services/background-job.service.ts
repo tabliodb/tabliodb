@@ -223,7 +223,7 @@ export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
     for (const recipient of delivery.recipients) {
       const url = this.createCommentNotificationUrl(delivery);
 
-      // Send one message per recipient so private email addresses are not exposed to other project members.
+      // Send one message per recipient so private email addresses are not exposed to other folder access grants.
       results.push(
         await this.mailService.sendTransactionalMail({
           html: createCommentNotificationHtml(delivery, recipient, source, url),
@@ -244,8 +244,8 @@ export class BackgroundJobService implements OnModuleInit, OnModuleDestroy {
 
   private createCommentNotificationUrl(delivery: CommentNotificationDeliveryContext): string {
     const baseUrl = this.configRepository.getEnv().server.webPublicUrl;
-    const pathSegments = delivery.projectId
-      ? ['workspaces', delivery.organizationSlug, 'projects', delivery.projectId, 'diagrams', delivery.diagramId]
+    const pathSegments = delivery.folderId
+      ? ['workspaces', delivery.organizationSlug, 'folders', delivery.folderId, 'diagrams', delivery.diagramId]
       : ['workspaces', delivery.organizationSlug, 'diagrams', delivery.diagramId];
     const path = pathSegments
       .map((segment) => encodeURIComponent(segment))
@@ -333,8 +333,8 @@ function createCommentNotificationHtml(
 }
 
 function createCommentNotificationLocation(delivery: CommentNotificationDeliveryContext): string {
-  // Root diagrams have no project/folder, so notification copy falls back to workspace / diagram.
-  return `${delivery.projectName ?? delivery.organizationName} / ${delivery.diagramName}`;
+  // Root diagrams have no folder/folder, so notification copy falls back to workspace / diagram.
+  return `${delivery.folderName ?? delivery.organizationName} / ${delivery.diagramName}`;
 }
 
 function createCommentNotificationReason(recipient: CommentNotificationDeliveryRecipient): string {

@@ -9,7 +9,7 @@ import { DiagramShareLinkController } from '../controllers/diagram-share-link.co
 import { DiagramController } from '../controllers/diagram.controller.js';
 import { InvitationController } from '../controllers/invitation.controller.js';
 import { OrganizationController } from '../controllers/organization.controller.js';
-import { ProjectController } from '../controllers/project.controller.js';
+import { FolderController } from '../controllers/folder.controller.js';
 import { ReviewSignalController } from '../controllers/review-signal.controller.js';
 import { SetupController } from '../controllers/setup.controller.js';
 import { SnapshotController } from '../controllers/snapshot.controller.js';
@@ -64,19 +64,19 @@ describe('rate limit presets', () => {
       },
       { handler: OrganizationController.prototype.updateOrganizationMember, preset: RateLimitPreset.OrganizationWrite },
       { handler: OrganizationController.prototype.removeOrganizationMember, preset: RateLimitPreset.OrganizationWrite },
-      { handler: ProjectController.prototype.createProject, preset: RateLimitPreset.ProjectWrite },
-      { handler: ProjectController.prototype.updateProject, preset: RateLimitPreset.ProjectWrite },
-      { handler: ProjectController.prototype.archiveProject, preset: RateLimitPreset.ProjectWrite },
-      { handler: ProjectController.prototype.addProjectMember, preset: RateLimitPreset.ProjectWrite },
-      { handler: ProjectController.prototype.updateProjectMember, preset: RateLimitPreset.ProjectWrite },
-      { handler: ProjectController.prototype.removeProjectMember, preset: RateLimitPreset.ProjectWrite },
+      { handler: FolderController.prototype.createFolder, preset: RateLimitPreset.FolderWrite },
+      { handler: FolderController.prototype.updateFolder, preset: RateLimitPreset.FolderWrite },
+      { handler: FolderController.prototype.archiveFolder, preset: RateLimitPreset.FolderWrite },
+      { handler: FolderController.prototype.addFolderAccess, preset: RateLimitPreset.FolderWrite },
+      { handler: FolderController.prototype.updateFolderAccess, preset: RateLimitPreset.FolderWrite },
+      { handler: FolderController.prototype.removeFolderAccess, preset: RateLimitPreset.FolderWrite },
       { handler: TeamController.prototype.createTeam, preset: RateLimitPreset.TeamWrite },
       { handler: TeamController.prototype.updateTeam, preset: RateLimitPreset.TeamWrite },
       { handler: TeamController.prototype.archiveTeam, preset: RateLimitPreset.TeamWrite },
       { handler: TeamController.prototype.addTeamMember, preset: RateLimitPreset.TeamWrite },
       { handler: TeamController.prototype.removeTeamMember, preset: RateLimitPreset.TeamWrite },
-      { handler: TeamController.prototype.upsertTeamProjectAccess, preset: RateLimitPreset.TeamWrite },
-      { handler: TeamController.prototype.removeTeamProjectAccess, preset: RateLimitPreset.TeamWrite },
+      { handler: TeamController.prototype.upsertTeamFolderAccess, preset: RateLimitPreset.TeamWrite },
+      { handler: TeamController.prototype.removeTeamFolderAccess, preset: RateLimitPreset.TeamWrite },
       { handler: DiagramController.prototype.createDiagram, preset: RateLimitPreset.DiagramWrite },
       { handler: DiagramController.prototype.createWorkspaceDiagram, preset: RateLimitPreset.DiagramWrite },
       { handler: DiagramController.prototype.updateDiagram, preset: RateLimitPreset.DiagramWrite },

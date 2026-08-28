@@ -3,31 +3,31 @@ import {
   Permission,
   isGranted,
   permissionsForOrganizationRole,
-  permissionsForProjectRole,
+  permissionsForAccessRole,
   type OrganizationRoleValue,
-  type ProjectRoleValue,
+  type AccessRoleValue,
 } from '@tabliodb/shared';
 import type {
   CurrentUserEditorPreferenceDtoOutput,
   DiagramResponseDtoOutput,
   OrganizationDtoOutput,
-  ProjectResponseDtoOutput,
+  FolderResponseDtoOutput,
 } from '@tabliodb/sdk';
 import { matchesRememberedWorkspace, matchesWorkspaceRoute } from './editor-route-guards';
 
 type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
 
 type EditorPermissionFlags = {
   canCommentDiagram: boolean;
   canCreateDiagram: boolean;
-  canCreateProject: boolean;
+  canCreateFolder: boolean;
   canCreateSnapshot: boolean;
   canEditDiagram: boolean;
   canManageDiagramMembers: boolean;
-  canManageProject: boolean;
+  canManageFolder: boolean;
   canManageWorkspace: boolean;
 };
 
@@ -60,38 +60,38 @@ export function useEditorActiveOrganization({
   }, [organizations, rememberedEditorTarget, routeWorkspaceSlug]);
 }
 
-export function useFilteredEditorProjects({
-  projectSearchTerm,
-  projects,
+export function useFilteredEditorFolders({
+  folderSearchTerm,
+  folders,
 }: {
-  projectSearchTerm: string;
-  projects: ProjectResponseDto[];
-}): ProjectResponseDto[] {
+  folderSearchTerm: string;
+  folders: FolderResponseDto[];
+}): FolderResponseDto[] {
   return useMemo(() => {
-    const search = projectSearchTerm.trim().toLowerCase();
+    const search = folderSearchTerm.trim().toLowerCase();
 
     return search
-      ? projects.filter((project) =>
-          [project.name, project.slug, project.description ?? ''].some((value) => value.toLowerCase().includes(search)),
+      ? folders.filter((folder) =>
+          [folder.name, folder.slug, folder.description ?? ''].some((value) => value.toLowerCase().includes(search)),
         )
-      : projects;
-  }, [projectSearchTerm, projects]);
+      : folders;
+  }, [folderSearchTerm, folders]);
 }
 
-export function useEditorActiveProject({
-  projects,
-  routeProjectId,
+export function useEditorActiveFolder({
+  folders,
+  routeFolderId,
 }: {
-  projects: ProjectResponseDto[];
-  routeProjectId: string | null;
-}): ProjectResponseDto | null {
+  folders: FolderResponseDto[];
+  routeFolderId: string | null;
+}): FolderResponseDto | null {
   return useMemo(() => {
-    if (!routeProjectId) {
+    if (!routeFolderId) {
       return null;
     }
 
-    return projects.find((project) => project.id === routeProjectId) ?? null;
-  }, [projects, routeProjectId]);
+    return folders.find((folder) => folder.id === routeFolderId) ?? null;
+  }, [folders, routeFolderId]);
 }
 
 export function useEditorActiveDiagram({
@@ -113,55 +113,55 @@ export function useEditorActiveDiagram({
 export function useEditorPermissionFlags({
   activeDiagram,
   activeOrganization,
-  activeProject,
+  activeFolder,
 }: {
   activeDiagram: DiagramResponseDto | null;
   activeOrganization: OrganizationDto | null;
-  activeProject: ProjectResponseDto | null;
+  activeFolder: FolderResponseDto | null;
 }): EditorPermissionFlags {
   return useMemo(
     () => ({
       canCommentDiagram: activeDiagram
-        ? hasProjectPermission(activeDiagram.role, Permission.DiagramComment)
-        : activeProject
-          ? hasProjectPermission(activeProject.projectRole, Permission.DiagramComment)
+        ? hasFolderPermission(activeDiagram.role, Permission.DiagramComment)
+        : activeFolder
+          ? hasFolderPermission(activeFolder.folderRole, Permission.DiagramComment)
           : Boolean(
               activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramComment),
             ),
-      canCreateDiagram: activeProject
-        ? hasProjectPermission(activeProject.projectRole, Permission.DiagramCreate)
+      canCreateDiagram: activeFolder
+        ? hasFolderPermission(activeFolder.folderRole, Permission.DiagramCreate)
         : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramCreate)),
-      canCreateProject: activeOrganization
-        ? hasOrganizationPermission(activeOrganization.role, Permission.ProjectCreate)
+      canCreateFolder: activeOrganization
+        ? hasOrganizationPermission(activeOrganization.role, Permission.FolderCreate)
         : false,
       canCreateSnapshot: activeDiagram
-        ? hasProjectPermission(activeDiagram.role, Permission.SnapshotCreate)
-        : activeProject
-          ? hasProjectPermission(activeProject.projectRole, Permission.SnapshotCreate)
+        ? hasFolderPermission(activeDiagram.role, Permission.SnapshotCreate)
+        : activeFolder
+          ? hasFolderPermission(activeFolder.folderRole, Permission.SnapshotCreate)
           : Boolean(
               activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.SnapshotCreate),
             ),
       // Diagram actions use the effective diagram role returned by the API, so a guest with direct editor access can edit without inheriting broad workspace power.
       canEditDiagram: activeDiagram
-        ? hasProjectPermission(activeDiagram.role, Permission.DiagramUpdate)
-        : activeProject
-          ? hasProjectPermission(activeProject.projectRole, Permission.DiagramUpdate)
+        ? hasFolderPermission(activeDiagram.role, Permission.DiagramUpdate)
+        : activeFolder
+          ? hasFolderPermission(activeFolder.folderRole, Permission.DiagramUpdate)
           : Boolean(activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramUpdate)),
       canManageDiagramMembers: activeDiagram
-        ? hasProjectPermission(activeDiagram.role, Permission.DiagramMemberManage)
-        : activeProject
-          ? hasProjectPermission(activeProject.projectRole, Permission.DiagramMemberManage)
+        ? hasFolderPermission(activeDiagram.role, Permission.DiagramMemberManage)
+        : activeFolder
+          ? hasFolderPermission(activeFolder.folderRole, Permission.DiagramMemberManage)
           : Boolean(
               activeOrganization && hasOrganizationPermission(activeOrganization.role, Permission.DiagramMemberManage),
             ),
-      canManageProject: activeProject
-        ? hasProjectPermission(activeProject.projectRole, Permission.ProjectUpdate)
+      canManageFolder: activeFolder
+        ? hasFolderPermission(activeFolder.folderRole, Permission.FolderUpdate)
         : false,
       canManageWorkspace: activeOrganization
         ? hasOrganizationPermission(activeOrganization.role, Permission.OrganizationManage)
         : false,
     }),
-    [activeDiagram, activeOrganization, activeProject],
+    [activeDiagram, activeOrganization, activeFolder],
   );
 }
 
@@ -172,9 +172,9 @@ function hasOrganizationPermission(role: OrganizationRoleValue, permission: Perm
   });
 }
 
-function hasProjectPermission(role: ProjectRoleValue, permission: Permission): boolean {
+function hasFolderPermission(role: AccessRoleValue, permission: Permission): boolean {
   return isGranted({
-    current: permissionsForProjectRole(role),
+    current: permissionsForAccessRole(role),
     requested: [permission],
   });
 }

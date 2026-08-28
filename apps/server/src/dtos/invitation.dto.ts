@@ -1,4 +1,4 @@
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, AccessRole } from '@tabliodb/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { LoginResponseDto, SessionBindingSchema } from './auth.dto.js';
@@ -6,8 +6,8 @@ import { LoginResponseDto, SessionBindingSchema } from './auth.dto.js';
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const InvitationStatusSchema = z.enum(['pending', 'accepted', 'revoked', 'expired']);
 const InvitationOrganizationRoleSchema = z.enum([OrganizationRole.Admin, OrganizationRole.Member, OrganizationRole.Guest]);
-const InvitationProjectRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
-const InvitationDiagramRoleSchema = z.enum([ProjectRole.Owner, ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
+const InvitationAccessRoleSchema = z.enum([AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer]);
+const InvitationDiagramRoleSchema = z.enum([AccessRole.Owner, AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer]);
 
 const InvitationSchema = z
   .object({
@@ -17,9 +17,9 @@ const InvitationSchema = z
     organizationName: z.string(),
     organizationSlug: z.string(),
     organizationRole: InvitationOrganizationRoleSchema,
-    projectId: z.uuid().nullable(),
-    projectName: z.string().nullable(),
-    projectRole: InvitationProjectRoleSchema.nullable(),
+    folderId: z.uuid().nullable(),
+    folderName: z.string().nullable(),
+    folderRole: InvitationAccessRoleSchema.nullable(),
     diagramId: z.uuid().nullable(),
     diagramName: z.string().nullable(),
     diagramRole: InvitationDiagramRoleSchema.nullable(),
@@ -39,8 +39,8 @@ const InvitationPublicSchema = InvitationSchema.pick({
   email: true,
   organizationName: true,
   organizationRole: true,
-  projectName: true,
-  projectRole: true,
+  folderName: true,
+  folderRole: true,
   diagramName: true,
   diagramRole: true,
   message: true,
@@ -53,8 +53,8 @@ const InvitationCreateSchema = z
     email: z.email(),
     organizationId: z.uuid().optional(),
     organizationRole: InvitationOrganizationRoleSchema.optional(),
-    projectId: z.uuid().optional(),
-    projectRole: InvitationProjectRoleSchema.optional(),
+    folderId: z.uuid().optional(),
+    folderRole: InvitationAccessRoleSchema.optional(),
     diagramId: z.uuid().optional(),
     diagramRole: InvitationDiagramRoleSchema.optional(),
     message: z.string().trim().max(500).optional(),

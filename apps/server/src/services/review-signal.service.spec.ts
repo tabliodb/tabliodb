@@ -45,7 +45,7 @@ describe(ReviewSignalService.name, () => {
 
     const settings = await service.getDiagramSettings(auth, 'diagram-id');
 
-    // Folder/project is only an organization boundary now; review rules are configured from the diagram settings dialog.
+    // Folder/folder is only an organization boundary now; review rules are configured from the diagram settings dialog.
     expect(diagramService.requireDiagram).toHaveBeenCalledWith(auth, 'diagram-id', Permission.DiagramRead);
     expect(settings).toEqual({
       diagram: { disabledRuleKeys: ['missing-primary-key'] },

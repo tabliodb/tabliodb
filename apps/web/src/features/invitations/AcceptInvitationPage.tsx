@@ -63,7 +63,7 @@ export function AcceptInvitationPage() {
           {invitation ? (
             <p className="text-sm font-bold leading-6 text-[rgb(var(--tabliodb-ink))]">
               {invitation.email} was invited as {formatRole(invitation.organizationRole)}
-              {invitation.projectName ? ` for ${invitation.projectName}` : ''}.
+              {invitation.folderName ? ` for ${invitation.folderName}` : ''}.
             </p>
           ) : null}
         </div>

@@ -24,7 +24,7 @@ import {
   type PasswordResetRequestDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { projectsKeys } from '@/resources/projects';
+import { foldersKeys } from '@/resources/folders';
 import { usersKeys } from '@/resources/users';
 import { authKeys } from './auth.keys';
 
@@ -103,7 +103,7 @@ export function useLoginMutation(params: UseLoginMutationParams = {}) {
       await activatePreparedSessionBinding();
       // Login response membawa user yang sama dengan /auth/me, jadi cache session bisa langsung dipakai route berikutnya.
       queryClient.setQueryData(authKeys.me(), data.user);
-      queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

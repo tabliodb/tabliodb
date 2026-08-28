@@ -328,7 +328,7 @@ export class AuthService {
         revokedSessions,
       } satisfies Record<string, JsonValue>,
       organizationId: user.organizations[0]?.id ?? null,
-      projectId: null,
+      folderId: null,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });
@@ -380,7 +380,7 @@ export class AuthService {
         revokedSessions,
       } satisfies Record<string, JsonValue>,
       organizationId: user.organizations[0]?.id ?? null,
-      projectId: null,
+      folderId: null,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });
@@ -423,7 +423,7 @@ export class AuthService {
         tokenExposedInResponse: shouldExposeToken,
       } satisfies Record<string, JsonValue>,
       organizationId: null,
-      projectId: null,
+      folderId: null,
     });
 
     return {
@@ -463,7 +463,7 @@ export class AuthService {
         revokedSessions,
       } satisfies Record<string, JsonValue>,
       organizationId: user.organizations[0]?.id ?? null,
-      projectId: null,
+      folderId: null,
     });
 
     return { revokedSessions, successful: true };

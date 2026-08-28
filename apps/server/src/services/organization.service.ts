@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForOrganizationRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, AccessRole, isGranted, permissionsForOrganizationRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import { AuditLogListQueryDto, AuditLogListResponseDto } from '../dtos/audit-log.dto.js';
@@ -92,7 +92,7 @@ export class OrganizationService {
     organizationId: string,
     dto: OrganizationSettingsUpdateDto,
   ): Promise<OrganizationSettingsDto> {
-    if (dto.name === undefined && dto.defaultProjectRole === undefined && dto.allowMemberProjectCreate === undefined) {
+    if (dto.name === undefined && dto.defaultFolderRole === undefined && dto.allowMemberFolderCreate === undefined) {
       throw new BadRequestException('At least one workspace setting is required');
     }
 
@@ -109,8 +109,8 @@ export class OrganizationService {
     }
 
     const organization = await this.organizationRepository.updateSettings(organizationId, {
-      allowMemberProjectCreate: dto.allowMemberProjectCreate,
-      defaultProjectRole: dto.defaultProjectRole,
+      allowMemberFolderCreate: dto.allowMemberFolderCreate,
+      defaultFolderRole: dto.defaultFolderRole,
       name: nextName,
     });
 
@@ -356,17 +356,17 @@ export class OrganizationService {
       changes.name = { after: after.name, before: before.name };
     }
 
-    if (before.defaultProjectRole !== after.defaultProjectRole) {
-      changes.defaultProjectRole = {
-        after: after.defaultProjectRole,
-        before: before.defaultProjectRole,
+    if (before.defaultFolderRole !== after.defaultFolderRole) {
+      changes.defaultFolderRole = {
+        after: after.defaultFolderRole,
+        before: before.defaultFolderRole,
       };
     }
 
-    if (before.allowMemberProjectCreate !== after.allowMemberProjectCreate) {
-      changes.allowMemberProjectCreate = {
-        after: after.allowMemberProjectCreate,
-        before: before.allowMemberProjectCreate,
+    if (before.allowMemberFolderCreate !== after.allowMemberFolderCreate) {
+      changes.allowMemberFolderCreate = {
+        after: after.allowMemberFolderCreate,
+        before: before.allowMemberFolderCreate,
       };
     }
 
@@ -467,7 +467,7 @@ export class OrganizationService {
       ipAddress: auth.request?.ipAddress ?? null,
       metadata: options.metadata,
       organizationId: options.organizationId,
-      projectId: null,
+      folderId: null,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });
@@ -475,9 +475,9 @@ export class OrganizationService {
 
   private serializeSettings(organization: OrganizationSettingsRow): OrganizationSettingsDto {
     return {
-      allowMemberProjectCreate: organization.allowMemberProjectCreate,
+      allowMemberFolderCreate: organization.allowMemberFolderCreate,
       createdAt: toIsoDateTime(organization.createdAt),
-      defaultProjectRole: this.toDefaultProjectRole(organization.defaultProjectRole),
+      defaultFolderRole: this.toDefaultFolderRole(organization.defaultFolderRole),
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
@@ -487,9 +487,9 @@ export class OrganizationService {
 
   private serializeOrganization(organization: OrganizationRow): OrganizationDto {
     return {
-      allowMemberProjectCreate: organization.allowMemberProjectCreate,
+      allowMemberFolderCreate: organization.allowMemberFolderCreate,
       createdAt: toIsoDateTime(organization.createdAt),
-      defaultProjectRole: this.toDefaultProjectRole(organization.defaultProjectRole),
+      defaultFolderRole: this.toDefaultFolderRole(organization.defaultFolderRole),
       id: organization.id,
       name: organization.name,
       role: this.toOrganizationRole(organization.role),
@@ -514,10 +514,10 @@ export class OrganizationService {
     };
   }
 
-  private toDefaultProjectRole(
+  private toDefaultFolderRole(
     role: string | null,
-  ): ProjectRole.Commenter | ProjectRole.Editor | ProjectRole.Viewer | null {
-    if (role === ProjectRole.Editor || role === ProjectRole.Commenter || role === ProjectRole.Viewer) {
+  ): AccessRole.Commenter | AccessRole.Editor | AccessRole.Viewer | null {
+    if (role === AccessRole.Editor || role === AccessRole.Commenter || role === AccessRole.Viewer) {
       return role;
     }
 
@@ -539,9 +539,9 @@ type OrganizationRow = OrganizationSettingsRow & {
 };
 
 type OrganizationSettingsRow = {
-  allowMemberProjectCreate: boolean;
+  allowMemberFolderCreate: boolean;
   createdAt: Date | string;
-  defaultProjectRole: string | null;
+  defaultFolderRole: string | null;
   id: string;
   name: string;
   slug: string;

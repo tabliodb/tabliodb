@@ -17,11 +17,11 @@ import {
   TeamMemberListQueryDto,
   TeamMemberListResponseDto,
   TeamMemberRemoveResponseDto,
-  TeamProjectAccessDto,
-  TeamProjectAccessListQueryDto,
-  TeamProjectAccessListResponseDto,
-  TeamProjectAccessRemoveResponseDto,
-  TeamProjectAccessUpsertDto,
+  TeamFolderAccessDto,
+  TeamFolderAccessListQueryDto,
+  TeamFolderAccessListResponseDto,
+  TeamFolderAccessRemoveResponseDto,
+  TeamFolderAccessUpsertDto,
   TeamResponseDto,
   TeamUpdateDto,
 } from '../dtos/team.dto.js';
@@ -117,46 +117,46 @@ export class TeamController {
     return this.teamService.removeMember(auth, teamId, userId);
   }
 
-  @Get(':teamId/projects')
+  @Get(':teamId/folders')
   @ApiParam({ name: 'teamId', type: String })
   @ApiPaginationQuery()
-  @ApiOperation({ operationId: 'getTeamProjectAccesses' })
-  @ZodResponse({ status: HttpStatus.OK, type: TeamProjectAccessListResponseDto })
-  getTeamProjectAccesses(
+  @ApiOperation({ operationId: 'getTeamFolderAccesses' })
+  @ZodResponse({ status: HttpStatus.OK, type: TeamFolderAccessListResponseDto })
+  getTeamFolderAccesses(
     @Auth() auth: AuthContext,
     @Param('teamId') teamId: string,
-    @Query() query: TeamProjectAccessListQueryDto,
-  ): Promise<TeamProjectAccessListResponseDto> {
-    return this.teamService.getProjectAccesses(auth, teamId, query);
+    @Query() query: TeamFolderAccessListQueryDto,
+  ): Promise<TeamFolderAccessListResponseDto> {
+    return this.teamService.getFolderAccesses(auth, teamId, query);
   }
 
-  @Post(':teamId/projects')
+  @Post(':teamId/folders')
   @RateLimit(RateLimitPreset.TeamWrite)
   @ApiParam({ name: 'teamId', type: String })
-  @ApiBody({ type: TeamProjectAccessUpsertDto })
-  @ApiOperation({ operationId: 'upsertTeamProjectAccess' })
-  @ZodResponse({ status: HttpStatus.CREATED, type: TeamProjectAccessDto })
-  upsertTeamProjectAccess(
+  @ApiBody({ type: TeamFolderAccessUpsertDto })
+  @ApiOperation({ operationId: 'upsertTeamFolderAccess' })
+  @ZodResponse({ status: HttpStatus.CREATED, type: TeamFolderAccessDto })
+  upsertTeamFolderAccess(
     @Auth() auth: AuthContext,
     @Param('teamId') teamId: string,
-    @Body() dto: TeamProjectAccessUpsertDto,
-  ): Promise<TeamProjectAccessDto> {
-    return this.teamService.upsertProjectAccess(auth, teamId, dto);
+    @Body() dto: TeamFolderAccessUpsertDto,
+  ): Promise<TeamFolderAccessDto> {
+    return this.teamService.upsertFolderAccess(auth, teamId, dto);
   }
 
-  @Delete(':teamId/projects/:projectId')
+  @Delete(':teamId/folders/:folderId')
   @RateLimit(RateLimitPreset.TeamWrite)
   @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'teamId', type: String })
-  @ApiParam({ name: 'projectId', type: String })
-  @ApiOperation({ operationId: 'removeTeamProjectAccess' })
-  @ZodResponse({ status: HttpStatus.OK, type: TeamProjectAccessRemoveResponseDto })
-  removeTeamProjectAccess(
+  @ApiParam({ name: 'folderId', type: String })
+  @ApiOperation({ operationId: 'removeTeamFolderAccess' })
+  @ZodResponse({ status: HttpStatus.OK, type: TeamFolderAccessRemoveResponseDto })
+  removeTeamFolderAccess(
     @Auth() auth: AuthContext,
     @Param('teamId') teamId: string,
-    @Param('projectId') projectId: string,
-  ): Promise<TeamProjectAccessRemoveResponseDto> {
-    return this.teamService.removeProjectAccess(auth, teamId, projectId);
+    @Param('folderId') folderId: string,
+  ): Promise<TeamFolderAccessRemoveResponseDto> {
+    return this.teamService.removeFolderAccess(auth, teamId, folderId);
   }
 
   @Get(':teamId/diagrams')

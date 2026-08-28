@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { ProjectRole } from '@tabliodb/shared';
+import { AccessRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { UserPreferenceService } from './user-preference.service.js';
@@ -16,16 +16,16 @@ const auth: AuthContext = {
 };
 
 const organization = {
-  allowMemberProjectCreate: true,
+  allowMemberFolderCreate: true,
   createdAt: new Date('2026-08-13T01:00:00.000Z'),
-  defaultProjectRole: null,
+  defaultFolderRole: null,
   id: '11111111-1111-4111-8111-111111111111',
   name: 'Personal Workspace',
   slug: 'personal-workspace',
   updatedAt: new Date('2026-08-13T01:00:00.000Z'),
 };
 
-const project = {
+const folder = {
   createdAt: new Date('2026-08-13T01:10:00.000Z'),
   description: null,
   id: '22222222-2222-4222-8222-222222222222',
@@ -33,7 +33,7 @@ const project = {
   organizationId: organization.id,
   organizationName: organization.name,
   organizationSlug: organization.slug,
-  projectRole: ProjectRole.Owner,
+  folderRole: AccessRole.Owner,
   slug: 'library-system',
   updatedAt: new Date('2026-08-13T01:10:00.000Z'),
 };
@@ -45,7 +45,7 @@ const diagram = {
   id: '33333333-3333-4333-8333-333333333333',
   name: 'Main schema',
   organizationId: organization.id,
-  projectId: project.id,
+  folderId: folder.id,
   slug: null,
   status: 'draft',
   updatedAt: new Date('2026-08-13T01:20:00.000Z'),
@@ -55,7 +55,7 @@ const preferenceRow = {
   createdAt: new Date('2026-08-13T02:00:00.000Z'),
   lastOpenedDiagramId: diagram.id,
   lastOpenedOrganizationId: organization.id,
-  lastOpenedProjectId: project.id,
+  lastOpenedFolderId: folder.id,
   updatedAt: new Date('2026-08-13T02:15:00.000Z'),
   userId: auth.user.id,
 };
@@ -67,7 +67,7 @@ describe(UserPreferenceService.name, () => {
   const organizationRepository = {
     getSettingsForUser: vi.fn(),
   };
-  const projectRepository = {
+  const folderRepository = {
     getByIdForUser: vi.fn(),
     getDiagramRole: vi.fn(),
   };
@@ -85,13 +85,13 @@ describe(UserPreferenceService.name, () => {
     service = new UserPreferenceService(
       diagramRepository as never,
       organizationRepository as never,
-      projectRepository as never,
+      folderRepository as never,
       userPreferenceRepository as never,
     );
 
     organizationRepository.getSettingsForUser.mockResolvedValue(organization);
-    projectRepository.getByIdForUser.mockResolvedValue(project);
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getByIdForUser.mockResolvedValue(folder);
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
     userPreferenceRepository.upsertEditorPreference.mockResolvedValue(preferenceRow);
   });
@@ -104,8 +104,8 @@ describe(UserPreferenceService.name, () => {
       diagramName: null,
       organizationId: null,
       organizationName: null,
-      projectId: null,
-      projectName: null,
+      folderId: null,
+      folderName: null,
       updatedAt: null,
       workspaceSlug: null,
     });
@@ -122,15 +122,15 @@ describe(UserPreferenceService.name, () => {
       diagramName: 'Main schema',
       organizationId: organization.id,
       organizationName: 'Personal Workspace',
-      projectId: project.id,
-      projectName: 'Library System',
+      folderId: folder.id,
+      folderName: 'Library System',
       updatedAt: '2026-08-13T02:15:00.000Z',
       workspaceSlug: 'personal-workspace',
     });
 
     expect(organizationRepository.getSettingsForUser).toHaveBeenCalledWith('user-id', organization.id);
-    expect(projectRepository.getByIdForUser).toHaveBeenCalledWith('user-id', project.id);
-    expect(projectRepository.getDiagramRole).toHaveBeenCalledWith('user-id', diagram.id);
+    expect(folderRepository.getByIdForUser).toHaveBeenCalledWith('user-id', folder.id);
+    expect(folderRepository.getDiagramRole).toHaveBeenCalledWith('user-id', diagram.id);
   });
 
   it('deletes stale editor preference when the saved workspace is no longer visible', async () => {
@@ -140,40 +140,40 @@ describe(UserPreferenceService.name, () => {
     await expect(service.getEditorPreference(auth)).resolves.toMatchObject({
       diagramId: null,
       organizationId: null,
-      projectId: null,
+      folderId: null,
     });
 
     // Preference lama dibersihkan secara lazy agar login berikutnya tidak terus mencoba target yang sudah tidak accessible.
     expect(userPreferenceRepository.deleteEditorPreference).toHaveBeenCalledWith('user-id');
-    expect(projectRepository.getByIdForUser).not.toHaveBeenCalled();
+    expect(folderRepository.getByIdForUser).not.toHaveBeenCalled();
     expect(diagramRepository.getById).not.toHaveBeenCalled();
   });
 
-  it('stores a valid workspace, project, and diagram target for the current user', async () => {
+  it('stores a valid workspace, folder, and diagram target for the current user', async () => {
     await expect(
       service.updateEditorPreference(auth, {
         diagramId: diagram.id,
         organizationId: organization.id,
-        projectId: project.id,
+        folderId: folder.id,
       }),
     ).resolves.toMatchObject({
       diagramId: diagram.id,
       organizationId: organization.id,
-      projectId: project.id,
+      folderId: folder.id,
     });
 
     expect(userPreferenceRepository.upsertEditorPreference).toHaveBeenCalledWith('user-id', {
       lastOpenedDiagramId: diagram.id,
       lastOpenedOrganizationId: organization.id,
-      lastOpenedProjectId: project.id,
+      lastOpenedFolderId: folder.id,
     });
   });
 
-  it('stores workspace-only preference when the workspace has no accessible project yet', async () => {
+  it('stores workspace-only preference when the workspace has no accessible folder yet', async () => {
     userPreferenceRepository.upsertEditorPreference.mockResolvedValue({
       ...preferenceRow,
       lastOpenedDiagramId: null,
-      lastOpenedProjectId: null,
+      lastOpenedFolderId: null,
     });
 
     await expect(
@@ -185,24 +185,24 @@ describe(UserPreferenceService.name, () => {
       diagramName: null,
       organizationId: organization.id,
       organizationName: organization.name,
-      projectId: null,
-      projectName: null,
+      folderId: null,
+      folderName: null,
       updatedAt: '2026-08-13T02:15:00.000Z',
       workspaceSlug: organization.slug,
     });
 
-    expect(projectRepository.getByIdForUser).not.toHaveBeenCalled();
+    expect(folderRepository.getByIdForUser).not.toHaveBeenCalled();
     expect(userPreferenceRepository.upsertEditorPreference).toHaveBeenCalledWith('user-id', {
       lastOpenedDiagramId: null,
       lastOpenedOrganizationId: organization.id,
-      lastOpenedProjectId: null,
+      lastOpenedFolderId: null,
     });
   });
 
-  it('stores a root workspace diagram target without a project target', async () => {
+  it('stores a root workspace diagram target without a folder target', async () => {
     userPreferenceRepository.upsertEditorPreference.mockResolvedValue({
       ...preferenceRow,
-      lastOpenedProjectId: null,
+      lastOpenedFolderId: null,
     });
 
     await expect(
@@ -213,27 +213,27 @@ describe(UserPreferenceService.name, () => {
     ).resolves.toMatchObject({
       diagramId: diagram.id,
       organizationId: organization.id,
-      projectId: null,
+      folderId: null,
     });
 
-    expect(projectRepository.getByIdForUser).not.toHaveBeenCalled();
+    expect(folderRepository.getByIdForUser).not.toHaveBeenCalled();
     expect(userPreferenceRepository.upsertEditorPreference).toHaveBeenCalledWith('user-id', {
       lastOpenedDiagramId: diagram.id,
       lastOpenedOrganizationId: organization.id,
-      lastOpenedProjectId: null,
+      lastOpenedFolderId: null,
     });
   });
 
-  it('rejects project targets that do not belong to the selected workspace', async () => {
-    projectRepository.getByIdForUser.mockResolvedValue({
-      ...project,
+  it('rejects folder targets that do not belong to the selected workspace', async () => {
+    folderRepository.getByIdForUser.mockResolvedValue({
+      ...folder,
       organizationId: '99999999-9999-4999-8999-999999999999',
     });
 
     await expect(
       service.updateEditorPreference(auth, {
         organizationId: organization.id,
-        projectId: project.id,
+        folderId: folder.id,
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
 
@@ -242,13 +242,13 @@ describe(UserPreferenceService.name, () => {
   });
 
   it('rejects diagram targets the user cannot access anymore', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue(undefined);
+    folderRepository.getDiagramRole.mockResolvedValue(undefined);
 
     await expect(
       service.updateEditorPreference(auth, {
         diagramId: diagram.id,
         organizationId: organization.id,
-        projectId: project.id,
+        folderId: folder.id,
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
 

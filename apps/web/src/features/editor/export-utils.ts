@@ -93,8 +93,8 @@ export async function createPngBlobFromSvg(svg: string): Promise<Blob> {
   }
 }
 
-export function createExportFileStem(projectName?: string, diagramName?: string): string {
-  const parts = ['tabliodb', toFileSlug(projectName), toFileSlug(diagramName)].filter(Boolean);
+export function createExportFileStem(folderName?: string, diagramName?: string): string {
+  const parts = ['tabliodb', toFileSlug(folderName), toFileSlug(diagramName)].filter(Boolean);
 
   return parts.join('-') || 'tabliodb-diagram';
 }

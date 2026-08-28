@@ -3,7 +3,7 @@ export * from './diagrams';
 export * from './invitations';
 export * from './notifications';
 export * from './organizations';
-export * from './projects';
+export * from './folders';
 export * from './review-signals';
 export * from './setup';
 export * from './share-links';

@@ -481,7 +481,7 @@ describe('schema-core diagram commands', () => {
     );
 
     const signalCodes = getDiagramReviewSignals(model, {
-      // Project/diagram settings disable rule keys before persistence, not after UI filtering, so server and frontend fallback agree.
+      // Folder/diagram settings disable rule keys before persistence, not after UI filtering, so server and frontend fallback agree.
       disabledRuleKeys: ['table_missing_primary_key'],
     }).map((signal) => signal.code);
 

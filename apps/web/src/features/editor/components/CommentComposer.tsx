@@ -7,7 +7,7 @@ import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { PlainTextPlugin } from '@lexical/react/LexicalPlainTextPlugin';
 import { cn } from '@tabliodb/ui';
-import type { ProjectMemberDtoOutput } from '@tabliodb/sdk';
+import type { FolderAccessDtoOutput } from '@tabliodb/sdk';
 import type { CommentLexicalDocumentDto } from '@/resources/comments';
 import {
   $createParagraphNode,
@@ -24,7 +24,7 @@ import {
 } from 'lexical';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-export type CommentMentionUser = Pick<ProjectMemberDtoOutput, 'avatarUrl' | 'cursorColor' | 'email' | 'name' | 'userId'>;
+export type CommentMentionUser = Pick<FolderAccessDtoOutput, 'avatarUrl' | 'cursorColor' | 'email' | 'name' | 'userId'>;
 
 export type CommentComposerProps = {
   'aria-invalid'?: boolean;

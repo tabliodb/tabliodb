@@ -9,7 +9,7 @@ const ownerName = process.env.TABLIODB_E2E_OWNER_NAME || 'Tabliodb Owner';
 const workspaceName = process.env.TABLIODB_E2E_WORKSPACE_NAME || 'Personal Workspace';
 const csrfCookieName = 'tabliodb_csrf_token';
 
-export type E2eProject = {
+export type E2eFolder = {
   id: string;
   organizationId: string;
   organizationSlug: string;
@@ -19,7 +19,7 @@ export type E2eProject = {
 export type E2eDiagram = {
   id: string;
   name: string;
-  projectId: string;
+  folderId: string;
 };
 
 export async function ensureOwnerSession(context: BrowserContext): Promise<boolean> {
@@ -60,20 +60,20 @@ export async function ensureOwnerSession(context: BrowserContext): Promise<boole
 
 export async function createRealtimeSmokeDiagram(
   context: BrowserContext,
-): Promise<{ diagram: E2eDiagram; path: string; project: E2eProject; tableName: string }> {
+): Promise<{ diagram: E2eDiagram; path: string; folder: E2eFolder; tableName: string }> {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const project = await createProject(context, `Realtime Smoke ${suffix}`);
-  const diagram = await createDiagram(context, project.id, `Realtime Smoke Diagram ${suffix}`);
+  const folder = await createFolder(context, `Realtime Smoke ${suffix}`);
+  const diagram = await createDiagram(context, folder.id, `Realtime Smoke Diagram ${suffix}`);
   const tableName = 'books';
 
   await importDiagramModel(context, diagram.id, createSmokeDiagramModel(diagram.name, tableName));
 
   return {
     diagram,
-    path: `/workspaces/${encodeURIComponent(project.organizationSlug || project.organizationId)}/projects/${encodeURIComponent(
-      project.id,
+    path: `/workspaces/${encodeURIComponent(folder.organizationSlug || folder.organizationId)}/folders/${encodeURIComponent(
+      folder.id,
     )}/diagrams/${encodeURIComponent(diagram.id)}`,
-    project,
+    folder,
     tableName,
   };
 }
@@ -92,7 +92,7 @@ export async function csrfHeaders(context: BrowserContext): Promise<Record<strin
   };
 }
 
-async function createProject(context: BrowserContext, name: string): Promise<E2eProject> {
+async function createFolder(context: BrowserContext, name: string): Promise<E2eFolder> {
   const organizationsResponse = await context.request.get(`${apiUrl}/organizations?limit=1`);
   expect(organizationsResponse.ok()).toBeTruthy();
 
@@ -105,7 +105,7 @@ async function createProject(context: BrowserContext, name: string): Promise<E2e
     throw new Error('E2E owner does not have a workspace.');
   }
 
-  const response = await context.request.post(`${apiUrl}/projects`, {
+  const response = await context.request.post(`${apiUrl}/folders`, {
     data: {
       description: 'Created by realtime collaboration smoke test.',
       name,
@@ -115,15 +115,15 @@ async function createProject(context: BrowserContext, name: string): Promise<E2e
   });
   expect(response.ok()).toBeTruthy();
 
-  return (await response.json()) as E2eProject;
+  return (await response.json()) as E2eFolder;
 }
 
-async function createDiagram(context: BrowserContext, projectId: string, name: string): Promise<E2eDiagram> {
+async function createDiagram(context: BrowserContext, folderId: string, name: string): Promise<E2eDiagram> {
   const response = await context.request.post(`${apiUrl}/diagrams`, {
     data: {
       dialect: 'postgresql',
       name,
-      projectId,
+      folderId,
     },
     headers: await csrfHeaders(context),
   });

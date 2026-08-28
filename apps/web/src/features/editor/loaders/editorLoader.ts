@@ -5,7 +5,7 @@ import { queryClient } from '@/lib/react-query';
 import { authQueries } from '@/resources/auth';
 import { diagramsQueries } from '@/resources/diagrams';
 import { organizationsQueries } from '@/resources/organizations';
-import { projectsQueries } from '@/resources/projects';
+import { foldersQueries } from '@/resources/folders';
 import {
   getOrganizationSlug,
   matchesRememberedWorkspace,
@@ -43,16 +43,16 @@ export async function editorLoader({ params }: LoaderFunctionArgs): Promise<Edit
       : null;
     const activeOrganization = requestedOrganization ?? rememberedOrganization ?? organizations[0];
     const organizationSlug = getOrganizationSlug(activeOrganization);
-    const projects = await queryClient.ensureQueryData(projectsQueries.listByOrganization(activeOrganization));
-    const requestedProject = params.projectId
-      ? (projects.find((project) => project.id === params.projectId) ?? null)
+    const folders = await queryClient.ensureQueryData(foldersQueries.listByOrganization(activeOrganization));
+    const requestedFolder = params.folderId
+      ? (folders.find((folder) => folder.id === params.folderId) ?? null)
       : null;
 
-    if (params.projectId && !requestedProject) {
+    if (params.folderId && !requestedFolder) {
       throw redirect(routes.workspace.to({ workspaceSlug: organizationSlug }));
     }
 
-    const activeProject = requestedProject;
+    const activeFolder = requestedFolder;
     const diagrams = await queryClient.ensureQueryData(diagramsQueries.listForWorkspace(activeOrganization));
     const requestedDiagram = params.diagramId
       ? (diagrams.find((diagram) => diagram.id === params.diagramId) ?? null)
@@ -60,14 +60,14 @@ export async function editorLoader({ params }: LoaderFunctionArgs): Promise<Edit
 
     if (params.diagramId && !requestedDiagram) {
       throw redirect(
-        activeProject
-          ? routes.project.to({ projectId: activeProject.id, workspaceSlug: organizationSlug })
+        activeFolder
+          ? routes.folder.to({ folderId: activeFolder.id, workspaceSlug: organizationSlug })
           : routes.workspace.to({ workspaceSlug: organizationSlug }),
       );
     }
 
-    if (activeProject && requestedDiagram && requestedDiagram.projectId !== activeProject.id) {
-      // A project route may only open diagrams inside that folder; root diagrams use the workspace diagram route.
+    if (activeFolder && requestedDiagram && requestedDiagram.folderId !== activeFolder.id) {
+      // A folder route may only open diagrams inside that folder; root diagrams use the workspace diagram route.
       throw redirect(routes.workspaceDiagram.to({ diagramId: requestedDiagram.id, workspaceSlug: organizationSlug }));
     }
 
@@ -78,24 +78,24 @@ export async function editorLoader({ params }: LoaderFunctionArgs): Promise<Edit
     const activeDiagram = requestedDiagram ?? (!params.diagramId ? (rememberedDiagram ?? diagrams[0] ?? null) : null);
 
     if (!activeDiagram) {
-      if (activeProject && !isProjectRoute(params, organizationSlug, activeProject.id)) {
-        throw redirect(routes.project.to({ projectId: activeProject.id, workspaceSlug: organizationSlug }));
+      if (activeFolder && !isFolderRoute(params, organizationSlug, activeFolder.id)) {
+        throw redirect(routes.folder.to({ folderId: activeFolder.id, workspaceSlug: organizationSlug }));
       }
 
-      if (!activeProject && !isWorkspaceRoute(params, organizationSlug)) {
+      if (!activeFolder && !isWorkspaceRoute(params, organizationSlug)) {
         throw redirect(routes.workspace.to({ workspaceSlug: organizationSlug }));
       }
 
-      return { title: activeProject?.name ?? activeOrganization.name };
+      return { title: activeFolder?.name ?? activeOrganization.name };
     }
 
-    if (!isDiagramRoute(params, organizationSlug, activeDiagram.projectId, activeDiagram.id)) {
+    if (!isDiagramRoute(params, organizationSlug, activeDiagram.folderId, activeDiagram.id)) {
       // The editor URL is canonicalized to the exact diagram so refreshes, sharing browser history, and document title agree.
       throw redirect(
-        activeDiagram.projectId
+        activeDiagram.folderId
           ? routes.diagram.to({
               diagramId: activeDiagram.id,
-              projectId: activeDiagram.projectId,
+              folderId: activeDiagram.folderId,
               workspaceSlug: organizationSlug,
             })
           : routes.workspaceDiagram.to({
@@ -105,7 +105,7 @@ export async function editorLoader({ params }: LoaderFunctionArgs): Promise<Edit
       );
     }
 
-    // Browser chrome follows the opened diagram document; project folders are only an organizational fallback.
+    // Browser chrome follows the opened diagram document; folders are only an organizational fallback.
     return { title: activeDiagram.name };
   } catch (error) {
     if (error instanceof TabliodbApiError && error.status === 401) {
@@ -121,20 +121,20 @@ function isEditorLoaderData(loaderData: unknown): loaderData is EditorLoaderData
 }
 
 function isWorkspaceRoute(params: Params<string>, workspaceSlug: string): boolean {
-  return params.workspaceSlug === workspaceSlug && !params.projectId && !params.diagramId;
+  return params.workspaceSlug === workspaceSlug && !params.folderId && !params.diagramId;
 }
 
-function isProjectRoute(params: Params<string>, workspaceSlug: string, projectId: string): boolean {
-  return params.workspaceSlug === workspaceSlug && params.projectId === projectId && !params.diagramId;
+function isFolderRoute(params: Params<string>, workspaceSlug: string, folderId: string): boolean {
+  return params.workspaceSlug === workspaceSlug && params.folderId === folderId && !params.diagramId;
 }
 
 function isDiagramRoute(
   params: Params<string>,
   workspaceSlug: string,
-  projectId: string | null,
+  folderId: string | null,
   diagramId: string,
 ): boolean {
-  return projectId
-    ? params.workspaceSlug === workspaceSlug && params.projectId === projectId && params.diagramId === diagramId
-    : params.workspaceSlug === workspaceSlug && !params.projectId && params.diagramId === diagramId;
+  return folderId
+    ? params.workspaceSlug === workspaceSlug && params.folderId === folderId && params.diagramId === diagramId
+    : params.workspaceSlug === workspaceSlug && !params.folderId && params.diagramId === diagramId;
 }

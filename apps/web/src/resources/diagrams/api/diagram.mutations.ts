@@ -24,7 +24,7 @@ import {
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { commentKeys } from '@/resources/comments';
 import { organizationsKeys } from '@/resources/organizations';
-import { projectsKeys } from '@/resources/projects';
+import { foldersKeys } from '@/resources/folders';
 import { reviewSignalKeys } from '@/resources/review-signals';
 import { diagramsKeys, type DiagramExportQuery } from './diagram.keys';
 
@@ -90,7 +90,7 @@ export function useCreateDiagramMutation(params: UseCreateDiagramMutationParams 
     mutationFn: createDiagramMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Diagram selector utama membaca list workspace; project cache hanya dipatch jika diagram memang berada di folder.
+      // Diagram selector utama membaca list workspace; folder cache hanya dipatch jika diagram memang berada di folder.
       patchDiagramListCache(data);
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
@@ -106,7 +106,7 @@ export function useCreateWorkspaceDiagramMutation(params: UseCreateWorkspaceDiag
       // Workspace-level create produces a root diagram, so the workspace list is the authoritative optimistic cache.
       patchDiagramListCache(data);
       queryClient.invalidateQueries({ queryKey: diagramsKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -168,7 +168,7 @@ export function useRemoveDiagramMemberMutation(params: UseRemoveDiagramMemberMut
     mutationFn: removeDiagramMemberMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Removing a direct member leaves workspace/project caches intact; only diagram access membership changes.
+      // Removing a direct member leaves workspace/folder caches intact; only diagram access membership changes.
       queryClient.invalidateQueries({ queryKey: diagramsKeys.membersRoot(variables.diagramId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
@@ -216,8 +216,8 @@ function patchDiagramListCache(data: DiagramResponseDtoOutput, mode: 'prepend' |
     patchList,
   );
 
-  if (data.projectId) {
-    queryClient.setQueryData<DiagramResponseDtoOutput[]>(diagramsKeys.listItemsByProject(data.projectId), patchList);
+  if (data.folderId) {
+    queryClient.setQueryData<DiagramResponseDtoOutput[]>(diagramsKeys.listItemsByFolder(data.folderId), patchList);
   }
 }
 

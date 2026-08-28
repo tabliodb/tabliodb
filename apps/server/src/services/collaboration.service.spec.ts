@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnauthorizedException } from '@nestjs/common';
-import { Permission, ProjectRole, REALTIME_PERSISTED_ACK_TYPE, diagramDocumentName } from '@tabliodb/shared';
+import { Permission, AccessRole, REALTIME_PERSISTED_ACK_TYPE, diagramDocumentName } from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
 import { CollaborationService } from './collaboration.service.js';
 
@@ -17,7 +17,7 @@ describe(CollaborationService.name, () => {
     recordRealtimeConnectionClosed: vi.fn(),
     recordRealtimeConnectionOpened: vi.fn(),
   };
-  const projectRepository = {
+  const folderRepository = {
     getDiagramRole: vi.fn(),
   };
 
@@ -41,7 +41,7 @@ describe(CollaborationService.name, () => {
       collaborationRepository as never,
       configRepository as never,
       metricsService as never,
-      projectRepository as never,
+      folderRepository as never,
     );
   });
 
@@ -191,29 +191,29 @@ describe(CollaborationService.name, () => {
   });
 
   it('allows editor realtime connections to mutate the shared document', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
 
     const context = await service['createConnectionContext'](createAuthContext(), 'diagram-id');
 
     expect(context).toMatchObject({
       diagramId: 'diagram-id',
       readOnly: false,
-      role: ProjectRole.Editor,
+      role: AccessRole.Editor,
       userId: 'user-id',
     });
   });
 
   it('marks viewer realtime connections as read-only', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Viewer });
 
     const context = await service['createConnectionContext'](createAuthContext(), 'diagram-id');
 
     expect(context.readOnly).toBe(true);
-    expect(context.role).toBe(ProjectRole.Viewer);
+    expect(context.role).toBe(AccessRole.Viewer);
   });
 
   it('keeps API key realtime connections read-only when the key lacks diagram update scope', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
 
     const context = await service['createConnectionContext'](
       createAuthContext({
@@ -229,7 +229,7 @@ describe(CollaborationService.name, () => {
   });
 
   it('rejects API key realtime connections when the key lacks diagram read scope', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
 
     await expect(
       service['createConnectionContext'](

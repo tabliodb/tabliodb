@@ -29,7 +29,7 @@ export class AuditLogRepository {
       .select([
         'audit_logs.id',
         'audit_logs.organizationId',
-        'audit_logs.projectId',
+        'audit_logs.folderId',
         'audit_logs.diagramId',
         'audit_logs.actorId',
         'users.name as actorName',

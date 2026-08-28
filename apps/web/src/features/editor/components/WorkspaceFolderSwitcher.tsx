@@ -2,16 +2,16 @@ import {
   OrganizationRole,
   Permission,
   isGranted,
-  permissionsForProjectRole,
+  permissionsForAccessRole,
   type OrganizationRoleValue,
-  type ProjectRoleValue,
+  type AccessRoleValue,
 } from '@tabliodb/shared';
 import type { DiagramModel } from '@tabliodb/schema-core';
 import {
   Role as SdkOrganizationRole,
   type DiagramResponseDtoOutput,
   type OrganizationDtoOutput,
-  type ProjectResponseDtoOutput,
+  type FolderResponseDtoOutput,
 } from '@tabliodb/sdk';
 import {
   Badge,
@@ -47,19 +47,19 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode, 
 import { DiagramSettingsDialog } from './DiagramSettingsDialog';
 import { DialectBadge } from './DialectIcon';
 import { MoveDiagramDialog } from './MoveDiagramDialog';
-import { ProjectSettingsDialog } from './ProjectSettingsDialog';
+import { FolderSettingsDialog } from './FolderSettingsDialog';
 import { WorkspaceSettingsDialog } from './WorkspaceSettingsDialog';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
 
-export function WorkspaceProjectSwitcher({
+export function WorkspaceFolderSwitcher({
   activeDiagram,
   activeOrganization,
-  activeProject,
+  activeFolder,
   canCreateDiagram,
-  canCreateProject,
+  canCreateFolder,
   canEditDiagram,
   canManageWorkspace,
   currentUserId,
@@ -67,38 +67,38 @@ export function WorkspaceProjectSwitcher({
   diagrams,
   model,
   onCreateDiagram,
-  onCreateProject,
+  onCreateFolder,
   onCreateWorkspace,
   onDiagramSelect,
   onDiagramLibraryOpenChange,
   onDiagramUpdated,
   onOrganizationSelect,
-  onProjectArchived,
+  onFolderArchived,
   organizations,
-  projects,
+  folders,
   stackedDialogOpen,
 }: {
   activeDiagram: DiagramResponseDto;
   activeOrganization: OrganizationDto;
-  activeProject: ProjectResponseDto | null;
+  activeFolder: FolderResponseDto | null;
   canCreateDiagram: boolean;
-  canCreateProject: boolean;
+  canCreateFolder: boolean;
   canEditDiagram: boolean;
   canManageWorkspace: boolean;
   currentUserId: string;
   diagramLibraryOpen: boolean;
   diagrams: DiagramResponseDto[];
   model: DiagramModel;
-  onCreateDiagram: (projectId?: string | null) => void;
-  onCreateProject: () => void;
+  onCreateDiagram: (folderId?: string | null) => void;
+  onCreateFolder: () => void;
   onCreateWorkspace: () => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
   onDiagramLibraryOpenChange: (open: boolean) => void;
   onDiagramUpdated: (diagram: DiagramResponseDto) => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
-  onProjectArchived: () => void;
+  onFolderArchived: () => void;
   organizations: OrganizationDto[];
-  projects: ProjectResponseDto[];
+  folders: FolderResponseDto[];
   stackedDialogOpen: boolean;
 }) {
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
@@ -117,21 +117,21 @@ export function WorkspaceProjectSwitcher({
         <DiagramNavigator
           activeDiagram={activeDiagram}
           activeOrganization={activeOrganization}
-          activeProject={activeProject}
+          activeFolder={activeFolder}
           canCreateDiagram={canCreateDiagram}
-          canCreateProject={canCreateProject}
+          canCreateFolder={canCreateFolder}
           canEditDiagram={canEditDiagram}
           currentUserId={currentUserId}
           diagrams={diagrams}
           model={model}
           onCreateDiagram={onCreateDiagram}
-          onCreateProject={onCreateProject}
+          onCreateFolder={onCreateFolder}
           onDiagramSelect={onDiagramSelect}
           onDiagramLibraryOpenChange={onDiagramLibraryOpenChange}
           onDiagramUpdated={onDiagramUpdated}
-          onProjectArchived={onProjectArchived}
+          onFolderArchived={onFolderArchived}
           open={diagramLibraryOpen}
-          projects={projects}
+          folders={folders}
           stackedDialogOpen={stackedDialogOpen}
         />
       </div>
@@ -262,69 +262,69 @@ type LibraryContextMenuState = {
     }
   | {
       kind: 'folder';
-      projectId: string;
+      folderId: string;
     }
 );
 
 function DiagramNavigator({
   activeDiagram,
   activeOrganization,
-  activeProject,
+  activeFolder,
   canCreateDiagram,
-  canCreateProject,
+  canCreateFolder,
   canEditDiagram,
   currentUserId,
   diagrams,
   model,
   onCreateDiagram,
-  onCreateProject,
+  onCreateFolder,
   onDiagramLibraryOpenChange,
   onDiagramSelect,
   onDiagramUpdated,
-  onProjectArchived,
+  onFolderArchived,
   open,
-  projects,
+  folders,
   stackedDialogOpen,
 }: {
   activeDiagram: DiagramResponseDto;
   activeOrganization: OrganizationDto;
-  activeProject: ProjectResponseDto | null;
+  activeFolder: FolderResponseDto | null;
   canCreateDiagram: boolean;
-  canCreateProject: boolean;
+  canCreateFolder: boolean;
   canEditDiagram: boolean;
   currentUserId: string;
   diagrams: DiagramResponseDto[];
   model: DiagramModel;
-  onCreateDiagram: (projectId?: string | null) => void;
-  onCreateProject: () => void;
+  onCreateDiagram: (folderId?: string | null) => void;
+  onCreateFolder: () => void;
   onDiagramLibraryOpenChange: (open: boolean) => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
   onDiagramUpdated: (diagram: DiagramResponseDto) => void;
-  onProjectArchived: () => void;
+  onFolderArchived: () => void;
   open: boolean;
-  projects: ProjectResponseDto[];
+  folders: FolderResponseDto[];
   stackedDialogOpen: boolean;
 }) {
   const [diagramSearchTerm, setDiagramSearchTerm] = useState('');
-  const [projectSearchTerm, setProjectSearchTerm] = useState('');
+  const [folderSearchTerm, setFolderSearchTerm] = useState('');
   const [selectedFolderFilterId, setSelectedFolderFilterId] = useState<string>(allDiagramFilterId);
   const [diagramSettingsDiagramId, setDiagramSettingsDiagramId] = useState<string | null>(null);
   const [moveDiagramId, setMoveDiagramId] = useState<string | null>(null);
-  const [folderSettingsProjectId, setFolderSettingsProjectId] = useState<string | null>(null);
+  const [folderSettingsFolderId, setFolderSettingsFolderId] = useState<string | null>(null);
   const [libraryContextMenu, setLibraryContextMenu] = useState<LibraryContextMenuState | null>(null);
   const libraryContextMenuRef = useRef<HTMLDivElement | null>(null);
-  const activeFolderName = activeProject?.name ?? 'No folder';
+  const activeFolderName = activeFolder?.name ?? 'No folder';
   const diagramSettingsDiagram = diagramSettingsDiagramId
     ? (diagrams.find((diagram) => diagram.id === diagramSettingsDiagramId) ?? null)
     : null;
   const moveDiagram = moveDiagramId ? (diagrams.find((diagram) => diagram.id === moveDiagramId) ?? null) : null;
-  const folderSettingsProject = folderSettingsProjectId
-    ? (projects.find((project) => project.id === folderSettingsProjectId) ?? null)
+  const folderSettingsFolder = folderSettingsFolderId
+    ? (folders.find((folder) => folder.id === folderSettingsFolderId) ?? null)
     : null;
   const isLibraryStackedDialogOpen =
     stackedDialogOpen ||
-    Boolean(diagramSettingsDiagram || moveDiagram || folderSettingsProject || libraryContextMenu);
-  const rootDiagramCount = diagrams.filter((diagram) => !diagram.projectId).length;
+    Boolean(diagramSettingsDiagram || moveDiagram || folderSettingsFolder || libraryContextMenu);
+  const rootDiagramCount = diagrams.filter((diagram) => !diagram.folderId).length;
   const filteredDiagrams = useMemo(() => {
     const search = diagramSearchTerm.trim().toLowerCase();
     const folderFilteredDiagrams = diagrams.filter((diagram) => {
@@ -333,10 +333,10 @@ function DiagramNavigator({
       }
 
       if (selectedFolderFilterId === rootDiagramFilterId) {
-        return !diagram.projectId;
+        return !diagram.folderId;
       }
 
-      return diagram.projectId === selectedFolderFilterId;
+      return diagram.folderId === selectedFolderFilterId;
     });
 
     return search
@@ -345,20 +345,20 @@ function DiagramNavigator({
         )
       : folderFilteredDiagrams;
   }, [diagrams, diagramSearchTerm, selectedFolderFilterId]);
-  const filteredProjects = useMemo(() => {
-    const search = projectSearchTerm.trim().toLowerCase();
+  const filteredFolders = useMemo(() => {
+    const search = folderSearchTerm.trim().toLowerCase();
 
     return search
-      ? projects.filter((project) =>
-          [project.name, project.slug, project.description ?? ''].some((value) => value.toLowerCase().includes(search)),
+      ? folders.filter((folder) =>
+          [folder.name, folder.slug, folder.description ?? ''].some((value) => value.toLowerCase().includes(search)),
         )
-      : projects;
-  }, [projectSearchTerm, projects]);
-  const selectedFolderLabel = getSelectedFolderLabel(selectedFolderFilterId, projects);
-  const selectedProjectIdForCreate =
+      : folders;
+  }, [folderSearchTerm, folders]);
+  const selectedFolderLabel = getSelectedFolderLabel(selectedFolderFilterId, folders);
+  const selectedFolderIdForCreate =
     selectedFolderFilterId !== allDiagramFilterId &&
     selectedFolderFilterId !== rootDiagramFilterId &&
-    projects.some((project) => project.id === selectedFolderFilterId)
+    folders.some((folder) => folder.id === selectedFolderFilterId)
       ? selectedFolderFilterId
       : null;
 
@@ -373,21 +373,21 @@ function DiagramNavigator({
     if (!nextOpen) {
       // Search filters are per visit; folder filter stays sticky while the dialog is open so "New diagram" can inherit it.
       setDiagramSearchTerm('');
-      setProjectSearchTerm('');
+      setFolderSearchTerm('');
       setSelectedFolderFilterId(allDiagramFilterId);
     }
   }
 
   function handleCreateDiagram() {
-    onCreateDiagram(selectedProjectIdForCreate);
+    onCreateDiagram(selectedFolderIdForCreate);
   }
 
-  function handleCreateProject() {
-    onCreateProject();
+  function handleCreateFolder() {
+    onCreateFolder();
   }
 
-  function openFolderContextMenu(event: MouseEvent, project: ProjectResponseDto) {
-    if (!canManageProjectSettings(project)) {
+  function openFolderContextMenu(event: MouseEvent, folder: FolderResponseDto) {
+    if (!canManageFolderSettings(folder)) {
       return;
     }
 
@@ -396,7 +396,7 @@ function DiagramNavigator({
     setLibraryContextMenu({
       kind: 'folder',
       ...getContextMenuPoint(event.clientX, event.clientY),
-      projectId: project.id,
+      folderId: folder.id,
     });
   }
 
@@ -429,8 +429,8 @@ function DiagramNavigator({
     });
   }
 
-  function openFolderActionMenu(event: MouseEvent<HTMLButtonElement>, project: ProjectResponseDto) {
-    if (!canManageProjectSettings(project)) {
+  function openFolderActionMenu(event: MouseEvent<HTMLButtonElement>, folder: FolderResponseDto) {
+    if (!canManageFolderSettings(folder)) {
       return;
     }
 
@@ -440,13 +440,13 @@ function DiagramNavigator({
     setLibraryContextMenu({
       kind: 'folder',
       ...getContextMenuPoint(rect.right - 220, rect.bottom + 6),
-      projectId: project.id,
+      folderId: folder.id,
     });
   }
 
-  function handleOpenFolderSettings(projectId: string) {
+  function handleOpenFolderSettings(folderId: string) {
     setLibraryContextMenu(null);
-    setFolderSettingsProjectId(projectId);
+    setFolderSettingsFolderId(folderId);
   }
 
   function handleOpenDiagramSettings(diagramId: string) {
@@ -578,8 +578,8 @@ function DiagramNavigator({
                     <h2 className="truncate text-[13px] font-black">{activeOrganization.name}</h2>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    {canCreateProject ? (
-                      <Button className="shrink-0 gap-1.5" onClick={handleCreateProject} size="sm" variant="secondary">
+                    {canCreateFolder ? (
+                      <Button className="shrink-0 gap-1.5" onClick={handleCreateFolder} size="sm" variant="secondary">
                         <FolderPlus className="size-4" />
                         Folder
                       </Button>
@@ -590,9 +590,9 @@ function DiagramNavigator({
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
                   <Input
                     className="h-9 pl-9 text-[13px]"
-                    onChange={(event) => setProjectSearchTerm(event.target.value)}
+                    onChange={(event) => setFolderSearchTerm(event.target.value)}
                     placeholder="Search folders"
-                    value={projectSearchTerm}
+                    value={folderSearchTerm}
                   />
                 </div>
               </div>
@@ -614,13 +614,13 @@ function DiagramNavigator({
                     subtitle="Standalone diagrams"
                     isFolder={false}
                   />
-                  {filteredProjects.length === 0 ? (
+                  {filteredFolders.length === 0 ? (
                     <div className="rounded-[var(--tabliodb-radius-md)] border border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                       No matching folders
                     </div>
                   ) : (
-                    filteredProjects.map((project) => {
-                      const canOpenSettings = canManageProjectSettings(project);
+                    filteredFolders.map((folder) => {
+                      const canOpenSettings = canManageFolderSettings(folder);
 
                       return (
                         <FolderFilterButton
@@ -629,20 +629,20 @@ function DiagramNavigator({
                               <IconButton
                                 className="size-8"
                                 icon={MoreHorizontal}
-                                label={`Folder actions for ${project.name}`}
-                                onClick={(event) => openFolderActionMenu(event, project)}
+                                label={`Folder actions for ${folder.name}`}
+                                onClick={(event) => openFolderActionMenu(event, folder)}
                                 variant="ghost"
                               />
                             ) : null
                           }
-                          count={diagrams.filter((diagram) => diagram.projectId === project.id).length}
+                          count={diagrams.filter((diagram) => diagram.folderId === folder.id).length}
                           isFolder={true}
-                          isSelected={selectedFolderFilterId === project.id}
-                          key={project.id}
-                          label={project.name}
-                          onContextMenu={(event) => openFolderContextMenu(event, project)}
-                          onSelect={() => setSelectedFolderFilterId(project.id)}
-                          subtitle={project.slug}
+                          isSelected={selectedFolderFilterId === folder.id}
+                          key={folder.id}
+                          label={folder.name}
+                          onContextMenu={(event) => openFolderContextMenu(event, folder)}
+                          onSelect={() => setSelectedFolderFilterId(folder.id)}
+                          subtitle={folder.slug}
                         />
                       );
                     })
@@ -689,8 +689,8 @@ function DiagramNavigator({
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {filteredDiagrams.map((diagram) => {
                       const isActive = diagram.id === activeDiagram.id;
-                      const folderName = diagram.projectId
-                        ? (projects.find((project) => project.id === diagram.projectId)?.name ?? 'Folder')
+                      const folderName = diagram.folderId
+                        ? (folders.find((folder) => folder.id === diagram.folderId)?.name ?? 'Folder')
                         : 'No folder';
                       const canOpenDiagramActions = canEditDiagramSettings(diagram);
 
@@ -751,7 +751,7 @@ function DiagramNavigator({
           <LibraryContextMenuItem
             icon={Settings}
             label="Folder settings"
-            onSelect={() => handleOpenFolderSettings(libraryContextMenu.projectId)}
+            onSelect={() => handleOpenFolderSettings(libraryContextMenu.folderId)}
           />
         </LibraryContextMenu>
       ) : null}
@@ -806,24 +806,24 @@ function DiagramNavigator({
             }
           }}
           open={Boolean(moveDiagram)}
-          projects={projects}
+          folders={folders}
           trigger={null}
         />
       ) : null}
-      {folderSettingsProject ? (
-        <ProjectSettingsDialog
+      {folderSettingsFolder ? (
+        <FolderSettingsDialog
           currentUserId={currentUserId}
           onArchived={() => {
-            setFolderSettingsProjectId(null);
-            onProjectArchived();
+            setFolderSettingsFolderId(null);
+            onFolderArchived();
           }}
           onOpenChange={(nextOpen) => {
             if (!nextOpen) {
-              setFolderSettingsProjectId(null);
+              setFolderSettingsFolderId(null);
             }
           }}
-          open={Boolean(folderSettingsProject)}
-          project={folderSettingsProject}
+          open={Boolean(folderSettingsFolder)}
+          folder={folderSettingsFolder}
           trigger={null}
         />
       ) : null}
@@ -887,7 +887,7 @@ function FolderFilterButton({
   );
 }
 
-function getSelectedFolderLabel(folderFilterId: string, projects: ProjectResponseDto[]): string {
+function getSelectedFolderLabel(folderFilterId: string, folders: FolderResponseDto[]): string {
   if (folderFilterId === allDiagramFilterId) {
     return 'All diagrams';
   }
@@ -896,7 +896,7 @@ function getSelectedFolderLabel(folderFilterId: string, projects: ProjectRespons
     return 'No folder';
   }
 
-  return projects.find((project) => project.id === folderFilterId)?.name ?? 'Folder';
+  return folders.find((folder) => folder.id === folderFilterId)?.name ?? 'Folder';
 }
 
 function LibraryContextMenu({
@@ -943,14 +943,14 @@ function LibraryContextMenuItem({
   );
 }
 
-function canManageProjectSettings(project: ProjectResponseDto): boolean {
+function canManageFolderSettings(folder: FolderResponseDto): boolean {
   // Folder settings currently includes member access, so only roles with member-management permission receive the menu.
-  return hasProjectPermission(project.projectRole, Permission.ProjectMemberManage);
+  return hasFolderPermission(folder.folderRole, Permission.FolderAccessManage);
 }
 
 function canEditDiagramSettings(diagram: DiagramResponseDto): boolean {
   // Diagram settings mutates diagram metadata/review overrides, so context actions follow the effective diagram role from the API.
-  return hasProjectPermission(diagram.role as ProjectRoleValue, Permission.DiagramUpdate);
+  return hasFolderPermission(diagram.role as AccessRoleValue, Permission.DiagramUpdate);
 }
 
 function getContextMenuPoint(left: number, top: number) {
@@ -986,9 +986,9 @@ function formatOrganizationRole(role: OrganizationRoleValue | SdkOrganizationRol
   }[normalizedRole];
 }
 
-function hasProjectPermission(role: ProjectRoleValue, permission: Permission): boolean {
+function hasFolderPermission(role: AccessRoleValue, permission: Permission): boolean {
   return isGranted({
-    current: permissionsForProjectRole(role),
+    current: permissionsForAccessRole(role),
     requested: [permission],
   });
 }

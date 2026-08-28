@@ -45,7 +45,7 @@ export function PublicSharePage() {
               {share.snapshot ? <Badge variant="blue">Saved v{share.snapshot.version}</Badge> : null}
             </div>
             <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-              {share.diagram.projectName ?? share.diagram.organizationName} / {share.diagram.dialect}
+              {share.diagram.folderName ?? share.diagram.organizationName} / {share.diagram.dialect}
             </p>
           </div>
         </div>

@@ -5,7 +5,7 @@ export enum OrganizationRole {
   Guest = 'guest',
 }
 
-export enum ProjectRole {
+export enum AccessRole {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',
@@ -13,17 +13,17 @@ export enum ProjectRole {
 }
 
 export type OrganizationRoleValue = `${OrganizationRole}`;
-export type ProjectRoleValue = `${ProjectRole}`;
+export type AccessRoleValue = `${AccessRole}`;
 
 export enum Permission {
   All = 'all',
   OrganizationRead = 'organization.read',
   OrganizationManage = 'organization.manage',
-  ProjectCreate = 'project.create',
-  ProjectRead = 'project.read',
-  ProjectUpdate = 'project.update',
-  ProjectDelete = 'project.delete',
-  ProjectMemberManage = 'project.member.manage',
+  FolderCreate = 'folder.create',
+  FolderRead = 'folder.read',
+  FolderUpdate = 'folder.update',
+  FolderDelete = 'folder.delete',
+  FolderAccessManage = 'folder.access.manage',
   DiagramCreate = 'diagram.create',
   DiagramRead = 'diagram.read',
   DiagramUpdate = 'diagram.update',
@@ -35,11 +35,11 @@ export enum Permission {
   ApiKeyManage = 'api-key.manage',
 }
 
-const rolePermissions: Record<ProjectRoleValue, Permission[]> = {
-  [ProjectRole.Owner]: [Permission.All],
-  [ProjectRole.Editor]: [
-    Permission.ProjectRead,
-    Permission.ProjectUpdate,
+const rolePermissions: Record<AccessRoleValue, Permission[]> = {
+  [AccessRole.Owner]: [Permission.All],
+  [AccessRole.Editor]: [
+    Permission.FolderRead,
+    Permission.FolderUpdate,
     Permission.DiagramCreate,
     Permission.DiagramRead,
     Permission.DiagramUpdate,
@@ -48,13 +48,13 @@ const rolePermissions: Record<ProjectRoleValue, Permission[]> = {
     Permission.SnapshotCreate,
     Permission.SnapshotRead,
   ],
-  [ProjectRole.Commenter]: [
-    Permission.ProjectRead,
+  [AccessRole.Commenter]: [
+    Permission.FolderRead,
     Permission.DiagramRead,
     Permission.DiagramComment,
     Permission.SnapshotRead,
   ],
-  [ProjectRole.Viewer]: [Permission.ProjectRead, Permission.DiagramRead, Permission.SnapshotRead],
+  [AccessRole.Viewer]: [Permission.FolderRead, Permission.DiagramRead, Permission.SnapshotRead],
 };
 
 const organizationRolePermissions: Record<OrganizationRoleValue, Permission[]> = {
@@ -63,7 +63,7 @@ const organizationRolePermissions: Record<OrganizationRoleValue, Permission[]> =
   [OrganizationRole.Admin]: [
     Permission.OrganizationRead,
     Permission.OrganizationManage,
-    Permission.ProjectCreate,
+    Permission.FolderCreate,
     Permission.DiagramCreate,
     Permission.DiagramRead,
     Permission.DiagramUpdate,
@@ -75,7 +75,7 @@ const organizationRolePermissions: Record<OrganizationRoleValue, Permission[]> =
   ],
   [OrganizationRole.Member]: [
     Permission.OrganizationRead,
-    Permission.ProjectCreate,
+    Permission.FolderCreate,
     Permission.DiagramCreate,
     Permission.DiagramRead,
     Permission.DiagramUpdate,
@@ -91,7 +91,7 @@ export function permissionsForOrganizationRole(role: OrganizationRoleValue): Per
   return organizationRolePermissions[role];
 }
 
-export function permissionsForProjectRole(role: ProjectRoleValue): Permission[] {
+export function permissionsForAccessRole(role: AccessRoleValue): Permission[] {
   return rolePermissions[role];
 }
 

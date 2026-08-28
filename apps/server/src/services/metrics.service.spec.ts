@@ -8,13 +8,13 @@ describe(MetricsService.name, () => {
     service.recordHttpRequest({
       durationMs: 12,
       method: 'get',
-      path: '/api/projects/:projectId/diagrams',
+      path: '/api/folders/:folderId/diagrams',
       statusCode: 200,
     });
     service.recordHttpRequest({
       durationMs: 40,
       method: 'GET',
-      path: '/api/projects/:projectId/diagrams',
+      path: '/api/folders/:folderId/diagrams',
       statusCode: 500,
     });
 
@@ -31,7 +31,7 @@ describe(MetricsService.name, () => {
         count: 2,
         errorCount: 1,
         method: 'GET',
-        path: '/api/projects/:projectId/diagrams',
+        path: '/api/folders/:folderId/diagrams',
         p95DurationMs: 40,
       }),
     );

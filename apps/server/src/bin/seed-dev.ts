@@ -1,4 +1,4 @@
-import { ProjectRole, OrganizationRole } from '@tabliodb/shared';
+import { AccessRole, OrganizationRole } from '@tabliodb/shared';
 import {
   createStarterDiagramModel,
   defaultDiagramReviewSettings,
@@ -17,7 +17,7 @@ const seedOwnerName = process.env.TABLIODB_DEV_OWNER_NAME ?? 'Tabliodb Owner';
 const seedOwnerPassword = process.env.TABLIODB_DEV_OWNER_PASSWORD ?? 'tabliodb-dev';
 // Demo values below are only written by the explicit db:seed/db:fresh:seed development scripts; production setup never imports this seed path.
 const seedWorkspaceName = process.env.TABLIODB_DEV_WORKSPACE_NAME ?? 'Personal Workspace';
-const seedProjectName = process.env.TABLIODB_DEV_PROJECT_NAME ?? 'Library System';
+const seedFolderName = process.env.TABLIODB_DEV_FOLDER_NAME ?? 'Library System';
 const seedDiagramName = process.env.TABLIODB_DEV_DIAGRAM_NAME ?? 'Main schema';
 
 const env = loadEnv();
@@ -29,7 +29,7 @@ try {
   console.log(`Seed owner: ${result.owner.email}`);
   console.log(`Seed password: ${result.passwordWasWritten ? seedOwnerPassword : '(kept existing password)'}`);
   console.log(`Workspace: ${result.organization.name}`);
-  console.log(`Project: ${result.project.name}`);
+  console.log(`Folder: ${result.folder.name}`);
   console.log(`Diagram: ${result.diagram.name}`);
   console.log(`Snapshot: v${result.snapshotVersion}`);
 } finally {
@@ -42,8 +42,8 @@ async function seedDevelopmentData(tx: Transaction<DB>) {
 
   const owner = await upsertSeedOwner(tx);
   const organization = await upsertSeedOrganization(tx, owner.id);
-  const project = await upsertSeedProject(tx, owner.id, organization.id);
-  const diagram = await upsertSeedDiagram(tx, owner.id, organization.id, project.id);
+  const folder = await upsertSeedFolder(tx, owner.id, organization.id);
+  const diagram = await upsertSeedDiagram(tx, owner.id, organization.id, folder.id);
   const snapshotVersion = await ensureInitialDiagramState(tx, {
     createdById: owner.id,
     diagramId: diagram.id,
@@ -54,7 +54,7 @@ async function seedDevelopmentData(tx: Transaction<DB>) {
     owner,
     passwordWasWritten: owner.passwordWasWritten,
     organization,
-    project,
+    folder,
     diagram,
     snapshotVersion,
   };
@@ -209,25 +209,25 @@ async function upsertSystemSetting(
     .execute();
 }
 
-async function upsertSeedProject(tx: Transaction<DB>, ownerId: string, organizationId: string) {
-  const slug = slugify(seedProjectName);
-  const existingProject = await tx
-    .selectFrom('projects')
+async function upsertSeedFolder(tx: Transaction<DB>, ownerId: string, organizationId: string) {
+  const slug = slugify(seedFolderName);
+  const existingFolder = await tx
+    .selectFrom('folders')
     .select(['id', 'name', 'slug'])
     .where('organizationId', '=', organizationId)
     .where('slug', '=', slug)
     .where('archivedAt', 'is', null)
     .executeTakeFirst();
 
-  const project =
-    existingProject ??
+  const folder =
+    existingFolder ??
     (await tx
-      .insertInto('projects')
+      .insertInto('folders')
       .values({
         createdById: ownerId,
         defaultDialect: 'postgresql',
         description: 'Starter schema workspace',
-        name: seedProjectName,
+        name: seedFolderName,
         organizationId,
         slug,
       })
@@ -235,30 +235,30 @@ async function upsertSeedProject(tx: Transaction<DB>, ownerId: string, organizat
       .executeTakeFirstOrThrow());
 
   await tx
-    .insertInto('project_members')
+    .insertInto('folder_access')
     .values({
       createdById: ownerId,
-      projectId: project.id,
-      role: ProjectRole.Owner,
+      folderId: folder.id,
+      role: AccessRole.Owner,
       userId: ownerId,
     })
     .onConflict((oc) =>
-      oc.columns(['projectId', 'userId']).doUpdateSet({
-        role: ProjectRole.Owner,
+      oc.columns(['folderId', 'userId']).doUpdateSet({
+        role: AccessRole.Owner,
         updatedAt: new Date(),
       }),
     )
     .execute();
 
-  return project;
+  return folder;
 }
 
-async function upsertSeedDiagram(tx: Transaction<DB>, ownerId: string, organizationId: string, projectId: string) {
+async function upsertSeedDiagram(tx: Transaction<DB>, ownerId: string, organizationId: string, folderId: string) {
   const slug = slugify(seedDiagramName);
   const existingDiagram = await tx
     .selectFrom('diagrams')
     .select(['id', 'name', 'slug'])
-    .where('projectId', '=', projectId)
+    .where('folderId', '=', folderId)
     .where('slug', '=', slug)
     .where('archivedAt', 'is', null)
     .executeTakeFirst();
@@ -272,7 +272,7 @@ async function upsertSeedDiagram(tx: Transaction<DB>, ownerId: string, organizat
         dialect: 'postgresql',
         name: seedDiagramName,
         organizationId,
-        projectId,
+        folderId,
         reviewSettings: defaultDiagramReviewSettings,
         slug,
       })

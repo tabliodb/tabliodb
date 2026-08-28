@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, AccessRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
@@ -29,7 +29,7 @@ const team = {
   memberCount: 0,
   name: 'Backend team',
   organizationId: 'organization-id',
-  projectAccessCount: 0,
+  folderAccessCount: 0,
   slug: 'backend-team',
   updatedAt: new Date('2026-08-02T07:00:00.000Z'),
 };
@@ -43,12 +43,12 @@ const member = {
   userId: 'editor-id',
 };
 
-const projectAccess = {
+const folderAccess = {
   createdAt: new Date('2026-08-02T09:00:00.000Z'),
-  projectId: 'project-id',
-  projectName: 'Library System',
-  projectSlug: 'library-system',
-  role: ProjectRole.Editor,
+  folderId: 'folder-id',
+  folderName: 'Library System',
+  folderSlug: 'library-system',
+  role: AccessRole.Editor,
   updatedAt: new Date('2026-08-02T09:00:00.000Z'),
 };
 
@@ -56,8 +56,8 @@ const diagramAccess = {
   createdAt: new Date('2026-08-02T09:30:00.000Z'),
   diagramId: 'diagram-id',
   diagramName: 'Main schema',
-  projectId: null,
-  role: ProjectRole.Commenter,
+  folderId: null,
+  role: AccessRole.Commenter,
   updatedAt: new Date('2026-08-02T09:30:00.000Z'),
 };
 
@@ -82,16 +82,16 @@ describe(TeamService.name, () => {
     getDiagramInOrganization: vi.fn(),
     getMember: vi.fn(),
     getMembers: vi.fn(),
-    getProjectAccess: vi.fn(),
-    getProjectAccesses: vi.fn(),
-    getProjectInOrganization: vi.fn(),
+    getFolderAccess: vi.fn(),
+    getFolderAccesses: vi.fn(),
+    getFolderInOrganization: vi.fn(),
     list: vi.fn(),
     removeMember: vi.fn(),
     removeDiagramAccess: vi.fn(),
-    removeProjectAccess: vi.fn(),
+    removeFolderAccess: vi.fn(),
     update: vi.fn(),
     upsertDiagramAccess: vi.fn(),
-    upsertProjectAccess: vi.fn(),
+    upsertFolderAccess: vi.fn(),
   };
   const userRepository = {
     getByEmail: vi.fn(),
@@ -241,54 +241,54 @@ describe(TeamService.name, () => {
     expect(auditLogRepository.create).not.toHaveBeenCalled();
   });
 
-  it('grants same-workspace project access through a team', async () => {
-    teamRepository.getProjectInOrganization.mockResolvedValue({
-      id: projectAccess.projectId,
-      name: projectAccess.projectName,
+  it('grants same-workspace folder access through a team', async () => {
+    teamRepository.getFolderInOrganization.mockResolvedValue({
+      id: folderAccess.folderId,
+      name: folderAccess.folderName,
       organizationId: team.organizationId,
-      slug: projectAccess.projectSlug,
+      slug: folderAccess.folderSlug,
     });
-    teamRepository.getProjectAccess.mockResolvedValue(undefined);
-    teamRepository.upsertProjectAccess.mockResolvedValue(projectAccess);
+    teamRepository.getFolderAccess.mockResolvedValue(undefined);
+    teamRepository.upsertFolderAccess.mockResolvedValue(folderAccess);
 
     await expect(
-      service.upsertProjectAccess(auth, 'team-id', {
-        projectId: projectAccess.projectId,
-        role: ProjectRole.Editor,
+      service.upsertFolderAccess(auth, 'team-id', {
+        folderId: folderAccess.folderId,
+        role: AccessRole.Editor,
       }),
     ).resolves.toMatchObject({
-      projectId: projectAccess.projectId,
-      role: ProjectRole.Editor,
+      folderId: folderAccess.folderId,
+      role: AccessRole.Editor,
     });
 
-    expect(teamRepository.upsertProjectAccess).toHaveBeenCalledWith('team-id', {
+    expect(teamRepository.upsertFolderAccess).toHaveBeenCalledWith('team-id', {
       createdById: 'owner-id',
-      projectId: projectAccess.projectId,
-      role: ProjectRole.Editor,
+      folderId: folderAccess.folderId,
+      role: AccessRole.Editor,
     });
     expect(auditLogRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: AuditAction.TeamProjectAccessUpdated,
-        entityId: projectAccess.projectId,
-        entityType: 'team_project_access',
+        action: AuditAction.TeamFolderAccessUpdated,
+        entityId: folderAccess.folderId,
+        entityType: 'team_folder_access',
         organizationId: team.organizationId,
-        projectId: projectAccess.projectId,
+        folderId: folderAccess.folderId,
       }),
     );
   });
 
-  it('rejects project access grants across workspace boundaries', async () => {
-    teamRepository.getProjectInOrganization.mockResolvedValue(undefined);
+  it('rejects folder access grants across workspace boundaries', async () => {
+    teamRepository.getFolderInOrganization.mockResolvedValue(undefined);
 
     await expect(
-      service.upsertProjectAccess(auth, 'team-id', {
-        projectId: 'foreign-project-id',
-        role: ProjectRole.Viewer,
+      service.upsertFolderAccess(auth, 'team-id', {
+        folderId: 'foreign-folder-id',
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    // The service validates project ownership before inserting the team grant.
-    expect(teamRepository.upsertProjectAccess).not.toHaveBeenCalled();
+    // The service validates folder ownership before inserting the team grant.
+    expect(teamRepository.upsertFolderAccess).not.toHaveBeenCalled();
   });
 
   it('grants same-workspace diagram access through a team', async () => {
@@ -296,7 +296,7 @@ describe(TeamService.name, () => {
       id: diagramAccess.diagramId,
       name: diagramAccess.diagramName,
       organizationId: team.organizationId,
-      projectId: null,
+      folderId: null,
     });
     teamRepository.getDiagramAccess.mockResolvedValue(undefined);
     teamRepository.upsertDiagramAccess.mockResolvedValue(diagramAccess);
@@ -304,17 +304,17 @@ describe(TeamService.name, () => {
     await expect(
       service.upsertDiagramAccess(auth, 'team-id', {
         diagramId: diagramAccess.diagramId,
-        role: ProjectRole.Commenter,
+        role: AccessRole.Commenter,
       }),
     ).resolves.toMatchObject({
       diagramId: diagramAccess.diagramId,
-      role: ProjectRole.Commenter,
+      role: AccessRole.Commenter,
     });
 
     expect(teamRepository.upsertDiagramAccess).toHaveBeenCalledWith('team-id', {
       createdById: 'owner-id',
       diagramId: diagramAccess.diagramId,
-      role: ProjectRole.Commenter,
+      role: AccessRole.Commenter,
     });
     expect(auditLogRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -333,7 +333,7 @@ describe(TeamService.name, () => {
     await expect(
       service.upsertDiagramAccess(auth, 'team-id', {
         diagramId: 'foreign-diagram-id',
-        role: ProjectRole.Viewer,
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 

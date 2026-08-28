@@ -14,7 +14,7 @@ import { InvitationRepository } from './invitation.repository.js';
 import { NotificationRepository } from './notification.repository.js';
 import { OrganizationRepository } from './organization.repository.js';
 import { PasswordResetRepository } from './password-reset.repository.js';
-import { ProjectRepository } from './project.repository.js';
+import { FolderRepository } from './folder.repository.js';
 import { ReviewSignalRepository } from './review-signal.repository.js';
 import { SessionRepository } from './session.repository.js';
 import { SetupRepository } from './setup.repository.js';
@@ -40,7 +40,7 @@ export const repositories = [
   NotificationRepository,
   OrganizationRepository,
   PasswordResetRepository,
-  ProjectRepository,
+  FolderRepository,
   ReviewSignalRepository,
   SessionRepository,
   SetupRepository,

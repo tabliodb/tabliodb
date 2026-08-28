@@ -64,7 +64,7 @@ const setupSteps: readonly SetupStep[] = [
   },
   {
     autoComplete: 'organization',
-    description: 'A workspace groups users, projects, teams, diagrams, and access policy.',
+    description: 'A workspace groups users, folders, teams, diagrams, and access policy.',
     helper: 'This does not rename the product. The app stays TablioDB; this only names the first workspace.',
     label: 'Workspace name',
     name: 'workspaceName',
@@ -297,7 +297,7 @@ export function SetupPage() {
                   Check the first owner and workspace
                 </h2>
                 <p className="mt-3 text-sm font-semibold leading-6 text-[rgb(var(--tabliodb-ink-muted))]">
-                  This creates the first admin account, the first workspace, and the starter project used by the editor.
+                  This creates the first admin account, the first workspace, and the starter folder used by the editor.
                 </p>
 
                 <div className="mt-7 grid gap-2">

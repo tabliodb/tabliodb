@@ -10,7 +10,7 @@ const UserCreateSchema = z
     email: z.email(),
     name: z.string().min(1),
     password: z.string().min(8),
-    // User creation is an instance-level account lifecycle operation; workspace/project access is granted separately through invitations or workspace members.
+    // User creation is an instance-level account lifecycle operation; workspace/folder access is granted separately through invitations or workspace members.
     instanceRole: z.enum(['admin']).optional(),
   })
   .meta({ id: 'UserCreateDto' });

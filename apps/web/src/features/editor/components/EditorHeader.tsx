@@ -2,7 +2,7 @@ import type { DiagramModel } from '@tabliodb/schema-core';
 import type {
   DiagramResponseDtoOutput,
   OrganizationDtoOutput,
-  ProjectResponseDtoOutput,
+  FolderResponseDtoOutput,
   SnapshotResponseDtoOutput,
 } from '@tabliodb/sdk';
 import { Badge, Button, IconButton } from '@tabliodb/ui';
@@ -14,21 +14,21 @@ import { DiagramAccessDialog } from './DiagramAccessDialog';
 import { NotificationInboxMenu, UserAccountMenu, type NotificationInboxItem } from './EditorHeaderMenus';
 import { EditorMoreActionsMenu } from './EditorMoreActionsMenu';
 import type { AvatarIdentity } from './UserAvatar';
-import { WorkspaceProjectSwitcher } from './WorkspaceProjectSwitcher';
+import { WorkspaceFolderSwitcher } from './WorkspaceFolderSwitcher';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
 type SnapshotResponseDto = SnapshotResponseDtoOutput;
 type HeaderAction = () => Promise<void> | void;
 
 export function EditorHeader({
   activeDiagram,
   activeOrganization,
-  activeProject,
+  activeFolder,
   canCommentDiagram,
   canCreateDiagram,
-  canCreateProject,
+  canCreateFolder,
   canCreateSnapshot,
   canEditDiagram,
   canManageDiagramMembers,
@@ -55,7 +55,7 @@ export function EditorHeader({
   onAdmin,
   onCopySql,
   onCreateDiagram,
-  onCreateProject,
+  onCreateFolder,
   onCreateSnapshot,
   onCreateWorkspace,
   onDiagramSelect,
@@ -80,23 +80,23 @@ export function EditorHeader({
   onOpenSnapshotHistory,
   onOpenSqlPreview,
   onOrganizationSelect,
-  onProjectArchived,
+  onFolderArchived,
   onRedo,
   onUndo,
   onUserLogout,
   openCommentThreadCount,
   organizations,
-  projects,
+  folders,
   snapshotHistoryLoading,
   snapshotSavePending,
   unreadNotificationCount,
 }: {
   activeDiagram: DiagramResponseDto;
   activeOrganization: OrganizationDto;
-  activeProject: ProjectResponseDto | null;
+  activeFolder: FolderResponseDto | null;
   canCommentDiagram: boolean;
   canCreateDiagram: boolean;
-  canCreateProject: boolean;
+  canCreateFolder: boolean;
   canCreateSnapshot: boolean;
   canEditDiagram: boolean;
   canManageDiagramMembers: boolean;
@@ -122,8 +122,8 @@ export function EditorHeader({
   notificationsOpen: boolean;
   onAdmin: () => void;
   onCopySql: HeaderAction;
-  onCreateDiagram: (projectId?: string | null) => void;
-  onCreateProject: () => void;
+  onCreateDiagram: (folderId?: string | null) => void;
+  onCreateFolder: () => void;
   onCreateSnapshot: () => void;
   onCreateWorkspace: () => void;
   onDiagramSelect: (diagram: DiagramResponseDto) => void;
@@ -148,14 +148,14 @@ export function EditorHeader({
   onOpenSnapshotHistory: () => void;
   onOpenSqlPreview: () => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
-  onProjectArchived: () => void;
+  onFolderArchived: () => void;
   onRedo: () => void;
   onToggleMinimap: () => void;
   onUndo: () => void;
   onUserLogout: () => void;
   openCommentThreadCount: number;
   organizations: OrganizationDto[];
-  projects: ProjectResponseDto[];
+  folders: FolderResponseDto[];
   snapshotHistoryLoading: boolean;
   snapshotSavePending: boolean;
   unreadNotificationCount: number;
@@ -168,12 +168,12 @@ export function EditorHeader({
         <div className="flex h-9 w-32 shrink-0 items-center overflow-hidden max-[560px]:w-9">
           <img src={LOGO} alt="Tabliodb" className="h-9 w-32 max-w-none" />
         </div>
-        <WorkspaceProjectSwitcher
+        <WorkspaceFolderSwitcher
           activeDiagram={activeDiagram}
           activeOrganization={activeOrganization}
-          activeProject={activeProject}
+          activeFolder={activeFolder}
           canCreateDiagram={canCreateDiagram}
-          canCreateProject={canCreateProject}
+          canCreateFolder={canCreateFolder}
           canEditDiagram={canEditDiagram}
           canManageWorkspace={canManageWorkspace}
           currentUserId={currentUser.id}
@@ -181,15 +181,15 @@ export function EditorHeader({
           diagrams={diagrams}
           model={model}
           onCreateDiagram={onCreateDiagram}
-          onCreateProject={onCreateProject}
+          onCreateFolder={onCreateFolder}
           onCreateWorkspace={onCreateWorkspace}
           onDiagramSelect={onDiagramSelect}
           onDiagramLibraryOpenChange={onDiagramLibraryOpenChange}
           onDiagramUpdated={onDiagramUpdated}
           onOrganizationSelect={onOrganizationSelect}
-          onProjectArchived={onProjectArchived}
+          onFolderArchived={onFolderArchived}
           organizations={organizations}
-          projects={projects}
+          folders={folders}
           stackedDialogOpen={diagramLibraryStackOpen}
         />
       </div>

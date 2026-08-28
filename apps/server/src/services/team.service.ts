@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, AccessRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import {
@@ -17,17 +17,17 @@ import {
   TeamMemberListQueryDto,
   TeamMemberListResponseDto,
   TeamMemberRemoveResponseDto,
-  TeamProjectAccessDto,
-  TeamProjectAccessListQueryDto,
-  TeamProjectAccessListResponseDto,
-  TeamProjectAccessRemoveResponseDto,
-  TeamProjectAccessUpsertDto,
+  TeamFolderAccessDto,
+  TeamFolderAccessListQueryDto,
+  TeamFolderAccessListResponseDto,
+  TeamFolderAccessRemoveResponseDto,
+  TeamFolderAccessUpsertDto,
   TeamResponseDto,
   TeamUpdateDto,
 } from '../dtos/team.dto.js';
 import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
-import { TeamRepository, type TeamDiagramRole, type TeamProjectRole } from '../repositories/team.repository.js';
+import { TeamRepository, type TeamDiagramRole, type TeamAccessRole } from '../repositories/team.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
 import { toIsoDateTime } from '../utils/date-time.js';
@@ -232,92 +232,92 @@ export class TeamService {
     return { successful: true };
   }
 
-  async getProjectAccesses(
+  async getFolderAccesses(
     auth: AuthContext,
     teamId: string,
-    query: TeamProjectAccessListQueryDto,
-  ): Promise<TeamProjectAccessListResponseDto> {
+    query: TeamFolderAccessListQueryDto,
+  ): Promise<TeamFolderAccessListResponseDto> {
     await this.requireTeam(auth, teamId, Permission.OrganizationRead);
 
-    const accesses = await this.teamRepository.getProjectAccesses(teamId, {
+    const accesses = await this.teamRepository.getFolderAccesses(teamId, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
     });
 
     return {
       ...accesses,
-      items: accesses.items.map((access) => this.serializeProjectAccess(access)),
+      items: accesses.items.map((access) => this.serializeFolderAccess(access)),
     };
   }
 
-  async upsertProjectAccess(
+  async upsertFolderAccess(
     auth: AuthContext,
     teamId: string,
-    dto: TeamProjectAccessUpsertDto,
-  ): Promise<TeamProjectAccessDto> {
+    dto: TeamFolderAccessUpsertDto,
+  ): Promise<TeamFolderAccessDto> {
     const team = await this.requireTeam(auth, teamId, Permission.OrganizationManage);
-    const project = await this.teamRepository.getProjectInOrganization(dto.projectId, team.organizationId);
+    const folder = await this.teamRepository.getFolderInOrganization(dto.folderId, team.organizationId);
 
-    if (!project) {
-      throw new BadRequestException('Project must belong to the same workspace as the team');
+    if (!folder) {
+      throw new BadRequestException('Folder must belong to the same workspace as the team');
     }
 
-    const currentAccess = await this.teamRepository.getProjectAccess(teamId, dto.projectId);
-    const access = await this.teamRepository.upsertProjectAccess(teamId, {
+    const currentAccess = await this.teamRepository.getFolderAccess(teamId, dto.folderId);
+    const access = await this.teamRepository.upsertFolderAccess(teamId, {
       createdById: auth.user.id,
-      projectId: dto.projectId,
+      folderId: dto.folderId,
       // DTO sudah punya default, tetapi fallback service menjaga caller SDK/API key yang mengirim payload minimal.
-      role: (dto.role ?? ProjectRole.Viewer) as TeamProjectRole,
+      role: (dto.role ?? AccessRole.Viewer) as TeamAccessRole,
     });
 
     if (!access) {
-      throw new NotFoundException('Team project access could not be loaded');
+      throw new NotFoundException('Team folder access could not be loaded');
     }
 
     if (!currentAccess || currentAccess.role !== access.role) {
       // A no-op grant should stay quiet in audit logs; only new or changed effective access matters.
       await this.recordTeamAudit(auth, {
-        action: AuditAction.TeamProjectAccessUpdated,
-        entityId: project.id,
-        entityType: 'team_project_access',
+        action: AuditAction.TeamFolderAccessUpdated,
+        entityId: folder.id,
+        entityType: 'team_folder_access',
         metadata: {
-          projectName: project.name,
+          folderName: folder.name,
           role: currentAccess ? { after: access.role, before: currentAccess.role } : access.role,
           teamName: team.name,
         },
         organizationId: team.organizationId,
-        projectId: project.id,
+        folderId: folder.id,
       });
     }
 
-    return this.serializeProjectAccess(access);
+    return this.serializeFolderAccess(access);
   }
 
-  async removeProjectAccess(
+  async removeFolderAccess(
     auth: AuthContext,
     teamId: string,
-    projectId: string,
-  ): Promise<TeamProjectAccessRemoveResponseDto> {
+    folderId: string,
+  ): Promise<TeamFolderAccessRemoveResponseDto> {
     const team = await this.requireTeam(auth, teamId, Permission.OrganizationManage);
-    const currentAccess = await this.teamRepository.getProjectAccess(teamId, projectId);
+    const currentAccess = await this.teamRepository.getFolderAccess(teamId, folderId);
 
     if (!currentAccess) {
-      throw new NotFoundException('Team project access not found');
+      throw new NotFoundException('Team folder access not found');
     }
 
-    await this.teamRepository.removeProjectAccess(teamId, projectId);
+    await this.teamRepository.removeFolderAccess(teamId, folderId);
 
     await this.recordTeamAudit(auth, {
-      action: AuditAction.TeamProjectAccessRemoved,
-      entityId: projectId,
-      entityType: 'team_project_access',
+      action: AuditAction.TeamFolderAccessRemoved,
+      entityId: folderId,
+      entityType: 'team_folder_access',
       metadata: {
-        projectName: currentAccess.projectName,
+        folderName: currentAccess.folderName,
         role: currentAccess.role,
         teamName: team.name,
       },
       organizationId: team.organizationId,
-      projectId,
+      folderId,
     });
 
     return { successful: true };
@@ -357,8 +357,8 @@ export class TeamService {
     const access = await this.teamRepository.upsertDiagramAccess(teamId, {
       createdById: auth.user.id,
       diagramId: dto.diagramId,
-      // Direct diagram team grants reuse project roles because the effective permission matrix is the same.
-      role: (dto.role ?? ProjectRole.Viewer) as TeamDiagramRole,
+      // Direct diagram team grants reuse folder roles because the effective permission matrix is the same.
+      role: (dto.role ?? AccessRole.Viewer) as TeamDiagramRole,
     });
 
     if (!access) {
@@ -377,7 +377,7 @@ export class TeamService {
           teamName: team.name,
         },
         organizationId: team.organizationId,
-        projectId: diagram.projectId,
+        folderId: diagram.folderId,
       });
     }
 
@@ -409,7 +409,7 @@ export class TeamService {
         teamName: team.name,
       },
       organizationId: team.organizationId,
-      projectId: currentAccess.projectId,
+      folderId: currentAccess.folderId,
     });
 
     return { successful: true };
@@ -446,7 +446,7 @@ export class TeamService {
       diagramId?: string | null;
       metadata: Record<string, JsonValue>;
       organizationId: string;
-      projectId?: string | null;
+      folderId?: string | null;
     },
   ) {
     return this.auditLogRepository.create({
@@ -458,7 +458,7 @@ export class TeamService {
       ipAddress: auth.request?.ipAddress ?? null,
       metadata: options.metadata,
       organizationId: options.organizationId,
-      projectId: options.projectId ?? null,
+      folderId: options.folderId ?? null,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });
@@ -472,7 +472,7 @@ export class TeamService {
       memberCount: Number(team.memberCount),
       name: team.name,
       organizationId: team.organizationId,
-      projectAccessCount: Number(team.projectAccessCount),
+      folderAccessCount: Number(team.folderAccessCount),
       slug: team.slug,
       createdAt: toIsoDateTime(team.createdAt),
       updatedAt: toIsoDateTime(team.updatedAt),
@@ -490,12 +490,12 @@ export class TeamService {
     };
   }
 
-  private serializeProjectAccess(access: TeamProjectAccessRow): TeamProjectAccessDto {
+  private serializeFolderAccess(access: TeamFolderAccessRow): TeamFolderAccessDto {
     return {
-      projectId: access.projectId,
-      projectName: access.projectName,
-      projectSlug: access.projectSlug,
-      role: access.role as ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer,
+      folderId: access.folderId,
+      folderName: access.folderName,
+      folderSlug: access.folderSlug,
+      role: access.role as AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer,
       createdAt: toIsoDateTime(access.createdAt),
       updatedAt: toIsoDateTime(access.updatedAt),
     };
@@ -506,8 +506,8 @@ export class TeamService {
       createdAt: toIsoDateTime(access.createdAt),
       diagramId: access.diagramId,
       diagramName: access.diagramName,
-      projectId: access.projectId,
-      role: access.role as ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer,
+      folderId: access.folderId,
+      role: access.role as AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer,
       updatedAt: toIsoDateTime(access.updatedAt),
     };
   }
@@ -521,7 +521,7 @@ type TeamRow = {
   memberCount: number;
   name: string;
   organizationId: string;
-  projectAccessCount: number;
+  folderAccessCount: number;
   slug: string;
   updatedAt: Date | string;
 };
@@ -535,11 +535,11 @@ type TeamMemberRow = {
   userId: string;
 };
 
-type TeamProjectAccessRow = {
+type TeamFolderAccessRow = {
   createdAt: Date | string;
-  projectId: string;
-  projectName: string;
-  projectSlug: string;
+  folderId: string;
+  folderName: string;
+  folderSlug: string;
   role: string;
   updatedAt: Date | string;
 };
@@ -548,7 +548,7 @@ type TeamDiagramAccessRow = {
   createdAt: Date | string;
   diagramId: string;
   diagramName: string;
-  projectId: string | null;
+  folderId: string | null;
   role: string;
   updatedAt: Date | string;
 };

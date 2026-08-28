@@ -1,21 +1,21 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { OrganizationRole, ProjectRole, type OrganizationRoleValue, type ProjectRoleValue } from '@tabliodb/shared';
+import { OrganizationRole, AccessRole, type OrganizationRoleValue, type AccessRoleValue } from '@tabliodb/shared';
 import {
-  DefaultProjectRole as SdkDefaultProjectRole,
+  DefaultFolderRole as SdkDefaultFolderRole,
   OrganizationRole as SdkInvitationOrganizationRole,
   Role5 as SdkOrganizationMemberRole,
   Role6 as SdkOrganizationAssignableMemberRole,
-  Role8 as SdkTeamProjectRole,
+  Role8 as SdkTeamAccessRole,
   type AuditLogDtoOutput,
   type InvitationCreateResponseDtoOutput,
   type OrganizationDtoOutput,
   type OrganizationMemberDtoOutput,
   type OrganizationSettingsDtoOutput,
-  type ProjectResponseDtoOutput,
+  type FolderResponseDtoOutput,
   type TeamDiagramAccessDtoOutput,
   type TeamMemberDtoOutput,
-  type TeamProjectAccessDtoOutput,
+  type TeamFolderAccessDtoOutput,
   type TeamResponseDtoOutput,
 } from '@tabliodb/sdk';
 import {
@@ -64,7 +64,7 @@ import {
   useUpdateOrganizationMemberMutation,
   useUpdateOrganizationSettingsMutation,
 } from '@/resources/organizations';
-import { projectsQueries } from '@/resources/projects';
+import { foldersQueries } from '@/resources/folders';
 import {
   teamsQueries,
   useAddTeamMemberMutation,
@@ -72,10 +72,10 @@ import {
   useCreateTeamMutation,
   useRemoveTeamMemberMutation,
   useRemoveTeamDiagramAccessMutation,
-  useRemoveTeamProjectAccessMutation,
+  useRemoveTeamFolderAccessMutation,
   useUpdateTeamMutation,
   useUpsertTeamDiagramAccessMutation,
-  useUpsertTeamProjectAccessMutation,
+  useUpsertTeamFolderAccessMutation,
 } from '@/resources/teams';
 import { selectClassName } from '../editor-form-styles';
 import { UserAvatar } from './UserAvatar';
@@ -85,19 +85,19 @@ type InvitationCreateResponseDto = InvitationCreateResponseDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
 type OrganizationMemberDto = OrganizationMemberDtoOutput;
 type OrganizationSettingsDto = OrganizationSettingsDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
 type TeamDiagramAccessDto = TeamDiagramAccessDtoOutput;
 type TeamMemberDto = TeamMemberDtoOutput;
-type TeamProjectAccessDto = TeamProjectAccessDtoOutput;
-type TeamProjectRole = `${SdkTeamProjectRole}`;
+type TeamFolderAccessDto = TeamFolderAccessDtoOutput;
+type TeamAccessRole = `${SdkTeamAccessRole}`;
 type TeamResponseDto = TeamResponseDtoOutput;
 type WorkspaceMemberCreateRole = OrganizationRole.Admin | OrganizationRole.Member | OrganizationRole.Guest;
-type WorkspaceDefaultProjectRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+type WorkspaceDefaultFolderRole = AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer;
 
-const sdkDefaultProjectRoleByValue: Record<WorkspaceDefaultProjectRole, SdkDefaultProjectRole> = {
-  [ProjectRole.Commenter]: SdkDefaultProjectRole.Commenter,
-  [ProjectRole.Editor]: SdkDefaultProjectRole.Editor,
-  [ProjectRole.Viewer]: SdkDefaultProjectRole.Viewer,
+const sdkDefaultFolderRoleByValue: Record<WorkspaceDefaultFolderRole, SdkDefaultFolderRole> = {
+  [AccessRole.Commenter]: SdkDefaultFolderRole.Commenter,
+  [AccessRole.Editor]: SdkDefaultFolderRole.Editor,
+  [AccessRole.Viewer]: SdkDefaultFolderRole.Viewer,
 };
 
 const sdkOrganizationMemberCreateRoleByValue: Record<WorkspaceMemberCreateRole, SdkOrganizationAssignableMemberRole> = {
@@ -118,25 +118,25 @@ const sdkOrganizationMemberUpdateRoleByValue: Record<WorkspaceMemberCreateRole, 
   [OrganizationRole.Member]: SdkOrganizationAssignableMemberRole.Member,
 };
 
-const sdkTeamProjectRoleByValue: Record<TeamProjectRole, SdkTeamProjectRole> = {
-  commenter: SdkTeamProjectRole.Commenter,
-  editor: SdkTeamProjectRole.Editor,
-  viewer: SdkTeamProjectRole.Viewer,
+const sdkTeamAccessRoleByValue: Record<TeamAccessRole, SdkTeamAccessRole> = {
+  commenter: SdkTeamAccessRole.Commenter,
+  editor: SdkTeamAccessRole.Editor,
+  viewer: SdkTeamAccessRole.Viewer,
 };
 
 function toOrganizationRoleValue(role: OrganizationRoleValue | SdkOrganizationMemberRole): OrganizationRoleValue {
   return role as OrganizationRoleValue;
 }
 
-function toWorkspaceDefaultProjectRole(role: SdkDefaultProjectRole): WorkspaceDefaultProjectRole {
-  return role as unknown as WorkspaceDefaultProjectRole;
+function toWorkspaceDefaultFolderRole(role: SdkDefaultFolderRole): WorkspaceDefaultFolderRole {
+  return role as unknown as WorkspaceDefaultFolderRole;
 }
 
-const workspaceDefaultRoleOptions = ['none', ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
+const workspaceDefaultRoleOptions = ['none', AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer] as const;
 
 const workspaceSettingsFormSchema = z.object({
-  allowMemberProjectCreate: z.boolean(),
-  defaultProjectRole: z.enum(workspaceDefaultRoleOptions),
+  allowMemberFolderCreate: z.boolean(),
+  defaultFolderRole: z.enum(workspaceDefaultRoleOptions),
   name: z.string().trim().min(1, 'Workspace name is required.').max(80, 'Keep the workspace name under 80 characters.'),
 });
 
@@ -178,36 +178,36 @@ const teamMemberFormDefaults: TeamMemberFormState = {
   email: '',
 };
 
-const teamProjectAccessRoleOptions = [ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
+const teamFolderAccessRoleOptions = [AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer] as const;
 
-const teamProjectAccessFormSchema = z.object({
-  projectId: z.string().min(1, 'Select a folder.'),
-  role: z.enum(teamProjectAccessRoleOptions),
+const teamFolderAccessFormSchema = z.object({
+  folderId: z.string().min(1, 'Select a folder.'),
+  role: z.enum(teamFolderAccessRoleOptions),
 });
 
-type TeamProjectAccessFormState = z.infer<typeof teamProjectAccessFormSchema>;
+type TeamFolderAccessFormState = z.infer<typeof teamFolderAccessFormSchema>;
 
-const teamProjectAccessFormDefaults: TeamProjectAccessFormState = {
-  projectId: '',
-  role: ProjectRole.Viewer,
+const teamFolderAccessFormDefaults: TeamFolderAccessFormState = {
+  folderId: '',
+  role: AccessRole.Viewer,
 };
 
 const teamDiagramAccessFormSchema = z.object({
   diagramId: z.string().min(1, 'Select a diagram.'),
-  role: z.enum(teamProjectAccessRoleOptions),
+  role: z.enum(teamFolderAccessRoleOptions),
 });
 
 type TeamDiagramAccessFormState = z.infer<typeof teamDiagramAccessFormSchema>;
 
 const teamDiagramAccessFormDefaults: TeamDiagramAccessFormState = {
   diagramId: '',
-  role: ProjectRole.Viewer,
+  role: AccessRole.Viewer,
 };
 
 const teamPageQuery = { limit: 50 } as const;
 const teamMemberPageQuery = { limit: 50 } as const;
 const teamDiagramAccessPageQuery = { limit: 50 } as const;
-const teamProjectAccessPageQuery = { limit: 50 } as const;
+const teamFolderAccessPageQuery = { limit: 50 } as const;
 const workspaceMemberPageQuery = { limit: 50 } as const;
 const workspaceAuditLogQuery = { limit: 8 } as const;
 
@@ -310,10 +310,10 @@ export function WorkspaceSettingsDialog({
     mode: 'onBlur',
     resolver: zodResolver(teamMemberFormSchema),
   });
-  const teamProjectAccessForm = useForm<TeamProjectAccessFormState>({
-    defaultValues: teamProjectAccessFormDefaults,
+  const teamFolderAccessForm = useForm<TeamFolderAccessFormState>({
+    defaultValues: teamFolderAccessFormDefaults,
     mode: 'onBlur',
-    resolver: zodResolver(teamProjectAccessFormSchema),
+    resolver: zodResolver(teamFolderAccessFormSchema),
   });
   const teamDiagramAccessForm = useForm<TeamDiagramAccessFormState>({
     defaultValues: teamDiagramAccessFormDefaults,
@@ -325,7 +325,7 @@ export function WorkspaceSettingsDialog({
   const { errors: selectedTeamErrors } = selectedTeamForm.formState;
   const { errors: workspaceMemberErrors } = workspaceMemberForm.formState;
   const { errors: teamMemberErrors } = teamMemberForm.formState;
-  const { errors: teamProjectAccessErrors } = teamProjectAccessForm.formState;
+  const { errors: teamFolderAccessErrors } = teamFolderAccessForm.formState;
   const { errors: teamDiagramAccessErrors } = teamDiagramAccessForm.formState;
   const settingsQueryOptions = organizationsQueries.settings(organization.id);
   const settingsQuery = useQuery({
@@ -362,18 +362,18 @@ export function WorkspaceSettingsDialog({
       Boolean(selectedTeamId) &&
       selectedTeamMembersQueryOptions.enabled !== false,
   });
-  const selectedTeamProjectAccessesQueryOptions = teamsQueries.projectAccesses(
+  const selectedTeamFolderAccessesQueryOptions = teamsQueries.folderAccesses(
     selectedTeamId ?? '',
-    teamProjectAccessPageQuery,
+    teamFolderAccessPageQuery,
   );
-  const selectedTeamProjectAccessesQuery = useQuery({
-    ...selectedTeamProjectAccessesQueryOptions,
+  const selectedTeamFolderAccessesQuery = useQuery({
+    ...selectedTeamFolderAccessesQueryOptions,
     enabled:
       dialogOpen &&
       activeSettingsTab === 'teams' &&
       canManageWorkspace &&
       Boolean(selectedTeamId) &&
-      selectedTeamProjectAccessesQueryOptions.enabled !== false,
+      selectedTeamFolderAccessesQueryOptions.enabled !== false,
   });
   const selectedTeamDiagramAccessesQueryOptions = teamsQueries.diagramAccesses(
     selectedTeamId ?? '',
@@ -388,9 +388,9 @@ export function WorkspaceSettingsDialog({
       Boolean(selectedTeamId) &&
       selectedTeamDiagramAccessesQueryOptions.enabled !== false,
   });
-  const teamProjectOptionsQuery = useQuery({
-    ...projectsQueries.list({ limit: 50, organizationId: organization.id }),
-    // Folder options are backed by the legacy project endpoint while the product language stays diagram-first.
+  const teamFolderOptionsQuery = useQuery({
+    ...foldersQueries.list({ limit: 50, organizationId: organization.id }),
+    // Folder options are backed by the folder endpoint while the product language stays diagram-first.
     enabled: dialogOpen && activeSettingsTab === 'teams' && canManageWorkspace,
   });
   const teamDiagramOptionsQuery = useQuery({
@@ -403,18 +403,18 @@ export function WorkspaceSettingsDialog({
   const teams = teamsQuery.data?.items ?? [];
   const selectedTeam = selectedTeamId ? (teams.find((team) => team.id === selectedTeamId) ?? null) : null;
   const selectedTeamMembers = selectedTeamMembersQuery.data?.items ?? [];
-  const selectedTeamProjectAccesses = selectedTeamProjectAccessesQuery.data?.items ?? [];
+  const selectedTeamFolderAccesses = selectedTeamFolderAccessesQuery.data?.items ?? [];
   const selectedTeamDiagramAccesses = selectedTeamDiagramAccessesQuery.data?.items ?? [];
-  const teamProjectOptions = teamProjectOptionsQuery.data?.items ?? [];
+  const teamFolderOptions = teamFolderOptionsQuery.data?.items ?? [];
   const teamDiagramOptions = teamDiagramOptionsQuery.data?.items ?? [];
-  const teamProjectSelectOptions = teamProjectOptions.map((projectOption) => ({
-    disabled: selectedTeamProjectAccesses.some((access) => access.projectId === projectOption.id),
-    label: projectOption.name,
-    value: projectOption.id,
+  const teamFolderSelectOptions = teamFolderOptions.map((folderOption) => ({
+    disabled: selectedTeamFolderAccesses.some((access) => access.folderId === folderOption.id),
+    label: folderOption.name,
+    value: folderOption.id,
   }));
   const teamDiagramSelectOptions = teamDiagramOptions.map((diagramOption) => ({
     disabled: selectedTeamDiagramAccesses.some((access) => access.diagramId === diagramOption.id),
-    label: diagramOption.projectId ? `${diagramOption.name} / folder` : `${diagramOption.name} / root`,
+    label: diagramOption.folderId ? `${diagramOption.name} / folder` : `${diagramOption.name} / root`,
     value: diagramOption.id,
   }));
   const updateSettingsMutation = useUpdateOrganizationSettingsMutation({
@@ -482,14 +482,14 @@ export function WorkspaceSettingsDialog({
     },
   });
   const removeTeamMemberMutation = useRemoveTeamMemberMutation();
-  const upsertTeamProjectAccessMutation = useUpsertTeamProjectAccessMutation({
+  const upsertTeamFolderAccessMutation = useUpsertTeamFolderAccessMutation({
     mutationConfig: {
       onSuccess: () => {
-        teamProjectAccessForm.reset(teamProjectAccessFormDefaults);
+        teamFolderAccessForm.reset(teamFolderAccessFormDefaults);
       },
     },
   });
-  const removeTeamProjectAccessMutation = useRemoveTeamProjectAccessMutation();
+  const removeTeamFolderAccessMutation = useRemoveTeamFolderAccessMutation();
   const upsertTeamDiagramAccessMutation = useUpsertTeamDiagramAccessMutation({
     mutationConfig: {
       onSuccess: () => {
@@ -504,8 +504,8 @@ export function WorkspaceSettingsDialog({
     archiveTeamMutation.isPending ||
     addTeamMemberMutation.isPending ||
     removeTeamMemberMutation.isPending ||
-    upsertTeamProjectAccessMutation.isPending ||
-    removeTeamProjectAccessMutation.isPending ||
+    upsertTeamFolderAccessMutation.isPending ||
+    removeTeamFolderAccessMutation.isPending ||
     upsertTeamDiagramAccessMutation.isPending ||
     removeTeamDiagramAccessMutation.isPending;
 
@@ -523,8 +523,8 @@ export function WorkspaceSettingsDialog({
       archiveTeamMutation.reset();
       addTeamMemberMutation.reset();
       removeTeamMemberMutation.reset();
-      upsertTeamProjectAccessMutation.reset();
-      removeTeamProjectAccessMutation.reset();
+      upsertTeamFolderAccessMutation.reset();
+      removeTeamFolderAccessMutation.reset();
       upsertTeamDiagramAccessMutation.reset();
       removeTeamDiagramAccessMutation.reset();
       setConfirmWorkspaceTransferUserId(null);
@@ -572,8 +572,8 @@ export function WorkspaceSettingsDialog({
       archiveTeamMutation.reset();
       addTeamMemberMutation.reset();
       removeTeamMemberMutation.reset();
-      upsertTeamProjectAccessMutation.reset();
-      removeTeamProjectAccessMutation.reset();
+      upsertTeamFolderAccessMutation.reset();
+      removeTeamFolderAccessMutation.reset();
       upsertTeamDiagramAccessMutation.reset();
       removeTeamDiagramAccessMutation.reset();
       setSelectedTeamId(null);
@@ -582,7 +582,7 @@ export function WorkspaceSettingsDialog({
       setCreatedWorkspaceInvite(null);
       workspaceMemberForm.reset(workspaceMemberFormDefaults);
       teamMemberForm.reset(teamMemberFormDefaults);
-      teamProjectAccessForm.reset(teamProjectAccessFormDefaults);
+      teamFolderAccessForm.reset(teamFolderAccessFormDefaults);
       teamDiagramAccessForm.reset(teamDiagramAccessFormDefaults);
       setConfirmWorkspaceTransferUserId(null);
       setTransferringWorkspaceUserId(null);
@@ -596,9 +596,9 @@ export function WorkspaceSettingsDialog({
 
     updateSettingsMutation.mutate({
       body: {
-        allowMemberProjectCreate: values.allowMemberProjectCreate,
-        defaultProjectRole:
-          values.defaultProjectRole === 'none' ? null : sdkDefaultProjectRoleByValue[values.defaultProjectRole],
+        allowMemberFolderCreate: values.allowMemberFolderCreate,
+        defaultFolderRole:
+          values.defaultFolderRole === 'none' ? null : sdkDefaultFolderRoleByValue[values.defaultFolderRole],
         name: values.name,
       },
       organizationId: organization.id,
@@ -744,42 +744,42 @@ export function WorkspaceSettingsDialog({
     });
   }
 
-  function handleUpsertTeamProjectAccess(values: TeamProjectAccessFormState) {
+  function handleUpsertTeamFolderAccess(values: TeamFolderAccessFormState) {
     if (!selectedTeam) {
       return;
     }
 
-    upsertTeamProjectAccessMutation.mutate({
+    upsertTeamFolderAccessMutation.mutate({
       body: {
-        projectId: values.projectId,
-        role: sdkTeamProjectRoleByValue[values.role as TeamProjectRole],
+        folderId: values.folderId,
+        role: sdkTeamAccessRoleByValue[values.role as TeamAccessRole],
       },
       organizationId: organization.id,
       teamId: selectedTeam.id,
     });
   }
 
-  function handleRemoveTeamProjectAccess(access: TeamProjectAccessDto) {
+  function handleRemoveTeamFolderAccess(access: TeamFolderAccessDto) {
     if (!selectedTeam) {
       return;
     }
 
-    removeTeamProjectAccessMutation.mutate({
+    removeTeamFolderAccessMutation.mutate({
       organizationId: organization.id,
-      projectId: access.projectId,
+      folderId: access.folderId,
       teamId: selectedTeam.id,
     });
   }
 
-  function handleUpdateTeamProjectAccessRole(access: TeamProjectAccessDto, role: TeamProjectRole) {
+  function handleUpdateTeamFolderAccessRole(access: TeamFolderAccessDto, role: TeamAccessRole) {
     if (!selectedTeam || access.role === role) {
       return;
     }
 
-    upsertTeamProjectAccessMutation.mutate({
+    upsertTeamFolderAccessMutation.mutate({
       body: {
-        projectId: access.projectId,
-        role: sdkTeamProjectRoleByValue[role],
+        folderId: access.folderId,
+        role: sdkTeamAccessRoleByValue[role],
       },
       organizationId: organization.id,
       teamId: selectedTeam.id,
@@ -795,7 +795,7 @@ export function WorkspaceSettingsDialog({
       body: {
         diagramId: values.diagramId,
         // Team diagram access uses the same role enum as folder access.
-        role: sdkTeamProjectRoleByValue[values.role as TeamProjectRole],
+        role: sdkTeamAccessRoleByValue[values.role as TeamAccessRole],
       },
       organizationId: organization.id,
       teamId: selectedTeam.id,
@@ -814,7 +814,7 @@ export function WorkspaceSettingsDialog({
     });
   }
 
-  function handleUpdateTeamDiagramAccessRole(access: TeamDiagramAccessDto, role: TeamProjectRole) {
+  function handleUpdateTeamDiagramAccessRole(access: TeamDiagramAccessDto, role: TeamAccessRole) {
     if (!selectedTeam || access.role === role) {
       return;
     }
@@ -822,7 +822,7 @@ export function WorkspaceSettingsDialog({
     upsertTeamDiagramAccessMutation.mutate({
       body: {
         diagramId: access.diagramId,
-        role: sdkTeamProjectRoleByValue[role],
+        role: sdkTeamAccessRoleByValue[role],
       },
       organizationId: organization.id,
       teamId: selectedTeam.id,
@@ -841,8 +841,8 @@ export function WorkspaceSettingsDialog({
     archiveTeamMutation.error ??
     addTeamMemberMutation.error ??
     removeTeamMemberMutation.error ??
-    upsertTeamProjectAccessMutation.error ??
-    removeTeamProjectAccessMutation.error ??
+    upsertTeamFolderAccessMutation.error ??
+    removeTeamFolderAccessMutation.error ??
     upsertTeamDiagramAccessMutation.error ??
     removeTeamDiagramAccessMutation.error;
   const updatingUserId = updateMemberMutation.isPending ? updateMemberMutation.variables?.userId : null;
@@ -850,8 +850,8 @@ export function WorkspaceSettingsDialog({
   const removingTeamMemberUserId = removeTeamMemberMutation.isPending
     ? removeTeamMemberMutation.variables?.userId
     : null;
-  const removingTeamProjectId = removeTeamProjectAccessMutation.isPending
-    ? removeTeamProjectAccessMutation.variables?.projectId
+  const removingTeamFolderId = removeTeamFolderAccessMutation.isPending
+    ? removeTeamFolderAccessMutation.variables?.folderId
     : null;
   const removingTeamDiagramId = removeTeamDiagramAccessMutation.isPending
     ? removeTeamDiagramAccessMutation.variables?.diagramId
@@ -892,15 +892,15 @@ export function WorkspaceSettingsDialog({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-sm">
                     <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                      Default workspace access
+                      Default folder access
                     </span>
                     <ControlledSelect
                       className={selectClassName}
                       control={form.control}
                       disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
-                      name="defaultProjectRole"
+                      name="defaultFolderRole"
                       options={workspaceDefaultRoleOptions.map((role) => ({
-                        label: role === 'none' ? 'No automatic access' : formatProjectRole(role),
+                        label: role === 'none' ? 'No automatic access' : formatAccessRole(role),
                         value: role,
                       }))}
                     />
@@ -910,7 +910,7 @@ export function WorkspaceSettingsDialog({
                     <ControlledCheckbox
                       control={form.control}
                       disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
-                      name="allowMemberProjectCreate"
+                      name="allowMemberFolderCreate"
                     />
                     Members can create folders
                   </label>
@@ -1167,7 +1167,7 @@ export function WorkspaceSettingsDialog({
                             <div className="min-w-0">
                               <h4 className="truncate text-sm font-extrabold">{selectedTeam.name}</h4>
                               <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} folder access /{' '}
+                                {selectedTeam.memberCount} members / {selectedTeam.folderAccessCount} folder access /{' '}
                                 {selectedTeam.diagramAccessCount} diagram access
                               </p>
                             </div>
@@ -1309,43 +1309,43 @@ export function WorkspaceSettingsDialog({
                                   </p>
                                 </div>
                                 <span className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  {selectedTeamProjectAccesses.length} shown
+                                  {selectedTeamFolderAccesses.length} shown
                                 </span>
                               </div>
 
                               <form
                                 className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_auto]"
-                                onSubmit={teamProjectAccessForm.handleSubmit(handleUpsertTeamProjectAccess)}
+                                onSubmit={teamFolderAccessForm.handleSubmit(handleUpsertTeamFolderAccess)}
                               >
                                 <label className="block text-sm">
-                                  <span className="sr-only">Project</span>
+                                  <span className="sr-only">Folder</span>
                                   <ControlledSelect
-                                    aria-invalid={Boolean(teamProjectAccessErrors.projectId)}
+                                    aria-invalid={Boolean(teamFolderAccessErrors.folderId)}
                                     className={selectClassName}
-                                    control={teamProjectAccessForm.control}
-                                    disabled={isTeamMutationPending || teamProjectOptionsQuery.isPending}
-                                    name="projectId"
-                                    options={teamProjectSelectOptions}
+                                    control={teamFolderAccessForm.control}
+                                    disabled={isTeamMutationPending || teamFolderOptionsQuery.isPending}
+                                    name="folderId"
+                                    options={teamFolderSelectOptions}
                                     placeholder="Select folder"
                                   />
-                                  <FieldError>{teamProjectAccessErrors.projectId?.message}</FieldError>
+                                  <FieldError>{teamFolderAccessErrors.folderId?.message}</FieldError>
                                 </label>
                                 <label className="block text-sm">
                                   <span className="sr-only">Role</span>
                                   <ControlledSelect
-                                    aria-invalid={Boolean(teamProjectAccessErrors.role)}
+                                    aria-invalid={Boolean(teamFolderAccessErrors.role)}
                                     className={selectClassName}
-                                    control={teamProjectAccessForm.control}
+                                    control={teamFolderAccessForm.control}
                                     disabled={isTeamMutationPending}
                                     name="role"
-                                    options={teamProjectAccessRoleOptions.map((role) => ({
-                                      label: formatProjectRole(role),
+                                    options={teamFolderAccessRoleOptions.map((role) => ({
+                                      label: formatAccessRole(role),
                                       value: role,
                                     }))}
                                   />
                                 </label>
                                 <Button disabled={isTeamMutationPending} size="sm" type="submit">
-                                  {upsertTeamProjectAccessMutation.isPending ? (
+                                  {upsertTeamFolderAccessMutation.isPending ? (
                                     <Loader2 className="size-4 animate-spin" />
                                   ) : (
                                     <ShieldCheck className="size-4" />
@@ -1354,25 +1354,25 @@ export function WorkspaceSettingsDialog({
                                 </Button>
                               </form>
 
-                              {selectedTeamProjectAccessesQuery.isPending ? (
+                              {selectedTeamFolderAccessesQuery.isPending ? (
                                 <div className="mt-3 flex items-center gap-2 rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                                   <Loader2 className="size-4 animate-spin" />
                                   Loading folder access
                                 </div>
-                              ) : selectedTeamProjectAccesses.length === 0 ? (
+                              ) : selectedTeamFolderAccesses.length === 0 ? (
                                 <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                                   No folder access yet
                                 </div>
                               ) : (
                                 <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
                                   <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                                    {selectedTeamProjectAccesses.map((access) => (
-                                      <TeamProjectAccessRow
+                                    {selectedTeamFolderAccesses.map((access) => (
+                                      <TeamFolderAccessRow
                                         access={access}
-                                        isRemoving={removingTeamProjectId === access.projectId}
-                                        key={access.projectId}
-                                        onRemove={handleRemoveTeamProjectAccess}
-                                        onRoleChange={handleUpdateTeamProjectAccessRole}
+                                        isRemoving={removingTeamFolderId === access.folderId}
+                                        key={access.folderId}
+                                        onRemove={handleRemoveTeamFolderAccess}
+                                        onRoleChange={handleUpdateTeamFolderAccessRole}
                                       />
                                     ))}
                                   </div>
@@ -1418,8 +1418,8 @@ export function WorkspaceSettingsDialog({
                                     control={teamDiagramAccessForm.control}
                                     disabled={isTeamMutationPending}
                                     name="role"
-                                    options={teamProjectAccessRoleOptions.map((role) => ({
-                                      label: formatProjectRole(role),
+                                    options={teamFolderAccessRoleOptions.map((role) => ({
+                                      label: formatAccessRole(role),
                                       value: role,
                                     }))}
                                   />
@@ -1478,13 +1478,13 @@ export function WorkspaceSettingsDialog({
 
                 {teamMutationError ||
                 selectedTeamMembersQuery.error ||
-                selectedTeamProjectAccessesQuery.error ||
+                selectedTeamFolderAccessesQuery.error ||
                 selectedTeamDiagramAccessesQuery.error ? (
                   <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                     {getErrorMessage(
                       teamMutationError ??
                         selectedTeamMembersQuery.error ??
-                        selectedTeamProjectAccessesQuery.error ??
+                        selectedTeamFolderAccessesQuery.error ??
                         selectedTeamDiagramAccessesQuery.error,
                     )}
                   </div>
@@ -1571,9 +1571,9 @@ function getWorkspaceSettingsDefaults(
   settings?: OrganizationSettingsDto,
 ): WorkspaceSettingsFormState {
   return {
-    allowMemberProjectCreate: settings?.allowMemberProjectCreate ?? true,
-    defaultProjectRole: settings?.defaultProjectRole
-      ? toWorkspaceDefaultProjectRole(settings.defaultProjectRole)
+    allowMemberFolderCreate: settings?.allowMemberFolderCreate ?? true,
+    defaultFolderRole: settings?.defaultFolderRole
+      ? toWorkspaceDefaultFolderRole(settings.defaultFolderRole)
       : 'none',
     name: settings?.name ?? organization.name,
   };
@@ -1614,7 +1614,7 @@ function TeamListItem({
         {team.description || 'No description yet'}
       </p>
       <div className="truncate text-xs font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
-        {team.projectAccessCount} folder access / {team.diagramAccessCount} diagram access
+        {team.folderAccessCount} folder access / {team.diagramAccessCount} diagram access
       </div>
     </button>
   );
@@ -1669,36 +1669,36 @@ function TeamMemberRow({
   );
 }
 
-function TeamProjectAccessRow({
+function TeamFolderAccessRow({
   access,
   isRemoving,
   onRemove,
   onRoleChange,
 }: {
-  access: TeamProjectAccessDto;
+  access: TeamFolderAccessDto;
   isRemoving: boolean;
-  onRemove: (access: TeamProjectAccessDto) => void;
-  onRoleChange: (access: TeamProjectAccessDto, role: TeamProjectRole) => void;
+  onRemove: (access: TeamFolderAccessDto) => void;
+  onRoleChange: (access: TeamFolderAccessDto, role: TeamAccessRole) => void;
 }) {
   return (
     <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-center">
       <div className="min-w-0">
-        <h6 className="truncate text-sm font-extrabold">{access.projectName}</h6>
-        <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">/{access.projectSlug}</p>
+        <h6 className="truncate text-sm font-extrabold">{access.folderName}</h6>
+        <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">/{access.folderSlug}</p>
       </div>
       <Select
         className={selectClassName}
         disabled={isRemoving}
-        onValueChange={(role) => onRoleChange(access, role as TeamProjectRole)}
-        options={teamProjectAccessRoleOptions.map((role) => ({
-          label: formatProjectRole(role),
+        onValueChange={(role) => onRoleChange(access, role as TeamAccessRole)}
+        options={teamFolderAccessRoleOptions.map((role) => ({
+          label: formatAccessRole(role),
           value: role,
         }))}
         value={access.role}
       />
-      <WithTooltip content={`Remove ${access.projectName} folder access from this team`}>
+      <WithTooltip content={`Remove ${access.folderName} folder access from this team`}>
         <Button
-          aria-label={`Remove ${access.projectName} folder access from this team`}
+          aria-label={`Remove ${access.folderName} folder access from this team`}
           disabled={isRemoving}
           onClick={() => onRemove(access)}
           size="icon"
@@ -1720,15 +1720,15 @@ function TeamDiagramAccessRow({
   access: TeamDiagramAccessDto;
   isRemoving: boolean;
   onRemove: (access: TeamDiagramAccessDto) => void;
-  onRoleChange: (access: TeamDiagramAccessDto, role: TeamProjectRole) => void;
+  onRoleChange: (access: TeamDiagramAccessDto, role: TeamAccessRole) => void;
 }) {
   return (
     <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           <h6 className="min-w-0 truncate text-sm font-extrabold">{access.diagramName}</h6>
-          <Badge className="shrink-0" variant={access.projectId ? 'neutral' : 'blue'}>
-            {access.projectId ? 'Folder' : 'Root'}
+          <Badge className="shrink-0" variant={access.folderId ? 'neutral' : 'blue'}>
+            {access.folderId ? 'Folder' : 'Root'}
           </Badge>
         </div>
         <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Direct team diagram access</p>
@@ -1736,9 +1736,9 @@ function TeamDiagramAccessRow({
       <Select
         className={selectClassName}
         disabled={isRemoving}
-        onValueChange={(role) => onRoleChange(access, role as TeamProjectRole)}
-        options={teamProjectAccessRoleOptions.map((role) => ({
-          label: formatProjectRole(role),
+        onValueChange={(role) => onRoleChange(access, role as TeamAccessRole)}
+        options={teamFolderAccessRoleOptions.map((role) => ({
+          label: formatAccessRole(role),
           value: role,
         }))}
         value={access.role}
@@ -1885,12 +1885,12 @@ function OrganizationRoleBadge({ role }: { role: OrganizationRoleValue | SdkOrga
   return <Badge>{formatOrganizationRole(normalizedRole)}</Badge>;
 }
 
-function formatProjectRole(role: ProjectRoleValue): string {
+function formatAccessRole(role: AccessRoleValue): string {
   return {
-    [ProjectRole.Commenter]: 'Commenter',
-    [ProjectRole.Editor]: 'Editor',
-    [ProjectRole.Owner]: 'Owner',
-    [ProjectRole.Viewer]: 'Viewer',
+    [AccessRole.Commenter]: 'Commenter',
+    [AccessRole.Editor]: 'Editor',
+    [AccessRole.Owner]: 'Owner',
+    [AccessRole.Viewer]: 'Viewer',
   }[role];
 }
 
@@ -1904,33 +1904,33 @@ function formatOrganizationRole(role: OrganizationRoleValue): string {
 }
 
 function formatAuditLogMessage(auditLog: AuditLogDto): string {
-  if (auditLog.action === 'project.created') {
+  if (auditLog.action === 'folder.created') {
     return `Created folder ${readMetadataString(auditLog.metadata, 'name', 'folder')}`;
   }
 
-  if (auditLog.action === 'project.archived') {
+  if (auditLog.action === 'folder.archived') {
     return `Archived folder ${readMetadataString(auditLog.metadata, 'name', 'folder')}`;
   }
 
-  if (auditLog.action === 'project.member_added') {
-    return `Added ${readMetadataString(auditLog.metadata, 'email', 'member')} as ${formatProjectRoleValue(
-      readMetadataString(auditLog.metadata, 'role', ProjectRole.Viewer),
+  if (auditLog.action === 'folder.access_added') {
+    return `Added ${readMetadataString(auditLog.metadata, 'email', 'member')} as ${formatAccessRoleValue(
+      readMetadataString(auditLog.metadata, 'role', AccessRole.Viewer),
     )}`;
   }
 
-  if (auditLog.action === 'project.member_removed') {
+  if (auditLog.action === 'folder.access_removed') {
     return `Removed ${readMetadataString(auditLog.metadata, 'email', 'member')} from folder access`;
   }
 
-  if (auditLog.action === 'project.member_role_updated') {
+  if (auditLog.action === 'folder.access_role_updated') {
     if (readMetadataBoolean(auditLog.metadata, 'transfer')) {
       return `Transferred folder ownership to ${readMetadataString(auditLog.metadata, 'email', 'member')}`;
     }
 
     const role = readMetadataRecord(auditLog.metadata, 'role');
-    return `Changed ${readMetadataString(auditLog.metadata, 'email', 'member')} from ${formatProjectRoleValue(
-      readMetadataString(role, 'before', ProjectRole.Viewer),
-    )} to ${formatProjectRoleValue(readMetadataString(role, 'after', ProjectRole.Viewer))}`;
+    return `Changed ${readMetadataString(auditLog.metadata, 'email', 'member')} from ${formatAccessRoleValue(
+      readMetadataString(role, 'before', AccessRole.Viewer),
+    )} to ${formatAccessRoleValue(readMetadataString(role, 'after', AccessRole.Viewer))}`;
   }
 
   if (auditLog.action === 'organization.member_removed') {
@@ -1984,24 +1984,24 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     )}`;
   }
 
-  if (auditLog.action === 'team.project_access_updated') {
+  if (auditLog.action === 'team.folder_access_updated') {
     const role = auditLog.metadata.role;
     const teamName = readMetadataString(auditLog.metadata, 'teamName', 'team');
-    const projectName = readMetadataString(auditLog.metadata, 'projectName', 'folder');
+    const folderName = readMetadataString(auditLog.metadata, 'folderName', 'folder');
 
     if (role && typeof role === 'object' && !Array.isArray(role)) {
-      return `Changed ${teamName} folder access to ${projectName} from ${formatProjectRoleValue(
-        readMetadataString(role as Record<string, unknown>, 'before', ProjectRole.Viewer),
-      )} to ${formatProjectRoleValue(readMetadataString(role as Record<string, unknown>, 'after', ProjectRole.Viewer))}`;
+      return `Changed ${teamName} folder access to ${folderName} from ${formatAccessRoleValue(
+        readMetadataString(role as Record<string, unknown>, 'before', AccessRole.Viewer),
+      )} to ${formatAccessRoleValue(readMetadataString(role as Record<string, unknown>, 'after', AccessRole.Viewer))}`;
     }
 
-    return `Granted ${teamName} ${formatProjectRoleValue(String(role ?? ProjectRole.Viewer))} on folder ${projectName}`;
+    return `Granted ${teamName} ${formatAccessRoleValue(String(role ?? AccessRole.Viewer))} on folder ${folderName}`;
   }
 
-  if (auditLog.action === 'team.project_access_removed') {
+  if (auditLog.action === 'team.folder_access_removed') {
     return `Removed ${readMetadataString(auditLog.metadata, 'teamName', 'team')} folder access from ${readMetadataString(
       auditLog.metadata,
-      'projectName',
+      'folderName',
       'folder',
     )}`;
   }
@@ -2012,12 +2012,12 @@ function formatAuditLogMessage(auditLog: AuditLogDto): string {
     const diagramName = readMetadataString(auditLog.metadata, 'diagramName', 'diagram');
 
     if (role && typeof role === 'object' && !Array.isArray(role)) {
-      return `Changed ${teamName} diagram access to ${diagramName} from ${formatProjectRoleValue(
-        readMetadataString(role as Record<string, unknown>, 'before', ProjectRole.Viewer),
-      )} to ${formatProjectRoleValue(readMetadataString(role as Record<string, unknown>, 'after', ProjectRole.Viewer))}`;
+      return `Changed ${teamName} diagram access to ${diagramName} from ${formatAccessRoleValue(
+        readMetadataString(role as Record<string, unknown>, 'before', AccessRole.Viewer),
+      )} to ${formatAccessRoleValue(readMetadataString(role as Record<string, unknown>, 'after', AccessRole.Viewer))}`;
     }
 
-    return `Granted ${teamName} ${formatProjectRoleValue(String(role ?? ProjectRole.Viewer))} on diagram ${diagramName}`;
+    return `Granted ${teamName} ${formatAccessRoleValue(String(role ?? AccessRole.Viewer))} on diagram ${diagramName}`;
   }
 
   if (auditLog.action === 'team.diagram_access_removed') {
@@ -2087,8 +2087,8 @@ function formatAuditLogAction(action: string): string {
       'team.member_removed': 'Removed',
       'team.diagram_access_removed': 'Access',
       'team.diagram_access_updated': 'Access',
-      'team.project_access_removed': 'Access',
-      'team.project_access_updated': 'Access',
+      'team.folder_access_removed': 'Access',
+      'team.folder_access_updated': 'Access',
       'team.updated': 'Team',
       'comment.deleted': 'Comment',
       'comment.edited': 'Comment',
@@ -2097,11 +2097,11 @@ function formatAuditLogAction(action: string): string {
       'diagram_review.approved': 'Approved',
       'diagram_review.changes_requested': 'Changes',
       'diagram_review.commented': 'Review',
-      'project.archived': 'Archived',
-      'project.created': 'Created',
-      'project.member_added': 'Member',
-      'project.member_removed': 'Removed',
-      'project.member_role_updated': 'Role',
+      'folder.archived': 'Archived',
+      'folder.created': 'Created',
+      'folder.access_added': 'Access',
+      'folder.access_removed': 'Removed',
+      'folder.access_role_updated': 'Role',
       'user.disabled': 'Disabled',
       'user.enabled': 'Enabled',
       'user.password_reset': 'Password',
@@ -2114,12 +2114,12 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
   if (
     action === 'comment_thread.resolved' ||
     action === 'diagram_review.approved' ||
-    action === 'project.created' ||
-    action === 'project.member_added' ||
+    action === 'folder.created' ||
+    action === 'folder.access_added' ||
     action === 'team.created' ||
     action === 'team.member_added' ||
     action === 'team.diagram_access_updated' ||
-    action === 'team.project_access_updated' ||
+    action === 'team.folder_access_updated' ||
     action === 'user.enabled'
   ) {
     return 'green';
@@ -2129,12 +2129,12 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     action === 'organization.member_removed' ||
     action === 'comment.deleted' ||
     action === 'diagram_review.changes_requested' ||
-    action === 'project.archived' ||
-    action === 'project.member_removed' ||
+    action === 'folder.archived' ||
+    action === 'folder.access_removed' ||
     action === 'team.archived' ||
     action === 'team.member_removed' ||
     action === 'team.diagram_access_removed' ||
-    action === 'team.project_access_removed' ||
+    action === 'team.folder_access_removed' ||
     action === 'user.disabled'
   ) {
     return 'yellow';
@@ -2146,7 +2146,7 @@ function getAuditLogTone(action: string): 'blue' | 'green' | 'neutral' | 'yellow
     action === 'comment.edited' ||
     action === 'comment_thread.reopened' ||
     action === 'diagram_review.commented' ||
-    action === 'project.member_role_updated' ||
+    action === 'folder.access_role_updated' ||
     action === 'team.updated' ||
     action === 'user.password_reset' ||
     action === 'user.sessions_revoked'
@@ -2171,9 +2171,9 @@ function readMetadataBoolean(metadata: Record<string, unknown>, key: string): bo
   return metadata[key] === true;
 }
 
-function formatProjectRoleValue(role: string): string {
-  if (Object.values(ProjectRole).includes(role as ProjectRole)) {
-    return formatProjectRole(role as ProjectRoleValue);
+function formatAccessRoleValue(role: string): string {
+  if (Object.values(AccessRole).includes(role as AccessRole)) {
+    return formatAccessRole(role as AccessRoleValue);
   }
 
   return role;

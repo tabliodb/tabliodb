@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ProjectRole } from '@tabliodb/shared';
+import { AccessRole } from '@tabliodb/shared';
 import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB } from '../schema/index.js';
@@ -17,8 +17,8 @@ export type TeamChildListOptions = {
   limit: number;
 };
 
-export type TeamProjectRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
-export type TeamDiagramRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+export type TeamAccessRole = AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer;
+export type TeamDiagramRole = AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer;
 
 @Injectable()
 export class TeamRepository {
@@ -58,9 +58,9 @@ export class TeamRepository {
         )`.as('memberCount'),
         sql<number>`(
           SELECT count(*)::int
-          FROM project_team_access
-          WHERE project_team_access.team_id = teams.id
-        )`.as('projectAccessCount'),
+          FROM folder_team_access
+          WHERE folder_team_access.team_id = teams.id
+        )`.as('folderAccessCount'),
         sql<number>`(
           SELECT count(*)::int
           FROM diagram_team_access
@@ -91,9 +91,9 @@ export class TeamRepository {
         )`.as('memberCount'),
         sql<number>`(
           SELECT count(*)::int
-          FROM project_team_access
-          WHERE project_team_access.team_id = teams.id
-        )`.as('projectAccessCount'),
+          FROM folder_team_access
+          WHERE folder_team_access.team_id = teams.id
+        )`.as('folderAccessCount'),
         sql<number>`(
           SELECT count(*)::int
           FROM diagram_team_access
@@ -245,32 +245,32 @@ export class TeamRepository {
     return Number(result.numDeletedRows) > 0;
   }
 
-  async getProjectAccesses(teamId: string, options: TeamChildListOptions) {
+  async getFolderAccesses(teamId: string, options: TeamChildListOptions) {
     const offset = decodeOffsetCursor(options.cursor);
     const rows = await this.db
-      .selectFrom('project_team_access')
-      .innerJoin('projects', 'projects.id', 'project_team_access.projectId')
+      .selectFrom('folder_team_access')
+      .innerJoin('folders', 'folders.id', 'folder_team_access.folderId')
       .select([
-        'project_team_access.projectId',
-        'projects.name as projectName',
-        'projects.slug as projectSlug',
-        'project_team_access.role',
-        'project_team_access.createdAt',
-        'project_team_access.updatedAt',
+        'folder_team_access.folderId',
+        'folders.name as folderName',
+        'folders.slug as folderSlug',
+        'folder_team_access.role',
+        'folder_team_access.createdAt',
+        'folder_team_access.updatedAt',
       ])
-      .where('project_team_access.teamId', '=', teamId)
-      .where('projects.archivedAt', 'is', null)
-      .orderBy('project_team_access.createdAt', 'asc')
-      .orderBy('project_team_access.projectId', 'asc')
+      .where('folder_team_access.teamId', '=', teamId)
+      .where('folders.archivedAt', 'is', null)
+      .orderBy('folder_team_access.createdAt', 'asc')
+      .orderBy('folder_team_access.folderId', 'asc')
       .limit(options.limit + 1)
       .offset(offset)
       .execute();
     const totalRow = await this.db
-      .selectFrom('project_team_access')
-      .innerJoin('projects', 'projects.id', 'project_team_access.projectId')
+      .selectFrom('folder_team_access')
+      .innerJoin('folders', 'folders.id', 'folder_team_access.folderId')
       .select((eb) => eb.fn.countAll<number>().as('count'))
-      .where('project_team_access.teamId', '=', teamId)
-      .where('projects.archivedAt', 'is', null)
+      .where('folder_team_access.teamId', '=', teamId)
+      .where('folders.archivedAt', 'is', null)
       .executeTakeFirstOrThrow();
 
     return {
@@ -280,52 +280,52 @@ export class TeamRepository {
     };
   }
 
-  getProjectAccess(teamId: string, projectId: string) {
+  getFolderAccess(teamId: string, folderId: string) {
     return this.db
-      .selectFrom('project_team_access')
-      .innerJoin('projects', 'projects.id', 'project_team_access.projectId')
+      .selectFrom('folder_team_access')
+      .innerJoin('folders', 'folders.id', 'folder_team_access.folderId')
       .select([
-        'project_team_access.projectId',
-        'projects.name as projectName',
-        'projects.slug as projectSlug',
-        'project_team_access.role',
-        'project_team_access.createdAt',
-        'project_team_access.updatedAt',
+        'folder_team_access.folderId',
+        'folders.name as folderName',
+        'folders.slug as folderSlug',
+        'folder_team_access.role',
+        'folder_team_access.createdAt',
+        'folder_team_access.updatedAt',
       ])
-      .where('project_team_access.teamId', '=', teamId)
-      .where('project_team_access.projectId', '=', projectId)
-      .where('projects.archivedAt', 'is', null)
+      .where('folder_team_access.teamId', '=', teamId)
+      .where('folder_team_access.folderId', '=', folderId)
+      .where('folders.archivedAt', 'is', null)
       .executeTakeFirst();
   }
 
-  async upsertProjectAccess(
+  async upsertFolderAccess(
     teamId: string,
-    options: { createdById: string; projectId: string; role: TeamProjectRole },
+    options: { createdById: string; folderId: string; role: TeamAccessRole },
   ) {
     await this.db
-      .insertInto('project_team_access')
+      .insertInto('folder_team_access')
       .values({
         createdById: options.createdById,
-        projectId: options.projectId,
+        folderId: options.folderId,
         role: options.role,
         teamId,
       })
       .onConflict((oc) =>
-        oc.columns(['projectId', 'teamId']).doUpdateSet({
+        oc.columns(['folderId', 'teamId']).doUpdateSet({
           role: options.role,
           updatedAt: new Date(),
         }),
       )
       .execute();
 
-    return this.getProjectAccess(teamId, options.projectId);
+    return this.getFolderAccess(teamId, options.folderId);
   }
 
-  async removeProjectAccess(teamId: string, projectId: string): Promise<boolean> {
+  async removeFolderAccess(teamId: string, folderId: string): Promise<boolean> {
     const result = await this.db
-      .deleteFrom('project_team_access')
+      .deleteFrom('folder_team_access')
       .where('teamId', '=', teamId)
-      .where('projectId', '=', projectId)
+      .where('folderId', '=', folderId)
       .executeTakeFirst();
 
     return Number(result.numDeletedRows) > 0;
@@ -339,7 +339,7 @@ export class TeamRepository {
       .select([
         'diagram_team_access.diagramId',
         'diagrams.name as diagramName',
-        'diagrams.projectId',
+        'diagrams.folderId',
         'diagram_team_access.role',
         'diagram_team_access.createdAt',
         'diagram_team_access.updatedAt',
@@ -373,7 +373,7 @@ export class TeamRepository {
       .select([
         'diagram_team_access.diagramId',
         'diagrams.name as diagramName',
-        'diagrams.projectId',
+        'diagrams.folderId',
         'diagram_team_access.role',
         'diagram_team_access.createdAt',
         'diagram_team_access.updatedAt',
@@ -417,11 +417,11 @@ export class TeamRepository {
     return Number(result.numDeletedRows) > 0;
   }
 
-  getProjectInOrganization(projectId: string, organizationId: string) {
+  getFolderInOrganization(folderId: string, organizationId: string) {
     return this.db
-      .selectFrom('projects')
+      .selectFrom('folders')
       .select(['id', 'organizationId', 'name', 'slug'])
-      .where('id', '=', projectId)
+      .where('id', '=', folderId)
       .where('organizationId', '=', organizationId)
       .where('archivedAt', 'is', null)
       .executeTakeFirst();
@@ -430,7 +430,7 @@ export class TeamRepository {
   getDiagramInOrganization(diagramId: string, organizationId: string) {
     return this.db
       .selectFrom('diagrams')
-      .select(['id', 'organizationId', 'name', 'projectId'])
+      .select(['id', 'organizationId', 'name', 'folderId'])
       .where('id', '=', diagramId)
       .where('organizationId', '=', organizationId)
       .where('archivedAt', 'is', null)

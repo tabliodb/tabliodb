@@ -6,9 +6,9 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ADD COLUMN IF NOT EXISTS organization_id uuid;
 
     UPDATE diagrams
-    SET organization_id = projects.organization_id
-    FROM projects
-    WHERE diagrams.project_id = projects.id
+    SET organization_id = folders.organization_id
+    FROM folders
+    WHERE diagrams.folder_id = folders.id
       AND diagrams.organization_id IS NULL;
 
     ALTER TABLE diagrams
@@ -26,31 +26,31 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     END $$;
 
     ALTER TABLE diagrams
-      DROP CONSTRAINT IF EXISTS diagrams_project_id_fkey;
+      DROP CONSTRAINT IF EXISTS diagrams_folder_id_fkey;
 
     ALTER TABLE diagrams
-      ALTER COLUMN project_id DROP NOT NULL;
+      ALTER COLUMN folder_id DROP NOT NULL;
 
     ALTER TABLE diagrams
-      ADD CONSTRAINT diagrams_project_id_fkey
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
+      ADD CONSTRAINT diagrams_folder_id_fkey
+      FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL;
 
     ALTER TABLE diagrams
-      DROP CONSTRAINT IF EXISTS diagrams_project_id_slug_key;
+      DROP CONSTRAINT IF EXISTS diagrams_folder_id_slug_key;
 
-    CREATE UNIQUE INDEX IF NOT EXISTS diagrams_project_slug_unique_idx
-      ON diagrams(project_id, slug)
-      WHERE project_id IS NOT NULL AND slug IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS diagrams_folder_slug_unique_idx
+      ON diagrams(folder_id, slug)
+      WHERE folder_id IS NOT NULL AND slug IS NOT NULL;
 
     CREATE UNIQUE INDEX IF NOT EXISTS diagrams_workspace_root_slug_unique_idx
       ON diagrams(organization_id, slug)
-      WHERE project_id IS NULL AND slug IS NOT NULL;
+      WHERE folder_id IS NULL AND slug IS NOT NULL;
 
     CREATE INDEX IF NOT EXISTS diagrams_organization_updated_at_idx
       ON diagrams(organization_id, updated_at DESC);
 
     ALTER TABLE user_editor_preferences
-      DROP CONSTRAINT IF EXISTS user_editor_preferences_diagram_requires_project_check;
+      DROP CONSTRAINT IF EXISTS user_editor_preferences_diagram_requires_folder_check;
   `.execute(db);
 }
 

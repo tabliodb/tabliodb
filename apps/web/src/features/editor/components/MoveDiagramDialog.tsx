@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { DiagramResponseDtoOutput, ProjectResponseDtoOutput } from '@tabliodb/sdk';
+import type { DiagramResponseDtoOutput, FolderResponseDtoOutput } from '@tabliodb/sdk';
 import {
   Button,
   Dialog,
@@ -22,12 +22,12 @@ import { useUpdateDiagramMutation } from '@/resources/diagrams';
 import { selectClassName } from '../editor-form-styles';
 
 type DiagramResponseDto = DiagramResponseDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
 
 const rootDiagramLocationValue = '__workspace_root__';
 
 const moveDiagramFormSchema = z.object({
-  projectId: z.string().min(1, 'Choose where this diagram should live.'),
+  folderId: z.string().min(1, 'Choose where this diagram should live.'),
 });
 
 type MoveDiagramFormState = z.infer<typeof moveDiagramFormSchema>;
@@ -38,7 +38,7 @@ export function MoveDiagramDialog({
   onMoved,
   onOpenChange,
   open,
-  projects,
+  folders,
   trigger,
 }: {
   canMove: boolean;
@@ -46,7 +46,7 @@ export function MoveDiagramDialog({
   onMoved: (diagram: DiagramResponseDto) => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
-  projects: ProjectResponseDto[];
+  folders: FolderResponseDto[];
   trigger?: ReactNode;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -58,14 +58,14 @@ export function MoveDiagramDialog({
     resolver: zodResolver(moveDiagramFormSchema),
   });
   const diagramLocationOptions = useMemo(
-    () => getDiagramLocationOptions(projects, diagram.projectId),
-    [diagram.projectId, projects],
+    () => getDiagramLocationOptions(folders, diagram.folderId),
+    [diagram.folderId, folders],
   );
-  const selectedProjectId = form.watch('projectId');
-  const currentLocationName = formatDiagramLocation(projects, diagram.projectId);
+  const selectedFolderId = form.watch('folderId');
+  const currentLocationName = formatDiagramLocation(folders, diagram.folderId);
   const nextLocationName = formatDiagramLocation(
-    projects,
-    selectedProjectId === rootDiagramLocationValue ? null : selectedProjectId,
+    folders,
+    selectedFolderId === rootDiagramLocationValue ? null : selectedFolderId,
   );
 
   useEffect(() => {
@@ -99,11 +99,11 @@ export function MoveDiagramDialog({
       return;
     }
 
-    const projectId = values.projectId === rootDiagramLocationValue ? null : values.projectId;
+    const folderId = values.folderId === rootDiagramLocationValue ? null : values.folderId;
     const updatedDiagram = await updateDiagramMutation.mutateAsync({
       body: {
-        // projectId is the only field sent from this dialog, keeping move semantics separate from settings edits.
-        projectId,
+        // folderId is the only field sent from this dialog, keeping move semantics separate from settings edits.
+        folderId,
       },
       diagramId: diagram.id,
     });
@@ -151,10 +151,10 @@ export function MoveDiagramDialog({
                   className={selectClassName}
                   control={form.control}
                   disabled={updateDiagramMutation.isPending || !canMove}
-                  name="projectId"
+                  name="folderId"
                   options={diagramLocationOptions}
                 />
-                <FieldError>{form.formState.errors.projectId?.message}</FieldError>
+                <FieldError>{form.formState.errors.folderId?.message}</FieldError>
               </label>
 
               <div className="rounded-[14px] border border-[rgb(var(--tabliodb-border))] bg-white p-3 text-sm font-bold text-[rgb(var(--tabliodb-ink-muted))]">
@@ -202,40 +202,40 @@ export function MoveDiagramDialog({
 
 function getMoveDiagramDefaults(diagram: DiagramResponseDto): MoveDiagramFormState {
   return {
-    projectId: diagram.projectId ?? rootDiagramLocationValue,
+    folderId: diagram.folderId ?? rootDiagramLocationValue,
   };
 }
 
-function getDiagramLocationOptions(projects: ProjectResponseDto[], currentProjectId: string | null) {
+function getDiagramLocationOptions(folders: FolderResponseDto[], currentFolderId: string | null) {
   const options = [
     {
       label: 'No folder',
       textValue: 'No folder',
       value: rootDiagramLocationValue,
     },
-    ...projects.map((project) => ({
-      label: project.name,
-      textValue: project.name,
-      value: project.id,
+    ...folders.map((folder) => ({
+      label: folder.name,
+      textValue: folder.name,
+      value: folder.id,
     })),
   ];
 
-  if (currentProjectId && !projects.some((project) => project.id === currentProjectId)) {
+  if (currentFolderId && !folders.some((folder) => folder.id === currentFolderId)) {
     // Direct diagram collaborators may not have folder-list access, but the select still needs a stable current value.
     options.push({
       label: 'Current folder',
       textValue: 'Current folder',
-      value: currentProjectId,
+      value: currentFolderId,
     });
   }
 
   return options;
 }
 
-function formatDiagramLocation(projects: ProjectResponseDto[], projectId: string | null): string {
-  if (!projectId) {
+function formatDiagramLocation(folders: FolderResponseDto[], folderId: string | null): string {
+  if (!folderId) {
     return 'No folder';
   }
 
-  return projects.find((project) => project.id === projectId)?.name ?? 'Current folder';
+  return folders.find((folder) => folder.id === folderId)?.name ?? 'Current folder';
 }

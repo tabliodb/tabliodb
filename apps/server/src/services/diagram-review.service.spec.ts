@@ -117,7 +117,7 @@ describe(DiagramReviewService.name, () => {
       scope: {
         id: 'diagram-id',
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
         status: 'changes_requested',
       },
     });
@@ -173,7 +173,7 @@ describe(DiagramReviewService.name, () => {
           previousStatus: 'reviewed',
         },
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
         requestId: 'request-id',
       }),
     );

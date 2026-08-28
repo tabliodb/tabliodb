@@ -1,6 +1,6 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
 import type { DiagramReviewSettings } from '@tabliodb/schema-core';
-import type { Permission, ProjectRole } from '@tabliodb/shared';
+import type { Permission, AccessRole } from '@tabliodb/shared';
 
 export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>;
 export type NullableColumn<T> = ColumnType<T | null, T | null | undefined, T | null>;
@@ -45,7 +45,7 @@ export interface UserTable {
 export interface UserEditorPreferenceTable {
   userId: string;
   lastOpenedOrganizationId: NullableColumn<string>;
-  lastOpenedProjectId: NullableColumn<string>;
+  lastOpenedFolderId: NullableColumn<string>;
   lastOpenedDiagramId: NullableColumn<string>;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -138,8 +138,8 @@ export interface OrganizationTable {
   name: string;
   slug: string;
   createdById: string;
-  defaultProjectRole: NullableColumn<string>;
-  allowMemberProjectCreate: Defaulted<boolean>;
+  defaultFolderRole: NullableColumn<string>;
+  allowMemberFolderCreate: Defaulted<boolean>;
   metadata: JsonColumn;
   archivedAt: NullableTimestamp;
   createdAt: Timestamp;
@@ -160,12 +160,12 @@ export interface OrganizationMemberTable {
 export interface InvitationTable {
   id: Generated<string>;
   organizationId: string;
-  projectId: NullableColumn<string>;
+  folderId: NullableColumn<string>;
   diagramId: NullableColumn<string>;
   email: string;
   organizationRole: string;
-  projectRole: NullableColumn<ProjectRole>;
-  diagramRole: NullableColumn<ProjectRole>;
+  folderRole: NullableColumn<AccessRole>;
+  diagramRole: NullableColumn<AccessRole>;
   tokenHash: BinaryColumn;
   message: NullableColumn<string>;
   invitedById: string;
@@ -176,7 +176,7 @@ export interface InvitationTable {
   createdAt: Timestamp;
 }
 
-export interface ProjectTable {
+export interface FolderTable {
   id: Generated<string>;
   organizationId: string;
   name: string;
@@ -190,10 +190,10 @@ export interface ProjectTable {
   updatedAt: Timestamp;
 }
 
-export interface ProjectMemberTable {
-  projectId: string;
+export interface FolderAccessTable {
+  folderId: string;
   userId: string;
-  role: ProjectRole;
+  role: AccessRole;
   createdById: NullableColumn<string>;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -218,10 +218,10 @@ export interface TeamMemberTable {
   createdAt: Timestamp;
 }
 
-export interface ProjectTeamAccessTable {
-  projectId: string;
+export interface FolderTeamAccessTable {
+  folderId: string;
   teamId: string;
-  role: ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+  role: AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer;
   createdById: NullableColumn<string>;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -230,7 +230,7 @@ export interface ProjectTeamAccessTable {
 export interface DiagramMemberTable {
   diagramId: string;
   userId: string;
-  role: ProjectRole;
+  role: AccessRole;
   createdById: NullableColumn<string>;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -239,7 +239,7 @@ export interface DiagramMemberTable {
 export interface DiagramTeamAccessTable {
   diagramId: string;
   teamId: string;
-  role: ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+  role: AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer;
   createdById: NullableColumn<string>;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -252,7 +252,7 @@ export interface ApiKeyTable {
   name: string;
   userId: string;
   organizationId: NullableColumn<string>;
-  projectId: NullableColumn<string>;
+  folderId: NullableColumn<string>;
   permissions: StringArrayColumn<Permission>;
   lastUsedAt: NullableTimestamp;
   expiresAt: NullableTimestamp;
@@ -264,7 +264,7 @@ export interface ApiKeyTable {
 export interface DiagramTable {
   id: Generated<string>;
   organizationId: string;
-  projectId: NullableColumn<string>;
+  folderId: NullableColumn<string>;
   name: string;
   slug: NullableColumn<string>;
   dialect: Defaulted<string>;
@@ -433,7 +433,7 @@ export interface BackgroundJobTable {
 export interface AuditLogTable {
   id: Generated<string>;
   organizationId: NullableColumn<string>;
-  projectId: NullableColumn<string>;
+  folderId: NullableColumn<string>;
   diagramId: NullableColumn<string>;
   actorId: NullableColumn<string>;
   action: string;
@@ -458,11 +458,11 @@ export interface DB {
   organizations: OrganizationTable;
   organization_members: OrganizationMemberTable;
   invitations: InvitationTable;
-  projects: ProjectTable;
-  project_members: ProjectMemberTable;
+  folders: FolderTable;
+  folder_access: FolderAccessTable;
   teams: TeamTable;
   team_members: TeamMemberTable;
-  project_team_access: ProjectTeamAccessTable;
+  folder_team_access: FolderTeamAccessTable;
   diagram_members: DiagramMemberTable;
   diagram_team_access: DiagramTeamAccessTable;
   api_keys: ApiKeyTable;
@@ -485,5 +485,5 @@ export interface DB {
 export type User = Selectable<UserTable>;
 export type InsertUser = Insertable<UserTable>;
 export type UpdateUser = Updateable<UserTable>;
-export type Project = Selectable<ProjectTable>;
+export type Folder = Selectable<FolderTable>;
 export type Diagram = Selectable<DiagramTable>;

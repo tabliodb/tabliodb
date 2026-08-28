@@ -13,7 +13,7 @@ import { NotificationRealtimeService } from './notification-realtime.service.js'
 import { NotificationService } from './notification.service.js';
 import { OrganizationService } from './organization.service.js';
 import { PermissionService } from './permission.service.js';
-import { ProjectService } from './project.service.js';
+import { FolderService } from './folder.service.js';
 import { RedisService } from './redis.service.js';
 import { ReviewSignalService } from './review-signal.service.js';
 import { ServerService } from './server.service.js';
@@ -39,7 +39,7 @@ export const services = [
   NotificationService,
   OrganizationService,
   PermissionService,
-  ProjectService,
+  FolderService,
   RedisService,
   ReviewSignalService,
   ServerService,

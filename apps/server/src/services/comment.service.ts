@@ -315,7 +315,7 @@ export class CommentService {
         threadId: comment.threadId,
       },
       organizationId: comment.organizationId,
-      projectId: comment.projectId,
+      folderId: comment.folderId,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });
@@ -378,7 +378,7 @@ export class CommentService {
         threadId: comment.threadId,
       },
       organizationId: comment.organizationId,
-      projectId: comment.projectId,
+      folderId: comment.folderId,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });
@@ -430,7 +430,7 @@ export class CommentService {
       throw new NotFoundException('Comment thread was not found.');
     }
 
-    // Audit entries need project/workspace scope, so this variant returns thread scope while preserving the same permission path.
+    // Audit entries need folder/workspace scope, so this variant returns thread scope while preserving the same permission path.
     await this.diagramService.requireDiagram(auth, thread.diagramId, permission);
 
     return thread;
@@ -450,7 +450,7 @@ export class CommentService {
         targetType: thread.targetType,
       },
       organizationId: thread.organizationId,
-      projectId: thread.projectId,
+      folderId: thread.folderId,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });

@@ -51,20 +51,20 @@ export function useDiagramExportActions({
   diagramName,
   model,
   persistedDraftSignature,
-  projectName,
+  folderName,
 }: {
   activeDiagramId: string | null;
   diagramName?: string;
   model: DiagramModel | null;
   persistedDraftSignature: string | null;
-  projectName?: string;
+  folderName?: string;
 }) {
   const [copiedSql, setCopiedSql] = useState(false);
   const exportDiagramMutation = useExportDiagramMutation();
 
   const fileStem = useMemo(
-    () => createExportFileStem(projectName, diagramName ?? model?.metadata.name),
-    [diagramName, model?.metadata.name, projectName],
+    () => createExportFileStem(folderName, diagramName ?? model?.metadata.name),
+    [diagramName, model?.metadata.name, folderName],
   );
   const sqlPreview = useMemo<DiagramSqlPreview>(() => {
     if (!model) {

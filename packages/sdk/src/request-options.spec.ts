@@ -76,7 +76,7 @@ describe(createTabliodbRequestOptions.name, () => {
       fetch: fetchSpy,
     });
 
-    await options.fetch?.('/api/projects', {
+    await options.fetch?.('/api/folders', {
       headers: options.headers as unknown as HeadersInit,
       method: 'POST',
     });

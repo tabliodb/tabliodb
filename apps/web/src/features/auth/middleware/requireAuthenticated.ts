@@ -6,7 +6,7 @@ import { authQueries } from '@/resources/auth';
 
 export const requireAuthenticated: MiddlewareFunction = async (_, next) => {
   try {
-    // Auth guard memakai /auth/me sebagai source of truth session, bukan localStorage atau query project sampingan.
+    // Auth guard memakai /auth/me sebagai source of truth session, bukan localStorage atau query folder sampingan.
     const user = await queryClient.ensureQueryData(authQueries.me());
 
     if (user.passwordChangeRequired) {

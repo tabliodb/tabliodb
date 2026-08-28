@@ -94,11 +94,11 @@ export class ReviewSignalRepository {
   async getSettingsForDiagram(diagramId: string) {
     const row = await this.db
       .selectFrom('diagrams')
-      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('folders', 'folders.id', 'diagrams.folderId')
       .select(['diagrams.reviewSettings as diagramSettings'])
       .where('diagrams.id', '=', diagramId)
       .where('diagrams.archivedAt', 'is', null)
-      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
+      .where((eb) => eb.or([eb('diagrams.folderId', 'is', null), eb('folders.archivedAt', 'is', null)]))
       .executeTakeFirst();
 
     if (!row) {
@@ -109,7 +109,7 @@ export class ReviewSignalRepository {
 
     return {
       diagram,
-      // Folder/project tidak lagi menjadi sumber review rules agar user hanya punya satu tempat mental model: diagram settings.
+      // Folder/folder tidak lagi menjadi sumber review rules agar user hanya punya satu tempat mental model: diagram settings.
       effective: diagram,
     };
   }

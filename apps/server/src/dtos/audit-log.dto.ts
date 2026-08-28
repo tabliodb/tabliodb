@@ -8,7 +8,7 @@ const AuditLogSchema = z
   .object({
     id: z.uuid(),
     organizationId: z.uuid().nullable(),
-    projectId: z.uuid().nullable(),
+    folderId: z.uuid().nullable(),
     diagramId: z.uuid().nullable(),
     actorId: z.uuid().nullable(),
     actorName: z.string().nullable(),

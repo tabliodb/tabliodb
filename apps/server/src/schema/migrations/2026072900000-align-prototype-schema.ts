@@ -55,21 +55,21 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     SELECT pg_temp.tabliodb_rename_column_if_needed('organization_members', 'userId', 'user_id');
     SELECT pg_temp.tabliodb_rename_column_if_needed('organization_members', 'createdAt', 'created_at');
 
-    SELECT pg_temp.tabliodb_rename_column_if_needed('projects', 'organizationId', 'organization_id');
-    SELECT pg_temp.tabliodb_rename_column_if_needed('projects', 'createdById', 'created_by_id');
-    SELECT pg_temp.tabliodb_rename_column_if_needed('projects', 'createdAt', 'created_at');
-    SELECT pg_temp.tabliodb_rename_column_if_needed('projects', 'updatedAt', 'updated_at');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('folders', 'organizationId', 'organization_id');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('folders', 'createdById', 'created_by_id');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('folders', 'createdAt', 'created_at');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('folders', 'updatedAt', 'updated_at');
 
-    SELECT pg_temp.tabliodb_rename_column_if_needed('project_members', 'projectId', 'project_id');
-    SELECT pg_temp.tabliodb_rename_column_if_needed('project_members', 'userId', 'user_id');
-    SELECT pg_temp.tabliodb_rename_column_if_needed('project_members', 'createdAt', 'created_at');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('folder_access', 'folderId', 'folder_id');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('folder_access', 'userId', 'user_id');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('folder_access', 'createdAt', 'created_at');
 
     SELECT pg_temp.tabliodb_rename_column_if_needed('api_keys', 'key', 'key_hash');
     SELECT pg_temp.tabliodb_rename_column_if_needed('api_keys', 'userId', 'user_id');
     SELECT pg_temp.tabliodb_rename_column_if_needed('api_keys', 'createdAt', 'created_at');
     SELECT pg_temp.tabliodb_rename_column_if_needed('api_keys', 'updatedAt', 'updated_at');
 
-    SELECT pg_temp.tabliodb_rename_column_if_needed('diagrams', 'projectId', 'project_id');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('diagrams', 'folderId', 'folder_id');
     SELECT pg_temp.tabliodb_rename_column_if_needed('diagrams', 'createdById', 'created_by_id');
     SELECT pg_temp.tabliodb_rename_column_if_needed('diagrams', 'createdAt', 'created_at');
     SELECT pg_temp.tabliodb_rename_column_if_needed('diagrams', 'updatedAt', 'updated_at');
@@ -96,7 +96,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     SELECT pg_temp.tabliodb_rename_column_if_needed('comments', 'updatedAt', 'updated_at');
 
     SELECT pg_temp.tabliodb_rename_column_if_needed('audit_logs', 'organizationId', 'organization_id');
-    SELECT pg_temp.tabliodb_rename_column_if_needed('audit_logs', 'projectId', 'project_id');
+    SELECT pg_temp.tabliodb_rename_column_if_needed('audit_logs', 'folderId', 'folder_id');
     SELECT pg_temp.tabliodb_rename_column_if_needed('audit_logs', 'actorId', 'actor_id');
     SELECT pg_temp.tabliodb_rename_column_if_needed('audit_logs', 'entityType', 'entity_type');
     SELECT pg_temp.tabliodb_rename_column_if_needed('audit_logs', 'entityId', 'entity_id');
@@ -185,8 +185,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
 
     ALTER TABLE IF EXISTS organizations
-      ADD COLUMN IF NOT EXISTS default_project_role text,
-      ADD COLUMN IF NOT EXISTS allow_member_project_create boolean NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS default_folder_role text,
+      ADD COLUMN IF NOT EXISTS allow_member_folder_create boolean NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}',
       ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 
@@ -196,19 +196,19 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ADD COLUMN IF NOT EXISTS created_by_id uuid REFERENCES users(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
-    ALTER TABLE IF EXISTS projects
+    ALTER TABLE IF EXISTS folders
       ADD COLUMN IF NOT EXISTS default_dialect text NOT NULL DEFAULT 'postgresql',
       ADD COLUMN IF NOT EXISTS review_settings jsonb NOT NULL DEFAULT '{"disabledRuleKeys":[]}'::jsonb,
       ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'private',
       ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 
-    ALTER TABLE IF EXISTS project_members
+    ALTER TABLE IF EXISTS folder_access
       ADD COLUMN IF NOT EXISTS created_by_id uuid REFERENCES users(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
     ALTER TABLE IF EXISTS api_keys
       ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS project_id uuid REFERENCES projects(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS folder_id uuid REFERENCES folders(id) ON DELETE CASCADE,
       ADD COLUMN IF NOT EXISTS last_used_at timestamptz,
       ADD COLUMN IF NOT EXISTS expires_at timestamptz,
       ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
@@ -265,10 +265,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     CREATE TABLE IF NOT EXISTS invitations (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-      project_id uuid REFERENCES projects(id) ON DELETE CASCADE,
+      folder_id uuid REFERENCES folders(id) ON DELETE CASCADE,
       email citext NOT NULL,
       organization_role text NOT NULL DEFAULT 'member' CHECK (organization_role IN ('owner', 'admin', 'member', 'guest')),
-      project_role text CHECK (project_role IN ('owner', 'editor', 'commenter', 'viewer')),
+      folder_role text CHECK (folder_role IN ('owner', 'editor', 'commenter', 'viewer')),
       token_hash bytea NOT NULL UNIQUE,
       message text,
       invited_by_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -341,17 +341,17 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     CREATE INDEX IF NOT EXISTS files_status_created_at_idx ON files(status, created_at DESC);
     CREATE INDEX IF NOT EXISTS file_variants_file_id_idx ON file_variants(file_id);
     CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys(user_id);
-    CREATE INDEX IF NOT EXISTS api_keys_project_id_idx ON api_keys(project_id);
+    CREATE INDEX IF NOT EXISTS api_keys_folder_id_idx ON api_keys(folder_id);
     CREATE INDEX IF NOT EXISTS organization_members_user_id_idx ON organization_members(user_id);
-    CREATE INDEX IF NOT EXISTS projects_organization_updated_at_idx ON projects(organization_id, updated_at DESC);
-    CREATE INDEX IF NOT EXISTS project_members_user_id_idx ON project_members(user_id);
-    CREATE INDEX IF NOT EXISTS diagrams_project_updated_at_idx ON diagrams(project_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS folders_organization_updated_at_idx ON folders(organization_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS folder_access_user_id_idx ON folder_access(user_id);
+    CREATE INDEX IF NOT EXISTS diagrams_folder_updated_at_idx ON diagrams(folder_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS diagram_entity_index_diagram_type_idx ON diagram_entity_index(diagram_id, entity_type);
     CREATE INDEX IF NOT EXISTS diagram_entity_index_parent_idx ON diagram_entity_index(diagram_id, parent_entity_id);
     CREATE INDEX IF NOT EXISTS diagram_review_signals_diagram_idx ON diagram_review_signals(diagram_id, severity, generated_at DESC);
     CREATE INDEX IF NOT EXISTS comment_threads_diagram_target_idx ON comment_threads(diagram_id, target_type, target_id);
     CREATE INDEX IF NOT EXISTS comments_thread_created_at_idx ON comments(thread_id, created_at);
-    CREATE INDEX IF NOT EXISTS audit_logs_scope_created_at_idx ON audit_logs(organization_id, project_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS audit_logs_scope_created_at_idx ON audit_logs(organization_id, folder_id, created_at DESC);
   `.execute(db);
 }
 

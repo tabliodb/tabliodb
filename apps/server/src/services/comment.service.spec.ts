@@ -33,7 +33,7 @@ const thread = {
 const scopedThread = {
   ...thread,
   organizationId: 'organization-id',
-  projectId: 'project-id',
+  folderId: 'folder-id',
 };
 
 const comment = {
@@ -180,7 +180,7 @@ describe(CommentService.name, () => {
       id: 'comment-id',
       organizationId: 'organization-id',
       parentCommentId: null,
-      projectId: 'project-id',
+      folderId: 'folder-id',
       threadId: 'thread-id',
     });
     diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
@@ -228,7 +228,7 @@ describe(CommentService.name, () => {
           threadId: 'thread-id',
         },
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
       }),
     );
   });
@@ -259,7 +259,7 @@ describe(CommentService.name, () => {
       id: 'comment-id',
       organizationId: 'organization-id',
       parentCommentId: 'parent-comment-id',
-      projectId: 'project-id',
+      folderId: 'folder-id',
       threadId: 'thread-id',
     });
     commentRepository.getCommentForResponse.mockResolvedValue({
@@ -305,7 +305,7 @@ describe(CommentService.name, () => {
           threadId: 'thread-id',
         },
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
       }),
     );
   });
@@ -318,7 +318,7 @@ describe(CommentService.name, () => {
       id: 'comment-id',
       organizationId: 'organization-id',
       parentCommentId: null,
-      projectId: 'project-id',
+      folderId: 'folder-id',
       threadId: 'thread-id',
     });
     diagramService.requireDiagram
@@ -378,7 +378,7 @@ describe(CommentService.name, () => {
     });
   });
 
-  it('stores only project-accessible mentions and skips self mentions', async () => {
+  it('stores only folder-accessible mentions and skips self mentions', async () => {
     commentRepository.getThreadById.mockResolvedValue(thread);
     commentRepository.getMentionableUsersForDiagram.mockResolvedValue([
       { email: 'commenter@tabliodb.local', name: 'Commenter User', userId: 'user-id' },
@@ -586,7 +586,7 @@ describe(CommentService.name, () => {
       diagramId: 'diagram-id',
       id: 'parent-comment-id',
       organizationId: 'organization-id',
-      projectId: 'project-id',
+      folderId: 'folder-id',
       threadId: 'thread-id',
     });
     diagramService.requireDiagram.mockResolvedValue({ id: 'diagram-id' });
@@ -763,7 +763,7 @@ describe(CommentService.name, () => {
       id: 'parent-comment-id',
       organizationId: 'organization-id',
       parentCommentId: null,
-      projectId: 'project-id',
+      folderId: 'folder-id',
       threadId: 'thread-id',
     });
     commentRepository.getThreadById.mockResolvedValue(thread);
@@ -810,7 +810,7 @@ describe(CommentService.name, () => {
       id: 'parent-comment-id',
       organizationId: 'organization-id',
       parentCommentId: null,
-      projectId: 'project-id',
+      folderId: 'folder-id',
       threadId: 'thread-id',
     });
 
@@ -874,7 +874,7 @@ describe(CommentService.name, () => {
           targetType: 'table',
         },
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
       }),
     );
   });
@@ -917,7 +917,7 @@ describe(CommentService.name, () => {
           targetType: 'table',
         },
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
       }),
     );
   });

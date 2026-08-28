@@ -12,7 +12,7 @@ describe(getErrorMessage.name, () => {
   });
 
   it('keeps useful application errors intact', () => {
-    expect(getErrorMessage(new Error('Project name is required'))).toBe('Project name is required');
+    expect(getErrorMessage(new Error('Folder name is required'))).toBe('Folder name is required');
   });
 
   it('reads the canonical API error envelope', () => {
@@ -20,14 +20,14 @@ describe(getErrorMessage.name, () => {
       400,
       {
         code: 'bad_request',
-        message: 'Project name is required',
+        message: 'Folder name is required',
         requestId: 'request-id',
         statusCode: 400,
       },
       new Headers(),
     );
 
-    expect(getErrorMessage(error)).toBe('Project name is required');
+    expect(getErrorMessage(error)).toBe('Folder name is required');
   });
 
   it('replaces generic API status titles with product messages', () => {

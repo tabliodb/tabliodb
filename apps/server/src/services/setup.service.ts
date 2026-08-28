@@ -77,7 +77,7 @@ export class SetupService {
         },
       } satisfies Record<string, JsonValue>,
       organizationId: null,
-      projectId: null,
+      folderId: null,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });
@@ -178,7 +178,7 @@ export class SetupService {
         },
       } satisfies Record<string, JsonValue>,
       organizationId: null,
-      projectId: null,
+      folderId: null,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });
@@ -263,7 +263,7 @@ export class SetupService {
         },
       } satisfies Record<string, JsonValue>,
       organizationId: null,
-      projectId: null,
+      folderId: null,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });

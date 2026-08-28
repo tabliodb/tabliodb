@@ -6,7 +6,7 @@ import { authQueries } from '@/resources/auth';
 
 export async function profileLoader() {
   try {
-    // Profile page depends only on current user identity; workspace/project data stays out of this route.
+    // Profile page depends only on current user identity; workspace/folder data stays out of this route.
     await queryClient.ensureQueryData(authQueries.me());
   } catch (error) {
     if (error instanceof TabliodbApiError && error.status === 401) {

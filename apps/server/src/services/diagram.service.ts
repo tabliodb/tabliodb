@@ -18,10 +18,10 @@ import {
   OrganizationRole,
   type OrganizationRoleValue,
   Permission,
-  ProjectRole,
+  AccessRole,
   isGranted,
   permissionsForOrganizationRole,
-  permissionsForProjectRole,
+  permissionsForAccessRole,
 } from '@tabliodb/shared';
 import { generateCreateSchemaSqlWithWarnings, parseCreateSchemaSql } from '@tabliodb/sql';
 import { AuditAction } from '../constants.js';
@@ -51,7 +51,7 @@ import { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { CollaborationRepository } from '../repositories/collaboration.repository.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
-import { ProjectRepository } from '../repositories/project.repository.js';
+import { FolderRepository } from '../repositories/folder.repository.js';
 import { ReviewSignalRepository } from '../repositories/review-signal.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import type { JsonValue } from '../schema/index.js';
@@ -65,35 +65,35 @@ export class DiagramService {
     private readonly collaborationRepository: CollaborationRepository,
     private readonly diagramRepository: DiagramRepository,
     private readonly organizationRepository: OrganizationRepository,
-    private readonly projectRepository: ProjectRepository,
+    private readonly folderRepository: FolderRepository,
     private readonly reviewSignalRepository: ReviewSignalRepository,
     private readonly userRepository: UserRepository,
   ) {}
 
   async create(auth: AuthContext, dto: DiagramCreateDto): Promise<DiagramResponseDto> {
-    const projectId = dto.projectId ?? null;
+    const folderId = dto.folderId ?? null;
 
-    if (projectId) {
-      const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
-      if (!project || project.organizationId !== dto.organizationId) {
+    if (folderId) {
+      const folder = await this.folderRepository.getByIdForUser(auth.user.id, folderId);
+      if (!folder || folder.organizationId !== dto.organizationId) {
         throw new NotFoundException('Folder not found');
       }
 
-      this.assertProjectPermission(auth, project.projectRole, Permission.DiagramCreate);
+      this.assertFolderPermission(auth, folder.folderRole, Permission.DiagramCreate);
     } else {
       await this.assertOrganizationPermission(auth, dto.organizationId, Permission.DiagramCreate);
     }
 
     const diagram = await this.diagramRepository.create({
       organizationId: dto.organizationId,
-      projectId,
+      folderId,
       name: dto.name,
       dialect: dto.dialect,
       reviewSettings: defaultDiagramReviewSettings,
       createdById: auth.user.id,
     });
 
-    return this.serializeDiagram({ ...diagram, role: ProjectRole.Owner });
+    return this.serializeDiagram({ ...diagram, role: AccessRole.Owner });
   }
 
   async createInOrganization(
@@ -106,7 +106,7 @@ export class DiagramService {
       dialect: dto.dialect,
       name: dto.name,
       organizationId,
-      projectId: null,
+      folderId: null,
     });
   }
 
@@ -168,7 +168,7 @@ export class DiagramService {
 
   async addMember(auth: AuthContext, diagramId: string, dto: DiagramMemberCreateDto): Promise<DiagramMemberDto> {
     const diagram = await this.requireDiagram(auth, diagramId, Permission.DiagramMemberManage);
-    this.assertAssignableDiagramMemberRole(dto.role ?? ProjectRole.Viewer);
+    this.assertAssignableDiagramMemberRole(dto.role ?? AccessRole.Viewer);
     const user = await this.userRepository.getByEmail(dto.email.trim().toLowerCase());
 
     if (!user) {
@@ -198,7 +198,7 @@ export class DiagramService {
     const existingMember = await this.diagramRepository.getMember(diagramId, user.id);
     const member = await this.diagramRepository.upsertMember(diagramId, {
       createdById: auth.user.id,
-      role: dto.role ?? ProjectRole.Viewer,
+      role: dto.role ?? AccessRole.Viewer,
       userId: user.id,
     });
 
@@ -287,13 +287,13 @@ export class DiagramService {
       throw new BadRequestException('New owner must be an active workspace member');
     }
 
-    const effectiveRole = await this.projectRepository.getDiagramRole(dto.userId, diagramId);
+    const effectiveRole = await this.folderRepository.getDiagramRole(dto.userId, diagramId);
     if (!effectiveRole) {
       throw new BadRequestException('New owner must already have diagram access');
     }
 
     const currentMember = await this.diagramRepository.getMember(diagramId, dto.userId);
-    if (currentMember?.role === ProjectRole.Owner) {
+    if (currentMember?.role === AccessRole.Owner) {
       throw new BadRequestException('User already owns this diagram');
     }
 
@@ -334,7 +334,7 @@ export class DiagramService {
     }
 
     if (
-      currentMember.role === ProjectRole.Owner &&
+      currentMember.role === AccessRole.Owner &&
       (await this.diagramRepository.getDiagramOwnerCount(diagramId)) <= 1
     ) {
       throw new BadRequestException('Diagram must keep at least one owner');
@@ -356,15 +356,15 @@ export class DiagramService {
     return { successful: true };
   }
 
-  async getByProject(auth: AuthContext, projectId: string, query: DiagramListQueryDto) {
-    const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
-    if (!project) {
-      throw new NotFoundException('Project not found');
+  async getByFolder(auth: AuthContext, folderId: string, query: DiagramListQueryDto) {
+    const folder = await this.folderRepository.getByIdForUser(auth.user.id, folderId);
+    if (!folder) {
+      throw new NotFoundException('Folder not found');
     }
 
-    this.assertProjectPermission(auth, project.projectRole, Permission.DiagramRead);
+    this.assertFolderPermission(auth, folder.folderRole, Permission.DiagramRead);
 
-    const diagrams = await this.diagramRepository.getByProject(projectId, {
+    const diagrams = await this.diagramRepository.getByFolder(folderId, {
       cursor: query.cursor,
       limit: clampPaginationLimit(query.limit),
     });
@@ -373,8 +373,8 @@ export class DiagramService {
       ...diagrams,
       items: diagrams.items.map((diagram) => ({
         ...diagram,
-        // The legacy folder endpoint is folder-scoped, so its effective role matches the folder role already authorized above.
-        role: project.projectRole,
+        // The folder endpoint is folder-scoped, so its effective role matches the folder role already authorized above.
+        role: folder.folderRole,
         // Response list mengikuti bentuk JSON yang diterima SDK: timestamp ISO string, bukan Date object server-side.
         createdAt: toIsoDateTime(diagram.createdAt),
         updatedAt: toIsoDateTime(diagram.updatedAt),
@@ -383,12 +383,12 @@ export class DiagramService {
   }
 
   async requireDiagram(auth: AuthContext, diagramId: string, permission: Permission = Permission.DiagramRead) {
-    const role = await this.projectRepository.getDiagramRole(auth.user.id, diagramId);
+    const role = await this.folderRepository.getDiagramRole(auth.user.id, diagramId);
     if (!role) {
       throw new NotFoundException('Diagram not found');
     }
 
-    this.assertProjectPermission(auth, role.role, permission);
+    this.assertFolderPermission(auth, role.role, permission);
 
     const diagram = await this.diagramRepository.getById(diagramId);
     if (!diagram) {
@@ -409,7 +409,7 @@ export class DiagramService {
   }
 
   async update(auth: AuthContext, diagramId: string, dto: DiagramUpdateDto): Promise<DiagramResponseDto> {
-    if (dto.name === undefined && dto.dialect === undefined && dto.projectId === undefined) {
+    if (dto.name === undefined && dto.dialect === undefined && dto.folderId === undefined) {
       throw new BadRequestException('At least one diagram field is required');
     }
 
@@ -418,16 +418,16 @@ export class DiagramService {
       throw new BadRequestException('Diagram name is required');
     }
 
-    // requireDiagram centralizes project-role lookup, archived filtering, and permission enforcement for every diagram write.
+    // requireDiagram centralizes folder-role lookup, archived filtering, and permission enforcement for every diagram write.
     const currentDiagram = await this.requireDiagram(auth, diagramId, Permission.DiagramUpdate);
-    const nextProjectId = dto.projectId ?? null;
+    const nextFolderId = dto.folderId ?? null;
 
-    if (dto.projectId !== undefined && nextProjectId !== currentDiagram.projectId) {
+    if (dto.folderId !== undefined && nextFolderId !== currentDiagram.folderId) {
       // Moving into a location must be authorized against the destination, not only the diagram the user can edit today.
-      await this.assertDiagramMoveTarget(auth, currentDiagram.organizationId, nextProjectId);
+      await this.assertDiagramMoveTarget(auth, currentDiagram.organizationId, nextFolderId);
     }
 
-    const updatePayload: { dialect?: DatabaseDialect; name?: string; projectId?: string | null } = {};
+    const updatePayload: { dialect?: DatabaseDialect; name?: string; folderId?: string | null } = {};
 
     if (dto.dialect !== undefined) {
       updatePayload.dialect = dto.dialect;
@@ -438,9 +438,9 @@ export class DiagramService {
       updatePayload.name = nextName;
     }
 
-    if (dto.projectId !== undefined) {
+    if (dto.folderId !== undefined) {
       // Undefined means "do not move"; null means "move to workspace root".
-      updatePayload.projectId = nextProjectId;
+      updatePayload.folderId = nextFolderId;
     }
 
     const diagram = await this.diagramRepository.update(diagramId, updatePayload);
@@ -543,12 +543,12 @@ export class DiagramService {
     };
   }
 
-  private assertProjectPermission(auth: AuthContext, role: ProjectRole, permission: Permission): void {
+  private assertFolderPermission(auth: AuthContext, role: AccessRole, permission: Permission): void {
     this.assertApiKeyScope(auth, permission);
 
     if (
       !isGranted({
-        current: permissionsForProjectRole(role),
+        current: permissionsForAccessRole(role),
         requested: [permission],
       })
     ) {
@@ -558,7 +558,7 @@ export class DiagramService {
 
   private assertApiKeyScope(auth: AuthContext, permission: Permission): void {
     if (auth.apiKey && !isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
-      // Service-level diagram checks cover internal callers and routes where the URL does not expose the final project id.
+      // Service-level diagram checks cover internal callers and routes where the URL does not expose the final folder id.
       throw new ForbiddenException(`${permission} API key scope is required`);
     }
   }
@@ -588,30 +588,30 @@ export class DiagramService {
   private async assertDiagramMoveTarget(
     auth: AuthContext,
     organizationId: string,
-    projectId: string | null,
+    folderId: string | null,
   ): Promise<void> {
-    if (!projectId) {
+    if (!folderId) {
       // A root diagram belongs directly to the workspace, so the workspace role is the destination permission source.
       await this.assertOrganizationPermission(auth, organizationId, Permission.DiagramCreate);
       return;
     }
 
-    const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
-    if (!project || project.organizationId !== organizationId) {
+    const folder = await this.folderRepository.getByIdForUser(auth.user.id, folderId);
+    if (!folder || folder.organizationId !== organizationId) {
       throw new NotFoundException('Folder not found');
     }
 
     // Moving into a folder consumes the same capability as creating a diagram there.
-    this.assertProjectPermission(auth, project.projectRole, Permission.DiagramCreate);
+    this.assertFolderPermission(auth, folder.folderRole, Permission.DiagramCreate);
   }
 
   private serializeDiagram(
-    diagram: NonNullable<Awaited<ReturnType<DiagramRepository['getById']>>> & { role: ProjectRole },
+    diagram: NonNullable<Awaited<ReturnType<DiagramRepository['getById']>>> & { role: AccessRole },
   ): DiagramResponseDto {
     return {
       id: diagram.id,
       organizationId: diagram.organizationId,
-      projectId: diagram.projectId,
+      folderId: diagram.folderId,
       name: diagram.name,
       // Kysely membaca kolom dialect sebagai text karena database menyimpannya generik, sedangkan kontrak API mengekspos union dialect canonical.
       dialect: diagram.dialect as DatabaseDialect,
@@ -628,7 +628,7 @@ export class DiagramService {
     createdAt: Date | string;
     email: string;
     name: string;
-    role: ProjectRole;
+    role: AccessRole;
     updatedAt: Date | string;
     userId: string;
   }): DiagramMemberDto {
@@ -645,10 +645,10 @@ export class DiagramService {
     accessType: DiagramEffectiveAccessDto['accessType'];
     avatarUrl?: string | null;
     cursorColor: string;
-    directRole: ProjectRole | null;
+    directRole: AccessRole | null;
     email: string;
     name: string;
-    role: ProjectRole;
+    role: AccessRole;
     sources: DiagramEffectiveAccessSourceDto[];
     userId: string;
   }): DiagramEffectiveAccessDto {
@@ -658,13 +658,13 @@ export class DiagramService {
     };
   }
 
-  private async assertCanChangeOwnerRole(diagramId: string, userId: string, nextRole: ProjectRole) {
+  private async assertCanChangeOwnerRole(diagramId: string, userId: string, nextRole: AccessRole) {
     const currentMember = await this.diagramRepository.getMember(diagramId, userId);
     if (!currentMember) {
       throw new NotFoundException('Diagram member not found');
     }
 
-    if (currentMember.role === ProjectRole.Owner && nextRole !== ProjectRole.Owner) {
+    if (currentMember.role === AccessRole.Owner && nextRole !== AccessRole.Owner) {
       const ownerCount = await this.diagramRepository.getDiagramOwnerCount(diagramId);
 
       if (ownerCount <= 1) {
@@ -675,8 +675,8 @@ export class DiagramService {
     return currentMember;
   }
 
-  private assertAssignableDiagramMemberRole(role: ProjectRole): void {
-    if (role !== ProjectRole.Owner) {
+  private assertAssignableDiagramMemberRole(role: AccessRole): void {
+    if (role !== AccessRole.Owner) {
       return;
     }
 
@@ -711,7 +711,7 @@ export class DiagramService {
       ipAddress: auth.request?.ipAddress ?? null,
       metadata: options.metadata,
       organizationId: options.diagram.organizationId,
-      projectId: options.diagram.projectId,
+      folderId: options.diagram.folderId,
       requestId: auth.request?.requestId ?? null,
       userAgent: auth.request?.userAgent ?? null,
     });

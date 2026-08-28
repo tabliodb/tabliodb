@@ -79,7 +79,7 @@ const PublicDiagramShareResponseSchema = z
       dialect: DatabaseDialectSchema,
       name: z.string(),
       organizationName: z.string(),
-      projectName: z.string().nullable(),
+      folderName: z.string().nullable(),
     }),
     model: DiagramModelSchema,
     share: z.object({

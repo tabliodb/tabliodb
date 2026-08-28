@@ -4,7 +4,7 @@ import type { DiagramModel } from '@tabliodb/schema-core';
 import {
   Action as SdkDiagramReviewAction,
   CurrentStatus as SdkDiagramReviewStatus,
-  type ProjectMemberDtoOutput,
+  type FolderAccessDtoOutput,
 } from '@tabliodb/sdk';
 import type { AwarenessState } from '@tabliodb/shared';
 import {
@@ -42,7 +42,7 @@ import {
   useUpdateCommentMutation,
 } from '@/resources/comments';
 import { diagramsQueries, useCreateDiagramReviewActionMutation } from '@/resources/diagrams';
-import { projectsQueries } from '@/resources/projects';
+import { foldersQueries } from '@/resources/folders';
 import { createEmptyCommentFormBody } from '../comment-body';
 import {
   findCommentThreadForTarget,
@@ -59,7 +59,7 @@ const CommentComposer = lazy(() => import('./CommentComposer'));
 
 type DiagramReviewAction = `${SdkDiagramReviewAction}`;
 type DiagramReviewStatus = `${SdkDiagramReviewStatus}`;
-type ProjectMemberDto = ProjectMemberDtoOutput;
+type FolderAccessDto = FolderAccessDtoOutput;
 
 const sdkDiagramReviewActionByValue: Record<DiagramReviewAction, SdkDiagramReviewAction> = {
   approved: SdkDiagramReviewAction.Approved,
@@ -74,7 +74,7 @@ const commentFormSchema = z.object({
 
 type CommentFormState = z.infer<typeof commentFormSchema>;
 
-const projectMemberPageQuery = { limit: 50 } as const;
+const folderAccessPageQuery = { limit: 50 } as const;
 const commentThreadPageQuery = { limit: 50 } as const;
 const commentReplyPageQuery = { limit: 50 } as const;
 const commentNestedReplyPageQuery = { limit: 30 } as const;
@@ -82,7 +82,7 @@ const commentTypingFreshnessMs = 8000;
 const commentTypingTimeoutMs = 6500;
 const emptyCommentThreads: CommentThreadListItemDto[] = [];
 const emptyComments: CommentResponseDto[] = [];
-const emptyProjectMembers: ProjectMemberDto[] = [];
+const emptyFolderAccess: FolderAccessDto[] = [];
 
 export function CommentsDialog({
   canComment,
@@ -96,7 +96,7 @@ export function CommentsDialog({
   onTypingChange,
   open,
   openRequest,
-  projectId,
+  folderId,
   remoteTypingPresences,
   selectedCommentTarget,
   selectedTableId,
@@ -112,7 +112,7 @@ export function CommentsDialog({
   onTypingChange: (typing: AwarenessState['commentTyping']) => void;
   open: boolean;
   openRequest: CommentThreadOpenRequest | null;
-  projectId: string | null;
+  folderId: string | null;
   remoteTypingPresences: CommentTypingPresence[];
   selectedCommentTarget: EditorCommentTarget | null;
   selectedTableId: string | null;
@@ -171,11 +171,11 @@ export function CommentsDialog({
     // Read receipt hanya diambil untuk thread yang sedang dibuka agar dialog tidak melakukan request tambahan untuk semua thread.
     enabled: open && Boolean(activeThread) && threadReadStateQueryOptions.enabled !== false,
   });
-  const mentionMembersQueryOptions = projectsQueries.members(projectId ?? '', projectMemberPageQuery);
+  const mentionMembersQueryOptions = foldersQueries.access(folderId ?? '', folderAccessPageQuery);
   const mentionMembersQuery = useQuery({
     ...mentionMembersQueryOptions,
-    // Root diagrams do not have project members; a diagram-scoped mention endpoint will fill this gap cleanly later.
-    enabled: open && Boolean(projectId) && mentionMembersQueryOptions.enabled !== false,
+    // Root diagrams do not have folder access grants; a diagram-scoped mention endpoint will fill this gap cleanly later.
+    enabled: open && Boolean(folderId) && mentionMembersQueryOptions.enabled !== false,
   });
   const rootComments = rootCommentsQuery.data?.items ?? emptyComments;
   const visibleTypingPresences = useMemo(
@@ -187,7 +187,7 @@ export function CommentsDialog({
     [visibleTypingPresences],
   );
   const activeThreadTypingPresences = activeThreadId ? (typingPresencesByThreadId.get(activeThreadId) ?? []) : [];
-  const mentionUsers = mentionMembersQuery.data?.items ?? emptyProjectMembers;
+  const mentionUsers = mentionMembersQuery.data?.items ?? emptyFolderAccess;
   const createThreadMutation = useCreateCommentThreadMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
   const threadReplyMutation = useReplyToCommentThreadMutation();

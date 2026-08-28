@@ -44,9 +44,9 @@ export type NotificationInboxRow = {
   parentAuthorName: string | null;
   parentCommentBodyText: string | null;
   parentCommentId: string | null;
-  projectId: string | null;
-  projectName: string | null;
-  projectSlug: string | null;
+  folderId: string | null;
+  folderName: string | null;
+  folderSlug: string | null;
   threadId: string;
   threadStatus: 'open' | 'resolved';
   threadTargetId: string | null;
@@ -86,8 +86,8 @@ export type CommentNotificationDeliveryContext = {
   diagramName: string;
   organizationName: string;
   organizationSlug: string;
-  projectId: string | null;
-  projectName: string | null;
+  folderId: string | null;
+  folderName: string | null;
   threadId: string;
   recipients: CommentNotificationDeliveryRecipient[];
 };
@@ -155,17 +155,17 @@ export class NotificationRepository {
       INNER JOIN comments ON comments.id = comment_mentions.comment_id
       INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-      LEFT JOIN projects ON projects.id = diagrams.project_id
+      LEFT JOIN folders ON folders.id = diagrams.folder_id
       INNER JOIN organizations ON organizations.id = diagrams.organization_id
       INNER JOIN users ON users.id = comment_mentions.mentioned_user_id
       WHERE comment_mentions.comment_id = ${options.commentId}
         AND comment_mentions.mentioned_user_id <> ${options.actorId}
         AND comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND (diagrams.folder_id IS NULL OR folders.archived_at IS NULL)
         AND organizations.archived_at IS NULL
         AND users.deleted_at IS NULL
-        AND ${this.createProjectAccessExistsSql(sql.ref('comment_mentions.mentioned_user_id'))}
+        AND ${this.createFolderAccessExistsSql(sql.ref('comment_mentions.mentioned_user_id'))}
     `.execute(this.db);
     const replyRow = await sql<{ replyUserId: string }>`
       SELECT parent_comments.created_by_id AS "replyUserId"
@@ -173,7 +173,7 @@ export class NotificationRepository {
       INNER JOIN comments parent_comments ON parent_comments.id = comments.parent_comment_id
       INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-      LEFT JOIN projects ON projects.id = diagrams.project_id
+      LEFT JOIN folders ON folders.id = diagrams.folder_id
       INNER JOIN organizations ON organizations.id = diagrams.organization_id
       INNER JOIN users ON users.id = parent_comments.created_by_id
       WHERE comments.id = ${options.commentId}
@@ -182,10 +182,10 @@ export class NotificationRepository {
         AND comments.deleted_at IS NULL
         AND parent_comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND (diagrams.folder_id IS NULL OR folders.archived_at IS NULL)
         AND organizations.archived_at IS NULL
         AND users.deleted_at IS NULL
-        AND ${this.createProjectAccessExistsSql(sql.ref('parent_comments.created_by_id'))}
+        AND ${this.createFolderAccessExistsSql(sql.ref('parent_comments.created_by_id'))}
     `.execute(this.db);
 
     return {
@@ -207,8 +207,8 @@ export class NotificationRepository {
         comment_threads.id AS "threadId",
         diagrams.id AS "diagramId",
         diagrams.name AS "diagramName",
-        diagrams.project_id AS "projectId",
-        projects.name AS "projectName",
+        diagrams.folder_id AS "folderId",
+        folders.name AS "folderName",
         organizations.name AS "organizationName",
         organizations.slug AS "organizationSlug",
         users.email AS "actorEmail",
@@ -217,13 +217,13 @@ export class NotificationRepository {
       INNER JOIN users ON users.id = comments.created_by_id
       INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-      LEFT JOIN projects ON projects.id = diagrams.project_id
+      LEFT JOIN folders ON folders.id = diagrams.folder_id
       INNER JOIN organizations ON organizations.id = diagrams.organization_id
       WHERE comments.id = ${options.commentId}
         AND comments.created_by_id = ${options.actorId}
         AND comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND (diagrams.folder_id IS NULL OR folders.archived_at IS NULL)
         AND organizations.archived_at IS NULL
         AND users.deleted_at IS NULL
     `.execute(this.db);
@@ -245,17 +245,17 @@ export class NotificationRepository {
         INNER JOIN comments ON comments.id = comment_mentions.comment_id
         INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
         INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-        LEFT JOIN projects ON projects.id = diagrams.project_id
+        LEFT JOIN folders ON folders.id = diagrams.folder_id
         INNER JOIN organizations ON organizations.id = diagrams.organization_id
         INNER JOIN users recipient_users ON recipient_users.id = comment_mentions.mentioned_user_id
         WHERE comment_mentions.comment_id = ${options.commentId}
           AND comment_mentions.mentioned_user_id <> ${options.actorId}
           AND comments.deleted_at IS NULL
           AND diagrams.archived_at IS NULL
-          AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+          AND (diagrams.folder_id IS NULL OR folders.archived_at IS NULL)
           AND organizations.archived_at IS NULL
           AND recipient_users.deleted_at IS NULL
-          AND ${this.createProjectAccessExistsSql(sql.ref('comment_mentions.mentioned_user_id'))}
+          AND ${this.createFolderAccessExistsSql(sql.ref('comment_mentions.mentioned_user_id'))}
         UNION ALL
         SELECT
           parent_comments.created_by_id AS "userId",
@@ -266,7 +266,7 @@ export class NotificationRepository {
         INNER JOIN comments parent_comments ON parent_comments.id = comments.parent_comment_id
         INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
         INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-        LEFT JOIN projects ON projects.id = diagrams.project_id
+        LEFT JOIN folders ON folders.id = diagrams.folder_id
         INNER JOIN organizations ON organizations.id = diagrams.organization_id
         INNER JOIN users parent_users ON parent_users.id = parent_comments.created_by_id
         WHERE comments.id = ${options.commentId}
@@ -275,10 +275,10 @@ export class NotificationRepository {
           AND comments.deleted_at IS NULL
           AND parent_comments.deleted_at IS NULL
           AND diagrams.archived_at IS NULL
-          AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+          AND (diagrams.folder_id IS NULL OR folders.archived_at IS NULL)
           AND organizations.archived_at IS NULL
           AND parent_users.deleted_at IS NULL
-          AND ${this.createProjectAccessExistsSql(sql.ref('parent_comments.created_by_id'))}
+          AND ${this.createFolderAccessExistsSql(sql.ref('parent_comments.created_by_id'))}
           AND NOT EXISTS (
             SELECT 1
             FROM comment_mentions mention_dedupe
@@ -312,9 +312,9 @@ export class NotificationRepository {
         AND comments.created_by_id <> ${userId}
         AND comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND (diagrams.folder_id IS NULL OR folders.archived_at IS NULL)
         AND organizations.archived_at IS NULL
-        AND ${this.createProjectAccessExistsSql(userId)}
+        AND ${this.createFolderAccessExistsSql(userId)}
     `;
   }
 
@@ -336,9 +336,9 @@ export class NotificationRepository {
         AND comments.deleted_at IS NULL
         AND parent_comments.deleted_at IS NULL
         AND diagrams.archived_at IS NULL
-        AND (diagrams.project_id IS NULL OR projects.archived_at IS NULL)
+        AND (diagrams.folder_id IS NULL OR folders.archived_at IS NULL)
         AND organizations.archived_at IS NULL
-        AND ${this.createProjectAccessExistsSql(userId)}
+        AND ${this.createFolderAccessExistsSql(userId)}
         AND NOT EXISTS (
           SELECT 1
           FROM comment_mentions mention_dedupe
@@ -350,9 +350,9 @@ export class NotificationRepository {
 
   private createCommonInboxSelectSql() {
     return sql`
-        diagrams.project_id AS "projectId",
-        projects.name AS "projectName",
-        projects.slug AS "projectSlug",
+        diagrams.folder_id AS "folderId",
+        folders.name AS "folderName",
+        folders.slug AS "folderSlug",
         organizations.id AS "organizationId",
         organizations.name AS "organizationName",
         organizations.slug AS "organizationSlug",
@@ -415,7 +415,7 @@ export class NotificationRepository {
       INNER JOIN users ON users.id = comments.created_by_id
       INNER JOIN comment_threads ON comment_threads.id = comments.thread_id
       INNER JOIN diagrams ON diagrams.id = comment_threads.diagram_id
-      LEFT JOIN projects ON projects.id = diagrams.project_id
+      LEFT JOIN folders ON folders.id = diagrams.folder_id
       INNER JOIN organizations ON organizations.id = diagrams.organization_id
       LEFT JOIN comment_thread_reads ON comment_thread_reads.thread_id = comment_threads.id
         AND comment_thread_reads.user_id = ${userId}
@@ -424,7 +424,7 @@ export class NotificationRepository {
     `;
   }
 
-  private createProjectAccessExistsSql(userId: string | ReturnType<typeof sql.ref>) {
+  private createFolderAccessExistsSql(userId: string | ReturnType<typeof sql.ref>) {
     return sql`
       (
         EXISTS (
@@ -456,7 +456,7 @@ export class NotificationRepository {
         )
         OR
         (
-          diagrams.project_id IS NULL
+          diagrams.folder_id IS NULL
           AND EXISTS (
             SELECT 1
             FROM organization_members access_root_organization_members
@@ -468,27 +468,27 @@ export class NotificationRepository {
         )
         OR EXISTS (
           SELECT 1
-          FROM project_members access_project_members
-          INNER JOIN organization_members access_project_organization_members
-            ON access_project_organization_members.organization_id = diagrams.organization_id
-          WHERE access_project_members.project_id = projects.id
-            AND access_project_members.user_id = ${userId}
-            AND access_project_organization_members.user_id = ${userId}
-            AND access_project_organization_members.status = 'active'
+          FROM folder_access access_folder_access
+          INNER JOIN organization_members access_folder_organization_members
+            ON access_folder_organization_members.organization_id = diagrams.organization_id
+          WHERE access_folder_access.folder_id = folders.id
+            AND access_folder_access.user_id = ${userId}
+            AND access_folder_organization_members.user_id = ${userId}
+            AND access_folder_organization_members.status = 'active'
         )
         OR EXISTS (
           SELECT 1
-          FROM project_team_access
-          INNER JOIN team_members ON team_members.team_id = project_team_access.team_id
-          INNER JOIN teams ON teams.id = project_team_access.team_id
-          INNER JOIN organization_members access_project_team_organization_members
-            ON access_project_team_organization_members.organization_id = diagrams.organization_id
-          WHERE project_team_access.project_id = projects.id
+          FROM folder_team_access
+          INNER JOIN team_members ON team_members.team_id = folder_team_access.team_id
+          INNER JOIN teams ON teams.id = folder_team_access.team_id
+          INNER JOIN organization_members access_folder_team_organization_members
+            ON access_folder_team_organization_members.organization_id = diagrams.organization_id
+          WHERE folder_team_access.folder_id = folders.id
             AND team_members.user_id = ${userId}
             -- Folder team grants inherit to diagrams only inside the same workspace.
             AND teams.organization_id = diagrams.organization_id
-            AND access_project_team_organization_members.user_id = ${userId}
-            AND access_project_team_organization_members.status = 'active'
+            AND access_folder_team_organization_members.user_id = ${userId}
+            AND access_folder_team_organization_members.status = 'active'
             AND teams.archived_at IS NULL
         )
         OR EXISTS (
@@ -501,7 +501,7 @@ export class NotificationRepository {
               access_manager_organization_members.role IN ('owner', 'admin')
               OR (
                 access_manager_organization_members.role = 'member'
-                AND organizations.default_project_role IN ('editor', 'commenter', 'viewer')
+                AND organizations.default_folder_role IN ('editor', 'commenter', 'viewer')
               )
             )
         )

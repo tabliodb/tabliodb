@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OrganizationRole, type ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, type AccessRole } from '@tabliodb/shared';
 import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { randomUUID } from 'node:crypto';
@@ -30,8 +30,8 @@ export class OrganizationRepository {
         'organizations.id',
         'organizations.name',
         'organizations.slug',
-        'organizations.defaultProjectRole',
-        'organizations.allowMemberProjectCreate',
+        'organizations.defaultFolderRole',
+        'organizations.allowMemberFolderCreate',
         'organizations.createdAt',
         'organizations.updatedAt',
         'organization_members.role',
@@ -54,7 +54,7 @@ export class OrganizationRepository {
       .executeTakeFirstOrThrow();
 
     return {
-      // Workspace switcher uses the same paginated contract as user/project lists, even if the first UI loads 50.
+      // Workspace switcher uses the same paginated contract as user/folder lists, even if the first UI loads 50.
       items: rows.slice(0, options.limit),
       nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
       totalCount: Number(totalRow.count),
@@ -105,8 +105,8 @@ export class OrganizationRepository {
         'organizations.id',
         'organizations.name',
         'organizations.slug',
-        'organizations.defaultProjectRole',
-        'organizations.allowMemberProjectCreate',
+        'organizations.defaultFolderRole',
+        'organizations.allowMemberFolderCreate',
         'organizations.createdAt',
         'organizations.updatedAt',
       ])
@@ -129,14 +129,14 @@ export class OrganizationRepository {
   async updateSettings(
     organizationId: string,
     dto: {
-      allowMemberProjectCreate?: boolean;
-      defaultProjectRole?: ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer | null;
+      allowMemberFolderCreate?: boolean;
+      defaultFolderRole?: AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer | null;
       name?: string;
     },
   ) {
     const values: {
-      allowMemberProjectCreate?: boolean;
-      defaultProjectRole?: ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer | null;
+      allowMemberFolderCreate?: boolean;
+      defaultFolderRole?: AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer | null;
       name?: string;
       slug?: string;
       updatedAt: Date;
@@ -149,12 +149,12 @@ export class OrganizationRepository {
       values.slug = slugify(dto.name);
     }
 
-    if (dto.defaultProjectRole !== undefined) {
-      values.defaultProjectRole = dto.defaultProjectRole;
+    if (dto.defaultFolderRole !== undefined) {
+      values.defaultFolderRole = dto.defaultFolderRole;
     }
 
-    if (dto.allowMemberProjectCreate !== undefined) {
-      values.allowMemberProjectCreate = dto.allowMemberProjectCreate;
+    if (dto.allowMemberFolderCreate !== undefined) {
+      values.allowMemberFolderCreate = dto.allowMemberFolderCreate;
     }
 
     const organization = await this.db
@@ -284,11 +284,11 @@ export class OrganizationRepository {
       `.execute(tx);
 
       await sql`
-        DELETE FROM project_members
-        USING projects
-        WHERE project_members.project_id = projects.id
-          AND projects.organization_id = ${organizationId}
-          AND project_members.user_id = ${userId}
+        DELETE FROM folder_access
+        USING folders
+        WHERE folder_access.folder_id = folders.id
+          AND folders.organization_id = ${organizationId}
+          AND folder_access.user_id = ${userId}
       `.execute(tx);
 
       await sql`
@@ -376,9 +376,9 @@ export class OrganizationRepository {
         .execute();
 
       return {
-        allowMemberProjectCreate: organization.allowMemberProjectCreate,
+        allowMemberFolderCreate: organization.allowMemberFolderCreate,
         createdAt: organization.createdAt,
-        defaultProjectRole: organization.defaultProjectRole,
+        defaultFolderRole: organization.defaultFolderRole,
         id: organization.id,
         name: organization.name,
         role: OrganizationRole.Owner,
@@ -403,7 +403,7 @@ export class OrganizationRepository {
             name: options.name,
             slug,
           })
-          .returning(['allowMemberProjectCreate', 'createdAt', 'defaultProjectRole', 'id', 'name', 'slug', 'updatedAt'])
+          .returning(['allowMemberFolderCreate', 'createdAt', 'defaultFolderRole', 'id', 'name', 'slug', 'updatedAt'])
           .executeTakeFirstOrThrow();
       } catch (error) {
         if (!isOrganizationSlugConflict(error)) {
@@ -420,14 +420,14 @@ export class OrganizationRepository {
         name: options.name,
         slug: `${baseSlug}-${randomUUID().slice(0, 8)}`,
       })
-      .returning(['allowMemberProjectCreate', 'createdAt', 'defaultProjectRole', 'id', 'name', 'slug', 'updatedAt'])
+      .returning(['allowMemberFolderCreate', 'createdAt', 'defaultFolderRole', 'id', 'name', 'slug', 'updatedAt'])
       .executeTakeFirstOrThrow();
   }
 
   private getSettingsById(organizationId: string) {
     return this.db
       .selectFrom('organizations')
-      .select(['id', 'name', 'slug', 'defaultProjectRole', 'allowMemberProjectCreate', 'createdAt', 'updatedAt'])
+      .select(['id', 'name', 'slug', 'defaultFolderRole', 'allowMemberFolderCreate', 'createdAt', 'updatedAt'])
       .where('id', '=', organizationId)
       .where('archivedAt', 'is', null)
       .executeTakeFirst();

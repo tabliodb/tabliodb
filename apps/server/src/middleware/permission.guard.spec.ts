@@ -31,14 +31,14 @@ class ParamTargetController {
 }
 
 class BodyTargetController {
-  @RequirePermission(Permission.ProjectCreate, { key: 'organizationId', source: 'body', type: 'organization' })
+  @RequirePermission(Permission.FolderCreate, { key: 'organizationId', source: 'body', type: 'organization' })
   route() {
     return null;
   }
 }
 
 class QueryTargetController {
-  @RequirePermission(Permission.ProjectRead, { key: 'projectId', source: 'query', type: 'project' })
+  @RequirePermission(Permission.FolderRead, { key: 'folderId', source: 'query', type: 'folder' })
   route() {
     return null;
   }
@@ -117,7 +117,7 @@ describe(PermissionGuard.name, () => {
     ).resolves.toBe(true);
 
     expect(permissionService.assertAllowed).toHaveBeenCalledWith(auth, {
-      permission: Permission.ProjectCreate,
+      permission: Permission.FolderCreate,
       target: { id: 'organization-id', type: 'organization' },
     });
   });
@@ -128,15 +128,15 @@ describe(PermissionGuard.name, () => {
         createContext(
           QueryTargetController,
           createRequest({
-            query: { projectId: 'project-id' },
+            query: { folderId: 'folder-id' },
           }),
         ),
       ),
     ).resolves.toBe(true);
 
     expect(permissionService.assertAllowed).toHaveBeenCalledWith(auth, {
-      permission: Permission.ProjectRead,
-      target: { id: 'project-id', type: 'project' },
+      permission: Permission.FolderRead,
+      target: { id: 'folder-id', type: 'folder' },
     });
   });
 

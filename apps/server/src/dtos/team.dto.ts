@@ -1,10 +1,10 @@
-import { ProjectRole } from '@tabliodb/shared';
+import { AccessRole } from '@tabliodb/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
-const TeamProjectRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
-const TeamDiagramRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
+const TeamAccessRoleSchema = z.enum([AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer]);
+const TeamDiagramRoleSchema = z.enum([AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer]);
 
 const TeamCreateSchema = z
   .object({
@@ -30,7 +30,7 @@ const TeamResponseSchema = z
     description: z.string().nullable(),
     memberCount: z.number().int().nonnegative(),
     diagramAccessCount: z.number().int().nonnegative(),
-    projectAccessCount: z.number().int().nonnegative(),
+    folderAccessCount: z.number().int().nonnegative(),
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,
   })
@@ -96,50 +96,50 @@ const TeamMemberRemoveResponseSchema = z
   })
   .meta({ id: 'TeamMemberRemoveResponseDto' });
 
-const TeamProjectAccessSchema = z
+const TeamFolderAccessSchema = z
   .object({
-    projectId: z.uuid(),
-    projectName: z.string(),
-    projectSlug: z.string(),
-    role: TeamProjectRoleSchema,
+    folderId: z.uuid(),
+    folderName: z.string(),
+    folderSlug: z.string(),
+    role: TeamAccessRoleSchema,
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,
   })
-  .meta({ id: 'TeamProjectAccessDto' });
+  .meta({ id: 'TeamFolderAccessDto' });
 
-const TeamProjectAccessUpsertSchema = z
+const TeamFolderAccessUpsertSchema = z
   .object({
-    projectId: z.uuid(),
-    role: TeamProjectRoleSchema.default(ProjectRole.Viewer),
+    folderId: z.uuid(),
+    role: TeamAccessRoleSchema.default(AccessRole.Viewer),
   })
-  .meta({ id: 'TeamProjectAccessUpsertDto' });
+  .meta({ id: 'TeamFolderAccessUpsertDto' });
 
-const TeamProjectAccessListQuerySchema = z
+const TeamFolderAccessListQuerySchema = z
   .object({
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })
-  .meta({ id: 'TeamProjectAccessListQueryDto' });
+  .meta({ id: 'TeamFolderAccessListQueryDto' });
 
-const TeamProjectAccessListResponseSchema = z
+const TeamFolderAccessListResponseSchema = z
   .object({
-    items: z.array(TeamProjectAccessSchema),
+    items: z.array(TeamFolderAccessSchema),
     nextCursor: z.string().nullable(),
     totalCount: z.number().int().nonnegative(),
   })
-  .meta({ id: 'TeamProjectAccessListResponseDto' });
+  .meta({ id: 'TeamFolderAccessListResponseDto' });
 
-const TeamProjectAccessRemoveResponseSchema = z
+const TeamFolderAccessRemoveResponseSchema = z
   .object({
     successful: z.boolean(),
   })
-  .meta({ id: 'TeamProjectAccessRemoveResponseDto' });
+  .meta({ id: 'TeamFolderAccessRemoveResponseDto' });
 
 const TeamDiagramAccessSchema = z
   .object({
     diagramId: z.uuid(),
     diagramName: z.string(),
-    projectId: z.uuid().nullable(),
+    folderId: z.uuid().nullable(),
     role: TeamDiagramRoleSchema,
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,
@@ -149,7 +149,7 @@ const TeamDiagramAccessSchema = z
 const TeamDiagramAccessUpsertSchema = z
   .object({
     diagramId: z.uuid(),
-    role: TeamDiagramRoleSchema.default(ProjectRole.Viewer),
+    role: TeamDiagramRoleSchema.default(AccessRole.Viewer),
   })
   .meta({ id: 'TeamDiagramAccessUpsertDto' });
 
@@ -188,10 +188,10 @@ export class TeamMemberDto extends createZodDto(TeamMemberSchema) {}
 export class TeamMemberListQueryDto extends createZodDto(TeamMemberListQuerySchema) {}
 export class TeamMemberListResponseDto extends createZodDto(TeamMemberListResponseSchema) {}
 export class TeamMemberRemoveResponseDto extends createZodDto(TeamMemberRemoveResponseSchema) {}
-export class TeamProjectAccessDto extends createZodDto(TeamProjectAccessSchema) {}
-export class TeamProjectAccessListQueryDto extends createZodDto(TeamProjectAccessListQuerySchema) {}
-export class TeamProjectAccessListResponseDto extends createZodDto(TeamProjectAccessListResponseSchema) {}
-export class TeamProjectAccessRemoveResponseDto extends createZodDto(TeamProjectAccessRemoveResponseSchema) {}
-export class TeamProjectAccessUpsertDto extends createZodDto(TeamProjectAccessUpsertSchema) {}
+export class TeamFolderAccessDto extends createZodDto(TeamFolderAccessSchema) {}
+export class TeamFolderAccessListQueryDto extends createZodDto(TeamFolderAccessListQuerySchema) {}
+export class TeamFolderAccessListResponseDto extends createZodDto(TeamFolderAccessListResponseSchema) {}
+export class TeamFolderAccessRemoveResponseDto extends createZodDto(TeamFolderAccessRemoveResponseSchema) {}
+export class TeamFolderAccessUpsertDto extends createZodDto(TeamFolderAccessUpsertSchema) {}
 export class TeamResponseDto extends createZodDto(TeamResponseSchema) {}
 export class TeamUpdateDto extends createZodDto(TeamUpdateSchema) {}

@@ -116,7 +116,7 @@ function NotificationInboxMenuItem({
   const Icon = notification.type === 'mention' ? AtSign : Reply;
   const targetLabel = formatCommentTargetType(notification.thread.targetType);
   const actionLabel = notification.type === 'mention' ? 'mentioned you' : 'replied to you';
-  const locationLabel = notification.project?.name ?? notification.workspace.name;
+  const locationLabel = notification.folder?.name ?? notification.workspace.name;
 
   return (
     <DropdownMenuItem

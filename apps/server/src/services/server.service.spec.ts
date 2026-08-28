@@ -217,7 +217,7 @@ describe(ServerService.name, () => {
         createAuth({
           apiKey: {
             id: 'api-key-id',
-            permissions: [Permission.ProjectRead],
+            permissions: [Permission.FolderRead],
           },
         }),
       ),

@@ -188,7 +188,7 @@ export const router = createBrowserRouter([
               },
               {
                 element: <EditorPage />,
-                path: routes.project.path,
+                path: routes.folder.path,
               },
               {
                 element: <EditorPage />,

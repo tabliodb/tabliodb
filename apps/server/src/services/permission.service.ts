@@ -4,17 +4,17 @@ import {
   Permission,
   isGranted,
   permissionsForOrganizationRole,
-  permissionsForProjectRole,
+  permissionsForAccessRole,
 } from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
-import { ProjectRepository } from '../repositories/project.repository.js';
+import { FolderRepository } from '../repositories/folder.repository.js';
 
 export type PermissionTarget =
   | { type: 'global' }
   | { id: string; type: 'diagram' }
   | { id: string; type: 'organization' }
-  | { id: string; type: 'project' };
+  | { id: string; type: 'folder' };
 
 export type PermissionRequirement = {
   permission: Permission;
@@ -25,7 +25,7 @@ export type PermissionRequirement = {
 export class PermissionService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,
-    private readonly projectRepository: ProjectRepository,
+    private readonly folderRepository: FolderRepository,
   ) {}
 
   async assertAllowed(auth: AuthContext, requirement: PermissionRequirement): Promise<void> {
@@ -56,9 +56,9 @@ export class PermissionService {
     }
 
     const role =
-      requirement.target.type === 'project'
-        ? await this.projectRepository.getProjectRole(auth.user.id, requirement.target.id)
-        : await this.projectRepository.getDiagramRole(auth.user.id, requirement.target.id);
+      requirement.target.type === 'folder'
+        ? await this.folderRepository.getAccessRole(auth.user.id, requirement.target.id)
+        : await this.folderRepository.getDiagramRole(auth.user.id, requirement.target.id);
 
     if (!role) {
       throw new NotFoundException(`${this.formatTarget(requirement.target.type)} not found`);
@@ -66,7 +66,7 @@ export class PermissionService {
 
     if (
       !isGranted({
-        current: permissionsForProjectRole(role.role),
+        current: permissionsForAccessRole(role.role),
         requested: [requirement.permission],
       })
     ) {
@@ -80,7 +80,7 @@ export class PermissionService {
     }
 
     if (!isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
-      // API key permissions are checked before project role so a leaked low-scope key cannot probe project existence.
+      // API key permissions are checked before folder role so a leaked low-scope key cannot probe folder existence.
       throw new ForbiddenException(`${permission} API key scope is required`);
     }
   }

@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, AccessRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
-import { ProjectService } from './project.service.js';
+import { FolderService } from './folder.service.js';
 
 const auth: AuthContext = {
   user: {
@@ -10,7 +10,7 @@ const auth: AuthContext = {
     cursorColor: '#58cc02',
     email: 'owner@tabliodb.local',
     id: 'owner-id',
-    name: 'Project Owner',
+    name: 'Folder Owner',
     passwordChangeRequired: false,
   },
 };
@@ -19,24 +19,24 @@ const authWithReadApiKey: AuthContext = {
   ...auth,
   apiKey: {
     id: 'api-key-id',
-    permissions: [Permission.ProjectRead],
+    permissions: [Permission.FolderRead],
   },
 };
 
-const project = {
+const folder = {
   createdAt: new Date('2026-07-29T10:00:00.000Z'),
   description: null,
-  id: 'project-id',
+  id: 'folder-id',
   name: 'Library System',
   organizationId: 'organization-id',
   organizationName: 'Default Workspace',
   organizationSlug: 'default-workspace',
-  projectRole: ProjectRole.Owner,
+  folderRole: AccessRole.Owner,
   slug: 'library-system',
   updatedAt: new Date('2026-07-29T10:00:00.000Z'),
 };
 
-describe(ProjectService.name, () => {
+describe(FolderService.name, () => {
   const auditLogRepository = {
     create: vi.fn(),
   };
@@ -48,70 +48,70 @@ describe(ProjectService.name, () => {
     getMember: vi.fn(),
     getRole: vi.fn(),
   };
-  const projectRepository = {
+  const folderRepository = {
     archive: vi.fn(),
     create: vi.fn(),
     getByIdForUser: vi.fn(),
-    getMember: vi.fn(),
-    getMembers: vi.fn(),
-    getProjectRole: vi.fn(),
-    getProjectOwnerCount: vi.fn(),
+    getAccess: vi.fn(),
+    getAccessList: vi.fn(),
+    getAccessRole: vi.fn(),
+    getFolderOwnerCount: vi.fn(),
     getVisibleToUser: vi.fn(),
-    removeMember: vi.fn(),
+    removeAccess: vi.fn(),
     transferOwnership: vi.fn(),
     update: vi.fn(),
-    updateMember: vi.fn(),
-    upsertMember: vi.fn(),
+    updateAccess: vi.fn(),
+    upsertAccess: vi.fn(),
   };
   const userRepository = {
     getByEmail: vi.fn(),
   };
 
-  let service: ProjectService;
+  let service: FolderService;
 
   beforeEach(() => {
     vi.resetAllMocks();
-    service = new ProjectService(
+    service = new FolderService(
       auditLogRepository as never,
       organizationRepository as never,
-      projectRepository as never,
+      folderRepository as never,
       userRepository as never,
     );
 
-    projectRepository.getByIdForUser.mockResolvedValue(project);
+    folderRepository.getByIdForUser.mockResolvedValue(folder);
   });
 
-  it('blocks project updates from project viewers at the service boundary', async () => {
-    projectRepository.getByIdForUser.mockResolvedValue({
-      ...project,
-      projectRole: ProjectRole.Viewer,
+  it('blocks folder updates from folder viewers at the service boundary', async () => {
+    folderRepository.getByIdForUser.mockResolvedValue({
+      ...folder,
+      folderRole: AccessRole.Viewer,
     });
 
     await expect(
-      service.update(auth, 'project-id', {
+      service.update(auth, 'folder-id', {
         name: 'Readonly Rename',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
-    // Controller decorators are not the only protection; service callers must also respect project roles.
-    expect(projectRepository.update).not.toHaveBeenCalled();
+    // Controller decorators are not the only protection; service callers must also respect folder roles.
+    expect(folderRepository.update).not.toHaveBeenCalled();
   });
 
-  it('blocks low-scope API keys before project member management lookups', async () => {
+  it('blocks low-scope API keys before folder access management lookups', async () => {
     await expect(
-      service.addMember(authWithReadApiKey, 'project-id', {
+      service.addAccess(authWithReadApiKey, 'folder-id', {
         email: 'editor@tabliodb.local',
-        role: ProjectRole.Editor,
+        role: AccessRole.Editor,
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
-    // API-key scope is checked before loading the project so low-scope tokens cannot probe project existence.
-    expect(projectRepository.getByIdForUser).not.toHaveBeenCalled();
+    // API-key scope is checked before loading the folder so low-scope tokens cannot probe folder existence.
+    expect(folderRepository.getByIdForUser).not.toHaveBeenCalled();
     expect(userRepository.getByEmail).not.toHaveBeenCalled();
-    expect(projectRepository.upsertMember).not.toHaveBeenCalled();
+    expect(folderRepository.upsertAccess).not.toHaveBeenCalled();
   });
 
-  it('adds an existing workspace user as a project member', async () => {
+  it('adds an existing workspace user to folder access', async () => {
     userRepository.getByEmail.mockResolvedValue({
       email: 'editor@tabliodb.local',
       id: 'editor-id',
@@ -122,25 +122,25 @@ describe(ProjectService.name, () => {
       status: 'active',
       userId: 'editor-id',
     });
-    projectRepository.upsertMember.mockResolvedValue({
+    folderRepository.upsertAccess.mockResolvedValue({
       avatarUrl: null,
       cursorColor: '#58cc02',
       createdAt: new Date('2026-07-29T11:00:00.000Z'),
       email: 'editor@tabliodb.local',
       name: 'Editor User',
-      role: ProjectRole.Editor,
+      role: AccessRole.Editor,
       updatedAt: new Date('2026-07-29T11:00:00.000Z'),
       userId: 'editor-id',
     });
 
     await expect(
-      service.addMember(auth, 'project-id', {
+      service.addAccess(auth, 'folder-id', {
         email: 'editor@tabliodb.local',
-        role: ProjectRole.Editor,
+        role: AccessRole.Editor,
       }),
     ).resolves.toMatchObject({
       email: 'editor@tabliodb.local',
-      role: ProjectRole.Editor,
+      role: AccessRole.Editor,
       userId: 'editor-id',
     });
 
@@ -150,32 +150,32 @@ describe(ProjectService.name, () => {
       role: OrganizationRole.Guest,
       userId: 'editor-id',
     });
-    expect(projectRepository.upsertMember).toHaveBeenCalledWith('project-id', {
+    expect(folderRepository.upsertAccess).toHaveBeenCalledWith('folder-id', {
       createdById: 'owner-id',
-      role: ProjectRole.Editor,
+      role: AccessRole.Editor,
       userId: 'editor-id',
     });
     expect(auditLogRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: 'project.member_added',
+        action: 'folder.access_added',
         actorId: 'owner-id',
         entityId: 'editor-id',
-        entityType: 'project_member',
+        entityType: 'folder_access',
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
       }),
     );
   });
 
-  it('returns a conflict error when project slug already exists in the workspace', async () => {
+  it('returns a conflict error when folder slug already exists in the workspace', async () => {
     organizationRepository.getByIdForUser.mockResolvedValue({
-      allowMemberProjectCreate: true,
+      allowMemberFolderCreate: true,
       id: 'organization-id',
       role: OrganizationRole.Owner,
     });
-    projectRepository.create.mockRejectedValue({
+    folderRepository.create.mockRejectedValue({
       code: '23505',
-      constraint: 'projects_organization_id_slug_key',
+      constraint: 'folders_organization_id_slug_key',
     });
 
     await expect(
@@ -197,25 +197,25 @@ describe(ProjectService.name, () => {
       status: 'active',
       userId: 'outsider-id',
     });
-    projectRepository.upsertMember.mockResolvedValue({
+    folderRepository.upsertAccess.mockResolvedValue({
       avatarUrl: null,
       cursorColor: '#1cb0f6',
       createdAt: new Date('2026-07-29T11:30:00.000Z'),
       email: 'outsider@tabliodb.local',
       name: 'Outsider User',
-      role: ProjectRole.Viewer,
+      role: AccessRole.Viewer,
       updatedAt: new Date('2026-07-29T11:30:00.000Z'),
       userId: 'outsider-id',
     });
 
     await expect(
-      service.addMember(auth, 'project-id', {
+      service.addAccess(auth, 'folder-id', {
         email: 'outsider@tabliodb.local',
-        role: ProjectRole.Viewer,
+        role: AccessRole.Viewer,
       }),
     ).resolves.toMatchObject({
       email: 'outsider@tabliodb.local',
-      role: ProjectRole.Viewer,
+      role: AccessRole.Viewer,
       userId: 'outsider-id',
     });
 
@@ -226,9 +226,9 @@ describe(ProjectService.name, () => {
       role: OrganizationRole.Guest,
       userId: 'outsider-id',
     });
-    expect(projectRepository.upsertMember).toHaveBeenCalledWith('project-id', {
+    expect(folderRepository.upsertAccess).toHaveBeenCalledWith('folder-id', {
       createdById: 'owner-id',
-      role: ProjectRole.Viewer,
+      role: AccessRole.Viewer,
       userId: 'outsider-id',
     });
   });
@@ -246,69 +246,69 @@ describe(ProjectService.name, () => {
     });
 
     await expect(
-      service.addMember(auth, 'project-id', {
+      service.addAccess(auth, 'folder-id', {
         email: 'suspended@tabliodb.local',
-        role: ProjectRole.Viewer,
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
     // Existing suspended/pending workspace rows are never reactivated through lower-scope grants.
-    expect(projectRepository.upsertMember).not.toHaveBeenCalled();
+    expect(folderRepository.upsertAccess).not.toHaveBeenCalled();
   });
 
-  it('prevents demoting the last project owner', async () => {
-    projectRepository.getMember.mockResolvedValue({
-      role: ProjectRole.Owner,
+  it('prevents demoting the last folder owner', async () => {
+    folderRepository.getAccess.mockResolvedValue({
+      role: AccessRole.Owner,
       userId: 'another-owner-id',
     });
-    projectRepository.getProjectOwnerCount.mockResolvedValue(1);
+    folderRepository.getFolderOwnerCount.mockResolvedValue(1);
 
     await expect(
-      service.updateMember(auth, 'project-id', 'another-owner-id', {
-        role: ProjectRole.Editor,
+      service.updateAccess(auth, 'folder-id', 'another-owner-id', {
+        role: AccessRole.Editor,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(projectRepository.updateMember).not.toHaveBeenCalled();
+    expect(folderRepository.updateAccess).not.toHaveBeenCalled();
   });
 
-  it('prevents removing the last project owner', async () => {
-    projectRepository.getMember.mockResolvedValue({
-      role: ProjectRole.Owner,
+  it('prevents removing the last folder owner', async () => {
+    folderRepository.getAccess.mockResolvedValue({
+      role: AccessRole.Owner,
       userId: 'another-owner-id',
     });
-    projectRepository.getProjectOwnerCount.mockResolvedValue(1);
+    folderRepository.getFolderOwnerCount.mockResolvedValue(1);
 
-    await expect(service.removeMember(auth, 'project-id', 'another-owner-id')).rejects.toBeInstanceOf(
+    await expect(service.removeAccess(auth, 'folder-id', 'another-owner-id')).rejects.toBeInstanceOf(
       BadRequestException,
     );
 
-    expect(projectRepository.removeMember).not.toHaveBeenCalled();
+    expect(folderRepository.removeAccess).not.toHaveBeenCalled();
   });
 
-  it('prevents changing your own project folder access', async () => {
+  it('prevents changing your own folder access', async () => {
     await expect(
-      service.updateMember(auth, 'project-id', 'owner-id', {
-        role: ProjectRole.Viewer,
+      service.updateAccess(auth, 'folder-id', 'owner-id', {
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
     // Self-management is rejected before member lookup so an owner cannot demote and re-promote themselves.
-    expect(projectRepository.getMember).not.toHaveBeenCalled();
-    expect(projectRepository.updateMember).not.toHaveBeenCalled();
+    expect(folderRepository.getAccess).not.toHaveBeenCalled();
+    expect(folderRepository.updateAccess).not.toHaveBeenCalled();
   });
 
   it('prevents assigning folder owner through the generic member create endpoint', async () => {
     await expect(
-      service.addMember(auth, 'project-id', {
+      service.addAccess(auth, 'folder-id', {
         email: 'editor@tabliodb.local',
         // This intentionally simulates a stale/generated-client bypass attempt; Owner must only flow through transferOwnership.
-        role: ProjectRole.Owner as never,
+        role: AccessRole.Owner as never,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(userRepository.getByEmail).not.toHaveBeenCalled();
-    expect(projectRepository.upsertMember).not.toHaveBeenCalled();
+    expect(folderRepository.upsertAccess).not.toHaveBeenCalled();
   });
 
   it('prevents adding yourself through the generic folder access endpoint', async () => {
@@ -319,27 +319,27 @@ describe(ProjectService.name, () => {
     });
 
     await expect(
-      service.addMember(auth, 'project-id', {
+      service.addAccess(auth, 'folder-id', {
         email: auth.user.email,
-        role: ProjectRole.Viewer,
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
     // Folder owner/admin self role changes must stay out of the generic add/upsert path.
     expect(organizationRepository.addMemberIfAbsent).not.toHaveBeenCalled();
-    expect(projectRepository.upsertMember).not.toHaveBeenCalled();
+    expect(folderRepository.upsertAccess).not.toHaveBeenCalled();
   });
 
   it('prevents assigning folder owner through the generic member update endpoint', async () => {
     await expect(
-      service.updateMember(auth, 'project-id', 'editor-id', {
+      service.updateAccess(auth, 'folder-id', 'editor-id', {
         // Generic role edits cannot promote Owner because they would bypass the explicit transfer audit trail.
-        role: ProjectRole.Owner as never,
+        role: AccessRole.Owner as never,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(projectRepository.getMember).not.toHaveBeenCalled();
-    expect(projectRepository.updateMember).not.toHaveBeenCalled();
+    expect(folderRepository.getAccess).not.toHaveBeenCalled();
+    expect(folderRepository.updateAccess).not.toHaveBeenCalled();
   });
 
   it('transfers folder ownership to an existing active folder collaborator', async () => {
@@ -348,46 +348,46 @@ describe(ProjectService.name, () => {
       status: 'active',
       userId: 'editor-id',
     });
-    projectRepository.getProjectRole.mockResolvedValue({ role: ProjectRole.Editor });
-    projectRepository.getMember.mockResolvedValue({
-      role: ProjectRole.Editor,
+    folderRepository.getAccessRole.mockResolvedValue({ role: AccessRole.Editor });
+    folderRepository.getAccess.mockResolvedValue({
+      role: AccessRole.Editor,
       userId: 'editor-id',
     });
-    projectRepository.transferOwnership.mockResolvedValue({
+    folderRepository.transferOwnership.mockResolvedValue({
       avatarUrl: null,
       cursorColor: '#1cb0f6',
       createdAt: new Date('2026-07-29T12:00:00.000Z'),
       email: 'editor@tabliodb.local',
       name: 'Editor User',
-      role: ProjectRole.Owner,
+      role: AccessRole.Owner,
       updatedAt: new Date('2026-07-29T12:00:00.000Z'),
       userId: 'editor-id',
     });
 
     await expect(
-      service.transferOwnership(auth, 'project-id', {
+      service.transferOwnership(auth, 'folder-id', {
         userId: 'editor-id',
       }),
     ).resolves.toMatchObject({
-      role: ProjectRole.Owner,
+      role: AccessRole.Owner,
       userId: 'editor-id',
     });
 
-    expect(projectRepository.transferOwnership).toHaveBeenCalledWith('project-id', {
+    expect(folderRepository.transferOwnership).toHaveBeenCalledWith('folder-id', {
       createdById: 'owner-id',
       userId: 'editor-id',
     });
     expect(auditLogRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: 'project.member_role_updated',
+        action: 'folder.access_role_updated',
         actorId: 'owner-id',
         entityId: 'editor-id',
-        entityType: 'project_member',
+        entityType: 'folder_access',
         metadata: expect.objectContaining({
           transfer: true,
         }),
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
       }),
     );
   });
@@ -396,29 +396,29 @@ describe(ProjectService.name, () => {
     organizationRepository.getMember.mockResolvedValue(undefined);
 
     await expect(
-      service.transferOwnership(auth, 'project-id', {
+      service.transferOwnership(auth, 'folder-id', {
         userId: 'outsider-id',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(projectRepository.getProjectRole).not.toHaveBeenCalled();
-    expect(projectRepository.transferOwnership).not.toHaveBeenCalled();
+    expect(folderRepository.getAccessRole).not.toHaveBeenCalled();
+    expect(folderRepository.transferOwnership).not.toHaveBeenCalled();
   });
 
-  it('prevents removing your own project folder access', async () => {
-    await expect(service.removeMember(auth, 'project-id', 'owner-id')).rejects.toBeInstanceOf(BadRequestException);
+  it('prevents removing your own folder access', async () => {
+    await expect(service.removeAccess(auth, 'folder-id', 'owner-id')).rejects.toBeInstanceOf(BadRequestException);
 
     // Self-removal has to be an explicit transfer/leave flow, not the generic member delete endpoint.
-    expect(projectRepository.getMember).not.toHaveBeenCalled();
-    expect(projectRepository.removeMember).not.toHaveBeenCalled();
+    expect(folderRepository.getAccess).not.toHaveBeenCalled();
+    expect(folderRepository.removeAccess).not.toHaveBeenCalled();
   });
 
   it('throws not found when a target member does not exist', async () => {
-    projectRepository.getMember.mockResolvedValue(undefined);
+    folderRepository.getAccess.mockResolvedValue(undefined);
 
     await expect(
-      service.updateMember(auth, 'project-id', 'missing-user-id', {
-        role: ProjectRole.Viewer,
+      service.updateAccess(auth, 'folder-id', 'missing-user-id', {
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });

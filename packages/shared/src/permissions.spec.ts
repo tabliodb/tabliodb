@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   OrganizationRole,
   Permission,
-  ProjectRole,
+  AccessRole,
   isGranted,
   permissionsForOrganizationRole,
-  permissionsForProjectRole,
+  permissionsForAccessRole,
 } from './permissions.js';
 
 const concretePermissions = Object.values(Permission).filter((permission) => permission !== Permission.All);
@@ -33,7 +33,7 @@ describe(permissionsForOrganizationRole.name, () => {
       [
         Permission.OrganizationRead,
         Permission.OrganizationManage,
-        Permission.ProjectCreate,
+        Permission.FolderCreate,
         Permission.DiagramCreate,
         Permission.DiagramRead,
         Permission.DiagramUpdate,
@@ -48,7 +48,7 @@ describe(permissionsForOrganizationRole.name, () => {
       OrganizationRole.Member,
       [
         Permission.OrganizationRead,
-        Permission.ProjectCreate,
+        Permission.FolderCreate,
         Permission.DiagramCreate,
         Permission.DiagramRead,
         Permission.DiagramUpdate,
@@ -68,17 +68,17 @@ describe(permissionsForOrganizationRole.name, () => {
   });
 });
 
-describe(permissionsForProjectRole.name, () => {
+describe(permissionsForAccessRole.name, () => {
   it('keeps folder and diagram owner as the all-permission sentinel', () => {
-    expect(permissionsForProjectRole(ProjectRole.Owner)).toEqual([Permission.All]);
+    expect(permissionsForAccessRole(AccessRole.Owner)).toEqual([Permission.All]);
   });
 
   it.each([
     [
-      ProjectRole.Editor,
+      AccessRole.Editor,
       [
-        Permission.ProjectRead,
-        Permission.ProjectUpdate,
+        Permission.FolderRead,
+        Permission.FolderUpdate,
         Permission.DiagramCreate,
         Permission.DiagramRead,
         Permission.DiagramUpdate,
@@ -89,15 +89,15 @@ describe(permissionsForProjectRole.name, () => {
       ],
     ],
     [
-      ProjectRole.Commenter,
-      [Permission.ProjectRead, Permission.DiagramRead, Permission.DiagramComment, Permission.SnapshotRead],
+      AccessRole.Commenter,
+      [Permission.FolderRead, Permission.DiagramRead, Permission.DiagramComment, Permission.SnapshotRead],
     ],
-    [ProjectRole.Viewer, [Permission.ProjectRead, Permission.DiagramRead, Permission.SnapshotRead]],
+    [AccessRole.Viewer, [Permission.FolderRead, Permission.DiagramRead, Permission.SnapshotRead]],
   ])('grants the expected folder/diagram permissions for %s', (role, allowed) => {
     expectPermissionMatrix({
       allowed,
-      current: permissionsForProjectRole(role),
-      label: `project:${role}`,
+      current: permissionsForAccessRole(role),
+      label: `folder:${role}`,
     });
   });
 });
@@ -106,8 +106,8 @@ describe(isGranted.name, () => {
   it('requires every requested permission to be present', () => {
     expect(
       isGranted({
-        current: [Permission.ProjectRead],
-        requested: [Permission.ProjectRead, Permission.ProjectUpdate],
+        current: [Permission.FolderRead],
+        requested: [Permission.FolderRead, Permission.FolderUpdate],
       }),
     ).toBe(false);
   });

@@ -12,7 +12,7 @@ export const teamsKeys = {
   diagramAccessesRoot: (teamId: string) => [...teamsKeys.all, 'diagram-accesses', teamId] as const,
   diagramAccesses: (teamId: string, query: PaginationQuery = {}) =>
     [...teamsKeys.diagramAccessesRoot(teamId), query] as const,
-  projectAccessesRoot: (teamId: string) => [...teamsKeys.all, 'project-accesses', teamId] as const,
-  projectAccesses: (teamId: string, query: PaginationQuery = {}) =>
-    [...teamsKeys.projectAccessesRoot(teamId), query] as const,
+  folderAccessesRoot: (teamId: string) => [...teamsKeys.all, 'folder-accesses', teamId] as const,
+  folderAccesses: (teamId: string, query: PaginationQuery = {}) =>
+    [...teamsKeys.folderAccessesRoot(teamId), query] as const,
 };

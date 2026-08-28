@@ -3,7 +3,7 @@ import type { AuthContext } from '../database.js';
 import { CurrentUserEditorPreferenceDto, CurrentUserEditorPreferenceUpdateDto } from '../dtos/auth.dto.js';
 import { DiagramRepository } from '../repositories/diagram.repository.js';
 import { OrganizationRepository } from '../repositories/organization.repository.js';
-import { ProjectRepository } from '../repositories/project.repository.js';
+import { FolderRepository } from '../repositories/folder.repository.js';
 import { UserPreferenceRepository } from '../repositories/user-preference.repository.js';
 import { toIsoDateTime } from '../utils/date-time.js';
 
@@ -17,7 +17,7 @@ type ResolvedEditorPreferenceTarget = {
     name: string;
     slug: string;
   };
-  project: {
+  folder: {
     id: string;
     name: string;
     organizationId: string;
@@ -29,7 +29,7 @@ export class UserPreferenceService {
   constructor(
     private readonly diagramRepository: DiagramRepository,
     private readonly organizationRepository: OrganizationRepository,
-    private readonly projectRepository: ProjectRepository,
+    private readonly folderRepository: FolderRepository,
     private readonly userPreferenceRepository: UserPreferenceRepository,
   ) {}
 
@@ -43,7 +43,7 @@ export class UserPreferenceService {
     const target = await this.resolveEditorPreferenceTarget(auth, {
       diagramId: preference.lastOpenedDiagramId,
       organizationId: preference.lastOpenedOrganizationId,
-      projectId: preference.lastOpenedProjectId,
+      folderId: preference.lastOpenedFolderId,
     });
 
     if (!target) {
@@ -62,7 +62,7 @@ export class UserPreferenceService {
     const target = await this.resolveEditorPreferenceTarget(auth, {
       diagramId: dto.diagramId ?? null,
       organizationId: dto.organizationId,
-      projectId: dto.projectId ?? null,
+      folderId: dto.folderId ?? null,
     });
 
     if (!target) {
@@ -72,7 +72,7 @@ export class UserPreferenceService {
     const preference = await this.userPreferenceRepository.upsertEditorPreference(auth.user.id, {
       lastOpenedDiagramId: target.diagram?.id ?? null,
       lastOpenedOrganizationId: target.organization.id,
-      lastOpenedProjectId: target.project?.id ?? null,
+      lastOpenedFolderId: target.folder?.id ?? null,
     });
 
     if (!preference) {
@@ -87,7 +87,7 @@ export class UserPreferenceService {
     input: {
       diagramId: string | null;
       organizationId: string;
-      projectId: string | null;
+      folderId: string | null;
     },
   ): Promise<ResolvedEditorPreferenceTarget | null> {
     const organization = await this.organizationRepository.getSettingsForUser(auth.user.id, input.organizationId);
@@ -95,18 +95,18 @@ export class UserPreferenceService {
       return null;
     }
 
-    if (!input.projectId && !input.diagramId) {
+    if (!input.folderId && !input.diagramId) {
       return {
         diagram: null,
         organization,
-        project: null,
+        folder: null,
       };
     }
 
-    const project = input.projectId
-      ? ((await this.projectRepository.getByIdForUser(auth.user.id, input.projectId)) ?? null)
+    const folder = input.folderId
+      ? ((await this.folderRepository.getByIdForUser(auth.user.id, input.folderId)) ?? null)
       : null;
-    if (input.projectId && (!project || project.organizationId !== organization.id)) {
+    if (input.folderId && (!folder || folder.organizationId !== organization.id)) {
       return null;
     }
 
@@ -114,28 +114,28 @@ export class UserPreferenceService {
       return {
         diagram: null,
         organization,
-        project,
+        folder,
       };
     }
 
     const [diagram, diagramRole] = await Promise.all([
       this.diagramRepository.getById(input.diagramId),
-      this.projectRepository.getDiagramRole(auth.user.id, input.diagramId),
+      this.folderRepository.getDiagramRole(auth.user.id, input.diagramId),
     ]);
 
     if (!diagram || !diagramRole || diagram.organizationId !== organization.id) {
       return null;
     }
 
-    if (input.projectId && diagram.projectId !== input.projectId) {
+    if (input.folderId && diagram.folderId !== input.folderId) {
       return null;
     }
 
     return {
       diagram,
       organization,
-      // Root diagrams intentionally persist a null project so the next visit can route workspace -> diagram directly.
-      project,
+      // Root diagrams intentionally persist a null folder so the next visit can route workspace -> diagram directly.
+      folder,
     };
   }
 }
@@ -146,8 +146,8 @@ function createEmptyEditorPreference(): CurrentUserEditorPreferenceDto {
     diagramName: null,
     organizationId: null,
     organizationName: null,
-    projectId: null,
-    projectName: null,
+    folderId: null,
+    folderName: null,
     updatedAt: null,
     workspaceSlug: null,
   };
@@ -162,8 +162,8 @@ function serializeEditorPreferenceTarget(
     diagramName: target.diagram?.name ?? null,
     organizationId: target.organization.id,
     organizationName: target.organization.name,
-    projectId: target.project?.id ?? null,
-    projectName: target.project?.name ?? null,
+    folderId: target.folder?.id ?? null,
+    folderName: target.folder?.name ?? null,
     updatedAt: toIsoDateTime(updatedAt),
     workspaceSlug: target.organization.slug,
   };

@@ -1,5 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, AccessRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { PermissionService } from './permission.service.js';
@@ -19,31 +19,31 @@ describe(PermissionService.name, () => {
   const organizationRepository = {
     getRole: vi.fn(),
   };
-  const projectRepository = {
+  const folderRepository = {
     getDiagramRole: vi.fn(),
-    getProjectRole: vi.fn(),
+    getAccessRole: vi.fn(),
   };
 
   let service: PermissionService;
 
   beforeEach(() => {
     vi.resetAllMocks();
-    service = new PermissionService(organizationRepository as never, projectRepository as never);
+    service = new PermissionService(organizationRepository as never, folderRepository as never);
   });
 
-  it('allows a project editor to create diagrams in that project', async () => {
-    projectRepository.getProjectRole.mockResolvedValue({ role: ProjectRole.Editor });
+  it('allows a folder editor to create diagrams in that folder', async () => {
+    folderRepository.getAccessRole.mockResolvedValue({ role: AccessRole.Editor });
 
     await expect(
       service.assertAllowed(auth, {
         permission: Permission.DiagramCreate,
-        target: { id: 'project-id', type: 'project' },
+        target: { id: 'folder-id', type: 'folder' },
       }),
     ).resolves.toBeUndefined();
   });
 
-  it('blocks a project viewer from creating snapshots', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+  it('blocks a folder viewer from creating snapshots', async () => {
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Viewer });
 
     await expect(
       service.assertAllowed(auth, {
@@ -53,13 +53,13 @@ describe(PermissionService.name, () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('hides missing project membership as not found', async () => {
-    projectRepository.getProjectRole.mockResolvedValue(undefined);
+  it('hides missing folder access grantship as not found', async () => {
+    folderRepository.getAccessRole.mockResolvedValue(undefined);
 
     await expect(
       service.assertAllowed(auth, {
-        permission: Permission.ProjectRead,
-        target: { id: 'project-id', type: 'project' },
+        permission: Permission.FolderRead,
+        target: { id: 'folder-id', type: 'folder' },
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -86,24 +86,24 @@ describe(PermissionService.name, () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('checks API key scope before project membership lookup', async () => {
+  it('checks API key scope before folder access grantship lookup', async () => {
     await expect(
       service.assertAllowed(
         {
           ...auth,
           apiKey: {
             id: 'api-key-id',
-            permissions: [Permission.ProjectRead],
+            permissions: [Permission.FolderRead],
           },
         },
         {
           permission: Permission.DiagramCreate,
-          target: { id: 'project-id', type: 'project' },
+          target: { id: 'folder-id', type: 'folder' },
         },
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
-    // Scope failure exits before DB lookup so limited API keys cannot probe whether a project exists.
-    expect(projectRepository.getProjectRole).not.toHaveBeenCalled();
+    // Scope failure exits before DB lookup so limited API keys cannot probe whether a folder exists.
+    expect(folderRepository.getAccessRole).not.toHaveBeenCalled();
   });
 });

@@ -24,7 +24,7 @@ const NotificationUserSchema = z.object({
   name: z.string(),
 });
 
-const NotificationProjectSchema = z.object({
+const NotificationFolderSchema = z.object({
   id: z.uuid(),
   name: z.string(),
   organizationId: z.uuid(),
@@ -87,7 +87,7 @@ const NotificationInboxItemSchema = z
     id: z.string(),
     isUnread: z.boolean(),
     parentComment: NotificationParentCommentSchema,
-    project: NotificationProjectSchema.nullable(),
+    folder: NotificationFolderSchema.nullable(),
     thread: NotificationThreadSchema,
     type: z.enum(['mention', 'reply']),
     workspace: NotificationWorkspaceSchema,

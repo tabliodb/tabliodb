@@ -12,7 +12,7 @@ import {
   type SmtpSettingsUpdateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
-import { projectsKeys } from '@/resources/projects';
+import { foldersKeys } from '@/resources/folders';
 import { setupKeys } from './setup.keys';
 
 const completeSetupMutationFn = async (body: SetupCreateDto) => {
@@ -56,7 +56,7 @@ export function useCompleteSetupMutation(params: UseCompleteSetupMutationParams 
       await activatePreparedSessionBinding();
       // Setup response sudah membawa status terbaru, jadi cache setup bisa langsung akurat tanpa menunggu refetch.
       queryClient.setQueryData(setupKeys.status(), data.setup);
-      queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.all });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

@@ -8,19 +8,19 @@ describe(sanitizeRequestPath.name, () => {
   });
 
   it('redacts sensitive query values without hiding safe filters', () => {
-    expect(sanitizeRequestPath('/api/projects?apiKey=secret&cursor=page-2&refreshToken=raw&sessionkey=local')).toBe(
-      '/api/projects?apiKey=%5Bredacted%5D&cursor=page-2&refreshToken=%5Bredacted%5D&sessionkey=%5Bredacted%5D',
+    expect(sanitizeRequestPath('/api/folders?apiKey=secret&cursor=page-2&refreshToken=raw&sessionkey=local')).toBe(
+      '/api/folders?apiKey=%5Bredacted%5D&cursor=page-2&refreshToken=%5Bredacted%5D&sessionkey=%5Bredacted%5D',
     );
   });
 
   it('uses express route patterns for low-cardinality metrics', () => {
     expect(
       getRequestRoutePattern({
-        originalUrl: '/api/projects/project-id/diagrams?cursor=next-token',
+        originalUrl: '/api/folders/folder-id/diagrams?cursor=next-token',
         route: {
-          path: '/api/projects/:projectId/diagrams',
+          path: '/api/folders/:folderId/diagrams',
         },
       }),
-    ).toBe('/api/projects/:projectId/diagrams');
+    ).toBe('/api/folders/:folderId/diagrams');
   });
 });

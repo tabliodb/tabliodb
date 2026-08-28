@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { createStarterDiagramModel, encodeDiagramModelAsYjsUpdate } from '@tabliodb/schema-core';
-import { OrganizationRole, Permission, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, Permission, AccessRole } from '@tabliodb/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../database.js';
 import { DiagramService } from './diagram.service.js';
@@ -24,15 +24,15 @@ const authWithReadApiKey: AuthContext = {
   },
 };
 
-const project = {
+const folder = {
   createdAt: new Date('2026-07-29T10:00:00.000Z'),
   description: null,
-  id: 'project-id',
+  id: 'folder-id',
   name: 'Library System',
   organizationId: 'organization-id',
   organizationName: 'Default Workspace',
   organizationSlug: 'default-workspace',
-  projectRole: ProjectRole.Editor,
+  folderRole: AccessRole.Editor,
   slug: 'library-system',
   updatedAt: new Date('2026-07-29T10:00:00.000Z'),
 };
@@ -47,7 +47,7 @@ const diagram = {
   lastSnapshotVersion: 0,
   name: 'Main schema',
   organizationId: 'organization-id',
-  projectId: 'project-id',
+  folderId: 'folder-id',
   reviewSettings: { disabledRuleKeys: [] },
   slug: null,
   status: 'draft',
@@ -66,7 +66,7 @@ describe(DiagramService.name, () => {
     getById: vi.fn(),
     getEffectiveAccess: vi.fn(),
     getByOrganization: vi.fn(),
-    getByProject: vi.fn(),
+    getByFolder: vi.fn(),
     getDiagramOwnerCount: vi.fn(),
     getMember: vi.fn(),
     replaceDocumentModel: vi.fn(),
@@ -82,7 +82,7 @@ describe(DiagramService.name, () => {
     getMember: vi.fn(),
     getRole: vi.fn(),
   };
-  const projectRepository = {
+  const folderRepository = {
     create: vi.fn(),
     getActiveBySlugInOrganization: vi.fn(),
     getByIdForUser: vi.fn(),
@@ -107,16 +107,16 @@ describe(DiagramService.name, () => {
       collaborationRepository as never,
       diagramRepository as never,
       organizationRepository as never,
-      projectRepository as never,
+      folderRepository as never,
       reviewSignalRepository as never,
       userRepository as never,
     );
   });
 
-  it('blocks a project viewer from creating diagrams', async () => {
-    projectRepository.getByIdForUser.mockResolvedValue({
-      ...project,
-      projectRole: ProjectRole.Viewer,
+  it('blocks a folder viewer from creating diagrams', async () => {
+    folderRepository.getByIdForUser.mockResolvedValue({
+      ...folder,
+      folderRole: AccessRole.Viewer,
     });
 
     await expect(
@@ -124,7 +124,7 @@ describe(DiagramService.name, () => {
         dialect: 'postgresql',
         name: 'Read only schema',
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
@@ -132,8 +132,8 @@ describe(DiagramService.name, () => {
     expect(diagramRepository.create).not.toHaveBeenCalled();
   });
 
-  it('allows a project editor to create diagrams', async () => {
-    projectRepository.getByIdForUser.mockResolvedValue(project);
+  it('allows a folder editor to create diagrams', async () => {
+    folderRepository.getByIdForUser.mockResolvedValue(folder);
     diagramRepository.create.mockResolvedValue(diagram);
 
     await expect(
@@ -141,12 +141,12 @@ describe(DiagramService.name, () => {
         dialect: 'postgresql',
         name: 'Main schema',
         organizationId: 'organization-id',
-        projectId: 'project-id',
+        folderId: 'folder-id',
       }),
     ).resolves.toMatchObject({
       id: 'diagram-id',
       name: 'Main schema',
-      projectId: 'project-id',
+      folderId: 'folder-id',
     });
   });
 
@@ -154,7 +154,7 @@ describe(DiagramService.name, () => {
     organizationRepository.getRole.mockResolvedValue({ role: 'member' });
     diagramRepository.create.mockResolvedValue({
       ...diagram,
-      projectId: null,
+      folderId: null,
     });
 
     await expect(
@@ -165,15 +165,15 @@ describe(DiagramService.name, () => {
     ).resolves.toMatchObject({
       name: 'Main schema',
       organizationId: 'organization-id',
-      projectId: null,
+      folderId: null,
     });
 
-    expect(projectRepository.create).not.toHaveBeenCalled();
+    expect(folderRepository.create).not.toHaveBeenCalled();
     expect(diagramRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Inventory ERD',
         organizationId: 'organization-id',
-        projectId: null,
+        folderId: null,
       }),
     );
   });
@@ -188,12 +188,12 @@ describe(DiagramService.name, () => {
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
-    expect(projectRepository.create).not.toHaveBeenCalled();
+    expect(folderRepository.create).not.toHaveBeenCalled();
     expect(diagramRepository.create).not.toHaveBeenCalled();
   });
 
-  it('blocks a project viewer from update-class diagram permissions', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+  it('blocks a folder viewer from update-class diagram permissions', async () => {
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Viewer });
 
     await expect(service.requireDiagram(auth, 'diagram-id', Permission.SnapshotCreate)).rejects.toBeInstanceOf(
       ForbiddenException,
@@ -203,8 +203,8 @@ describe(DiagramService.name, () => {
     expect(diagramRepository.getById).not.toHaveBeenCalled();
   });
 
-  it('allows a project editor to use update-class diagram permissions', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+  it('allows a folder editor to use update-class diagram permissions', async () => {
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
     diagramRepository.getById.mockResolvedValue(diagram);
 
     await expect(service.requireDiagram(auth, 'diagram-id', Permission.SnapshotCreate)).resolves.toMatchObject({
@@ -213,7 +213,7 @@ describe(DiagramService.name, () => {
   });
 
   it('blocks API keys without the requested diagram scope even when the owning user can edit', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
 
     await expect(
       service.requireDiagram(authWithReadApiKey, 'diagram-id', Permission.SnapshotCreate),
@@ -223,8 +223,8 @@ describe(DiagramService.name, () => {
     expect(diagramRepository.getById).not.toHaveBeenCalled();
   });
 
-  it('allows API keys when both token scope and project role satisfy the requested diagram permission', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+  it('allows API keys when both token scope and folder role satisfy the requested diagram permission', async () => {
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Viewer });
     diagramRepository.getById.mockResolvedValue(diagram);
 
     await expect(
@@ -235,7 +235,7 @@ describe(DiagramService.name, () => {
   });
 
   it('returns effective diagram access after checking manage permission', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
     diagramRepository.getEffectiveAccess.mockResolvedValue({
       items: [
@@ -243,14 +243,14 @@ describe(DiagramService.name, () => {
           accessType: 'mixed',
           avatarUrl: null,
           cursorColor: '#58cc02',
-          directRole: ProjectRole.Viewer,
+          directRole: AccessRole.Viewer,
           email: 'member@tabliodb.local',
           name: 'Member User',
-          role: ProjectRole.Editor,
+          role: AccessRole.Editor,
           sources: [
             {
               inherited: false,
-              role: ProjectRole.Viewer,
+              role: AccessRole.Viewer,
               sourceId: 'diagram-id',
               sourceLabel: 'Direct access',
               sourceName: 'Main schema',
@@ -258,8 +258,8 @@ describe(DiagramService.name, () => {
             },
             {
               inherited: true,
-              role: ProjectRole.Editor,
-              sourceId: 'project-id',
+              role: AccessRole.Editor,
+              sourceId: 'folder-id',
               sourceLabel: 'Folder: Library System',
               sourceName: 'Library System',
               sourceType: 'folder',
@@ -276,8 +276,8 @@ describe(DiagramService.name, () => {
       items: [
         {
           accessType: 'mixed',
-          directRole: ProjectRole.Viewer,
-          role: ProjectRole.Editor,
+          directRole: AccessRole.Viewer,
+          role: AccessRole.Editor,
           sources: [{ sourceLabel: 'Direct access' }, { sourceLabel: 'Folder: Library System' }],
         },
       ],
@@ -288,12 +288,12 @@ describe(DiagramService.name, () => {
   });
 
   it('prevents changing your own direct diagram access', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
 
     await expect(
       service.updateMember(auth, 'diagram-id', 'user-id', {
-        role: ProjectRole.Viewer,
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -303,12 +303,12 @@ describe(DiagramService.name, () => {
   });
 
   it('prevents assigning diagram owner through the generic member update endpoint', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
 
     await expect(
       service.updateMember(auth, 'diagram-id', 'target-user-id', {
-        role: ProjectRole.Owner,
+        role: AccessRole.Owner,
       } as never),
     ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -318,13 +318,13 @@ describe(DiagramService.name, () => {
   });
 
   it('prevents assigning diagram owner through the generic member create endpoint', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
 
     await expect(
       service.addMember(auth, 'diagram-id', {
         email: 'target@tabliodb.local',
-        role: ProjectRole.Owner,
+        role: AccessRole.Owner,
       } as never),
     ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -334,7 +334,7 @@ describe(DiagramService.name, () => {
   });
 
   it('anchors an existing user as a workspace guest before adding direct diagram access', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
     userRepository.getByEmail.mockResolvedValue({
       email: 'viewer@tabliodb.local',
@@ -353,7 +353,7 @@ describe(DiagramService.name, () => {
       cursorColor: '#1cb0f6',
       email: 'viewer@tabliodb.local',
       name: 'Viewer User',
-      role: ProjectRole.Viewer,
+      role: AccessRole.Viewer,
       updatedAt: new Date('2026-07-29T11:45:00.000Z'),
       userId: 'viewer-id',
     });
@@ -361,11 +361,11 @@ describe(DiagramService.name, () => {
     await expect(
       service.addMember(auth, 'diagram-id', {
         email: 'viewer@tabliodb.local',
-        role: ProjectRole.Viewer,
+        role: AccessRole.Viewer,
       }),
     ).resolves.toMatchObject({
       email: 'viewer@tabliodb.local',
-      role: ProjectRole.Viewer,
+      role: AccessRole.Viewer,
       userId: 'viewer-id',
     });
 
@@ -377,13 +377,13 @@ describe(DiagramService.name, () => {
     });
     expect(diagramRepository.upsertMember).toHaveBeenCalledWith('diagram-id', {
       createdById: 'user-id',
-      role: ProjectRole.Viewer,
+      role: AccessRole.Viewer,
       userId: 'viewer-id',
     });
   });
 
   it('rejects adding suspended workspace users to direct diagram access', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
     userRepository.getByEmail.mockResolvedValue({
       email: 'suspended@tabliodb.local',
@@ -399,7 +399,7 @@ describe(DiagramService.name, () => {
     await expect(
       service.addMember(auth, 'diagram-id', {
         email: 'suspended@tabliodb.local',
-        role: ProjectRole.Viewer,
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -408,7 +408,7 @@ describe(DiagramService.name, () => {
   });
 
   it('prevents adding yourself through the generic direct diagram access endpoint', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
     userRepository.getByEmail.mockResolvedValue({
       email: auth.user.email,
@@ -419,7 +419,7 @@ describe(DiagramService.name, () => {
     await expect(
       service.addMember(auth, 'diagram-id', {
         email: auth.user.email,
-        role: ProjectRole.Viewer,
+        role: AccessRole.Viewer,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -429,7 +429,7 @@ describe(DiagramService.name, () => {
   });
 
   it('prevents transferring diagram ownership to yourself', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
 
     await expect(
@@ -444,8 +444,8 @@ describe(DiagramService.name, () => {
   });
 
   it('prevents transferring diagram ownership to a user without diagram access', async () => {
-    projectRepository.getDiagramRole
-      .mockResolvedValueOnce({ role: ProjectRole.Owner })
+    folderRepository.getDiagramRole
+      .mockResolvedValueOnce({ role: AccessRole.Owner })
       .mockResolvedValueOnce(undefined);
     diagramRepository.getById.mockResolvedValue(diagram);
     organizationRepository.getMember.mockResolvedValue({
@@ -464,9 +464,9 @@ describe(DiagramService.name, () => {
   });
 
   it('transfers diagram ownership to an existing collaborator', async () => {
-    projectRepository.getDiagramRole
-      .mockResolvedValueOnce({ role: ProjectRole.Owner })
-      .mockResolvedValueOnce({ role: ProjectRole.Viewer });
+    folderRepository.getDiagramRole
+      .mockResolvedValueOnce({ role: AccessRole.Owner })
+      .mockResolvedValueOnce({ role: AccessRole.Viewer });
     diagramRepository.getById.mockResolvedValue(diagram);
     organizationRepository.getMember.mockResolvedValue({
       status: 'active',
@@ -478,7 +478,7 @@ describe(DiagramService.name, () => {
       cursorColor: '#1cb0f6',
       email: 'target@tabliodb.local',
       name: 'Target User',
-      role: ProjectRole.Viewer,
+      role: AccessRole.Viewer,
       updatedAt: new Date('2026-07-29T11:30:00.000Z'),
       userId: 'target-user-id',
     });
@@ -488,7 +488,7 @@ describe(DiagramService.name, () => {
       cursorColor: '#1cb0f6',
       email: 'target@tabliodb.local',
       name: 'Target User',
-      role: ProjectRole.Owner,
+      role: AccessRole.Owner,
       updatedAt: new Date('2026-07-29T12:00:00.000Z'),
       userId: 'target-user-id',
     });
@@ -499,7 +499,7 @@ describe(DiagramService.name, () => {
       }),
     ).resolves.toMatchObject({
       email: 'target@tabliodb.local',
-      role: ProjectRole.Owner,
+      role: AccessRole.Owner,
       updatedAt: '2026-07-29T12:00:00.000Z',
     });
 
@@ -513,8 +513,8 @@ describe(DiagramService.name, () => {
         entityId: 'target-user-id',
         metadata: expect.objectContaining({
           role: {
-            after: ProjectRole.Owner,
-            before: ProjectRole.Viewer,
+            after: AccessRole.Owner,
+            before: AccessRole.Viewer,
           },
           transfer: true,
         }),
@@ -523,7 +523,7 @@ describe(DiagramService.name, () => {
   });
 
   it('prevents removing your own direct diagram access', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Owner });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Owner });
     diagramRepository.getById.mockResolvedValue(diagram);
 
     await expect(service.removeMember(auth, 'diagram-id', 'user-id')).rejects.toBeInstanceOf(BadRequestException);
@@ -537,12 +537,12 @@ describe(DiagramService.name, () => {
     await expect(service.update(auth, 'diagram-id', {})).rejects.toBeInstanceOf(BadRequestException);
 
     // Empty updates are rejected before permission lookup so the API returns a precise client error.
-    expect(projectRepository.getDiagramRole).not.toHaveBeenCalled();
+    expect(folderRepository.getDiagramRole).not.toHaveBeenCalled();
     expect(diagramRepository.update).not.toHaveBeenCalled();
   });
 
-  it('blocks a project viewer from updating diagram settings', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+  it('blocks a folder viewer from updating diagram settings', async () => {
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Viewer });
 
     await expect(
       service.update(auth, 'diagram-id', {
@@ -554,8 +554,8 @@ describe(DiagramService.name, () => {
     expect(diagramRepository.update).not.toHaveBeenCalled();
   });
 
-  it('allows a project editor to update diagram settings', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+  it('allows a folder editor to update diagram settings', async () => {
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
     diagramRepository.getById.mockResolvedValue(diagram);
     diagramRepository.update.mockResolvedValue({
       ...diagram,
@@ -583,77 +583,77 @@ describe(DiagramService.name, () => {
   });
 
   it('allows a diagram editor to move a diagram into an accessible folder', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
     diagramRepository.getById.mockResolvedValue({
       ...diagram,
-      projectId: null,
+      folderId: null,
     });
-    projectRepository.getByIdForUser.mockResolvedValue({
-      ...project,
-      id: 'target-project-id',
+    folderRepository.getByIdForUser.mockResolvedValue({
+      ...folder,
+      id: 'target-folder-id',
       slug: 'target-folder',
     });
     diagramRepository.update.mockResolvedValue({
       ...diagram,
-      projectId: 'target-project-id',
+      folderId: 'target-folder-id',
       updatedAt: new Date('2026-07-29T12:15:00.000Z'),
     });
 
     await expect(
       service.update(auth, 'diagram-id', {
-        projectId: 'target-project-id',
+        folderId: 'target-folder-id',
       }),
     ).resolves.toMatchObject({
       id: 'diagram-id',
-      projectId: 'target-project-id',
+      folderId: 'target-folder-id',
       updatedAt: '2026-07-29T12:15:00.000Z',
     });
 
     // Destination folder access is checked before the diagram row is moved.
-    expect(projectRepository.getByIdForUser).toHaveBeenCalledWith('user-id', 'target-project-id');
+    expect(folderRepository.getByIdForUser).toHaveBeenCalledWith('user-id', 'target-folder-id');
     expect(diagramRepository.update).toHaveBeenCalledWith('diagram-id', {
-      projectId: 'target-project-id',
+      folderId: 'target-folder-id',
     });
   });
 
   it('allows a diagram editor to move a diagram back to the workspace root when the workspace permits creation', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
     diagramRepository.getById.mockResolvedValue(diagram);
     organizationRepository.getRole.mockResolvedValue({ role: 'member' });
     diagramRepository.update.mockResolvedValue({
       ...diagram,
-      projectId: null,
+      folderId: null,
       updatedAt: new Date('2026-07-29T12:20:00.000Z'),
     });
 
     await expect(
       service.update(auth, 'diagram-id', {
-        projectId: null,
+        folderId: null,
       }),
     ).resolves.toMatchObject({
       id: 'diagram-id',
-      projectId: null,
+      folderId: null,
     });
 
     // Root moves use workspace-level diagram creation permission because there is no destination folder role.
     expect(organizationRepository.getRole).toHaveBeenCalledWith('user-id', 'organization-id');
     expect(diagramRepository.update).toHaveBeenCalledWith('diagram-id', {
-      projectId: null,
+      folderId: null,
     });
   });
 
   it('blocks moving a diagram into a folder from another workspace or without access', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
     diagramRepository.getById.mockResolvedValue(diagram);
-    projectRepository.getByIdForUser.mockResolvedValue({
-      ...project,
-      id: 'foreign-project-id',
+    folderRepository.getByIdForUser.mockResolvedValue({
+      ...folder,
+      id: 'foreign-folder-id',
       organizationId: 'other-organization-id',
     });
 
     await expect(
       service.update(auth, 'diagram-id', {
-        projectId: 'foreign-project-id',
+        folderId: 'foreign-folder-id',
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
 
@@ -661,9 +661,9 @@ describe(DiagramService.name, () => {
     expect(diagramRepository.update).not.toHaveBeenCalled();
   });
 
-  it('allows a project viewer to export a diagram as SQL', async () => {
+  it('allows a folder viewer to export a diagram as SQL', async () => {
     const model = createStarterDiagramModel('Library System', 'postgresql');
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Viewer });
     diagramRepository.getById.mockResolvedValue(diagram);
     collaborationRepository.loadDocument.mockResolvedValue(encodeDiagramModelAsYjsUpdate(model));
 
@@ -679,10 +679,10 @@ describe(DiagramService.name, () => {
     expect(response.content).toContain('CREATE TABLE');
   });
 
-  it('allows a project viewer to export a diagram as Mermaid ERD', async () => {
+  it('allows a folder viewer to export a diagram as Mermaid ERD', async () => {
     const model = createStarterDiagramModel('Library System', 'postgresql');
 
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Viewer });
     diagramRepository.getById.mockResolvedValue(diagram);
     collaborationRepository.loadDocument.mockResolvedValue(encodeDiagramModelAsYjsUpdate(model));
 
@@ -699,8 +699,8 @@ describe(DiagramService.name, () => {
     expect(response.content).toContain('USERS ||--o{ BORROWINGS');
   });
 
-  it('blocks a project viewer from importing a diagram', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Viewer });
+  it('blocks a folder viewer from importing a diagram', async () => {
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Viewer });
 
     await expect(
       service.importDiagram(auth, 'diagram-id', {
@@ -714,8 +714,8 @@ describe(DiagramService.name, () => {
     expect(reviewSignalRepository.syncGeneratedSignals).not.toHaveBeenCalled();
   });
 
-  it('allows a project editor to import SQL into a diagram draft', async () => {
-    projectRepository.getDiagramRole.mockResolvedValue({ role: ProjectRole.Editor });
+  it('allows a folder editor to import SQL into a diagram draft', async () => {
+    folderRepository.getDiagramRole.mockResolvedValue({ role: AccessRole.Editor });
     diagramRepository.getById.mockResolvedValue(diagram);
     diagramRepository.replaceDocumentModel.mockResolvedValue({
       ...diagram,

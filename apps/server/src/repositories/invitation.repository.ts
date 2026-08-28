@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, AccessRole } from '@tabliodb/shared';
 import { Insertable, Kysely, type Transaction } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { DB, InvitationTable } from '../schema/index.js';
@@ -17,15 +17,15 @@ export type InvitationRecord = {
   invitedByName: string;
   diagramId: string | null;
   diagramName: string | null;
-  diagramRole: ProjectRole | null;
+  diagramRole: AccessRole | null;
   message: string | null;
   organizationId: string;
   organizationName: string;
   organizationRole: OrganizationRole.Admin | OrganizationRole.Member | OrganizationRole.Guest;
   organizationSlug: string;
-  projectId: string | null;
-  projectName: string | null;
-  projectRole: ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer | null;
+  folderId: string | null;
+  folderName: string | null;
+  folderRole: AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer | null;
   revokedAt: Date | string | null;
 };
 
@@ -96,13 +96,13 @@ export class InvitationRepository {
         })
         .execute();
 
-      if (invitation.projectId && invitation.projectRole) {
+      if (invitation.folderId && invitation.folderRole) {
         await tx
-          .insertInto('project_members')
+          .insertInto('folder_access')
           .values({
             createdById: invitation.invitedById,
-            projectId: invitation.projectId,
-            role: invitation.projectRole,
+            folderId: invitation.folderId,
+            role: invitation.folderRole,
             userId: user.id,
           })
           .execute();
@@ -156,7 +156,7 @@ export class InvitationRepository {
       .selectFrom('invitations')
       .innerJoin('organizations', 'organizations.id', 'invitations.organizationId')
       .innerJoin('users as invited_by', 'invited_by.id', 'invitations.invitedById')
-      .leftJoin('projects', 'projects.id', 'invitations.projectId')
+      .leftJoin('folders', 'folders.id', 'invitations.folderId')
       .leftJoin('diagrams', 'diagrams.id', 'invitations.diagramId')
       .select([
         'invitations.id',
@@ -165,9 +165,9 @@ export class InvitationRepository {
         'organizations.name as organizationName',
         'organizations.slug as organizationSlug',
         'invitations.organizationRole',
-        'invitations.projectId',
-        'projects.name as projectName',
-        'invitations.projectRole',
+        'invitations.folderId',
+        'folders.name as folderName',
+        'invitations.folderRole',
         'invitations.diagramId',
         'diagrams.name as diagramName',
         'invitations.diagramRole',
@@ -193,23 +193,23 @@ export class InvitationRepository {
     invitedByName: string;
     diagramId: string | null;
     diagramName: string | null;
-    diagramRole: ProjectRole | string | null;
+    diagramRole: AccessRole | string | null;
     message: string | null;
     organizationId: string;
     organizationName: string;
     organizationRole: string;
     organizationSlug: string;
-    projectId: string | null;
-    projectName: string | null;
-    projectRole: ProjectRole | string | null;
+    folderId: string | null;
+    folderName: string | null;
+    folderRole: AccessRole | string | null;
     revokedAt: Date | string | null;
   }): InvitationRecord {
     return {
       ...row,
       // Database check constraint menjaga value role; cast ini mengangkat text DB menjadi union domain untuk service/DTO.
       organizationRole: row.organizationRole as OrganizationRole.Admin | OrganizationRole.Member | OrganizationRole.Guest,
-      diagramRole: row.diagramRole as ProjectRole | null,
-      projectRole: row.projectRole as ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer | null,
+      diagramRole: row.diagramRole as AccessRole | null,
+      folderRole: row.folderRole as AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer | null,
     };
   }
 }

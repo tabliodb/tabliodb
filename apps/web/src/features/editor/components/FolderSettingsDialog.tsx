@@ -1,11 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { ProjectRole, type ProjectRoleValue } from '@tabliodb/shared';
+import { AccessRole, type AccessRoleValue } from '@tabliodb/shared';
 import {
-  Role7 as SdkProjectMemberOutputRole,
-  Role8 as SdkProjectAssignableMemberRole,
-  type ProjectMemberDtoOutput,
-  type ProjectResponseDtoOutput,
+  Role7 as SdkFolderAccessOutputRole,
+  Role8 as SdkFolderAssignableMemberRole,
+  type FolderAccessDtoOutput,
+  type FolderResponseDtoOutput,
 } from '@tabliodb/sdk';
 import {
   Button,
@@ -30,62 +30,62 @@ import { z } from 'zod';
 import { ControlledInput, ControlledSelect, ControlledTextarea } from '@/features/app/FormControls';
 import { getErrorMessage } from '@/features/app/RouteStates';
 import {
-  projectsQueries,
-  useAddProjectMemberMutation,
-  useArchiveProjectMutation,
-  useRemoveProjectMemberMutation,
-  useTransferProjectOwnershipMutation,
-  useUpdateProjectMemberMutation,
-  useUpdateProjectMutation,
-} from '@/resources/projects';
+  foldersQueries,
+  useAddFolderAccessMutation,
+  useArchiveFolderMutation,
+  useRemoveFolderAccessMutation,
+  useTransferFolderOwnershipMutation,
+  useUpdateFolderAccessMutation,
+  useUpdateFolderMutation,
+} from '@/resources/folders';
 import { selectClassName } from '../editor-form-styles';
 import { UserAvatar } from './UserAvatar';
 
-type ProjectMemberDto = ProjectMemberDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
-type ProjectAssignableRole = ProjectRole.Editor | ProjectRole.Commenter | ProjectRole.Viewer;
+type FolderAccessDto = FolderAccessDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
+type FolderAssignableRole = AccessRole.Editor | AccessRole.Commenter | AccessRole.Viewer;
 
-const projectAssignableRoleOptions = [ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer] as const;
-const projectMemberPageQuery = { limit: 50 } as const;
+const folderAssignableRoleOptions = [AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer] as const;
+const folderAccessPageQuery = { limit: 50 } as const;
 
-const sdkProjectMemberRoleByValue: Record<ProjectAssignableRole, SdkProjectAssignableMemberRole> = {
-  [ProjectRole.Commenter]: SdkProjectAssignableMemberRole.Commenter,
-  [ProjectRole.Editor]: SdkProjectAssignableMemberRole.Editor,
-  [ProjectRole.Viewer]: SdkProjectAssignableMemberRole.Viewer,
+const sdkFolderAccessRoleByValue: Record<FolderAssignableRole, SdkFolderAssignableMemberRole> = {
+  [AccessRole.Commenter]: SdkFolderAssignableMemberRole.Commenter,
+  [AccessRole.Editor]: SdkFolderAssignableMemberRole.Editor,
+  [AccessRole.Viewer]: SdkFolderAssignableMemberRole.Viewer,
 };
 
-const projectFormSchema = z.object({
+const folderFormSchema = z.object({
   description: z.string().trim().max(240, 'Keep the description under 240 characters.').optional(),
   name: z.string().trim().min(1, 'Folder name is required.').max(80, 'Keep the name under 80 characters.'),
 });
 
-type ProjectFormState = z.infer<typeof projectFormSchema>;
+type FolderFormState = z.infer<typeof folderFormSchema>;
 
-const memberFormSchema = z.object({
+const folderAccessFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
-  role: z.enum(projectAssignableRoleOptions),
+  role: z.enum(folderAssignableRoleOptions),
 });
 
-type MemberFormState = z.infer<typeof memberFormSchema>;
+type FolderAccessFormState = z.infer<typeof folderAccessFormSchema>;
 
-const memberFormDefaults: MemberFormState = {
+const folderAccessFormDefaults: FolderAccessFormState = {
   email: '',
-  role: ProjectRole.Viewer,
+  role: AccessRole.Viewer,
 };
 
-export function ProjectSettingsDialog({
+export function FolderSettingsDialog({
   currentUserId,
   onArchived,
   onOpenChange,
   open,
-  project,
+  folder,
   trigger,
 }: {
   currentUserId: string;
   onArchived: () => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
-  project: ProjectResponseDto;
+  folder: FolderResponseDto;
   trigger?: ReactNode | null;
 }) {
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -93,43 +93,43 @@ export function ProjectSettingsDialog({
   const [internalOpen, setInternalOpen] = useState(false);
   const [transferringUserId, setTransferringUserId] = useState<string | null>(null);
   const dialogOpen = open ?? internalOpen;
-  const form = useForm<ProjectFormState>({
-    defaultValues: getProjectFormDefaults(project),
+  const form = useForm<FolderFormState>({
+    defaultValues: getFolderFormDefaults(folder),
     mode: 'onBlur',
-    resolver: zodResolver(projectFormSchema),
+    resolver: zodResolver(folderFormSchema),
   });
-  const memberForm = useForm<MemberFormState>({
-    defaultValues: memberFormDefaults,
+  const folderAccessForm = useForm<FolderAccessFormState>({
+    defaultValues: folderAccessFormDefaults,
     mode: 'onBlur',
-    resolver: zodResolver(memberFormSchema),
+    resolver: zodResolver(folderAccessFormSchema),
   });
   const { errors } = form.formState;
-  const { errors: memberErrors } = memberForm.formState;
-  const membersQueryOptions = projectsQueries.members(project.id, projectMemberPageQuery);
-  const membersQuery = useQuery({
-    ...membersQueryOptions,
-    // Member list hanya dibutuhkan saat modal terbuka, jadi settings dialog menjadi fetch boundary.
-    enabled: dialogOpen && membersQueryOptions.enabled !== false,
+  const { errors: folderAccessErrors } = folderAccessForm.formState;
+  const folderAccessQueryOptions = foldersQueries.access(folder.id, folderAccessPageQuery);
+  const folderAccessQuery = useQuery({
+    ...folderAccessQueryOptions,
+    // Folder access list hanya dibutuhkan saat modal terbuka, jadi settings dialog menjadi fetch boundary.
+    enabled: dialogOpen && folderAccessQueryOptions.enabled !== false,
   });
-  const members = membersQuery.data?.items ?? [];
+  const folderAccessEntries = folderAccessQuery.data?.items ?? [];
 
   useEffect(() => {
     if (dialogOpen) {
-      // Saat settings dibuka, form selalu mengikuti project terbaru dari query cache parent.
-      form.reset(getProjectFormDefaults(project));
-      memberForm.reset(memberFormDefaults);
+      // Saat settings dibuka, form selalu mengikuti folder terbaru dari query cache parent.
+      form.reset(getFolderFormDefaults(folder));
+      folderAccessForm.reset(folderAccessFormDefaults);
       setConfirmArchive(false);
     }
-  }, [dialogOpen, form, memberForm, project]);
+  }, [dialogOpen, form, folderAccessForm, folder]);
 
-  const updateProjectMutation = useUpdateProjectMutation({
+  const updateFolderMutation = useUpdateFolderMutation({
     mutationConfig: {
       onSuccess: () => {
         setDialogOpen(false);
       },
     },
   });
-  const archiveProjectMutation = useArchiveProjectMutation({
+  const archiveFolderMutation = useArchiveFolderMutation({
     mutationConfig: {
       onSuccess: () => {
         setDialogOpen(false);
@@ -137,23 +137,23 @@ export function ProjectSettingsDialog({
       },
     },
   });
-  const addProjectMemberMutation = useAddProjectMemberMutation({
+  const addFolderAccessMutation = useAddFolderAccessMutation({
     mutationConfig: {
       onSuccess: () => {
         // Role tetap viewer setelah add agar invite aman berulang cepat, tetapi email yang sudah dipakai dibersihkan.
-        memberForm.reset(memberFormDefaults);
+        folderAccessForm.reset(folderAccessFormDefaults);
       },
     },
   });
-  const updateProjectMemberMutation = useUpdateProjectMemberMutation();
-  const transferProjectOwnershipMutation = useTransferProjectOwnershipMutation();
-  const removeProjectMemberMutation = useRemoveProjectMemberMutation();
-  const isProjectMutationPending = updateProjectMutation.isPending || archiveProjectMutation.isPending;
-  const isMemberMutationPending =
-    addProjectMemberMutation.isPending ||
-    updateProjectMemberMutation.isPending ||
-    transferProjectOwnershipMutation.isPending ||
-    removeProjectMemberMutation.isPending;
+  const updateFolderAccessMutation = useUpdateFolderAccessMutation();
+  const transferFolderOwnershipMutation = useTransferFolderOwnershipMutation();
+  const removeFolderAccessMutation = useRemoveFolderAccessMutation();
+  const isFolderMutationPending = updateFolderMutation.isPending || archiveFolderMutation.isPending;
+  const isFolderAccessMutationPending =
+    addFolderAccessMutation.isPending ||
+    updateFolderAccessMutation.isPending ||
+    transferFolderOwnershipMutation.isPending ||
+    removeFolderAccessMutation.isPending;
 
   function setDialogOpen(nextOpen: boolean) {
     setInternalOpen(nextOpen);
@@ -161,34 +161,34 @@ export function ProjectSettingsDialog({
   }
 
   function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen && (isProjectMutationPending || isMemberMutationPending)) {
+    if (!nextOpen && (isFolderMutationPending || isFolderAccessMutationPending)) {
       return;
     }
 
     setDialogOpen(nextOpen);
 
     if (!nextOpen) {
-      form.reset(getProjectFormDefaults(project));
-      memberForm.reset(memberFormDefaults);
+      form.reset(getFolderFormDefaults(folder));
+      folderAccessForm.reset(folderAccessFormDefaults);
       setConfirmArchive(false);
-      updateProjectMutation.reset();
-      archiveProjectMutation.reset();
-      addProjectMemberMutation.reset();
-      updateProjectMemberMutation.reset();
-      transferProjectOwnershipMutation.reset();
-      removeProjectMemberMutation.reset();
+      updateFolderMutation.reset();
+      archiveFolderMutation.reset();
+      addFolderAccessMutation.reset();
+      updateFolderAccessMutation.reset();
+      transferFolderOwnershipMutation.reset();
+      removeFolderAccessMutation.reset();
       setConfirmTransferUserId(null);
       setTransferringUserId(null);
     }
   }
 
-  function handleSubmit(values: ProjectFormState) {
-    updateProjectMutation.mutate({
+  function handleSubmit(values: FolderFormState) {
+    updateFolderMutation.mutate({
       body: {
         description: toOptionalDescription(values.description) ?? null,
         name: values.name,
       },
-      projectId: project.id,
+      folderId: folder.id,
     });
   }
 
@@ -198,45 +198,45 @@ export function ProjectSettingsDialog({
       return;
     }
 
-    archiveProjectMutation.mutate({ organizationId: project.organizationId, projectId: project.id });
+    archiveFolderMutation.mutate({ organizationId: folder.organizationId, folderId: folder.id });
   }
 
-  function handleAddMember(values: MemberFormState) {
-    addProjectMemberMutation.mutate({
+  function handleAddFolderAccess(values: FolderAccessFormState) {
+    addFolderAccessMutation.mutate({
       body: {
         email: values.email,
-        role: sdkProjectMemberRoleByValue[values.role],
+        role: sdkFolderAccessRoleByValue[values.role],
       },
-      organizationId: project.organizationId,
-      projectId: project.id,
+      organizationId: folder.organizationId,
+      folderId: folder.id,
     });
   }
 
-  function handleUpdateMemberRole(member: ProjectMemberDto, role: ProjectAssignableRole) {
-    if (toProjectRoleValue(member.role) === role) {
+  function handleUpdateFolderAccessRole(access: FolderAccessDto, role: FolderAssignableRole) {
+    if (toAccessRoleValue(access.role) === role) {
       return;
     }
 
     setConfirmTransferUserId(null);
-    updateProjectMemberMutation.mutate({
-      body: { role: sdkProjectMemberRoleByValue[role] },
-      projectId: project.id,
-      userId: member.userId,
+    updateFolderAccessMutation.mutate({
+      body: { role: sdkFolderAccessRoleByValue[role] },
+      folderId: folder.id,
+      userId: access.userId,
     });
   }
 
-  function handleTransferOwnership(member: ProjectMemberDto) {
-    if (confirmTransferUserId !== member.userId) {
+  function handleTransferOwnership(access: FolderAccessDto) {
+    if (confirmTransferUserId !== access.userId) {
       // Folder ownership memakai aksi dua langkah agar user sadar bahwa Owner lama akan otomatis turun menjadi Editor.
-      setConfirmTransferUserId(member.userId);
+      setConfirmTransferUserId(access.userId);
       return;
     }
 
-    setTransferringUserId(member.userId);
-    transferProjectOwnershipMutation.mutate(
+    setTransferringUserId(access.userId);
+    transferFolderOwnershipMutation.mutate(
       {
-        body: { userId: member.userId },
-        projectId: project.id,
+        body: { userId: access.userId },
+        folderId: folder.id,
       },
       {
         onSettled: () => {
@@ -247,22 +247,22 @@ export function ProjectSettingsDialog({
     );
   }
 
-  function handleRemoveMember(member: ProjectMemberDto) {
+  function handleRemoveFolderAccess(access: FolderAccessDto) {
     setConfirmTransferUserId(null);
-    removeProjectMemberMutation.mutate({
-      projectId: project.id,
-      userId: member.userId,
+    removeFolderAccessMutation.mutate({
+      folderId: folder.id,
+      userId: access.userId,
     });
   }
 
-  const mutationError = updateProjectMutation.error ?? archiveProjectMutation.error;
-  const memberMutationError =
-    addProjectMemberMutation.error ??
-    updateProjectMemberMutation.error ??
-    transferProjectOwnershipMutation.error ??
-    removeProjectMemberMutation.error;
-  const updatingUserId = updateProjectMemberMutation.isPending ? updateProjectMemberMutation.variables?.userId : null;
-  const removingUserId = removeProjectMemberMutation.isPending ? removeProjectMemberMutation.variables?.userId : null;
+  const mutationError = updateFolderMutation.error ?? archiveFolderMutation.error;
+  const folderAccessMutationError =
+    addFolderAccessMutation.error ??
+    updateFolderAccessMutation.error ??
+    transferFolderOwnershipMutation.error ??
+    removeFolderAccessMutation.error;
+  const updatingUserId = updateFolderAccessMutation.isPending ? updateFolderAccessMutation.variables?.userId : null;
+  const removingUserId = removeFolderAccessMutation.isPending ? removeFolderAccessMutation.variables?.userId : null;
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
@@ -280,7 +280,7 @@ export function ProjectSettingsDialog({
         <DialogBody className="grid gap-5">
           <form
             className="grid gap-4 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white p-4"
-            id="project-settings-form"
+            id="folder-settings-form"
             onSubmit={form.handleSubmit(handleSubmit)}
           >
             <h3 className="text-sm font-black">Details</h3>
@@ -291,7 +291,7 @@ export function ProjectSettingsDialog({
               <ControlledInput
                 aria-invalid={Boolean(errors.name)}
                 control={form.control}
-                disabled={isProjectMutationPending}
+                disabled={isFolderMutationPending}
                 name="name"
               />
               <FieldError>{errors.name?.message}</FieldError>
@@ -305,7 +305,7 @@ export function ProjectSettingsDialog({
                 aria-invalid={Boolean(errors.description)}
                 className="min-h-24 w-full resize-none rounded-2xl border-2 border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:ring-4 focus:ring-[rgb(var(--tabliodb-focus-ring))]"
                 control={form.control}
-                disabled={isProjectMutationPending}
+                disabled={isFolderMutationPending}
                 name="description"
               />
               <FieldError>{errors.description?.message}</FieldError>
@@ -326,29 +326,29 @@ export function ProjectSettingsDialog({
                   Folder access
                 </h3>
                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  {membersQuery.data?.totalCount ?? members.length} people
+                  {folderAccessQuery.data?.totalCount ?? folderAccessEntries.length} people
                 </p>
               </div>
             </div>
 
             <form
               className="m-4 grid gap-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
-              onSubmit={memberForm.handleSubmit(handleAddMember)}
+              onSubmit={folderAccessForm.handleSubmit(handleAddFolderAccess)}
             >
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                   Email
                 </span>
                 <ControlledInput
-                  aria-invalid={Boolean(memberErrors.email)}
+                  aria-invalid={Boolean(folderAccessErrors.email)}
                   autoComplete="email"
-                  control={memberForm.control}
-                  disabled={isMemberMutationPending}
+                  control={folderAccessForm.control}
+                  disabled={isFolderAccessMutationPending}
                   name="email"
                   placeholder="teammate@example.com"
                   type="email"
                 />
-                <FieldError>{memberErrors.email?.message}</FieldError>
+                <FieldError>{folderAccessErrors.email?.message}</FieldError>
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
@@ -356,17 +356,17 @@ export function ProjectSettingsDialog({
                 </span>
                 <ControlledSelect
                   className={selectClassName}
-                  control={memberForm.control}
-                  disabled={isMemberMutationPending}
+                  control={folderAccessForm.control}
+                  disabled={isFolderAccessMutationPending}
                   name="role"
-                  options={projectAssignableRoleOptions.map((role) => ({
-                    label: formatProjectRole(role),
+                  options={folderAssignableRoleOptions.map((role) => ({
+                    label: formatAccessRole(role),
                     value: role,
                   }))}
                 />
               </label>
-              <Button className="self-start sm:mt-6" disabled={isMemberMutationPending} type="submit">
-                {addProjectMemberMutation.isPending ? (
+              <Button className="self-start sm:mt-6" disabled={isFolderAccessMutationPending} type="submit">
+                {addFolderAccessMutation.isPending ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <UserPlus className="size-4" />
@@ -375,33 +375,33 @@ export function ProjectSettingsDialog({
               </Button>
             </form>
 
-            {membersQuery.isPending ? (
+            {folderAccessQuery.isPending ? (
               <div className="m-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                 <Loader2 className="size-4 animate-spin" />
                 Loading access
               </div>
-            ) : membersQuery.error ? (
+            ) : folderAccessQuery.error ? (
               <div className="m-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                {getErrorMessage(membersQuery.error)}
+                {getErrorMessage(folderAccessQuery.error)}
               </div>
-            ) : members.length === 0 ? (
+            ) : folderAccessEntries.length === 0 ? (
               <div className="m-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                 No direct folder access yet
               </div>
             ) : (
               <div className="tabliodb-scrollbar max-h-72 overflow-y-auto border-t border-[rgb(var(--tabliodb-border))]">
                 <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
-                  {members.map((member) => (
+                  {folderAccessEntries.map((access) => (
                     <FolderAccessRow
-                      confirmTransfer={confirmTransferUserId === member.userId}
+                      access={access}
+                      confirmTransfer={confirmTransferUserId === access.userId}
                       currentUserId={currentUserId}
-                      isRemoving={removingUserId === member.userId}
-                      isTransferring={transferringUserId === member.userId}
-                      isUpdating={updatingUserId === member.userId}
-                      key={member.userId}
-                      member={member}
-                      onRemove={handleRemoveMember}
-                      onRoleChange={handleUpdateMemberRole}
+                      isRemoving={removingUserId === access.userId}
+                      isTransferring={transferringUserId === access.userId}
+                      isUpdating={updatingUserId === access.userId}
+                      key={access.userId}
+                      onRemove={handleRemoveFolderAccess}
+                      onRoleChange={handleUpdateFolderAccessRole}
                       onTransferOwnership={handleTransferOwnership}
                     />
                   ))}
@@ -409,9 +409,9 @@ export function ProjectSettingsDialog({
               </div>
             )}
 
-            {memberMutationError ? (
+            {folderAccessMutationError ? (
               <div className="m-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
-                {getErrorMessage(memberMutationError)}
+                {getErrorMessage(folderAccessMutationError)}
               </div>
             ) : null}
           </section>
@@ -419,11 +419,11 @@ export function ProjectSettingsDialog({
 
         <DialogFooter className="justify-between sm:justify-between">
           <Button
-            disabled={isProjectMutationPending || isMemberMutationPending}
+            disabled={isFolderMutationPending || isFolderAccessMutationPending}
             onClick={handleArchive}
             variant={confirmArchive ? 'danger' : 'secondary'}
           >
-            {archiveProjectMutation.isPending ? (
+            {archiveFolderMutation.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <Archive className="size-4" />
@@ -432,7 +432,7 @@ export function ProjectSettingsDialog({
           </Button>
           <div className="flex gap-2">
             <Button
-              disabled={isProjectMutationPending || isMemberMutationPending}
+              disabled={isFolderMutationPending || isFolderAccessMutationPending}
               onClick={() => handleOpenChange(false)}
               type="button"
               variant="secondary"
@@ -440,11 +440,11 @@ export function ProjectSettingsDialog({
               Cancel
             </Button>
             <Button
-              disabled={isProjectMutationPending || isMemberMutationPending}
-              form="project-settings-form"
+              disabled={isFolderMutationPending || isFolderAccessMutationPending}
+              form="folder-settings-form"
               type="submit"
             >
-              {updateProjectMutation.isPending ? (
+              {updateFolderMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Save className="size-4" />
@@ -459,30 +459,30 @@ export function ProjectSettingsDialog({
 }
 
 function FolderAccessRow({
+  access,
   confirmTransfer,
   currentUserId,
   isRemoving,
   isTransferring,
   isUpdating,
-  member,
   onRemove,
   onRoleChange,
   onTransferOwnership,
 }: {
+  access: FolderAccessDto;
   confirmTransfer: boolean;
   currentUserId: string;
   isRemoving: boolean;
   isTransferring: boolean;
   isUpdating: boolean;
-  member: ProjectMemberDto;
-  onRemove: (member: ProjectMemberDto) => void;
-  onRoleChange: (member: ProjectMemberDto, role: ProjectAssignableRole) => void;
-  onTransferOwnership: (member: ProjectMemberDto) => void;
+  onRemove: (access: FolderAccessDto) => void;
+  onRoleChange: (access: FolderAccessDto, role: FolderAssignableRole) => void;
+  onTransferOwnership: (access: FolderAccessDto) => void;
 }) {
   const isBusy = isRemoving || isTransferring || isUpdating;
-  const isSelf = member.userId === currentUserId;
-  const normalizedRole = toProjectRoleValue(member.role);
-  const isOwner = normalizedRole === ProjectRole.Owner;
+  const isSelf = access.userId === currentUserId;
+  const normalizedRole = toAccessRoleValue(access.role);
+  const isOwner = normalizedRole === AccessRole.Owner;
   const canEditRole = !isOwner && !isSelf;
   const canRemove = !isOwner && !isSelf;
   const canTransferOwnership = !isSelf && !isOwner;
@@ -490,16 +490,16 @@ function FolderAccessRow({
   return (
     <article className="grid gap-3 p-3 transition hover:bg-[rgb(var(--tabliodb-surface))] sm:grid-cols-[minmax(0,1fr)_230px_auto] sm:items-center">
       <div className="flex min-w-0 items-center gap-3">
-        <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
+        <UserAvatar className="size-10 rounded-[14px] text-xs" user={access} />
         <div className="min-w-0">
-          <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{member.name}</h4>
-          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
+          <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{access.name}</h4>
+          <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{access.email}</p>
         </div>
       </div>
       {!canEditRole ? (
         <div className="text-left sm:text-right">
           <div className="text-sm font-extrabold text-[rgb(var(--tabliodb-ink))]">
-            {formatProjectRole(normalizedRole)}
+            {formatAccessRole(normalizedRole)}
           </div>
           <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
             {isSelf ? 'Your access' : 'Owner transfer only'}
@@ -509,9 +509,9 @@ function FolderAccessRow({
         <Select
           className={selectClassName}
           disabled={isBusy}
-          onValueChange={(role) => onRoleChange(member, role as ProjectAssignableRole)}
-          options={projectAssignableRoleOptions.map((role) => ({
-            label: formatProjectRole(role),
+          onValueChange={(role) => onRoleChange(access, role as FolderAssignableRole)}
+          options={folderAssignableRoleOptions.map((role) => ({
+            label: formatAccessRole(role),
             value: role,
           }))}
           value={normalizedRole}
@@ -522,19 +522,19 @@ function FolderAccessRow({
           <WithTooltip
             content={
               confirmTransfer
-                ? `Click again to transfer folder ownership to ${member.name}`
-                : `Transfer folder ownership to ${member.name}`
+                ? `Click again to transfer folder ownership to ${access.name}`
+                : `Transfer folder ownership to ${access.name}`
             }
           >
             <Button
               aria-label={
                 confirmTransfer
-                  ? `Confirm transfer folder ownership to ${member.name}`
-                  : `Transfer folder ownership to ${member.name}`
+                  ? `Confirm transfer folder ownership to ${access.name}`
+                  : `Transfer folder ownership to ${access.name}`
               }
               className={cn(confirmTransfer && 'border-[rgb(var(--tabliodb-red))] text-[rgb(var(--tabliodb-red))]')}
               disabled={isBusy}
-              onClick={() => onTransferOwnership(member)}
+              onClick={() => onTransferOwnership(access)}
               size="sm"
               type="button"
               variant={confirmTransfer ? 'secondary' : 'soft'}
@@ -545,11 +545,11 @@ function FolderAccessRow({
           </WithTooltip>
         ) : null}
         {canRemove ? (
-          <WithTooltip content={`Remove ${member.name} from this folder`}>
+          <WithTooltip content={`Remove ${access.name} from this folder`}>
             <Button
-              aria-label={`Remove ${member.name}`}
+              aria-label={`Remove ${access.name}`}
               disabled={isBusy}
-              onClick={() => onRemove(member)}
+              onClick={() => onRemove(access)}
               size="icon"
               variant="ghost"
             >
@@ -562,25 +562,25 @@ function FolderAccessRow({
   );
 }
 
-function formatProjectRole(role: ProjectRoleValue): string {
+function formatAccessRole(role: AccessRoleValue): string {
   return {
-    [ProjectRole.Commenter]: 'Commenter',
-    [ProjectRole.Editor]: 'Editor',
-    [ProjectRole.Owner]: 'Owner',
-    [ProjectRole.Viewer]: 'Viewer',
+    [AccessRole.Commenter]: 'Commenter',
+    [AccessRole.Editor]: 'Editor',
+    [AccessRole.Owner]: 'Owner',
+    [AccessRole.Viewer]: 'Viewer',
   }[role];
 }
 
-function getProjectFormDefaults(project: ProjectResponseDto): ProjectFormState {
+function getFolderFormDefaults(folder: FolderResponseDto): FolderFormState {
   return {
-    description: project.description ?? '',
-    name: project.name,
+    description: folder.description ?? '',
+    name: folder.name,
   };
 }
 
-function toProjectRoleValue(role: ProjectRoleValue | SdkProjectMemberOutputRole): ProjectRoleValue {
+function toAccessRoleValue(role: AccessRoleValue | SdkFolderAccessOutputRole): AccessRoleValue {
   // SDK generated enum dan shared permission enum memakai value string yang sama, tetapi cast eksplisit menjaga boundary tetap terlihat.
-  return role as ProjectRoleValue;
+  return role as AccessRoleValue;
 }
 
 function toOptionalDescription(value: string | undefined): string | undefined {

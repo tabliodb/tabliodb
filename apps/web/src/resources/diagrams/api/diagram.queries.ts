@@ -4,7 +4,7 @@ import {
   getDiagramMembers,
   getDiagramReviewEvents,
   getDiagramReviewSummary,
-  getProjectDiagrams,
+  getFolderDiagrams,
   getWorkspaceDiagrams,
   type DiagramExportResponseDtoOutput,
   type DiagramEffectiveAccessListResponseDtoOutput,
@@ -14,7 +14,7 @@ import {
   type DiagramReviewSummaryDtoOutput,
   type DiagramResponseDtoOutput,
   type OrganizationDtoOutput,
-  type ProjectResponseDtoOutput,
+  type FolderResponseDtoOutput,
 } from '@tabliodb/sdk';
 import type { PaginationQuery } from '@tabliodb/shared';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
@@ -34,17 +34,17 @@ type DiagramsQueries = {
     diagramId: string,
     query?: DiagramExportQuery,
   ) => AppQueryOptions<DiagramExportResponseDtoOutput, ReturnType<typeof diagramsKeys.exportByDiagram>>;
-  listByProject: (
-    projectId: string,
+  listByFolder: (
+    folderId: string,
     query?: PaginationQuery,
-  ) => AppQueryOptions<DiagramListResponseDtoOutput, ReturnType<typeof diagramsKeys.listByProject>>;
+  ) => AppQueryOptions<DiagramListResponseDtoOutput, ReturnType<typeof diagramsKeys.listByFolder>>;
   listByWorkspace: (
     organizationId: string,
     query?: PaginationQuery,
   ) => AppQueryOptions<DiagramListResponseDtoOutput, ReturnType<typeof diagramsKeys.listByWorkspace>>;
-  listForProject: (
-    project: ProjectResponseDtoOutput | null,
-  ) => AppQueryOptions<DiagramResponseDtoOutput[], ReturnType<typeof diagramsKeys.listItemsByProject>>;
+  listForFolder: (
+    folder: FolderResponseDtoOutput | null,
+  ) => AppQueryOptions<DiagramResponseDtoOutput[], ReturnType<typeof diagramsKeys.listItemsByFolder>>;
   listForWorkspace: (
     organization: OrganizationDtoOutput | null,
   ) => AppQueryOptions<DiagramResponseDtoOutput[], ReturnType<typeof diagramsKeys.listItemsByWorkspace>>;
@@ -76,11 +76,11 @@ export const diagramsQueries: DiagramsQueries = {
       queryKey: diagramsKeys.exportByDiagram(diagramId, query),
     }),
 
-  listByProject: (projectId: string, query: PaginationQuery = {}) =>
+  listByFolder: (folderId: string, query: PaginationQuery = {}) =>
     appQueryOptions({
-      enabled: Boolean(projectId),
-      queryFn: () => getProjectDiagrams({ projectId, ...query }),
-      queryKey: diagramsKeys.listByProject(projectId, query),
+      enabled: Boolean(folderId),
+      queryFn: () => getFolderDiagrams({ folderId, ...query }),
+      queryKey: diagramsKeys.listByFolder(folderId, query),
     }),
 
   listByWorkspace: (organizationId: string, query: PaginationQuery = {}) =>
@@ -90,11 +90,11 @@ export const diagramsQueries: DiagramsQueries = {
       queryKey: diagramsKeys.listByWorkspace(organizationId, query),
     }),
 
-  listForProject: (project: ProjectResponseDtoOutput | null) =>
+  listForFolder: (folder: FolderResponseDtoOutput | null) =>
     appQueryOptions({
-      enabled: Boolean(project?.id),
-      queryFn: () => listDiagramsForProject(project),
-      queryKey: diagramsKeys.listItemsByProject(project?.id ?? 'missing-project'),
+      enabled: Boolean(folder?.id),
+      queryFn: () => listDiagramsForFolder(folder),
+      queryKey: diagramsKeys.listItemsByFolder(folder?.id ?? 'missing-folder'),
     }),
 
   listForWorkspace: (organization: OrganizationDtoOutput | null) =>
@@ -126,14 +126,14 @@ export const diagramsQueries: DiagramsQueries = {
     }),
 };
 
-async function listDiagramsForProject(project: ProjectResponseDtoOutput | null): Promise<DiagramResponseDtoOutput[]> {
-  if (!project) {
+async function listDiagramsForFolder(folder: FolderResponseDtoOutput | null): Promise<DiagramResponseDtoOutput[]> {
+  if (!folder) {
     return [];
   }
 
-  const diagrams = await getProjectDiagrams({ limit: 50, projectId: project.id });
+  const diagrams = await getFolderDiagrams({ limit: 50, folderId: folder.id });
 
-  // Diagram creation is an editor action, not a fetch side effect; empty projects render a CTA instead.
+  // Diagram creation is an editor action, not a fetch side effect; empty folders render a CTA instead.
   return diagrams.items;
 }
 

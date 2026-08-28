@@ -9,10 +9,10 @@ export const diagramsKeys = {
   exportByDiagram: (diagramId: string, query: DiagramExportQuery = {}) =>
     [...diagramsKeys.exports(), { diagramId }, query] as const,
   lists: () => [...diagramsKeys.all, 'list'] as const,
-  listByProject: (projectId: string, query: PaginationQuery = {}) =>
-    [...diagramsKeys.lists(), { projectId }, query] as const,
-  listItemsByProject: (projectId: string) =>
-    [...diagramsKeys.lists(), 'items-by-project', { projectId }, { limit: 50 }] as const,
+  listByFolder: (folderId: string, query: PaginationQuery = {}) =>
+    [...diagramsKeys.lists(), { folderId }, query] as const,
+  listItemsByFolder: (folderId: string) =>
+    [...diagramsKeys.lists(), 'items-by-folder', { folderId }, { limit: 50 }] as const,
   listByWorkspace: (organizationId: string, query: PaginationQuery = {}) =>
     [...diagramsKeys.lists(), { organizationId }, query] as const,
   listItemsByWorkspace: (organizationId: string) =>

@@ -116,15 +116,15 @@ export type CurrentUserEditorPreferenceDtoOutput = {
   diagramName: string | null;
   organizationId: string | null;
   organizationName: string | null;
-  projectId: string | null;
-  projectName: string | null;
+  folderId: string | null;
+  folderName: string | null;
   updatedAt: string | null;
   workspaceSlug: string | null;
 };
 export type CurrentUserEditorPreferenceUpdateDto = {
   diagramId?: string | null;
   organizationId: string;
-  projectId?: string | null;
+  folderId?: string | null;
 };
 export type SessionBindingPublicKeyDto = {
   crv: Crv;
@@ -391,14 +391,14 @@ export type DiagramShareLinkRevokeResponseDtoOutput = {
 };
 export type DiagramCreateDto = {
   organizationId: string;
-  projectId?: string | null;
+  folderId?: string | null;
   name: string;
   dialect?: Dialect;
 };
 export type DiagramResponseDtoOutput = {
   id: string;
   organizationId: string;
-  projectId: string | null;
+  folderId: string | null;
   name: string;
   dialect: Dialect;
   status: Status4;
@@ -470,7 +470,7 @@ export type DiagramMemberRemoveResponseDtoOutput = {
 export type DiagramUpdateDto = {
   name?: string;
   dialect?: Dialect;
-  projectId?: string | null;
+  folderId?: string | null;
 };
 export type DiagramExportResponseDtoOutput = {
   content: string;
@@ -683,8 +683,8 @@ export type InvitationCreateDto = {
   email: string;
   organizationId?: string;
   organizationRole?: OrganizationRole;
-  projectId?: string;
-  projectRole?: ProjectRole;
+  folderId?: string;
+  folderRole?: FolderRole;
   diagramId?: string;
   diagramRole?: DiagramRole;
   message?: string;
@@ -697,9 +697,9 @@ export type InvitationDtoOutput = {
   organizationName: string;
   organizationSlug: string;
   organizationRole: OrganizationRole;
-  projectId: string | null;
-  projectName: string | null;
-  projectRole: ProjectRole | null;
+  folderId: string | null;
+  folderName: string | null;
+  folderRole: FolderRole | null;
   diagramId: string | null;
   diagramName: string | null;
   diagramRole: DiagramRole | null;
@@ -722,8 +722,8 @@ export type InvitationPublicDtoOutput = {
   email: string;
   organizationName: string;
   organizationRole: OrganizationRole;
-  projectName: string | null;
-  projectRole: ProjectRole | null;
+  folderName: string | null;
+  folderRole: FolderRole | null;
   diagramName: string | null;
   diagramRole: DiagramRole | null;
   message: string | null;
@@ -784,7 +784,7 @@ export type NotificationInboxItemDtoOutput = {
     bodyText: string;
     id: string;
   } | null;
-  project: {
+  folder: {
     id: string;
     name: string;
     organizationId: string;
@@ -825,8 +825,8 @@ export type OrganizationDtoOutput = {
   slug: string;
   role: Role5;
   status: string;
-  defaultProjectRole: DefaultProjectRole | null;
-  allowMemberProjectCreate: boolean;
+  defaultFolderRole: DefaultFolderRole | null;
+  allowMemberFolderCreate: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -839,15 +839,15 @@ export type OrganizationSettingsDtoOutput = {
   id: string;
   name: string;
   slug: string;
-  defaultProjectRole: DefaultProjectRole | null;
-  allowMemberProjectCreate: boolean;
+  defaultFolderRole: DefaultFolderRole | null;
+  allowMemberFolderCreate: boolean;
   createdAt: string;
   updatedAt: string;
 };
 export type OrganizationSettingsUpdateDto = {
   name?: string;
-  defaultProjectRole?: DefaultProjectRole | null;
-  allowMemberProjectCreate?: boolean;
+  defaultFolderRole?: DefaultFolderRole | null;
+  allowMemberFolderCreate?: boolean;
 };
 export type OrganizationMemberDtoOutput = {
   avatarUrl: string | null;
@@ -882,7 +882,7 @@ export type OrganizationOwnershipTransferDto = {
 export type AuditLogDtoOutput = {
   id: string;
   organizationId: string | null;
-  projectId: string | null;
+  folderId: string | null;
   diagramId: string | null;
   actorId: string | null;
   actorName: string | null;
@@ -903,36 +903,36 @@ export type AuditLogListResponseDtoOutput = {
   nextCursor: string | null;
   totalCount: number;
 };
-export type ProjectResponseDtoOutput = {
+export type FolderResponseDtoOutput = {
   id: string;
   organizationId: string;
   organizationName: string;
   organizationSlug: string;
-  projectRole: ProjectRole2;
+  folderRole: FolderRole2;
   name: string;
   slug: string;
   description: string | null;
   createdAt: string;
   updatedAt: string;
 };
-export type ProjectListResponseDtoOutput = {
-  items: ProjectResponseDtoOutput[];
+export type FolderListResponseDtoOutput = {
+  items: FolderResponseDtoOutput[];
   nextCursor: string | null;
   totalCount: number;
 };
-export type ProjectCreateDto = {
+export type FolderCreateDto = {
   organizationId: string;
   name: string;
   description?: string;
 };
-export type ProjectUpdateDto = {
+export type FolderUpdateDto = {
   name?: string;
   description?: string | null;
 };
-export type ProjectArchiveResponseDtoOutput = {
+export type FolderArchiveResponseDtoOutput = {
   successful: boolean;
 };
-export type ProjectMemberDtoOutput = {
+export type FolderAccessDtoOutput = {
   userId: string;
   email: string;
   name: string;
@@ -942,22 +942,22 @@ export type ProjectMemberDtoOutput = {
   createdAt: string;
   updatedAt: string;
 };
-export type ProjectMemberListResponseDtoOutput = {
-  items: ProjectMemberDtoOutput[];
+export type FolderAccessListResponseDtoOutput = {
+  items: FolderAccessDtoOutput[];
   nextCursor: string | null;
   totalCount: number;
 };
-export type ProjectMemberCreateDto = {
+export type FolderAccessCreateDto = {
   email: string;
   role?: Role8;
 };
-export type ProjectOwnershipTransferDto = {
+export type FolderOwnershipTransferDto = {
   userId: string;
 };
-export type ProjectMemberUpdateDto = {
+export type FolderAccessUpdateDto = {
   role: Role8;
 };
-export type ProjectMemberRemoveResponseDtoOutput = {
+export type FolderAccessRemoveResponseDtoOutput = {
   successful: boolean;
 };
 export type PublicDiagramShareSnapshotDtoOutput = {
@@ -972,7 +972,7 @@ export type PublicDiagramShareResponseDtoOutput = {
     dialect: Dialect;
     name: string;
     organizationName: string;
-    projectName: string | null;
+    folderName: string | null;
   };
   model: {
     schemaVersion: number;
@@ -1583,7 +1583,7 @@ export type TeamResponseDtoOutput = {
   description: string | null;
   memberCount: number;
   diagramAccessCount: number;
-  projectAccessCount: number;
+  folderAccessCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -1623,30 +1623,30 @@ export type TeamMemberCreateDto = {
 export type TeamMemberRemoveResponseDtoOutput = {
   successful: boolean;
 };
-export type TeamProjectAccessDtoOutput = {
-  projectId: string;
-  projectName: string;
-  projectSlug: string;
+export type TeamFolderAccessDtoOutput = {
+  folderId: string;
+  folderName: string;
+  folderSlug: string;
   role: Role8;
   createdAt: string;
   updatedAt: string;
 };
-export type TeamProjectAccessListResponseDtoOutput = {
-  items: TeamProjectAccessDtoOutput[];
+export type TeamFolderAccessListResponseDtoOutput = {
+  items: TeamFolderAccessDtoOutput[];
   nextCursor: string | null;
   totalCount: number;
 };
-export type TeamProjectAccessUpsertDto = {
-  projectId: string;
+export type TeamFolderAccessUpsertDto = {
+  folderId: string;
   role?: Role8;
 };
-export type TeamProjectAccessRemoveResponseDtoOutput = {
+export type TeamFolderAccessRemoveResponseDtoOutput = {
   successful: boolean;
 };
 export type TeamDiagramAccessDtoOutput = {
   diagramId: string;
   diagramName: string;
-  projectId: string | null;
+  folderId: string | null;
   role: Role8;
   createdAt: string;
   updatedAt: string;
@@ -3219,7 +3219,7 @@ export function getOrganizationAuditLogs(
     ),
   );
 }
-export function getProjects(
+export function getFolders(
   {
     organizationId,
     cursor,
@@ -3234,9 +3234,9 @@ export function getProjects(
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: ProjectListResponseDtoOutput;
+      data: FolderListResponseDtoOutput;
     }>(
-      `/projects${QS.query(
+      `/folders${QS.query(
         QS.explode({
           organizationId,
           cursor,
@@ -3249,88 +3249,88 @@ export function getProjects(
     ),
   );
 }
-export function createProject(
+export function createFolder(
   {
-    projectCreateDto,
+    folderCreateDto,
   }: {
-    projectCreateDto: ProjectCreateDto;
+    folderCreateDto: FolderCreateDto;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 201;
-      data: ProjectResponseDtoOutput;
+      data: FolderResponseDtoOutput;
     }>(
-      '/projects',
+      '/folders',
       oazapfts.json({
         ...opts,
         method: 'POST',
-        body: projectCreateDto,
+        body: folderCreateDto,
       }),
     ),
   );
 }
-export function updateProject(
+export function updateFolder(
   {
-    projectId,
-    projectUpdateDto,
+    folderId,
+    folderUpdateDto,
   }: {
-    projectId: string;
-    projectUpdateDto: ProjectUpdateDto;
+    folderId: string;
+    folderUpdateDto: FolderUpdateDto;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: ProjectResponseDtoOutput;
+      data: FolderResponseDtoOutput;
     }>(
-      `/projects/${encodeURIComponent(projectId)}`,
+      `/folders/${encodeURIComponent(folderId)}`,
       oazapfts.json({
         ...opts,
         method: 'PATCH',
-        body: projectUpdateDto,
+        body: folderUpdateDto,
       }),
     ),
   );
 }
-export function archiveProject(
+export function archiveFolder(
   {
-    projectId,
+    folderId,
   }: {
-    projectId: string;
+    folderId: string;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: ProjectArchiveResponseDtoOutput;
-    }>(`/projects/${encodeURIComponent(projectId)}`, {
+      data: FolderArchiveResponseDtoOutput;
+    }>(`/folders/${encodeURIComponent(folderId)}`, {
       ...opts,
       method: 'DELETE',
     }),
   );
 }
-export function getProjectMembers(
+export function getFolderAccess(
   {
     cursor,
     limit,
-    projectId,
+    folderId,
   }: {
     cursor?: string;
     limit?: number;
-    projectId: string;
+    folderId: string;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: ProjectMemberListResponseDtoOutput;
+      data: FolderAccessListResponseDtoOutput;
     }>(
-      `/projects/${encodeURIComponent(projectId)}/members${QS.query(
+      `/folders/${encodeURIComponent(folderId)}/access${QS.query(
         QS.explode({
           cursor,
           limit,
@@ -3342,109 +3342,109 @@ export function getProjectMembers(
     ),
   );
 }
-export function addProjectMember(
+export function addFolderAccess(
   {
-    projectId,
-    projectMemberCreateDto,
+    folderId,
+    folderAccessCreateDto,
   }: {
-    projectId: string;
-    projectMemberCreateDto: ProjectMemberCreateDto;
+    folderId: string;
+    folderAccessCreateDto: FolderAccessCreateDto;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 201;
-      data: ProjectMemberDtoOutput;
+      data: FolderAccessDtoOutput;
     }>(
-      `/projects/${encodeURIComponent(projectId)}/members`,
+      `/folders/${encodeURIComponent(folderId)}/access`,
       oazapfts.json({
         ...opts,
         method: 'POST',
-        body: projectMemberCreateDto,
+        body: folderAccessCreateDto,
       }),
     ),
   );
 }
-export function transferProjectOwnership(
+export function transferFolderOwnership(
   {
-    projectId,
-    projectOwnershipTransferDto,
+    folderId,
+    folderOwnershipTransferDto,
   }: {
-    projectId: string;
-    projectOwnershipTransferDto: ProjectOwnershipTransferDto;
+    folderId: string;
+    folderOwnershipTransferDto: FolderOwnershipTransferDto;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: ProjectMemberDtoOutput;
+      data: FolderAccessDtoOutput;
     }>(
-      `/projects/${encodeURIComponent(projectId)}/ownership/transfer`,
+      `/folders/${encodeURIComponent(folderId)}/ownership/transfer`,
       oazapfts.json({
         ...opts,
         method: 'POST',
-        body: projectOwnershipTransferDto,
+        body: folderOwnershipTransferDto,
       }),
     ),
   );
 }
-export function updateProjectMember(
+export function updateFolderAccess(
   {
     userId,
-    projectId,
-    projectMemberUpdateDto,
+    folderId,
+    folderAccessUpdateDto,
   }: {
     userId: string;
-    projectId: string;
-    projectMemberUpdateDto: ProjectMemberUpdateDto;
+    folderId: string;
+    folderAccessUpdateDto: FolderAccessUpdateDto;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: ProjectMemberDtoOutput;
+      data: FolderAccessDtoOutput;
     }>(
-      `/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
+      `/folders/${encodeURIComponent(folderId)}/access/${encodeURIComponent(userId)}`,
       oazapfts.json({
         ...opts,
         method: 'PATCH',
-        body: projectMemberUpdateDto,
+        body: folderAccessUpdateDto,
       }),
     ),
   );
 }
-export function removeProjectMember(
+export function removeFolderAccess(
   {
     userId,
-    projectId,
+    folderId,
   }: {
     userId: string;
-    projectId: string;
+    folderId: string;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: ProjectMemberRemoveResponseDtoOutput;
-    }>(`/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, {
+      data: FolderAccessRemoveResponseDtoOutput;
+    }>(`/folders/${encodeURIComponent(folderId)}/access/${encodeURIComponent(userId)}`, {
       ...opts,
       method: 'DELETE',
     }),
   );
 }
-export function getProjectDiagrams(
+export function getFolderDiagrams(
   {
     cursor,
     limit,
-    projectId,
+    folderId,
   }: {
     cursor?: string;
     limit?: number;
-    projectId: string;
+    folderId: string;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
@@ -3453,7 +3453,7 @@ export function getProjectDiagrams(
       status: 200;
       data: DiagramListResponseDtoOutput;
     }>(
-      `/projects/${encodeURIComponent(projectId)}/diagrams${QS.query(
+      `/folders/${encodeURIComponent(folderId)}/diagrams${QS.query(
         QS.explode({
           cursor,
           limit,
@@ -3974,7 +3974,7 @@ export function removeTeamMember(
     }),
   );
 }
-export function getTeamProjectAccesses(
+export function getTeamFolderAccesses(
   {
     cursor,
     limit,
@@ -3989,9 +3989,9 @@ export function getTeamProjectAccesses(
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: TeamProjectAccessListResponseDtoOutput;
+      data: TeamFolderAccessListResponseDtoOutput;
     }>(
-      `/teams/${encodeURIComponent(teamId)}/projects${QS.query(
+      `/teams/${encodeURIComponent(teamId)}/folders${QS.query(
         QS.explode({
           cursor,
           limit,
@@ -4003,36 +4003,36 @@ export function getTeamProjectAccesses(
     ),
   );
 }
-export function upsertTeamProjectAccess(
+export function upsertTeamFolderAccess(
   {
     teamId,
-    teamProjectAccessUpsertDto,
+    teamFolderAccessUpsertDto,
   }: {
     teamId: string;
-    teamProjectAccessUpsertDto: TeamProjectAccessUpsertDto;
+    teamFolderAccessUpsertDto: TeamFolderAccessUpsertDto;
   },
   opts?: Oazapfts.RequestOpts,
 ) {
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 201;
-      data: TeamProjectAccessDtoOutput;
+      data: TeamFolderAccessDtoOutput;
     }>(
-      `/teams/${encodeURIComponent(teamId)}/projects`,
+      `/teams/${encodeURIComponent(teamId)}/folders`,
       oazapfts.json({
         ...opts,
         method: 'POST',
-        body: teamProjectAccessUpsertDto,
+        body: teamFolderAccessUpsertDto,
       }),
     ),
   );
 }
-export function removeTeamProjectAccess(
+export function removeTeamFolderAccess(
   {
-    projectId,
+    folderId,
     teamId,
   }: {
-    projectId: string;
+    folderId: string;
     teamId: string;
   },
   opts?: Oazapfts.RequestOpts,
@@ -4040,8 +4040,8 @@ export function removeTeamProjectAccess(
   return oazapfts.ok(
     oazapfts.fetchJson<{
       status: 200;
-      data: TeamProjectAccessRemoveResponseDtoOutput;
-    }>(`/teams/${encodeURIComponent(teamId)}/projects/${encodeURIComponent(projectId)}`, {
+      data: TeamFolderAccessRemoveResponseDtoOutput;
+    }>(`/teams/${encodeURIComponent(teamId)}/folders/${encodeURIComponent(folderId)}`, {
       ...opts,
       method: 'DELETE',
     }),
@@ -4263,11 +4263,11 @@ export enum Permissions {
   All = 'all',
   OrganizationRead = 'organization.read',
   OrganizationManage = 'organization.manage',
-  ProjectCreate = 'project.create',
-  ProjectRead = 'project.read',
-  ProjectUpdate = 'project.update',
-  ProjectDelete = 'project.delete',
-  ProjectMemberManage = 'project.member.manage',
+  FolderCreate = 'folder.create',
+  FolderRead = 'folder.read',
+  FolderUpdate = 'folder.update',
+  FolderDelete = 'folder.delete',
+  FolderAccessManage = 'folder.access.manage',
   DiagramCreate = 'diagram.create',
   DiagramRead = 'diagram.read',
   DiagramUpdate = 'diagram.update',
@@ -4469,7 +4469,7 @@ export enum OrganizationRole {
   Member = 'member',
   Guest = 'guest',
 }
-export enum ProjectRole {
+export enum FolderRole {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
@@ -4511,7 +4511,7 @@ export enum Role5 {
   Member = 'member',
   Guest = 'guest',
 }
-export enum DefaultProjectRole {
+export enum DefaultFolderRole {
   Editor = 'editor',
   Commenter = 'commenter',
   Viewer = 'viewer',
@@ -4526,7 +4526,7 @@ export enum Role6 {
   Member = 'member',
   Guest = 'guest',
 }
-export enum ProjectRole2 {
+export enum FolderRole2 {
   Owner = 'owner',
   Editor = 'editor',
   Commenter = 'commenter',

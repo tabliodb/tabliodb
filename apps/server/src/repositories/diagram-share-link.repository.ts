@@ -33,8 +33,8 @@ export type DiagramShareLinkAccessContext = {
   diagramName: string;
   organizationId: string;
   organizationName: string;
-  projectId: string | null;
-  projectName: string | null;
+  folderId: string | null;
+  folderName: string | null;
 };
 
 export type PublicDiagramShareLinkRecord = DiagramShareLinkRecord &
@@ -71,20 +71,20 @@ export class DiagramShareLinkRepository {
   async getDiagramAccessContext(diagramId: string): Promise<DiagramShareLinkAccessContext | undefined> {
     return this.db
       .selectFrom('diagrams')
-      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('folders', 'folders.id', 'diagrams.folderId')
       .innerJoin('organizations', 'organizations.id', 'diagrams.organizationId')
       .select([
         'diagrams.id as diagramId',
         'diagrams.name as diagramName',
         'diagrams.dialect',
-        'diagrams.projectId',
-        'projects.name as projectName',
+        'diagrams.folderId',
+        'folders.name as folderName',
         'organizations.id as organizationId',
         'organizations.name as organizationName',
       ])
       .where('diagrams.id', '=', diagramId)
       .where('diagrams.archivedAt', 'is', null)
-      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
+      .where((eb) => eb.or([eb('diagrams.folderId', 'is', null), eb('folders.archivedAt', 'is', null)]))
       .where('organizations.archivedAt', 'is', null)
       .executeTakeFirst();
   }
@@ -105,7 +105,7 @@ export class DiagramShareLinkRepository {
       .executeTakeFirstOrThrow();
 
     return {
-      // Share links dipaginasi sejak awal karena enterprise project bisa membuat banyak link untuk stakeholder berbeda.
+      // Share links dipaginasi sejak awal karena enterprise folder bisa membuat banyak link untuk stakeholder berbeda.
       items: rows.slice(0, options.limit).map((row) => this.toShareLinkRecord(row)),
       nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
       totalCount: Number(totalRow.count),
@@ -115,14 +115,14 @@ export class DiagramShareLinkRepository {
   async getActiveByTokenHash(tokenHash: Buffer): Promise<PublicDiagramShareLinkRecord | undefined> {
     const row = await this.baseShareLinkQuery()
       .innerJoin('diagrams', 'diagrams.id', 'diagram_share_links.diagramId')
-      .leftJoin('projects', 'projects.id', 'diagrams.projectId')
+      .leftJoin('folders', 'folders.id', 'diagrams.folderId')
       .innerJoin('organizations', 'organizations.id', 'diagrams.organizationId')
       .leftJoin('diagram_snapshots', 'diagram_snapshots.id', 'diagram_share_links.snapshotId')
       .select([
         'diagrams.name as diagramName',
         'diagrams.dialect',
-        'diagrams.projectId',
-        'projects.name as projectName',
+        'diagrams.folderId',
+        'folders.name as folderName',
         'organizations.id as organizationId',
         'organizations.name as organizationName',
         'diagram_snapshots.version as snapshotVersion',
@@ -136,7 +136,7 @@ export class DiagramShareLinkRepository {
         eb.or([eb('diagram_share_links.expiresAt', 'is', null), eb('diagram_share_links.expiresAt', '>', new Date())]),
       )
       .where('diagrams.archivedAt', 'is', null)
-      .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
+      .where((eb) => eb.or([eb('diagrams.folderId', 'is', null), eb('folders.archivedAt', 'is', null)]))
       .where('organizations.archivedAt', 'is', null)
       .executeTakeFirst();
 
@@ -147,8 +147,8 @@ export class DiagramShareLinkRepository {
           diagramName: row.diagramName,
           organizationId: row.organizationId,
           organizationName: row.organizationName,
-          projectId: row.projectId,
-          projectName: row.projectName,
+          folderId: row.folderId,
+          folderName: row.folderName,
           snapshotCreatedAt: row.snapshotCreatedAt,
           snapshotMessage: row.snapshotMessage,
           snapshotModel: row.snapshotModel as JsonValue | null,

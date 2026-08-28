@@ -5,20 +5,20 @@ import {
   createTeam,
   removeTeamDiagramAccess,
   removeTeamMember,
-  removeTeamProjectAccess,
+  removeTeamFolderAccess,
   updateTeam,
   upsertTeamDiagramAccess,
-  upsertTeamProjectAccess,
+  upsertTeamFolderAccess,
   type TeamCreateDto,
   type TeamDiagramAccessUpsertDto,
   type TeamMemberCreateDto,
-  type TeamProjectAccessUpsertDto,
+  type TeamFolderAccessUpsertDto,
   type TeamUpdateDto,
 } from '@tabliodb/sdk';
 import { queryClient, type MutationConfig } from '@/lib/react-query';
 import { organizationsKeys } from '@/resources/organizations';
 import { diagramsKeys } from '@/resources/diagrams';
-import { projectsKeys } from '@/resources/projects';
+import { foldersKeys } from '@/resources/folders';
 import { teamsKeys } from './team.keys';
 
 const createTeamMutationFn = (body: TeamCreateDto) => createTeam({ teamCreateDto: body });
@@ -30,13 +30,13 @@ const addTeamMemberMutationFn = (input: { body: TeamMemberCreateDto; organizatio
   addTeamMember({ teamId: input.teamId, teamMemberCreateDto: input.body });
 const removeTeamMemberMutationFn = (input: { organizationId: string; teamId: string; userId: string }) =>
   removeTeamMember({ teamId: input.teamId, userId: input.userId });
-const upsertTeamProjectAccessMutationFn = (input: {
-  body: TeamProjectAccessUpsertDto;
+const upsertTeamFolderAccessMutationFn = (input: {
+  body: TeamFolderAccessUpsertDto;
   organizationId: string;
   teamId: string;
-}) => upsertTeamProjectAccess({ teamId: input.teamId, teamProjectAccessUpsertDto: input.body });
-const removeTeamProjectAccessMutationFn = (input: { organizationId: string; projectId: string; teamId: string }) =>
-  removeTeamProjectAccess({ projectId: input.projectId, teamId: input.teamId });
+}) => upsertTeamFolderAccess({ teamId: input.teamId, teamFolderAccessUpsertDto: input.body });
+const removeTeamFolderAccessMutationFn = (input: { organizationId: string; folderId: string; teamId: string }) =>
+  removeTeamFolderAccess({ folderId: input.folderId, teamId: input.teamId });
 const upsertTeamDiagramAccessMutationFn = (input: {
   body: TeamDiagramAccessUpsertDto;
   organizationId: string;
@@ -89,7 +89,7 @@ export function useArchiveTeamMutation(params: UseArchiveTeamMutationParams = {}
     onSuccess: (data, variables, onMutateResult, context) => {
       queryClient.invalidateQueries({ queryKey: teamsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -106,7 +106,7 @@ export function useAddTeamMemberMutation(params: UseAddTeamMemberMutationParams 
     onSuccess: (data, variables, onMutateResult, context) => {
       queryClient.invalidateQueries({ queryKey: teamsKeys.membersRoot(variables.teamId) });
       queryClient.invalidateQueries({ queryKey: teamsKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       // Team member add also anchors existing users as workspace guests, so workspace settings must not show stale membership.
       queryClient.invalidateQueries({ queryKey: organizationsKeys.membersRoot(variables.organizationId) });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
@@ -126,44 +126,44 @@ export function useRemoveTeamMemberMutation(params: UseRemoveTeamMemberMutationP
     onSuccess: (data, variables, onMutateResult, context) => {
       queryClient.invalidateQueries({ queryKey: teamsKeys.membersRoot(variables.teamId) });
       queryClient.invalidateQueries({ queryKey: teamsKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
 }
 
-type UseUpsertTeamProjectAccessMutationParams = {
-  mutationConfig?: MutationConfig<typeof upsertTeamProjectAccessMutationFn>;
+type UseUpsertTeamFolderAccessMutationParams = {
+  mutationConfig?: MutationConfig<typeof upsertTeamFolderAccessMutationFn>;
 };
 
-export function useUpsertTeamProjectAccessMutation(params: UseUpsertTeamProjectAccessMutationParams = {}) {
+export function useUpsertTeamFolderAccessMutation(params: UseUpsertTeamFolderAccessMutationParams = {}) {
   return useMutation({
-    mutationFn: upsertTeamProjectAccessMutationFn,
+    mutationFn: upsertTeamFolderAccessMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Project access through a team changes effective roles, so project lists and active access panels both refresh.
-      queryClient.invalidateQueries({ queryKey: teamsKeys.projectAccessesRoot(variables.teamId) });
+      // Folder access through a team changes effective roles, so folder lists and active access panels both refresh.
+      queryClient.invalidateQueries({ queryKey: teamsKeys.folderAccessesRoot(variables.teamId) });
       queryClient.invalidateQueries({ queryKey: teamsKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
 }
 
-type UseRemoveTeamProjectAccessMutationParams = {
-  mutationConfig?: MutationConfig<typeof removeTeamProjectAccessMutationFn>;
+type UseRemoveTeamFolderAccessMutationParams = {
+  mutationConfig?: MutationConfig<typeof removeTeamFolderAccessMutationFn>;
 };
 
-export function useRemoveTeamProjectAccessMutation(params: UseRemoveTeamProjectAccessMutationParams = {}) {
+export function useRemoveTeamFolderAccessMutation(params: UseRemoveTeamFolderAccessMutationParams = {}) {
   return useMutation({
-    mutationFn: removeTeamProjectAccessMutationFn,
+    mutationFn: removeTeamFolderAccessMutationFn,
     ...params.mutationConfig,
     onSuccess: (data, variables, onMutateResult, context) => {
-      queryClient.invalidateQueries({ queryKey: teamsKeys.projectAccessesRoot(variables.teamId) });
+      queryClient.invalidateQueries({ queryKey: teamsKeys.folderAccessesRoot(variables.teamId) });
       queryClient.invalidateQueries({ queryKey: teamsKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: foldersKeys.lists() });
       queryClient.invalidateQueries({ queryKey: organizationsKeys.auditLogsRoot(variables.organizationId) });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },

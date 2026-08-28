@@ -385,7 +385,7 @@ function InviteUserDialog() {
                   <div className="grid gap-2 sm:grid-cols-2">
                     <RoleOption
                       checked={form.watch('organizationRole') === SdkOrganizationRole.Member}
-                      description="Can join workspace projects."
+                      description="Can join workspace folders."
                       label="Member"
                       onClick={() =>
                         form.setValue('organizationRole', SdkOrganizationRole.Member, { shouldDirty: true })

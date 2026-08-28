@@ -2,12 +2,12 @@ import type { PaginationQuery } from '@tabliodb/shared';
 import {
   getTeamDiagramAccesses,
   getTeamMembers,
-  getTeamProjectAccesses,
+  getTeamFolderAccesses,
   getTeams,
   type TeamDiagramAccessListResponseDtoOutput,
   type TeamListResponseDtoOutput,
   type TeamMemberListResponseDtoOutput,
-  type TeamProjectAccessListResponseDtoOutput,
+  type TeamFolderAccessListResponseDtoOutput,
 } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { teamsKeys, type TeamListQuery } from './team.keys';
@@ -22,10 +22,10 @@ type TeamsQueries = {
     teamId: string,
     query?: PaginationQuery,
   ) => AppQueryOptions<TeamMemberListResponseDtoOutput, ReturnType<typeof teamsKeys.members>>;
-  projectAccesses: (
+  folderAccesses: (
     teamId: string,
     query?: PaginationQuery,
-  ) => AppQueryOptions<TeamProjectAccessListResponseDtoOutput, ReturnType<typeof teamsKeys.projectAccesses>>;
+  ) => AppQueryOptions<TeamFolderAccessListResponseDtoOutput, ReturnType<typeof teamsKeys.folderAccesses>>;
 };
 
 export const teamsQueries: TeamsQueries = {
@@ -50,10 +50,10 @@ export const teamsQueries: TeamsQueries = {
       queryKey: teamsKeys.members(teamId, query),
     }),
 
-  projectAccesses: (teamId: string, query: PaginationQuery = {}) =>
+  folderAccesses: (teamId: string, query: PaginationQuery = {}) =>
     appQueryOptions({
       enabled: Boolean(teamId),
-      queryFn: () => getTeamProjectAccesses({ teamId, ...query }),
-      queryKey: teamsKeys.projectAccesses(teamId, query),
+      queryFn: () => getTeamFolderAccesses({ teamId, ...query }),
+      queryKey: teamsKeys.folderAccesses(teamId, query),
     }),
 };

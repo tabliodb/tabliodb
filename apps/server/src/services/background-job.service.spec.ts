@@ -101,8 +101,8 @@ describe(BackgroundJobService.name, () => {
       diagramName: 'Library schema',
       organizationName: 'Library Workspace',
       organizationSlug: 'library-workspace',
-      projectId: 'project-id',
-      projectName: 'Library System',
+      folderId: 'folder-id',
+      folderName: 'Library System',
       recipients: [
         {
           email: 'owner@tabliodb.local',

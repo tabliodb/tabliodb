@@ -1,17 +1,17 @@
 import { DatabaseDialectSchema, DiagramModelSchema } from '@tabliodb/schema-core';
-import { ProjectRole } from '@tabliodb/shared';
+import { AccessRole } from '@tabliodb/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
 const DiagramStatusSchema = z.enum(['draft', 'reviewed', 'approved', 'changes_requested']);
 const DiagramMemberRoleSchema = z.enum([
-  ProjectRole.Owner,
-  ProjectRole.Editor,
-  ProjectRole.Commenter,
-  ProjectRole.Viewer,
+  AccessRole.Owner,
+  AccessRole.Editor,
+  AccessRole.Commenter,
+  AccessRole.Viewer,
 ]);
-const DiagramAssignableMemberRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
+const DiagramAssignableMemberRoleSchema = z.enum([AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer]);
 const DiagramEffectiveAccessTypeSchema = z.enum(['direct', 'inherited', 'mixed']);
 const DiagramEffectiveAccessSourceTypeSchema = z.enum([
   'direct',
@@ -26,7 +26,7 @@ const DiagramEffectiveAccessSourceTypeSchema = z.enum([
 const DiagramCreateSchema = z
   .object({
     organizationId: z.uuid(),
-    projectId: z.uuid().nullable().optional(),
+    folderId: z.uuid().nullable().optional(),
     name: z.string().min(1),
     dialect: DatabaseDialectSchema.default('postgresql'),
   })
@@ -44,8 +44,8 @@ const DiagramUpdateSchema = z
     // Diagram settings is a partial update because users may rename, move, or change dialect independently.
     name: z.string().trim().min(1).max(80).optional(),
     dialect: DatabaseDialectSchema.optional(),
-    // A null projectId intentionally means a root workspace diagram; folders are optional organization, not required ownership.
-    projectId: z.uuid().nullable().optional(),
+    // A null folderId intentionally means a root workspace diagram; folders are optional organization, not required ownership.
+    folderId: z.uuid().nullable().optional(),
   })
   .meta({ id: 'DiagramUpdateDto' });
 
@@ -53,7 +53,7 @@ const DiagramResponseSchema = z
   .object({
     id: z.uuid(),
     organizationId: z.uuid(),
-    projectId: z.uuid().nullable(),
+    folderId: z.uuid().nullable(),
     name: z.string(),
     dialect: DatabaseDialectSchema,
     status: DiagramStatusSchema,
@@ -142,7 +142,7 @@ const DiagramEffectiveAccessListResponseSchema = z
 const DiagramMemberCreateSchema = z
   .object({
     email: z.email(),
-    role: DiagramAssignableMemberRoleSchema.default(ProjectRole.Viewer),
+    role: DiagramAssignableMemberRoleSchema.default(AccessRole.Viewer),
   })
   .meta({ id: 'DiagramMemberCreateDto' });
 

@@ -1,12 +1,12 @@
 import type { DiagramModel } from '@tabliodb/schema-core';
-import type { OrganizationDtoOutput, ProjectResponseDtoOutput } from '@tabliodb/sdk';
+import type { OrganizationDtoOutput, FolderResponseDtoOutput } from '@tabliodb/sdk';
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import type { NavigateFunction } from 'react-router';
 import { routes } from '@/app/routes';
 import { getOrganizationSlug, getWorkspaceSlug } from './editor-route-guards';
 
 type OrganizationDto = OrganizationDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
 
 type ResetDraftOptions = {
   clearSelection?: boolean;
@@ -82,13 +82,13 @@ export function useEditorRouteActions({
     [navigate, resetDraft],
   );
 
-  const goToProject = useCallback(
-    (project: ProjectResponseDto, { replace, ...resetOptions }: EditorRouteActionOptions = {}) => {
+  const goToFolder = useCallback(
+    (folder: FolderResponseDto, { replace, ...resetOptions }: EditorRouteActionOptions = {}) => {
       resetDraft(resetOptions);
       navigate(
-        routes.project.to({
-          projectId: project.id,
-          workspaceSlug: getWorkspaceSlug(project),
+        routes.folder.to({
+          folderId: folder.id,
+          workspaceSlug: getWorkspaceSlug(folder),
         }),
         createNavigateOptions(replace),
       );
@@ -100,16 +100,16 @@ export function useEditorRouteActions({
     (
       target: {
         diagramId: string;
-        projectId: string | null;
+        folderId: string | null;
         workspaceSlug: string;
       },
       { replace, ...resetOptions }: EditorRouteActionOptions = {},
     ) => {
       resetDraft(resetOptions);
-      // Root diagrams use the workspace route; foldered diagrams keep the legacy project route for deep links.
+      // Root diagrams use the workspace route; foldered diagrams keep the legacy folder route for deep links.
       navigate(
-        target.projectId
-          ? routes.diagram.to({ diagramId: target.diagramId, projectId: target.projectId, workspaceSlug: target.workspaceSlug })
+        target.folderId
+          ? routes.diagram.to({ diagramId: target.diagramId, folderId: target.folderId, workspaceSlug: target.workspaceSlug })
           : routes.workspaceDiagram.to({ diagramId: target.diagramId, workspaceSlug: target.workspaceSlug }),
         createNavigateOptions(replace),
       );
@@ -123,7 +123,7 @@ export function useEditorRouteActions({
     goToAdminSettings,
     goToDiagram,
     goToProfile,
-    goToProject,
+    goToFolder,
     goToWorkspace,
     resetDraft,
   };

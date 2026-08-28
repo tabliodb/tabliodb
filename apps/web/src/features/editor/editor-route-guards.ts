@@ -1,16 +1,16 @@
 import type {
   CurrentUserEditorPreferenceDtoOutput,
   OrganizationDtoOutput,
-  ProjectResponseDtoOutput,
+  FolderResponseDtoOutput,
 } from '@tabliodb/sdk';
 
 type CurrentUserEditorPreferenceDto = CurrentUserEditorPreferenceDtoOutput;
 type OrganizationDto = OrganizationDtoOutput;
-type ProjectResponseDto = ProjectResponseDtoOutput;
+type FolderResponseDto = FolderResponseDtoOutput;
 
-export function getWorkspaceSlug(project: ProjectResponseDto): string {
-  // Prefer human-friendly workspace slugs, but keep organization id as a stable fallback for older/project-only payloads.
-  return project.organizationSlug || project.organizationId;
+export function getWorkspaceSlug(folder: FolderResponseDto): string {
+  // Prefer human-friendly workspace slugs, but keep organization id as a stable fallback for older/folder-only payloads.
+  return folder.organizationSlug || folder.organizationId;
 }
 
 export function getOrganizationSlug(organization: OrganizationDto): string {
@@ -37,8 +37,8 @@ export function matchesRememberedWorkspace(
 export function createEditorPreferenceKey(target: {
   diagramId?: string | null;
   organizationId: string | null;
-  projectId?: string | null;
+  folderId?: string | null;
 }): string {
   // A compact stable key lets EditorPage skip duplicate preference writes without comparing nested objects.
-  return [target.organizationId ?? '', target.projectId ?? '', target.diagramId ?? ''].join(':');
+  return [target.organizationId ?? '', target.folderId ?? '', target.diagramId ?? ''].join(':');
 }

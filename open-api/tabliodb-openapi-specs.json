@@ -3172,9 +3172,9 @@
         ]
       }
     },
-    "/projects": {
+    "/folders": {
       "get": {
-        "operationId": "getProjects",
+        "operationId": "getFolders",
         "parameters": [
           {
             "name": "organizationId",
@@ -3207,7 +3207,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectListResponseDto_Output"
+                  "$ref": "#/components/schemas/FolderListResponseDto_Output"
                 }
               }
             }
@@ -3226,18 +3226,18 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       },
       "post": {
-        "operationId": "createProject",
+        "operationId": "createFolder",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProjectCreateDto"
+                "$ref": "#/components/schemas/FolderCreateDto"
               }
             }
           }
@@ -3248,7 +3248,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectResponseDto_Output"
+                  "$ref": "#/components/schemas/FolderResponseDto_Output"
                 }
               }
             }
@@ -3267,16 +3267,16 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       }
     },
-    "/projects/{projectId}": {
+    "/folders/{folderId}": {
       "patch": {
-        "operationId": "updateProject",
+        "operationId": "updateFolder",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -3289,7 +3289,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProjectUpdateDto"
+                "$ref": "#/components/schemas/FolderUpdateDto"
               }
             }
           }
@@ -3300,7 +3300,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectResponseDto_Output"
+                  "$ref": "#/components/schemas/FolderResponseDto_Output"
                 }
               }
             }
@@ -3319,14 +3319,14 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       },
       "delete": {
-        "operationId": "archiveProject",
+        "operationId": "archiveFolder",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -3340,7 +3340,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectArchiveResponseDto_Output"
+                  "$ref": "#/components/schemas/FolderArchiveResponseDto_Output"
                 }
               }
             }
@@ -3359,13 +3359,13 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       }
     },
-    "/projects/{projectId}/members": {
+    "/folders/{folderId}/access": {
       "get": {
-        "operationId": "getProjectMembers",
+        "operationId": "getFolderAccess",
         "parameters": [
           {
             "name": "cursor",
@@ -3384,7 +3384,7 @@
             }
           },
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -3398,7 +3398,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectMemberListResponseDto_Output"
+                  "$ref": "#/components/schemas/FolderAccessListResponseDto_Output"
                 }
               }
             }
@@ -3417,14 +3417,14 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       },
       "post": {
-        "operationId": "addProjectMember",
+        "operationId": "addFolderAccess",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -3437,7 +3437,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProjectMemberCreateDto"
+                "$ref": "#/components/schemas/FolderAccessCreateDto"
               }
             }
           }
@@ -3448,7 +3448,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectMemberDto_Output"
+                  "$ref": "#/components/schemas/FolderAccessDto_Output"
                 }
               }
             }
@@ -3467,16 +3467,16 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       }
     },
-    "/projects/{projectId}/ownership/transfer": {
+    "/folders/{folderId}/ownership/transfer": {
       "post": {
-        "operationId": "transferProjectOwnership",
+        "operationId": "transferFolderOwnership",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -3489,7 +3489,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProjectOwnershipTransferDto"
+                "$ref": "#/components/schemas/FolderOwnershipTransferDto"
               }
             }
           }
@@ -3500,7 +3500,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectMemberDto_Output"
+                  "$ref": "#/components/schemas/FolderAccessDto_Output"
                 }
               }
             }
@@ -3519,13 +3519,13 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       }
     },
-    "/projects/{projectId}/members/{userId}": {
+    "/folders/{folderId}/access/{userId}": {
       "patch": {
-        "operationId": "updateProjectMember",
+        "operationId": "updateFolderAccess",
         "parameters": [
           {
             "name": "userId",
@@ -3536,7 +3536,7 @@
             }
           },
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -3549,7 +3549,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProjectMemberUpdateDto"
+                "$ref": "#/components/schemas/FolderAccessUpdateDto"
               }
             }
           }
@@ -3560,7 +3560,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectMemberDto_Output"
+                  "$ref": "#/components/schemas/FolderAccessDto_Output"
                 }
               }
             }
@@ -3579,11 +3579,11 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       },
       "delete": {
-        "operationId": "removeProjectMember",
+        "operationId": "removeFolderAccess",
         "parameters": [
           {
             "name": "userId",
@@ -3594,7 +3594,7 @@
             }
           },
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -3608,7 +3608,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectMemberRemoveResponseDto_Output"
+                  "$ref": "#/components/schemas/FolderAccessRemoveResponseDto_Output"
                 }
               }
             }
@@ -3627,13 +3627,13 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       }
     },
-    "/projects/{projectId}/diagrams": {
+    "/folders/{folderId}/diagrams": {
       "get": {
-        "operationId": "getProjectDiagrams",
+        "operationId": "getFolderDiagrams",
         "parameters": [
           {
             "name": "cursor",
@@ -3652,7 +3652,7 @@
             }
           },
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -3685,7 +3685,7 @@
         ],
         "summary": "",
         "tags": [
-          "projects"
+          "folders"
         ]
       }
     },
@@ -4778,9 +4778,9 @@
         ]
       }
     },
-    "/teams/{teamId}/projects": {
+    "/teams/{teamId}/folders": {
       "get": {
-        "operationId": "getTeamProjectAccesses",
+        "operationId": "getTeamFolderAccesses",
         "parameters": [
           {
             "name": "cursor",
@@ -4813,7 +4813,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamProjectAccessListResponseDto_Output"
+                  "$ref": "#/components/schemas/TeamFolderAccessListResponseDto_Output"
                 }
               }
             }
@@ -4836,7 +4836,7 @@
         ]
       },
       "post": {
-        "operationId": "upsertTeamProjectAccess",
+        "operationId": "upsertTeamFolderAccess",
         "parameters": [
           {
             "name": "teamId",
@@ -4852,7 +4852,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TeamProjectAccessUpsertDto"
+                "$ref": "#/components/schemas/TeamFolderAccessUpsertDto"
               }
             }
           }
@@ -4863,7 +4863,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamProjectAccessDto_Output"
+                  "$ref": "#/components/schemas/TeamFolderAccessDto_Output"
                 }
               }
             }
@@ -4886,12 +4886,12 @@
         ]
       }
     },
-    "/teams/{teamId}/projects/{projectId}": {
+    "/teams/{teamId}/folders/{folderId}": {
       "delete": {
-        "operationId": "removeTeamProjectAccess",
+        "operationId": "removeTeamFolderAccess",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "folderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -4913,7 +4913,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamProjectAccessRemoveResponseDto_Output"
+                  "$ref": "#/components/schemas/TeamFolderAccessRemoveResponseDto_Output"
                 }
               }
             }
@@ -5882,13 +5882,13 @@
             "type": "string",
             "nullable": true
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
             "nullable": true
           },
-          "projectName": {
+          "folderName": {
             "type": "string",
             "nullable": true
           },
@@ -5908,8 +5908,8 @@
           "diagramName",
           "organizationId",
           "organizationName",
-          "projectId",
-          "projectName",
+          "folderId",
+          "folderName",
           "updatedAt",
           "workspaceSlug"
         ],
@@ -5929,7 +5929,7 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -6217,11 +6217,11 @@
                 "all",
                 "organization.read",
                 "organization.manage",
-                "project.create",
-                "project.read",
-                "project.update",
-                "project.delete",
-                "project.member.manage",
+                "folder.create",
+                "folder.read",
+                "folder.update",
+                "folder.delete",
+                "folder.access.manage",
                 "diagram.create",
                 "diagram.read",
                 "diagram.update",
@@ -6272,11 +6272,11 @@
                 "all",
                 "organization.read",
                 "organization.manage",
-                "project.create",
-                "project.read",
-                "project.update",
-                "project.delete",
-                "project.member.manage",
+                "folder.create",
+                "folder.read",
+                "folder.update",
+                "folder.delete",
+                "folder.access.manage",
                 "diagram.create",
                 "diagram.read",
                 "diagram.update",
@@ -7363,7 +7363,7 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -7403,7 +7403,7 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -7454,7 +7454,7 @@
         "required": [
           "id",
           "organizationId",
-          "projectId",
+          "folderId",
           "name",
           "dialect",
           "status",
@@ -7822,7 +7822,7 @@
               "sqlserver"
             ]
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -8849,12 +8849,12 @@
               "guest"
             ]
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "projectRole": {
+          "folderRole": {
             "type": "string",
             "enum": [
               "editor",
@@ -8923,17 +8923,17 @@
               "guest"
             ]
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
             "nullable": true
           },
-          "projectName": {
+          "folderName": {
             "type": "string",
             "nullable": true
           },
-          "projectRole": {
+          "folderRole": {
             "type": "string",
             "enum": [
               "editor",
@@ -9019,9 +9019,9 @@
           "organizationName",
           "organizationSlug",
           "organizationRole",
-          "projectId",
-          "projectName",
-          "projectRole",
+          "folderId",
+          "folderName",
+          "folderRole",
           "diagramId",
           "diagramName",
           "diagramRole",
@@ -9077,11 +9077,11 @@
               "guest"
             ]
           },
-          "projectName": {
+          "folderName": {
             "type": "string",
             "nullable": true
           },
-          "projectRole": {
+          "folderRole": {
             "type": "string",
             "enum": [
               "editor",
@@ -9127,8 +9127,8 @@
           "email",
           "organizationName",
           "organizationRole",
-          "projectName",
-          "projectRole",
+          "folderName",
+          "folderRole",
           "diagramName",
           "diagramRole",
           "message",
@@ -9405,7 +9405,7 @@
             "additionalProperties": false,
             "nullable": true
           },
-          "project": {
+          "folder": {
             "type": "object",
             "properties": {
               "id": {
@@ -9527,7 +9527,7 @@
           "id",
           "isUnread",
           "parentComment",
-          "project",
+          "folder",
           "thread",
           "type",
           "workspace"
@@ -9626,7 +9626,7 @@
           "status": {
             "type": "string"
           },
-          "defaultProjectRole": {
+          "defaultFolderRole": {
             "type": "string",
             "enum": [
               "editor",
@@ -9635,7 +9635,7 @@
             ],
             "nullable": true
           },
-          "allowMemberProjectCreate": {
+          "allowMemberFolderCreate": {
             "type": "boolean"
           },
           "createdAt": {
@@ -9655,8 +9655,8 @@
           "slug",
           "role",
           "status",
-          "defaultProjectRole",
-          "allowMemberProjectCreate",
+          "defaultFolderRole",
+          "allowMemberFolderCreate",
           "createdAt",
           "updatedAt"
         ],
@@ -9702,7 +9702,7 @@
           "slug": {
             "type": "string"
           },
-          "defaultProjectRole": {
+          "defaultFolderRole": {
             "type": "string",
             "enum": [
               "editor",
@@ -9711,7 +9711,7 @@
             ],
             "nullable": true
           },
-          "allowMemberProjectCreate": {
+          "allowMemberFolderCreate": {
             "type": "boolean"
           },
           "createdAt": {
@@ -9729,8 +9729,8 @@
           "id",
           "name",
           "slug",
-          "defaultProjectRole",
-          "allowMemberProjectCreate",
+          "defaultFolderRole",
+          "allowMemberFolderCreate",
           "createdAt",
           "updatedAt"
         ],
@@ -9744,7 +9744,7 @@
             "minLength": 1,
             "maxLength": 80
           },
-          "defaultProjectRole": {
+          "defaultFolderRole": {
             "type": "string",
             "enum": [
               "editor",
@@ -9753,7 +9753,7 @@
             ],
             "nullable": true
           },
-          "allowMemberProjectCreate": {
+          "allowMemberFolderCreate": {
             "type": "boolean"
           }
         }
@@ -9932,7 +9932,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
             "nullable": true
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -9994,7 +9994,7 @@
         "required": [
           "id",
           "organizationId",
-          "projectId",
+          "folderId",
           "diagramId",
           "actorId",
           "actorName",
@@ -10036,7 +10036,7 @@
         ],
         "additionalProperties": false
       },
-      "ProjectResponseDto_Output": {
+      "FolderResponseDto_Output": {
         "type": "object",
         "properties": {
           "id": {
@@ -10055,7 +10055,7 @@
           "organizationSlug": {
             "type": "string"
           },
-          "projectRole": {
+          "folderRole": {
             "type": "string",
             "enum": [
               "owner",
@@ -10090,7 +10090,7 @@
           "organizationId",
           "organizationName",
           "organizationSlug",
-          "projectRole",
+          "folderRole",
           "name",
           "slug",
           "description",
@@ -10099,13 +10099,13 @@
         ],
         "additionalProperties": false
       },
-      "ProjectListResponseDto_Output": {
+      "FolderListResponseDto_Output": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ProjectResponseDto_Output"
+              "$ref": "#/components/schemas/FolderResponseDto_Output"
             }
           },
           "nextCursor": {
@@ -10125,7 +10125,7 @@
         ],
         "additionalProperties": false
       },
-      "ProjectCreateDto": {
+      "FolderCreateDto": {
         "type": "object",
         "properties": {
           "organizationId": {
@@ -10146,7 +10146,7 @@
           "name"
         ]
       },
-      "ProjectUpdateDto": {
+      "FolderUpdateDto": {
         "type": "object",
         "properties": {
           "name": {
@@ -10159,7 +10159,7 @@
           }
         }
       },
-      "ProjectArchiveResponseDto_Output": {
+      "FolderArchiveResponseDto_Output": {
         "type": "object",
         "properties": {
           "successful": {
@@ -10171,7 +10171,7 @@
         ],
         "additionalProperties": false
       },
-      "ProjectMemberDto_Output": {
+      "FolderAccessDto_Output": {
         "type": "object",
         "properties": {
           "userId": {
@@ -10226,13 +10226,13 @@
         ],
         "additionalProperties": false
       },
-      "ProjectMemberListResponseDto_Output": {
+      "FolderAccessListResponseDto_Output": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ProjectMemberDto_Output"
+              "$ref": "#/components/schemas/FolderAccessDto_Output"
             }
           },
           "nextCursor": {
@@ -10252,7 +10252,7 @@
         ],
         "additionalProperties": false
       },
-      "ProjectMemberCreateDto": {
+      "FolderAccessCreateDto": {
         "type": "object",
         "properties": {
           "email": {
@@ -10274,7 +10274,7 @@
           "email"
         ]
       },
-      "ProjectOwnershipTransferDto": {
+      "FolderOwnershipTransferDto": {
         "type": "object",
         "properties": {
           "userId": {
@@ -10287,7 +10287,7 @@
           "userId"
         ]
       },
-      "ProjectMemberUpdateDto": {
+      "FolderAccessUpdateDto": {
         "type": "object",
         "properties": {
           "role": {
@@ -10303,7 +10303,7 @@
           "role"
         ]
       },
-      "ProjectMemberRemoveResponseDto_Output": {
+      "FolderAccessRemoveResponseDto_Output": {
         "type": "object",
         "properties": {
           "successful": {
@@ -10374,7 +10374,7 @@
               "organizationName": {
                 "type": "string"
               },
-              "projectName": {
+              "folderName": {
                 "type": "string",
                 "nullable": true
               }
@@ -10384,7 +10384,7 @@
               "dialect",
               "name",
               "organizationName",
-              "projectName"
+              "folderName"
             ],
             "additionalProperties": false
           },
@@ -13268,7 +13268,7 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
-          "projectAccessCount": {
+          "folderAccessCount": {
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
@@ -13292,7 +13292,7 @@
           "description",
           "memberCount",
           "diagramAccessCount",
-          "projectAccessCount",
+          "folderAccessCount",
           "createdAt",
           "updatedAt"
         ],
@@ -13460,18 +13460,18 @@
         ],
         "additionalProperties": false
       },
-      "TeamProjectAccessDto_Output": {
+      "TeamFolderAccessDto_Output": {
         "type": "object",
         "properties": {
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "projectName": {
+          "folderName": {
             "type": "string"
           },
-          "projectSlug": {
+          "folderSlug": {
             "type": "string"
           },
           "role": {
@@ -13494,22 +13494,22 @@
           }
         },
         "required": [
-          "projectId",
-          "projectName",
-          "projectSlug",
+          "folderId",
+          "folderName",
+          "folderSlug",
           "role",
           "createdAt",
           "updatedAt"
         ],
         "additionalProperties": false
       },
-      "TeamProjectAccessListResponseDto_Output": {
+      "TeamFolderAccessListResponseDto_Output": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TeamProjectAccessDto_Output"
+              "$ref": "#/components/schemas/TeamFolderAccessDto_Output"
             }
           },
           "nextCursor": {
@@ -13529,10 +13529,10 @@
         ],
         "additionalProperties": false
       },
-      "TeamProjectAccessUpsertDto": {
+      "TeamFolderAccessUpsertDto": {
         "type": "object",
         "properties": {
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -13548,10 +13548,10 @@
           }
         },
         "required": [
-          "projectId"
+          "folderId"
         ]
       },
-      "TeamProjectAccessRemoveResponseDto_Output": {
+      "TeamFolderAccessRemoveResponseDto_Output": {
         "type": "object",
         "properties": {
           "successful": {
@@ -13574,7 +13574,7 @@
           "diagramName": {
             "type": "string"
           },
-          "projectId": {
+          "folderId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -13602,7 +13602,7 @@
         "required": [
           "diagramId",
           "diagramName",
-          "projectId",
+          "folderId",
           "role",
           "createdAt",
           "updatedAt"

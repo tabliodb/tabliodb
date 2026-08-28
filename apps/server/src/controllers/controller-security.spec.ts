@@ -63,14 +63,14 @@ const servicePermissionRoutes = new Set([
   'TeamController.createTeam',
   'TeamController.getTeamDiagramAccesses',
   'TeamController.getTeamMembers',
-  'TeamController.getTeamProjectAccesses',
+  'TeamController.getTeamFolderAccesses',
   'TeamController.getTeams',
   'TeamController.removeTeamDiagramAccess',
   'TeamController.removeTeamMember',
-  'TeamController.removeTeamProjectAccess',
+  'TeamController.removeTeamFolderAccess',
   'TeamController.updateTeam',
   'TeamController.upsertTeamDiagramAccess',
-  'TeamController.upsertTeamProjectAccess',
+  'TeamController.upsertTeamFolderAccess',
 ]);
 
 describe('controller security boundaries', () => {

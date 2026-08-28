@@ -1,9 +1,9 @@
-import { OrganizationRole, ProjectRole } from '@tabliodb/shared';
+import { OrganizationRole, AccessRole } from '@tabliodb/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 const DateTimeSchema = z.iso.datetime({ offset: true });
-const DefaultProjectRoleSchema = z.enum([ProjectRole.Editor, ProjectRole.Commenter, ProjectRole.Viewer]);
+const DefaultFolderRoleSchema = z.enum([AccessRole.Editor, AccessRole.Commenter, AccessRole.Viewer]);
 const OrganizationRoleSchema = z.enum([
   OrganizationRole.Owner,
   OrganizationRole.Admin,
@@ -23,8 +23,8 @@ const OrganizationSchema = z
     slug: z.string(),
     role: OrganizationRoleSchema,
     status: z.string(),
-    defaultProjectRole: DefaultProjectRoleSchema.nullable(),
-    allowMemberProjectCreate: z.boolean(),
+    defaultFolderRole: DefaultFolderRoleSchema.nullable(),
+    allowMemberFolderCreate: z.boolean(),
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,
   })
@@ -111,8 +111,8 @@ const OrganizationSettingsSchema = z
     id: z.uuid(),
     name: z.string(),
     slug: z.string(),
-    defaultProjectRole: DefaultProjectRoleSchema.nullable(),
-    allowMemberProjectCreate: z.boolean(),
+    defaultFolderRole: DefaultFolderRoleSchema.nullable(),
+    allowMemberFolderCreate: z.boolean(),
     createdAt: DateTimeSchema,
     updatedAt: DateTimeSchema,
   })
@@ -121,8 +121,8 @@ const OrganizationSettingsSchema = z
 const OrganizationSettingsUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
-    defaultProjectRole: DefaultProjectRoleSchema.nullable().optional(),
-    allowMemberProjectCreate: z.boolean().optional(),
+    defaultFolderRole: DefaultFolderRoleSchema.nullable().optional(),
+    allowMemberFolderCreate: z.boolean().optional(),
   })
   .meta({ id: 'OrganizationSettingsUpdateDto' });
 
