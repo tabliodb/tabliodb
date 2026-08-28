@@ -32,6 +32,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  WithTooltip,
   cn,
   toast,
 } from '@tabliodb/ui';
@@ -44,6 +45,7 @@ import {
   KeyRound,
   ListPlus,
   MessageSquareText,
+  Palette,
   Scissors,
   Trash2,
   X,
@@ -77,7 +79,7 @@ import {
   duplicateTableInModel,
 } from '../diagram-table-actions';
 import { formatColumnType } from '../diagram-model';
-import { getDisplayTableColor } from '../table-colors';
+import { getDisplayTableColor, getTableColorLabel, tableColorOptions } from '../table-colors';
 
 const tableNodeShape = 'tabliodb-table';
 const noteNodeShape = 'tabliodb-note';
@@ -287,6 +289,12 @@ type TableContextMenuState = {
   top: number;
 };
 
+type GroupContextMenuState = {
+  groupId: string;
+  left: number;
+  top: number;
+};
+
 type TableSelectionBoxState = {
   count: number;
   height: number;
@@ -409,6 +417,7 @@ export function SchemaCanvas({
   const remoteCursorsRef = useRef(remoteCursors);
   const [relationshipMenu, setRelationshipMenu] = useState<RelationshipMenuState | null>(null);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
+  const [groupContextMenu, setGroupContextMenu] = useState<GroupContextMenuState | null>(null);
   const [selectionBox, setSelectionBox] = useState<TableSelectionBoxState | null>(null);
   const [confirmAction, setConfirmAction] = useState<CanvasConfirmAction | null>(null);
   const [remoteCursorPositions, setRemoteCursorPositions] = useState<RemoteCanvasCursorPosition[]>([]);
@@ -506,33 +515,41 @@ export function SchemaCanvas({
   }, [model.tables, tableContextMenu]);
 
   useEffect(() => {
-    if (!tableContextMenu) {
+    if (groupContextMenu && !model.groups[groupContextMenu.groupId]) {
+      setGroupContextMenu(null);
+    }
+  }, [groupContextMenu, model.groups]);
+
+  useEffect(() => {
+    if (!tableContextMenu && !groupContextMenu) {
       return;
     }
 
-    const handleOutsideMouseDown = (event: MouseEvent) => {
+    const handleOutsideClick = (event: MouseEvent) => {
       const target = getElementFromEventTarget(event.target);
 
-      if (target?.closest('[data-tabliodb-table-context-menu]')) {
+      if (target?.closest('[data-tabliodb-table-context-menu],[data-tabliodb-group-context-menu]')) {
         return;
       }
 
       setTableContextMenu(null);
+      setGroupContextMenu(null);
     };
     const handleEscapeKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setTableContextMenu(null);
+        setGroupContextMenu(null);
       }
     };
 
-    window.addEventListener('mousedown', handleOutsideMouseDown);
+    window.addEventListener('click', handleOutsideClick);
     window.addEventListener('keydown', handleEscapeKey);
 
     return () => {
-      window.removeEventListener('mousedown', handleOutsideMouseDown);
+      window.removeEventListener('click', handleOutsideClick);
       window.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [tableContextMenu]);
+  }, [groupContextMenu, tableContextMenu]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -632,6 +649,31 @@ export function SchemaCanvas({
       };
     };
 
+    const createGroupMenuStateFromEvent = (event: MouseEvent, groupId: string): GroupContextMenuState => {
+      const containerRect = container.getBoundingClientRect();
+      const menuWidth = 288;
+      const menuHeight = 220;
+      const safeMinLeft = Math.min(
+        floatingInsetLeftRef.current + 12,
+        Math.max(12, containerRect.width - menuWidth - 12),
+      );
+      const safeMaxLeft = Math.max(safeMinLeft, containerRect.width - floatingInsetRightRef.current - menuWidth - 12);
+
+      return {
+        groupId,
+        left: clamp(event.clientX - containerRect.left, safeMinLeft, safeMaxLeft),
+        top: clamp(event.clientY - containerRect.top, 12, containerRect.height - menuHeight - 12),
+      };
+    };
+
+    const openGroupContextMenu = (event: MouseEvent, groupId: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setRelationshipMenu(null);
+      setTableContextMenu(null);
+      setGroupContextMenu(createGroupMenuStateFromEvent(event, groupId));
+    };
+
     const getCommentMarkerFromEvent = (event: MouseEvent) => {
       const target = getElementFromEventTarget(event.target);
       return target?.closest<HTMLElement>('.tabliodb-table-node__comment-marker') ?? null;
@@ -659,6 +701,12 @@ export function SchemaCanvas({
       }
 
       return target.closest<HTMLElement>('[data-tabliodb-table-id]');
+    };
+
+    const getNoteNodeFromEvent = (event: MouseEvent) => {
+      const target = getElementFromEventTarget(event.target);
+
+      return target?.closest<HTMLElement>('[data-tabliodb-note-id]') ?? null;
     };
 
     const applySingleTableSelection = (tableId: string | null) => {
@@ -761,6 +809,7 @@ export function SchemaCanvas({
       };
       setRelationshipMenu(null);
       setTableContextMenu(null);
+      setGroupContextMenu(null);
       applyMultiTableSelection([]);
       updateTableSelectionBox(event);
 
@@ -841,11 +890,16 @@ export function SchemaCanvas({
     };
 
     graph.on('node:click', ({ e, node }) => {
-      const data = node.getData<TableNodeData | NoteNodeData>();
+      const data = node.getData<TableNodeData | NoteNodeData | GroupNodeData>();
       setRelationshipMenu(null);
       setTableContextMenu(null);
+      setGroupContextMenu(null);
 
       if (isNoteNodeData(data) && handleNoteActionEvent(e as unknown as MouseEvent, data.noteId)) {
+        return;
+      }
+
+      if (isGroupNodeData(data)) {
         return;
       }
 
@@ -871,6 +925,7 @@ export function SchemaCanvas({
 
       setRelationshipMenu(null);
       setTableContextMenu(null);
+      setGroupContextMenu(null);
       applySingleTableSelection(null);
     });
 
@@ -885,7 +940,18 @@ export function SchemaCanvas({
 
       setRelationshipMenu(createRelationshipMenuStateFromEvent(event, relationship.id));
       setTableContextMenu(null);
+      setGroupContextMenu(null);
       applyMultiTableSelection([]);
+    });
+
+    graph.on('node:contextmenu', ({ e, node }) => {
+      const data = node.getData<TableNodeData | NoteNodeData | GroupNodeData>();
+
+      if (!isGroupNodeData(data) || !modelRef.current.groups[data.groupId]) {
+        return;
+      }
+
+      openGroupContextMenu(e as unknown as MouseEvent, data.groupId);
     });
 
     graph.on('edge:connected', ({ edge, e, isNew }) => {
@@ -918,6 +984,7 @@ export function SchemaCanvas({
       applySingleTableSelection(nextRelationshipCommand.targetTableId);
       onColumnSelectRef.current?.(nextRelationshipCommand.targetColumnIds[0]);
       setTableContextMenu(null);
+      setGroupContextMenu(null);
     });
 
     graph.on('edge:change:target', ({ edge }) => {
@@ -983,6 +1050,7 @@ export function SchemaCanvas({
       // Klik row column di canvas memilih table sekaligus column supaya sidebar kiri langsung menunjuk field yang sama.
       event.preventDefault();
       setRelationshipMenu(null);
+      setGroupContextMenu(null);
       applySingleTableSelection(tableId);
       onColumnSelectRef.current?.(columnId);
     };
@@ -1012,6 +1080,7 @@ export function SchemaCanvas({
       event.stopPropagation();
       setRelationshipMenu(null);
       setTableContextMenu(null);
+      setGroupContextMenu(null);
       applySingleTableSelection(tableId);
     };
 
@@ -1037,6 +1106,7 @@ export function SchemaCanvas({
 
       // X6 HTML nodes are mounted outside React's synthetic event ownership, so right-click is captured with a native listener.
       setRelationshipMenu(null);
+      setGroupContextMenu(null);
       setTableContextMenu({
         left: clamp(event.clientX - containerRect.left, safeMinLeft, safeMaxLeft),
         tableId,
@@ -1046,6 +1116,21 @@ export function SchemaCanvas({
       if (!selectedTableIdsRef.current.includes(tableId)) {
         applySingleTableSelection(tableId);
       }
+    };
+
+    const handleGroupContextMenu = (event: MouseEvent) => {
+      if (getTableNodeFromEvent(event) || getNoteNodeFromEvent(event)) {
+        return;
+      }
+
+      const point = graph.clientToLocal(event.clientX, event.clientY);
+      const group = getGroupAtLocalPoint(modelRef.current, point);
+
+      if (!group) {
+        return;
+      }
+
+      openGroupContextMenu(event, group.id);
     };
 
     const handleNoteInteractiveMouseDown = (event: MouseEvent) => {
@@ -1210,6 +1295,7 @@ export function SchemaCanvas({
     container.addEventListener('click', handleColumnRowClick, true);
     container.addEventListener('click', handleTableNodeClick, true);
     container.addEventListener('contextmenu', handleTableContextMenu, true);
+    container.addEventListener('contextmenu', handleGroupContextMenu, true);
     container.addEventListener('mousedown', handleNoteInteractiveMouseDown, true);
     container.addEventListener('click', handleNoteActionClick, true);
     container.addEventListener('focusout', handleNoteFocusOut, true);
@@ -1529,6 +1615,7 @@ export function SchemaCanvas({
       container.removeEventListener('click', handleColumnRowClick, true);
       container.removeEventListener('click', handleTableNodeClick, true);
       container.removeEventListener('contextmenu', handleTableContextMenu, true);
+      container.removeEventListener('contextmenu', handleGroupContextMenu, true);
       container.removeEventListener('mousedown', handleNoteInteractiveMouseDown, true);
       container.removeEventListener('click', handleNoteActionClick, true);
       container.removeEventListener('focusout', handleNoteFocusOut, true);
@@ -1719,10 +1806,49 @@ export function SchemaCanvas({
   const activeRelationship = relationshipMenu ? (model.relationships[relationshipMenu.relationshipId] ?? null) : null;
   const activeContextTable = tableContextMenu ? (model.tables[tableContextMenu.tableId] ?? null) : null;
   const activeContextTableColumns = activeContextTable ? getTableColumns(model, activeContextTable.id) : [];
+  const activeContextGroup = groupContextMenu ? (model.groups[groupContextMenu.groupId] ?? null) : null;
   const canShowMinimap = Object.keys(model.tables).length > 0;
 
   function closeTableContextMenu() {
     setTableContextMenu(null);
+  }
+
+  function closeGroupContextMenu() {
+    setGroupContextMenu(null);
+  }
+
+  function handleGroupNameCommit(group: DiagramGroup, value: string) {
+    if (readOnly) {
+      return;
+    }
+
+    const name = value.trim();
+
+    if (!name || name === group.name) {
+      return;
+    }
+
+    onModelChangeRef.current(
+      applyDiagramCommand(modelRef.current, {
+        changes: { name },
+        groupId: group.id,
+        type: 'group.update',
+      }),
+    );
+  }
+
+  function handleGroupColorChange(group: DiagramGroup, color: string) {
+    if (readOnly || color === getDisplayTableColor(group.color)) {
+      return;
+    }
+
+    onModelChangeRef.current(
+      applyDiagramCommand(modelRef.current, {
+        changes: { color },
+        groupId: group.id,
+        type: 'group.update',
+      }),
+    );
   }
 
   function handleTableDiscuss(table: DatabaseTable) {
@@ -2011,6 +2137,17 @@ export function SchemaCanvas({
           onViewDocs={() => handleTableDocsOpen(activeContextTable)}
           table={activeContextTable}
           top={tableContextMenu.top}
+        />
+      ) : null}
+      {activeContextGroup && groupContextMenu ? (
+        <GroupNodeContextMenu
+          group={activeContextGroup}
+          left={groupContextMenu.left}
+          onClose={closeGroupContextMenu}
+          onColorChange={(color) => handleGroupColorChange(activeContextGroup, color)}
+          onRename={(name) => handleGroupNameCommit(activeContextGroup, name)}
+          readOnly={readOnly}
+          top={groupContextMenu.top}
         />
       ) : null}
       <CanvasConfirmDialog
@@ -2529,6 +2666,124 @@ function TableNodeContextMenuItem({
         <span />
       )}
     </button>
+  );
+}
+
+function GroupNodeContextMenu({
+  group,
+  left,
+  onClose,
+  onColorChange,
+  onRename,
+  readOnly,
+  top,
+}: {
+  group: DiagramGroup;
+  left: number;
+  onClose: () => void;
+  onColorChange: (color: string) => void;
+  onRename: (name: string) => void;
+  readOnly: boolean;
+  top: number;
+}) {
+  const displayColor = getDisplayTableColor(group.color);
+  const colorChoices = useMemo(() => Array.from(new Set([displayColor, ...tableColorOptions])), [displayColor]);
+  const [draftName, setDraftName] = useState(group.name);
+
+  useEffect(() => {
+    setDraftName(group.name);
+  }, [group.id, group.name]);
+
+  function commitName() {
+    onRename(draftName);
+  }
+
+  return (
+    <section
+      aria-label={`Module actions for ${group.name}`}
+      className="absolute z-40 w-72 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-2 text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_18px_42px_rgb(15_23_42/0.16)]"
+      data-tabliodb-group-context-menu=""
+      onContextMenu={(event) => event.preventDefault()}
+      onMouseDown={(event) => event.stopPropagation()}
+      role="menu"
+      style={{ left, top }}
+    >
+      <div className="flex items-start gap-2 px-1 pb-2 pt-1">
+        <span
+          className="flex size-8 shrink-0 items-center justify-center rounded-[var(--tabliodb-radius-md)] border border-white shadow-[0_0_0_1px_rgb(var(--tabliodb-border-strong)),0_1px_0_rgb(var(--tabliodb-border-strong))]"
+          style={{ backgroundColor: hexToRgba(displayColor, 0.16), color: displayColor }}
+        >
+          <Palette className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+            Module
+          </div>
+          <div className="truncate text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{group.name}</div>
+        </div>
+        <button
+          aria-label="Close module menu"
+          className="flex size-8 cursor-pointer items-center justify-center rounded-[var(--tabliodb-radius-sm)] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-surface))] hover:text-[rgb(var(--tabliodb-ink))]"
+          onClick={onClose}
+          type="button"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+
+      <label className="block px-1 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+        Module name
+      </label>
+      <input
+        className="mt-1 h-10 w-full rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:shadow-[0_0_0_3px_rgb(var(--tabliodb-primary)/0.18)] disabled:cursor-not-allowed disabled:bg-[rgb(var(--tabliodb-surface))] disabled:text-[rgb(var(--tabliodb-ink-muted))]"
+        disabled={readOnly}
+        onBlur={commitName}
+        onChange={(event) => setDraftName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.currentTarget.blur();
+          }
+
+          if (event.key === 'Escape') {
+            setDraftName(group.name);
+            event.currentTarget.blur();
+          }
+        }}
+        placeholder="Module name"
+        value={draftName}
+      />
+
+      <div className="-mx-0.5 my-2 h-px bg-[rgb(var(--tabliodb-border))]" />
+
+      <div className="px-1 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
+        Color
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2 px-1 pb-1">
+        {colorChoices.map((color) => {
+          const colorLabel = getTableColorLabel(color);
+          const selected = color === displayColor;
+
+          return (
+            <WithTooltip content={`Set module color to ${colorLabel}`} key={color}>
+              <button
+                aria-label={`Use ${colorLabel} for module`}
+                aria-pressed={selected}
+                className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-55"
+                disabled={readOnly}
+                onClick={() => onColorChange(color)}
+                style={{
+                  backgroundColor: color,
+                  boxShadow: selected
+                    ? `0 0 0 1px #ffffff, 0 0 0 4px ${color}, 0 1px 0 rgb(var(--tabliodb-border-strong))`
+                    : '0 0 0 1px rgb(var(--tabliodb-border-strong)), 0 1px 0 rgb(var(--tabliodb-border-strong))',
+                }}
+                type="button"
+              />
+            </WithTooltip>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -3103,7 +3358,9 @@ function createGroupNodeMetadata(model: DiagramModel, group: DiagramGroup): Node
     attrs: {
       body: {
         fill: hexToRgba(color, 0.1),
-        pointerEvents: 'none',
+        cursor: 'context-menu',
+        // Isi module tetap tidak menangkap pointer supaya table di dalamnya masih mudah dipilih dan di-drag.
+        pointerEvents: 'visibleStroke',
         rx: 18,
         ry: 18,
         stroke: color,
@@ -3116,7 +3373,8 @@ function createGroupNodeMetadata(model: DiagramModel, group: DiagramGroup): Node
         fontFamily: 'Nunito, ui-sans-serif, system-ui, sans-serif',
         fontSize: 13,
         fontWeight: 900,
-        pointerEvents: 'none',
+        cursor: 'context-menu',
+        pointerEvents: 'visiblePainted',
         refX: 16,
         refY: 17,
         text: `${group.name}  ${group.tableIds.length}`,
@@ -4583,6 +4841,10 @@ function isNoteNodeData(data: unknown): data is NoteNodeData {
   return Boolean(data && typeof data === 'object' && 'kind' in data && data.kind === 'note');
 }
 
+function isGroupNodeData(data: unknown): data is GroupNodeData {
+  return Boolean(data && typeof data === 'object' && 'kind' in data && data.kind === 'group');
+}
+
 function isMovableCanvasNodeData(data: unknown): data is TableNodeData | NoteNodeData {
   return isTableNodeData(data) || isNoteNodeData(data);
 }
@@ -4677,6 +4939,30 @@ function createRectFromPoints(startPoint: PointLike, endPoint: PointLike): Canva
     x: left,
     y: top,
   };
+}
+
+function getGroupAtLocalPoint(model: DiagramModel, point: PointLike): DiagramGroup | null {
+  const candidates = Object.values(model.groups)
+    .map((group) => ({
+      area: 0,
+      bounds: getRenderedGroupBounds(model, group),
+      group,
+    }))
+    .filter(({ bounds }) => {
+      return (
+        point.x >= bounds.x &&
+        point.x <= bounds.x + bounds.width &&
+        point.y >= bounds.y &&
+        point.y <= bounds.y + bounds.height
+      );
+    })
+    .map((candidate) => ({
+      ...candidate,
+      area: candidate.bounds.width * candidate.bounds.height,
+    }))
+    .sort((first, second) => first.area - second.area);
+
+  return candidates[0]?.group ?? null;
 }
 
 function createScreenSelectionRect(
