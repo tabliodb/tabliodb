@@ -384,7 +384,7 @@ export function CreateDiagramDialog({
   const createDiagramMutation = useCreateDiagramMutation({
     mutationConfig: {
       onSuccess: (diagram) => {
-        // New diagram becomes an empty unsaved draft; the first persisted snapshot is created only when the user clicks Snapshot.
+        // New diagram becomes an empty unsaved draft; the first persisted saved version is created only when the user clicks Save.
         form.reset({ dialect: defaultDialect, name: '', projectId: selectedDefaultProjectId });
         handleOpenChange(false);
         onCreated(diagram);

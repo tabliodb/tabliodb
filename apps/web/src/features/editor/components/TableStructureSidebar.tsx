@@ -71,8 +71,8 @@ const inlineTableNameSchema = z
 const inlineGroupNameSchema = z
   .string()
   .trim()
-  .min(1, 'Module name is required.')
-  .max(64, 'Keep the module name under 64 characters.');
+  .min(1, 'Group name is required.')
+  .max(64, 'Keep the group name under 64 characters.');
 const inlineColumnNameSchema = z
   .string()
   .trim()
@@ -235,7 +235,7 @@ export function TableStructureSidebar({
 
   function handleCreateGroup() {
     const groupId = createDiagramEntityId('group');
-    const groupName = createUniqueGroupName(groups, `${titleCaseWords(table.name)} module`);
+    const groupName = createUniqueGroupName(groups, `${titleCaseWords(table.name)} group`);
 
     apply(
       applyDiagramCommand(model, {
@@ -497,7 +497,7 @@ export function TableStructureSidebar({
                     <div className="border-t border-[rgb(var(--tabliodb-border))] pt-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                          Module
+                          Group
                         </span>
                         <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                           {tableGroup ? `${tableGroup.tableIds.length} tables` : 'None'}
@@ -509,7 +509,7 @@ export function TableStructureSidebar({
                           disabled={groups.length === 0}
                           onValueChange={handleGroupMembershipChange}
                           options={[
-                            { label: 'No module', value: unsetGroupValue },
+                            { label: 'No group', value: unsetGroupValue },
                             ...groups.map((group) => ({
                               label: group.name,
                               value: group.id,
@@ -519,16 +519,16 @@ export function TableStructureSidebar({
                         />
                       ) : (
                         <div className="rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-2 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                          {tableGroup?.name ?? 'No module'}
+                          {tableGroup?.name ?? 'No group'}
                         </div>
                       )}
                       {tableGroup && !readOnly ? (
                         <div className="mt-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
                           <InlineTextInput
-                            ariaLabel="Module name"
+                            ariaLabel="Group name"
                             disabled={readOnly}
                             onCommit={handleGroupNameCommit}
-                            placeholder="Module name"
+                            placeholder="Group name"
                             validate={createInlineStringValidator(inlineGroupNameSchema)}
                             value={tableGroup.name}
                           />
@@ -540,7 +540,7 @@ export function TableStructureSidebar({
                             variant="secondary"
                           >
                             <Trash2 className="size-3.5" />
-                            {confirmDeleteGroup ? 'Confirm delete module' : 'Delete module'}
+                            {confirmDeleteGroup ? 'Confirm delete group' : 'Delete group'}
                           </Button>
                         </div>
                       ) : !readOnly ? (
@@ -551,7 +551,7 @@ export function TableStructureSidebar({
                           variant="soft"
                         >
                           <Plus className="size-3.5" />
-                          Create module
+                          Create group
                         </Button>
                       ) : null}
                     </div>
@@ -635,7 +635,7 @@ export function TableStructureSidebar({
               <div className="mt-3 border-t border-[rgb(var(--tabliodb-border))] pt-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <span className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                    Module
+                    Group
                   </span>
                   <span className="rounded-full border border-[rgb(var(--tabliodb-border))] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                     {tableGroup ? `${tableGroup.tableIds.length} tables` : 'None'}
@@ -647,7 +647,7 @@ export function TableStructureSidebar({
                     disabled={groups.length === 0}
                     onValueChange={handleGroupMembershipChange}
                     options={[
-                      { label: 'No module', value: unsetGroupValue },
+                      { label: 'No group', value: unsetGroupValue },
                       ...groups.map((group) => ({
                         label: group.name,
                         value: group.id,
@@ -657,16 +657,16 @@ export function TableStructureSidebar({
                   />
                 ) : (
                   <div className="rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white px-2.5 py-2 text-[13px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                    {tableGroup?.name ?? 'No module'}
+                    {tableGroup?.name ?? 'No group'}
                   </div>
                 )}
                 {tableGroup && !readOnly ? (
                   <div className="mt-2 rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border))] bg-white p-2">
                     <InlineTextInput
-                      ariaLabel="Module name"
+                      ariaLabel="Group name"
                       disabled={readOnly}
                       onCommit={handleGroupNameCommit}
-                      placeholder="Module name"
+                      placeholder="Group name"
                       validate={createInlineStringValidator(inlineGroupNameSchema)}
                       value={tableGroup.name}
                     />
@@ -675,9 +675,9 @@ export function TableStructureSidebar({
                         const colorLabel = getTableColorLabel(color);
 
                         return (
-                          <WithTooltip content={`Set module color to ${colorLabel}`} key={color}>
+                          <WithTooltip content={`Set group color to ${colorLabel}`} key={color}>
                             <button
-                              aria-label={`Use ${colorLabel} for module`}
+                              aria-label={`Use ${colorLabel} for group`}
                               className="size-5 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
                               disabled={readOnly}
                               onClick={() => handleGroupColorChange(color)}
@@ -702,7 +702,7 @@ export function TableStructureSidebar({
                       variant="secondary"
                     >
                       <Trash2 className="size-3.5" />
-                      {confirmDeleteGroup ? 'Confirm delete module' : 'Delete module'}
+                      {confirmDeleteGroup ? 'Confirm delete group' : 'Delete group'}
                     </Button>
                   </div>
                 ) : !readOnly ? (
@@ -713,7 +713,7 @@ export function TableStructureSidebar({
                     variant="soft"
                   >
                     <Plus className="size-3.5" />
-                    Create module from table
+                    Create group from table
                   </Button>
                 ) : null}
               </div>

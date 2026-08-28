@@ -78,7 +78,7 @@ export function MultiSelectTablesSidebar({
     const selectionBounds = getSelectedTablesBounds(model, selectedTables);
     const groupName = createUniqueName(
       new Set(Object.values(model.groups).map((group) => group.name.toLowerCase())),
-      'new_module',
+      'new_group',
     );
     const nextModel = applyDiagramCommand(model, {
       color: '#ff8ac7',
@@ -98,7 +98,7 @@ export function MultiSelectTablesSidebar({
     onModelChange(nextModel);
     toast.success({
       description: `${selectedTables.length} table${selectedTables.length === 1 ? '' : 's'} are now inside ${groupName}.`,
-      title: 'Module created',
+      title: 'Group created',
     });
   }
 
@@ -179,7 +179,7 @@ export function MultiSelectTablesSidebar({
         <MultiSelectActionButton
           disabled={readOnly || selectedCount === 0}
           icon={<FolderPlus className="size-4" />}
-          label="Create module"
+          label="Create group"
           onClick={handleCreateGroup}
         />
       </div>

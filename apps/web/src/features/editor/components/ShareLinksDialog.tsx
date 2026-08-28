@@ -188,7 +188,7 @@ export function ShareLinksDialog({
                       { label: 'Live diagram', value: 'diagram' },
                       {
                         disabled: !latestSnapshot,
-                        label: latestSnapshot ? `Snapshot v${latestSnapshot.version}` : 'Snapshot unavailable',
+                        label: latestSnapshot ? `Saved version v${latestSnapshot.version}` : 'No saved version yet',
                         value: 'snapshot',
                       },
                     ]}
@@ -390,7 +390,7 @@ function ShareLinkStatusBadge({ status }: { status: DiagramShareLinkDto['status'
 }
 
 function formatShareLinkTarget(shareLink: DiagramShareLinkDto): string {
-  return shareLink.targetType === 'snapshot' ? 'Snapshot link' : 'Live diagram link';
+  return shareLink.targetType === 'snapshot' ? 'Saved version link' : 'Live diagram link';
 }
 
 function createExpiryIsoDate(days: number): string {

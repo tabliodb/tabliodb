@@ -241,14 +241,14 @@ export function EditorHeader({
           className="hidden lg:inline-flex"
           disabled={snapshotHistoryLoading}
           icon={History}
-          label="Snapshot history"
+          label="Saved versions"
           onClick={onOpenSnapshotHistory}
         />
         <IconButton className="hidden xl:inline-flex" icon={LocateFixed} label="Fit diagram" onClick={onFitDiagram} />
         {canCreateSnapshot ? (
           <Button className="gap-2 px-3" disabled={snapshotSavePending} onClick={onCreateSnapshot}>
             {snapshotSavePending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            <span className="hidden xl:inline">Snapshot</span>
+            <span className="hidden xl:inline">Save</span>
           </Button>
         ) : null}
         <Button className="gap-2 px-3" onClick={onOpenSqlPreview} variant="sky">

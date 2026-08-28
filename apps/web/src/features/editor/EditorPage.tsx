@@ -443,9 +443,9 @@ export function EditorPage() {
     mutationConfig: {
       onError: (error) => {
         toast.warning({
-          // Snapshot save tidak selalu berada di dialog, jadi kegagalan harus muncul sebagai feedback global yang langsung terlihat.
+          // Save tidak selalu berada di dialog, jadi kegagalan harus muncul sebagai feedback global yang langsung terlihat.
           description: getErrorMessage(error),
-          title: 'Snapshot was not saved',
+          title: 'Diagram was not saved',
         });
       },
       onSuccess: (snapshot) => {
@@ -1393,12 +1393,12 @@ export function EditorPage() {
 
       saveSnapshotMutation.mutate({
         diagramId: activeDiagram.id,
-        message: 'Manual snapshot',
+        message: 'Manual save',
         snapshot: {
           ...modelToSave,
           metadata: {
             ...modelToSave.metadata,
-            // Snapshots are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
+            // Saved versions are append-only, so every explicit save gets a fresh timestamp inside the domain model too.
             updatedAt: new Date().toISOString(),
           },
         },
@@ -2211,7 +2211,7 @@ function updateLiveModelFromDiagram(
     dialect: toDatabaseDialect(diagram.dialect),
     metadata: {
       ...currentModel.metadata,
-      // Diagram metadata follows the server record immediately; version history is created only by the Snapshot action.
+      // Diagram metadata follows the server record immediately; version history is created only by the Save action.
       name: diagram.name,
       updatedAt: new Date().toISOString(),
     },
@@ -2367,8 +2367,8 @@ function getEditorLoadingProgress({
       weight: 20,
     },
     {
-      detail: 'Loading snapshots for the active diagram.',
-      label: 'Loading snapshots',
+      detail: 'Loading saved versions for the active diagram.',
+      label: 'Loading saved versions',
       ready: snapshotsReady,
       weight: 18,
     },

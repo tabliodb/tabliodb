@@ -66,7 +66,7 @@ export function KeyboardShortcutsDialog({
             ]
           : []),
         ...(canComment ? [{ action: 'Open comments', keys: [getPrimaryModifierKey(), 'K'] }] : []),
-        ...(canSnapshot ? [{ action: 'Create snapshot', keys: [getPrimaryModifierKey(), 'S'] }] : []),
+        ...(canSnapshot ? [{ action: 'Save diagram', keys: [getPrimaryModifierKey(), 'S'] }] : []),
       ],
       title: 'Editor',
     },
@@ -138,14 +138,14 @@ export function EditorConfirmDialog({
       ? 'Delete selected tables?'
       : isSnapshotGuard
         ? action.guard.title
-        : 'Restore snapshot?';
+        : 'Restore saved version?';
   const description = isTableDelete
     ? `Table "${action.tableName}" and its relationships will be removed from this draft.`
     : isTablesDelete
       ? `${action.tableCount} selected table${action.tableCount === 1 ? '' : 's'} and their relationships will be removed from this draft.`
     : isSnapshotGuard
       ? action.guard.description
-      : 'Your current unsaved draft will be replaced by the selected snapshot.';
+      : 'Your current unsaved draft will be replaced by the selected saved version.';
   const confirmIcon = isTableDelete || isTablesDelete ? (
     <Trash2 className="size-4" />
   ) : isSnapshotGuard ? (

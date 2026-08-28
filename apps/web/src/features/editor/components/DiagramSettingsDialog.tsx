@@ -204,7 +204,7 @@ export function DiagramSettingsDialog({
 
               {hasUnsavedDialectChange && liveModelDialect ? (
                 <div className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-sky-border))] bg-[rgb(var(--tabliodb-sky-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-sky-text))]">
-                  The open snapshot uses {formatDiagramDialect(liveModelDialect)} while the diagram record uses{' '}
+                  The open saved version uses {formatDiagramDialect(liveModelDialect)} while the diagram record uses{' '}
                   {formatDiagramDialect(diagram.dialect)}.
                 </div>
               ) : null}

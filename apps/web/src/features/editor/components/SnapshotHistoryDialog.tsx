@@ -79,11 +79,9 @@ export function SnapshotHistoryDialog({
             <div className="min-w-0">
               <DialogTitle className="flex items-center gap-2">
                 <History className="size-5 text-[rgb(var(--tabliodb-lavender-text))]" />
-                Snapshot history
+                Saved versions
               </DialogTitle>
-              <DialogDescription>
-                Restore an older checkpoint or compare it with the latest saved snapshot.
-              </DialogDescription>
+              <DialogDescription>Restore an older saved version or compare it with the current one.</DialogDescription>
             </div>
             <Badge variant={snapshots.length > 1 ? 'purple' : 'neutral'}>{snapshots.length} versions</Badge>
           </div>
@@ -101,7 +99,7 @@ export function SnapshotHistoryDialog({
             <div className="tabliodb-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
               {snapshots.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-[rgb(var(--tabliodb-border))] bg-white p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                  No snapshots yet
+                  No saved versions yet
                 </div>
               ) : (
                 <div className="grid gap-2">
@@ -125,7 +123,7 @@ export function SnapshotHistoryDialog({
                           <span className="flex min-w-0 items-center gap-2">
                             <Badge variant={isLatest ? 'greenFilled' : 'neutral'}>v{snapshot.version}</Badge>
                             <span className="truncate text-[13px] font-extrabold">
-                              {snapshot.message ?? `Snapshot v${snapshot.version}`}
+                              {snapshot.message ?? `Saved version v${snapshot.version}`}
                             </span>
                           </span>
                           {isLatest ? <Badge variant="neutral">Current</Badge> : null}
@@ -135,7 +133,7 @@ export function SnapshotHistoryDialog({
                         </span>
                         {snapshot.restoredFromSnapshotId ? (
                           <span className="mt-2 inline-flex rounded-full border border-[rgb(var(--tabliodb-lavender-border))] bg-white px-2 py-1 text-[10px] font-extrabold text-[rgb(var(--tabliodb-lavender-text))]">
-                            Restored checkpoint
+                            Restored version
                           </span>
                         ) : null}
                       </button>
@@ -150,12 +148,12 @@ export function SnapshotHistoryDialog({
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[rgb(var(--tabliodb-border))] px-5 py-4">
               <div className="min-w-0">
                 <h3 className="truncate text-[15px] font-extrabold">
-                  {selectedSnapshot ? `Snapshot v${selectedSnapshot.version}` : 'Select a snapshot'}
+                  {selectedSnapshot ? `Saved version v${selectedSnapshot.version}` : 'Select a saved version'}
                 </h3>
                 <p className="text-[13px] font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
                   {latestSnapshot && selectedSnapshot && selectedSnapshot.id !== latestSnapshot.id
                     ? `Compared with v${latestSnapshot.version}`
-                    : 'Latest snapshot is already active'}
+                    : 'Current saved version is already active'}
                 </p>
               </div>
               <Button
@@ -178,7 +176,7 @@ export function SnapshotHistoryDialog({
               {!selectedSnapshot ? (
                 <SnapshotHistoryEmptyState message="Choose a saved version from the list." />
               ) : selectedSnapshot.id === latestSnapshot?.id ? (
-                <SnapshotHistoryEmptyState message="This is the current saved snapshot." />
+                <SnapshotHistoryEmptyState message="This is the current saved version." />
               ) : diffQuery.isPending ? (
                 <div className="flex h-full min-h-65 items-center justify-center gap-2 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                   <Loader2 className="size-4 animate-spin" />

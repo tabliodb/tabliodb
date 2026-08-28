@@ -179,7 +179,7 @@ export function ImportJsonDialog({
               Import Tabliodb JSON
             </DialogTitle>
             <DialogDescription>
-              Replace the current draft for {currentDiagramName}. Create a snapshot after import when the result looks
+              Replace the current draft for {currentDiagramName}. Click Save after import when the result looks
               right.
             </DialogDescription>
           </DialogHeader>
@@ -338,7 +338,7 @@ export function ImportSqlDialog({
               Import SQL DDL
             </DialogTitle>
             <DialogDescription>
-              Parse CREATE statements into an editable draft for {currentDiagramName}. Snapshot after reviewing the
+              Parse CREATE statements into an editable draft for {currentDiagramName}. Click Save after reviewing the
               imported diagram.
             </DialogDescription>
           </DialogHeader>

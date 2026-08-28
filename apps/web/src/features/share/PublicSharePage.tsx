@@ -42,7 +42,7 @@ export function PublicSharePage() {
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="truncate text-base font-black">{share.diagram.name}</h1>
               <Badge variant="green">Read-only</Badge>
-              {share.snapshot ? <Badge variant="blue">Snapshot v{share.snapshot.version}</Badge> : null}
+              {share.snapshot ? <Badge variant="blue">Saved v{share.snapshot.version}</Badge> : null}
             </div>
             <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
               {share.diagram.projectName ?? share.diagram.organizationName} / {share.diagram.dialect}

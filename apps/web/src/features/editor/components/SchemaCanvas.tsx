@@ -90,9 +90,9 @@ const tableNodeWidth = 288; // Default width saat table baru dibuat, bukan batas
 const tableHeaderHeight = 36; // Header dan CSS sama-sama 3 grid unit agar node HTML tidak terpotong di X6.
 const tableColumnHeight = 24; // Port dihitung dari tinggi row ini, jadi konektor jatuh tepat di tengah baris kolom.
 const tablePaddingBottom = 12; // Padding bawah 1 grid unit menjaga row terakhir tidak mepet radius kartu saat kolom bertambah.
-const groupPaddingX = 36; // Group mengikuti grid 12px supaya outline module tetap sejajar dengan table di canvas.
-const groupPaddingBottom = 24; // Ruang bawah module dibuat dua grid unit agar table terakhir tidak terasa menempel.
-const groupHeaderOffset = 48; // Header module memakai offset empat grid unit agar judul tidak bertabrakan dengan table pertama.
+const groupPaddingX = 36; // Group mengikuti grid 12px supaya outline group tetap sejajar dengan table di canvas.
+const groupPaddingBottom = 24; // Ruang bawah group dibuat dua grid unit agar table terakhir tidak terasa menempel.
+const groupHeaderOffset = 48; // Header group memakai offset empat grid unit agar judul tidak bertabrakan dengan table pertama.
 const noteNodeDefaultWidth = 264; // Width note juga grid-aligned sehingga add-note di viewport terasa presisi.
 const noteNodeMinHeight = 120; // Min-height note stabil untuk textarea kosong dan tetap mudah di-drag.
 const noteNodeMaxHeight = 216; // Max-height mencegah note panjang mendominasi canvas saat belum ada fitur rich note penuh.
@@ -2700,7 +2700,7 @@ function GroupNodeContextMenu({
 
   return (
     <section
-      aria-label={`Module actions for ${group.name}`}
+      aria-label={`Group actions for ${group.name}`}
       className="absolute z-40 w-72 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-2 text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_18px_42px_rgb(15_23_42/0.16)]"
       data-tabliodb-group-context-menu=""
       onContextMenu={(event) => event.preventDefault()}
@@ -2717,12 +2717,12 @@ function GroupNodeContextMenu({
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-            Module
+            Group
           </div>
           <div className="truncate text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{group.name}</div>
         </div>
         <button
-          aria-label="Close module menu"
+          aria-label="Close group menu"
           className="flex size-8 cursor-pointer items-center justify-center rounded-[var(--tabliodb-radius-sm)] text-[rgb(var(--tabliodb-ink-muted))] transition hover:bg-[rgb(var(--tabliodb-surface))] hover:text-[rgb(var(--tabliodb-ink))]"
           onClick={onClose}
           type="button"
@@ -2732,7 +2732,7 @@ function GroupNodeContextMenu({
       </div>
 
       <label className="block px-1 text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-        Module name
+        Group name
       </label>
       <input
         className="mt-1 h-10 w-full rounded-[var(--tabliodb-radius-md)] border border-[rgb(var(--tabliodb-border-strong))] bg-white px-3 text-[14px] font-extrabold text-[rgb(var(--tabliodb-ink))] outline-none transition focus:border-[rgb(var(--tabliodb-primary))] focus:shadow-[0_0_0_3px_rgb(var(--tabliodb-primary)/0.18)] disabled:cursor-not-allowed disabled:bg-[rgb(var(--tabliodb-surface))] disabled:text-[rgb(var(--tabliodb-ink-muted))]"
@@ -2749,7 +2749,7 @@ function GroupNodeContextMenu({
             event.currentTarget.blur();
           }
         }}
-        placeholder="Module name"
+        placeholder="Group name"
         value={draftName}
       />
 
@@ -2764,9 +2764,9 @@ function GroupNodeContextMenu({
           const selected = color === displayColor;
 
           return (
-            <WithTooltip content={`Set module color to ${colorLabel}`} key={color}>
+            <WithTooltip content={`Set group color to ${colorLabel}`} key={color}>
               <button
-                aria-label={`Use ${colorLabel} for module`}
+                aria-label={`Use ${colorLabel} for group`}
                 aria-pressed={selected}
                 className="size-7 cursor-pointer rounded-full border-2 border-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-55"
                 disabled={readOnly}
@@ -3359,7 +3359,7 @@ function createGroupNodeMetadata(model: DiagramModel, group: DiagramGroup): Node
       body: {
         fill: hexToRgba(color, 0.1),
         cursor: 'context-menu',
-        // Isi module tetap tidak menangkap pointer supaya table di dalamnya masih mudah dipilih dan di-drag.
+        // Isi group tetap tidak menangkap pointer supaya table di dalamnya masih mudah dipilih dan di-drag.
         pointerEvents: 'visibleStroke',
         rx: 18,
         ry: 18,

@@ -608,7 +608,7 @@ describe('schema-core diagram commands', () => {
     expect(model.tables.books.displayMode).toBeUndefined();
   });
 
-  it('creates module groups and keeps table membership exclusive', () => {
+  it('creates groups and keeps table membership exclusive', () => {
     const model = applyDiagramCommands(
       createEmptyDiagramModel('Group command test'),
       [
@@ -668,15 +668,15 @@ describe('schema-core diagram commands', () => {
     expect(deletedGroupModel.tables.orders.groupId).toBeUndefined();
   });
 
-  it('repairs stale empty module groups during normalization', () => {
+  it('repairs stale empty groups during normalization', () => {
     const modelWithStaleGroup = normalizeDiagramModel({
-      ...createEmptyDiagramModel('Stale module repair test'),
+      ...createEmptyDiagramModel('Stale group repair test'),
       groups: {
         abandoned: {
           color: '#ff8ac7',
           height: 260,
           id: 'abandoned',
-          name: 'Abandoned module',
+          name: 'Abandoned group',
           position: { x: 80, y: 120 },
           tableIds: [],
           width: 420,
@@ -684,7 +684,7 @@ describe('schema-core diagram commands', () => {
       },
     });
 
-    // Empty modules are not selectable in the editor, so normalization prunes them before they can become confusing UI artifacts.
+    // Empty groups are not selectable in the editor, so normalization prunes them before they can become confusing UI artifacts.
     expect(modelWithStaleGroup.groups.abandoned).toBeUndefined();
   });
 

@@ -16,7 +16,7 @@ export function getSnapshotRealtimeGuard(status: DiagramCollaborationStatus): Sn
       description: 'Realtime authentication failed, so the editor cannot confirm that your live draft is synced.',
       detail:
         status.message ??
-        'Refresh after signing in again. Saving anyway may create a snapshot that misses recent collaborative changes.',
+        'Refresh after signing in again. Saving anyway may create a version that misses recent collaborative changes.',
       title: 'Save while realtime auth failed?',
     };
   }
@@ -33,7 +33,7 @@ export function getSnapshotRealtimeGuard(status: DiagramCollaborationStatus): Sn
   if (status.connection === 'connected') {
     return {
       description: 'Realtime is connected but still syncing pending changes.',
-      detail: `There are ${status.unsyncedChanges} pending change(s). Wait for Saved if this snapshot needs to become the official checkpoint for the team.`,
+      detail: `There are ${status.unsyncedChanges} pending change(s). Wait for Saved if this version needs to become the official checkpoint for the team.`,
       title: 'Save before sync finishes?',
     };
   }

@@ -1123,7 +1123,7 @@ export function normalizeDiagramModel(model: DiagramModel): DiagramModel {
   const repairedGroupMembership = repairGroupMembership(groups, tables);
 
   if (repairedGroupMembership.changed) {
-    // Module membership is stored on both the group and the table for fast canvas rendering; normalization keeps those two views in sync and removes modules that no longer own any table.
+    // Group membership is stored on both the group and the table for fast canvas rendering; normalization keeps those two views in sync and removes groups that no longer own any table.
     groups = repairedGroupMembership.groups;
     tables = repairedGroupMembership.tables;
     changed = true;
@@ -1246,7 +1246,7 @@ function repairGroupMembership(
       ...nextTables,
       [tableId]: DatabaseTableSchema.parse({
         ...table,
-        // If a table points to a deleted module, clear the pointer instead of keeping a hidden broken selection target.
+        // If a table points to a deleted group, clear the pointer instead of keeping a hidden broken selection target.
         groupId: undefined,
       }),
     };
@@ -1296,7 +1296,7 @@ function repairGroupMembership(
             groupId,
             DiagramGroupSchema.parse({
               ...group,
-              // Module rows are table-backed in the UI; stale or duplicate table references are removed during normalization.
+              // Group rows are table-backed in the UI; stale or duplicate table references are removed during normalization.
               tableIds,
             }),
           ],
@@ -2029,7 +2029,7 @@ function deleteTable(model: DiagramModel, tableId: string): DiagramModel {
         groupId,
         {
           ...group,
-          // Table deletion removes the table from module membership first; pruneEmptyGroups then removes modules that became unreachable.
+          // Table deletion removes the table from group membership first; pruneEmptyGroups then removes groups that became unreachable.
           tableIds: group.tableIds.filter((currentTableId) => currentTableId !== tableId),
         },
       ]),
@@ -2094,7 +2094,7 @@ function assignTableToGroup(model: DiagramModel, command: AssignTableToGroupComm
       groupId,
       {
         ...currentGroup,
-        // Membership is exclusive; assigning to a new module removes the table from any previous module first.
+        // Membership is exclusive; assigning to a new group removes the table from any previous group first.
         tableIds: currentGroup.tableIds.filter((tableId) => tableId !== table.id),
       },
     ]),
