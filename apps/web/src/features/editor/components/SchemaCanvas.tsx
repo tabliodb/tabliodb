@@ -3078,6 +3078,10 @@ function syncRelationshipEdge(graph: Graph, metadata: EdgeMetadata): void {
   existing.setLabels(metadata.labels ?? []);
   existing.setRouter(metadata.router!);
   existing.setConnector(metadata.connector!);
+  // X6 merges attrs, so markers from the previous cardinality must be cleared before applying the next edge style.
+  // Without this reset, changing 1:N to 1:1 can keep the old crow-foot marker on screen.
+  existing.attr('line/sourceMarker', null);
+  existing.attr('line/targetMarker', null);
   existing.attr(metadata.attrs ?? {});
   existing.setVertices(metadata.vertices ?? []);
   existing.setZIndex(metadata.zIndex ?? 0);
@@ -3596,8 +3600,9 @@ function createRelationshipEdgeMetadata(
       isRelationshipTargetMany(relationship.cardinality),
     );
     const markerAttrs = {
-      ...(sourceMarker ? { sourceMarker } : {}),
-      ...(targetMarker ? { targetMarker } : {}),
+      // Markers are explicit on every render so the edge can move between 1:1 and 1:N without stale SVG marker state.
+      sourceMarker: sourceMarker ?? null,
+      targetMarker: targetMarker ?? null,
     };
 
     return [
