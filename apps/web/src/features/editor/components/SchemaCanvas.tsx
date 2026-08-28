@@ -39,7 +39,18 @@ import {
 } from '@tabliodb/ui';
 import type { CommentTargetType, CommentThreadTargetSummaryDto } from '@/resources/comments';
 import type { AwarenessState } from '@tabliodb/shared';
-import { Copy, FileText, KeyRound, ListPlus, MessageSquareText, Scissors, Trash2, type LucideIcon } from 'lucide-react';
+import {
+  ArrowRight,
+  Copy,
+  FileText,
+  KeyRound,
+  ListPlus,
+  MessageSquareText,
+  Scissors,
+  Trash2,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   useEffect,
   useMemo,
@@ -649,8 +660,8 @@ export function SchemaCanvas({
 
       const containerRect = container.getBoundingClientRect();
       const event = e as unknown as MouseEvent;
-      const menuWidth = 330;
-      const menuHeight = 128;
+      const menuWidth = 360;
+      const menuHeight = 156;
       const safeMinLeft = Math.min(
         floatingInsetLeftRef.current + 12,
         Math.max(12, containerRect.width - menuWidth - 12),
@@ -1830,34 +1841,34 @@ function RelationshipQuickEditor({
   return (
     <section
       aria-label="Relationship actions"
-      className="absolute z-40 w-[330px] rounded-[18px] border border-slate-700 bg-slate-900 p-3 text-white shadow-[0_5px_0_rgb(15_23_42),0_18px_36px_rgb(15_23_42/0.24)]"
+      className="absolute z-40 w-[360px] rounded-[20px] border border-[rgb(var(--tabliodb-border-strong))] bg-white p-3 text-[rgb(var(--tabliodb-ink))] shadow-[0_3px_0_rgb(var(--tabliodb-border-strong)),0_18px_42px_rgb(15_23_42/0.14)]"
       onMouseDown={(event) => event.stopPropagation()}
       role="group"
       style={{ left, top }}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)_24px] items-center gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)_28px] items-center gap-2">
         <RelationshipEndpointPill label={sourceLabel} tone="source" />
-        <span className="text-center text-sm font-black text-slate-500">-&gt;</span>
+        <ArrowRight className="mx-auto size-4 text-[rgb(var(--tabliodb-ink-subtle))]" />
         <RelationshipEndpointPill label={targetLabel} tone="target" />
         <button
           aria-label="Close relationship actions"
-          className="grid size-6 cursor-pointer place-items-center rounded-full text-sm font-black text-slate-400 outline-none transition hover:bg-slate-800 hover:text-white focus-visible:ring-[3px] focus-visible:ring-cyan-300"
+          className="grid size-7 cursor-pointer place-items-center rounded-full text-[rgb(var(--tabliodb-ink-muted))] outline-none transition hover:bg-[rgb(var(--tabliodb-surface))] hover:text-[rgb(var(--tabliodb-ink))] focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))]"
           onClick={onClose}
           type="button"
         >
-          x
+          <X className="size-4" />
         </button>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
-        <div className="inline-flex rounded-[12px] bg-slate-800 p-1">
+        <div className="inline-flex rounded-[14px] border border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-1">
           {cardinalityOptions.map((option) => (
             <button
               aria-pressed={relationship.cardinality === option.value}
               className={cn(
-                'h-8 min-w-12 cursor-pointer rounded-[9px] px-3 text-xs font-black outline-none transition focus-visible:ring-[3px] focus-visible:ring-cyan-300',
+                'h-8 min-w-12 cursor-pointer rounded-[10px] px-3 text-xs font-black outline-none transition-[background,border-color,box-shadow,color,transform] focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-focus-ring))] disabled:cursor-not-allowed disabled:opacity-50',
                 relationship.cardinality === option.value
-                  ? 'bg-teal-500 text-white shadow-[0_2px_0_rgb(13_148_136)]'
-                  : 'text-slate-300 hover:bg-slate-700 hover:text-white',
+                  ? 'bg-[rgb(var(--tabliodb-primary))] text-white shadow-[0_2px_0_rgb(var(--tabliodb-primary-shadow))]'
+                  : 'text-[rgb(var(--tabliodb-ink-muted))] hover:bg-[rgb(var(--tabliodb-primary-soft))] hover:text-[rgb(var(--tabliodb-primary-text))]',
               )}
               disabled={readOnly}
               key={option.value}
@@ -1869,11 +1880,12 @@ function RelationshipQuickEditor({
           ))}
         </div>
         <button
-          className="h-8 cursor-pointer rounded-[10px] px-3 text-xs font-black text-slate-400 outline-none transition hover:bg-red-500 hover:text-white focus-visible:ring-[3px] focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[10px] border border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] px-3 text-xs font-black text-[rgb(var(--tabliodb-danger-text))] outline-none transition hover:bg-white focus-visible:ring-[3px] focus-visible:ring-[rgb(var(--tabliodb-danger-border))] disabled:cursor-not-allowed disabled:opacity-50"
           disabled={readOnly}
           onClick={onDelete}
           type="button"
         >
+          <Trash2 className="size-3.5" />
           Delete
         </button>
       </div>
@@ -1883,9 +1895,28 @@ function RelationshipQuickEditor({
 
 function RelationshipEndpointPill({ label, tone }: { label: string; tone: 'source' | 'target' }) {
   return (
-    <div className="min-w-0 rounded-[10px] bg-slate-800 px-3 py-2">
-      <span className={cn('mb-1 block size-1.5 rounded-full', tone === 'source' ? 'bg-pink-400' : 'bg-emerald-400')} />
-      <span className="block truncate font-mono text-[11px] font-black leading-none text-cyan-200">{label}</span>
+    <div
+      className={cn(
+        'min-w-0 rounded-[13px] border px-3 py-2 shadow-[0_1px_0_rgb(var(--tabliodb-border))]',
+        tone === 'source'
+          ? 'border-[rgb(var(--tabliodb-lavender-border))] bg-[rgb(var(--tabliodb-lavender-soft))]'
+          : 'border-[rgb(var(--tabliodb-teal-border))] bg-[rgb(var(--tabliodb-teal-soft))]',
+      )}
+    >
+      <span
+        className={cn(
+          'mb-1 block size-1.5 rounded-full',
+          tone === 'source' ? 'bg-[rgb(var(--tabliodb-lavender))]' : 'bg-[rgb(var(--tabliodb-teal))]',
+        )}
+      />
+      <span
+        className={cn(
+          'block truncate font-mono text-[11px] font-black leading-none',
+          tone === 'source' ? 'text-[rgb(var(--tabliodb-lavender-text))]' : 'text-[rgb(var(--tabliodb-teal-text))]',
+        )}
+      >
+        {label}
+      </span>
     </div>
   );
 }
