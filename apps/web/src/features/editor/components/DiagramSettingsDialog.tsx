@@ -182,9 +182,9 @@ export function DiagramSettingsDialog({
               <section className="rounded-(--tabliodb-radius-lg) border-2 border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface))] p-3">
                 <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-sm font-extrabold">Review rule overrides</h3>
+                    <h3 className="text-sm font-extrabold">Review rules</h3>
                     <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Disable extra rules for this diagram only.
+                      Checked rules run on this diagram. Folder-disabled rules stay locked off here.
                     </p>
                   </div>
                   <Badge variant="blue">{diagramReviewSettingsQuery.isPending ? 'Loading' : 'Diagram'}</Badge>

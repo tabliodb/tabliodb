@@ -359,7 +359,7 @@ export function ProjectSettingsDialog({
               <div>
                 <h3 className="text-sm font-extrabold">Review rule defaults</h3>
                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  Disabled rules become the baseline for every diagram in this folder.
+                  Checked rules run for diagrams in this folder. Uncheck a rule to turn it off by default.
                 </p>
               </div>
               <Badge variant="blue">{projectReviewSettingsQuery.isPending ? 'Loading' : 'Folder'}</Badge>

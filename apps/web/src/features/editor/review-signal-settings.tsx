@@ -38,30 +38,31 @@ export function ReviewSignalSettingsFields<
           name={'disabledRuleKeys' as Path<TFieldValues>}
           render={({ field }) => {
             const disabledRuleKeys = Array.isArray(field.value) ? (field.value as DiagramReviewSignalCode[]) : [];
-            const isInherited = inheritedDisabledRules.has(rule.code);
-            const isChecked = isInherited || disabledRuleKeys.includes(rule.code);
+            const isDisabledByCurrentScope = disabledRuleKeys.includes(rule.code);
+            const isDisabledByInheritedScope = inheritedDisabledRules.has(rule.code);
+            const isEnabled = !isDisabledByCurrentScope && !isDisabledByInheritedScope;
 
             return (
               <label
                 className={cn(
                   'flex cursor-pointer items-start gap-3 rounded-(--tabliodb-radius-md) border-2 bg-white p-3 transition',
-                  isChecked
-                    ? 'border-[rgb(var(--tabliodb-active-chip-border))] bg-[rgb(var(--tabliodb-selected-surface))]'
-                    : 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]',
-                  (disabled || isInherited) && 'cursor-not-allowed opacity-75',
+                  isEnabled
+                    ? 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]'
+                    : 'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))]',
+                  (disabled || isDisabledByInheritedScope) && 'cursor-not-allowed opacity-75',
                 )}
               >
                 <Checkbox
-                  checked={isChecked}
-                  disabled={disabled || isInherited}
+                  checked={isEnabled}
+                  disabled={disabled || isDisabledByInheritedScope}
                   onCheckedChange={(checked) => {
                     const nextRuleKeys = new Set(disabledRuleKeys);
 
-                    // Rule turunan dari project hanya ditampilkan sebagai checked; payload diagram/project tetap menulis rule miliknya sendiri.
+                    // Backend menyimpan disabledRuleKeys, tetapi UI memakai mental model umum: checked berarti rule aktif, unchecked berarti rule dimatikan.
                     if (checked === true) {
-                      nextRuleKeys.add(rule.code);
-                    } else {
                       nextRuleKeys.delete(rule.code);
+                    } else {
+                      nextRuleKeys.add(rule.code);
                     }
 
                     field.onChange(Array.from(nextRuleKeys));
@@ -70,13 +71,24 @@ export function ReviewSignalSettingsFields<
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{rule.title}</span>
-                    <Badge variant={isInherited ? 'blue' : getReviewRuleBadgeVariant(rule.severity)}>
-                      {isInherited ? 'Inherited' : rule.severity}
+                    <Badge
+                      variant={
+                        isDisabledByInheritedScope || isDisabledByCurrentScope
+                          ? 'neutral'
+                          : getReviewRuleBadgeVariant(rule.severity)
+                      }
+                    >
+                      {isDisabledByInheritedScope ? 'Off by folder' : isDisabledByCurrentScope ? 'Off' : rule.severity}
                     </Badge>
                   </div>
                   <p className="mt-1 text-xs font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
                     {rule.description}
                   </p>
+                  {isDisabledByInheritedScope ? (
+                    <p className="mt-1 text-[11px] font-bold leading-4 text-[rgb(var(--tabliodb-ink-subtle))]">
+                      This rule is disabled by the folder default. Enable it from folder settings if this diagram should use it.
+                    </p>
+                  ) : null}
                 </div>
               </label>
             );
