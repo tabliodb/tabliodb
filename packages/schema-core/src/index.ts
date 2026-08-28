@@ -1069,6 +1069,7 @@ export function normalizeDiagramModel(model: DiagramModel): DiagramModel {
   const canonicalGroups = canonicalizeEntityRecord(parsedModel.groups, mergeDuplicateGroupEntity);
   let tables = canonicalTables.record;
   let columns = canonicalColumns.record;
+  let groups = canonicalGroups.record;
   let changed =
     canonicalTables.changed ||
     canonicalColumns.changed ||
@@ -1119,13 +1120,22 @@ export function normalizeDiagramModel(model: DiagramModel): DiagramModel {
     }
   }
 
+  const repairedGroupMembership = repairGroupMembership(groups, tables);
+
+  if (repairedGroupMembership.changed) {
+    // Module membership is stored on both the group and the table for fast canvas rendering; normalization keeps those two views in sync and removes modules that no longer own any table.
+    groups = repairedGroupMembership.groups;
+    tables = repairedGroupMembership.tables;
+    changed = true;
+  }
+
   return changed
     ? DiagramModelSchema.parse({
         ...parsedModel,
         checks: canonicalChecks.record,
         columns,
         enums: canonicalEnums.record,
-        groups: canonicalGroups.record,
+        groups,
         indexes: canonicalIndexes.record,
         notes: canonicalNotes.record,
         relationships: canonicalRelationships.record,
@@ -1217,6 +1227,105 @@ function mergeDuplicateGroupEntity(primary: DiagramGroup, duplicate: DiagramGrou
     // Groups use dynamic table IDs too, so duplicate aliases should coalesce their table membership instead of dropping it.
     tableIds: uniqueValues([...duplicate.tableIds, ...primary.tableIds]),
   });
+}
+
+function repairGroupMembership(
+  groups: Record<string, DiagramGroup>,
+  tables: Record<string, DatabaseTable>,
+): { changed: boolean; groups: Record<string, DiagramGroup>; tables: Record<string, DatabaseTable> } {
+  let changed = false;
+  let nextTables = tables;
+
+  for (const [tableId, table] of Object.entries(tables)) {
+    if (!table.groupId || groups[table.groupId]) {
+      continue;
+    }
+
+    changed = true;
+    nextTables = {
+      ...nextTables,
+      [tableId]: DatabaseTableSchema.parse({
+        ...table,
+        // If a table points to a deleted module, clear the pointer instead of keeping a hidden broken selection target.
+        groupId: undefined,
+      }),
+    };
+  }
+
+  for (const [groupId, group] of Object.entries(groups)) {
+    for (const tableId of group.tableIds) {
+      const table = nextTables[tableId];
+
+      if (!table || (table.groupId && table.groupId !== groupId)) {
+        changed = true;
+        continue;
+      }
+
+      if (!table.groupId) {
+        changed = true;
+        nextTables = {
+          ...nextTables,
+          [tableId]: DatabaseTableSchema.parse({
+            ...table,
+            // Old snapshots may only know membership from group.tableIds; restore table.groupId so sidebar, canvas, and export agree.
+            groupId,
+          }),
+        };
+      }
+    }
+  }
+
+  const groupedTables = Object.values(nextTables);
+  const nextGroups = Object.fromEntries(
+    Object.entries(groups).flatMap<[string, DiagramGroup]>(([groupId, group]) => {
+      const tableIds = uniqueValues([
+        ...group.tableIds,
+        ...groupedTables.filter((table) => table.groupId === groupId).map((table) => table.id),
+      ]).filter((tableId) => nextTables[tableId]?.groupId === groupId);
+
+      if (tableIds.length === 0) {
+        changed = true;
+        return [];
+      }
+
+      if (!areStringArraysEqual(tableIds, group.tableIds)) {
+        changed = true;
+
+        return [
+          [
+            groupId,
+            DiagramGroupSchema.parse({
+              ...group,
+              // Module rows are table-backed in the UI; stale or duplicate table references are removed during normalization.
+              tableIds,
+            }),
+          ],
+        ];
+      }
+
+      return [[groupId, group]];
+    }),
+  );
+
+  return {
+    changed,
+    groups: nextGroups,
+    tables: nextTables,
+  };
+}
+
+function pruneEmptyGroups(model: DiagramModel): DiagramModel {
+  const repaired = repairGroupMembership(model.groups, model.tables);
+
+  if (!repaired.changed) {
+    return model;
+  }
+
+  return {
+    ...model,
+    groups: repaired.groups,
+    tables: repaired.tables,
+  };
 }
 
 export function stringifyDiagramModel(model: DiagramModel, space = 2): string {
@@ -1900,7 +2009,7 @@ function deleteTable(model: DiagramModel, tableId: string): DiagramModel {
   const removedColumnIds = new Set(table.columnIds);
   const removedIndexIds = new Set(table.indexIds);
 
-  return {
+  return pruneEmptyGroups({
     ...model,
     tables: omitKey(model.tables, tableId),
     columns: omitKeys(model.columns, removedColumnIds),
@@ -1920,12 +2029,12 @@ function deleteTable(model: DiagramModel, tableId: string): DiagramModel {
         groupId,
         {
           ...group,
-          // Group tetap dipertahankan, tetapi daftar table-nya dibersihkan agar selection tidak mengarah ke entity kosong.
+          // Table deletion removes the table from module membership first; pruneEmptyGroups then removes modules that became unreachable.
           tableIds: group.tableIds.filter((currentTableId) => currentTableId !== tableId),
         },
       ]),
     ),
-  };
+  });
 }
 
 function createGroup(model: DiagramModel, command: CreateGroupCommand, idFactory: DiagramIdFactory): DiagramModel {
@@ -1952,9 +2061,11 @@ function createGroup(model: DiagramModel, command: CreateGroupCommand, idFactory
     },
   };
 
-  return tableIds.reduce(
-    (currentModel, tableId) => assignTableToGroup(currentModel, { groupId, tableId, type: 'group.assignTable' }),
-    modelWithGroup,
+  return pruneEmptyGroups(
+    tableIds.reduce(
+      (currentModel, tableId) => assignTableToGroup(currentModel, { groupId, tableId, type: 'group.assignTable' }),
+      modelWithGroup,
+    ),
   );
 }
 
@@ -1989,7 +2100,7 @@ function assignTableToGroup(model: DiagramModel, command: AssignTableToGroupComm
     ]),
   );
 
-  return {
+  return pruneEmptyGroups({
     ...model,
     groups: {
       ...groupsWithoutTable,
@@ -2005,7 +2116,7 @@ function assignTableToGroup(model: DiagramModel, command: AssignTableToGroupComm
         groupId: group.id,
       }),
     },
-  };
+  });
 }
 
 function removeTableFromGroup(model: DiagramModel, command: RemoveTableFromGroupCommand): DiagramModel {
@@ -2029,7 +2140,7 @@ function removeTableFromGroup(model: DiagramModel, command: RemoveTableFromGroup
         ]),
       );
 
-  return {
+  return pruneEmptyGroups({
     ...model,
     groups: nextGroups,
     tables: {
@@ -2039,7 +2150,7 @@ function removeTableFromGroup(model: DiagramModel, command: RemoveTableFromGroup
         groupId: undefined,
       }),
     },
-  };
+  });
 }
 
 function deleteGroup(model: DiagramModel, groupId: string): DiagramModel {

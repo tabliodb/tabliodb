@@ -657,7 +657,7 @@ describe('schema-core diagram commands', () => {
       { now: fixedNow },
     );
 
-    expect(groupedModel.groups.core.tableIds).toEqual([]);
+    expect(groupedModel.groups.core).toBeUndefined();
     expect(groupedModel.groups.commerce.tableIds).toEqual(['orders', 'users']);
     expect(groupedModel.tables.users.groupId).toBe('commerce');
     expect(groupedModel.tables.orders.groupId).toBe('commerce');
@@ -666,6 +666,26 @@ describe('schema-core diagram commands', () => {
     expect(deletedGroupModel.tables.users).toBeDefined();
     expect(deletedGroupModel.tables.users.groupId).toBeUndefined();
     expect(deletedGroupModel.tables.orders.groupId).toBeUndefined();
+  });
+
+  it('repairs stale empty module groups during normalization', () => {
+    const modelWithStaleGroup = normalizeDiagramModel({
+      ...createEmptyDiagramModel('Stale module repair test'),
+      groups: {
+        abandoned: {
+          color: '#ff8ac7',
+          height: 260,
+          id: 'abandoned',
+          name: 'Abandoned module',
+          position: { x: 80, y: 120 },
+          tableIds: [],
+          width: 420,
+        },
+      },
+    });
+
+    // Empty modules are not selectable in the editor, so normalization prunes them before they can become confusing UI artifacts.
+    expect(modelWithStaleGroup.groups.abandoned).toBeUndefined();
   });
 
   it('creates, edits, moves, and deletes diagram notes immutably', () => {
