@@ -183,7 +183,6 @@ export interface ProjectTable {
   slug: string;
   description: NullableColumn<string>;
   defaultDialect: Defaulted<string>;
-  reviewSettings: JsonColumn<DiagramReviewSettings>;
   visibility: Defaulted<'private' | 'organization'>;
   createdById: string;
   archivedAt: NullableTimestamp;

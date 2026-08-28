@@ -56,8 +56,8 @@ const ReviewSignalSettingsSchema = z
 const ReviewSignalEffectiveSettingsSchema = z
   .object({
     diagram: ReviewSignalSettingsSchema,
+    // Effective saat ini sama dengan diagram settings; field tetap eksplisit agar client tidak menebak sumber rule aktif.
     effective: ReviewSignalSettingsSchema,
-    project: ReviewSignalSettingsSchema,
   })
   .meta({ id: 'ReviewSignalEffectiveSettingsDto' });
 

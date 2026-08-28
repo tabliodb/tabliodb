@@ -38,30 +38,6 @@ export class ReviewSignalController {
     return this.service.getByDiagram(auth, diagramId, query);
   }
 
-  @Get('project/:projectId/settings')
-  @RequirePermission(Permission.ProjectRead, { key: 'projectId', source: 'param', type: 'project' })
-  @ApiParam({ name: 'projectId', type: String })
-  @ApiOperation({ operationId: 'getProjectReviewSignalSettings' })
-  @ZodResponse({ status: HttpStatus.OK, type: ReviewSignalSettingsDto })
-  getProjectReviewSignalSettings(@Auth() auth: AuthContext, @Param('projectId') projectId: string) {
-    return this.service.getProjectSettings(auth, projectId);
-  }
-
-  @Patch('project/:projectId/settings')
-  @RateLimit(RateLimitPreset.ReviewSignalWrite)
-  @RequirePermission(Permission.ProjectUpdate, { key: 'projectId', source: 'param', type: 'project' })
-  @ApiParam({ name: 'projectId', type: String })
-  @ApiBody({ type: ReviewSignalSettingsDto })
-  @ApiOperation({ operationId: 'updateProjectReviewSignalSettings' })
-  @ZodResponse({ status: HttpStatus.OK, type: ReviewSignalSettingsDto })
-  updateProjectReviewSignalSettings(
-    @Auth() auth: AuthContext,
-    @Param('projectId') projectId: string,
-    @Body() dto: ReviewSignalSettingsDto,
-  ) {
-    return this.service.updateProjectSettings(auth, projectId, dto);
-  }
-
   @Get('diagram/:diagramId/settings')
   @RequirePermission(Permission.DiagramRead, { key: 'diagramId', source: 'param', type: 'diagram' })
   @ApiParam({ name: 'diagramId', type: String })

@@ -83,10 +83,6 @@ describe('rate limit presets', () => {
       { handler: DiagramController.prototype.exportDiagram, preset: RateLimitPreset.DiagramExport },
       { handler: DiagramController.prototype.importDiagram, preset: RateLimitPreset.DiagramImport },
       {
-        handler: ReviewSignalController.prototype.updateProjectReviewSignalSettings,
-        preset: RateLimitPreset.ReviewSignalWrite,
-      },
-      {
         handler: ReviewSignalController.prototype.updateDiagramReviewSignalSettings,
         preset: RateLimitPreset.ReviewSignalWrite,
       },

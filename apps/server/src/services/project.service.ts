@@ -5,7 +5,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { defaultDiagramReviewSettings } from '@tabliodb/schema-core';
 import { OrganizationRole, Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
 import { AuditAction } from '../constants.js';
 import { AuthContext } from '../database.js';
@@ -74,7 +73,6 @@ export class ProjectService {
       description: dto.description ?? null,
       name: dto.name,
       organizationId: organization.id,
-      reviewSettings: defaultDiagramReviewSettings,
       slug: slugify(dto.name),
     });
 

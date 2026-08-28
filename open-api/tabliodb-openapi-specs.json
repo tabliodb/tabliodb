@@ -3786,98 +3786,6 @@
         ]
       }
     },
-    "/review-signals/project/{projectId}/settings": {
-      "get": {
-        "operationId": "getProjectReviewSignalSettings",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          },
-          {
-            "api-key": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "review-signals"
-        ]
-      },
-      "patch": {
-        "operationId": "updateProjectReviewSignalSettings",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReviewSignalSettingsDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          },
-          {
-            "api-key": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "review-signals"
-        ]
-      }
-    },
     "/review-signals/diagram/{diagramId}/settings": {
       "get": {
         "operationId": "getDiagramReviewSignalSettings",
@@ -11268,6 +11176,22 @@
         ],
         "additionalProperties": false
       },
+      "ReviewSignalEffectiveSettingsDto_Output": {
+        "type": "object",
+        "properties": {
+          "diagram": {
+            "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
+          },
+          "effective": {
+            "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
+          }
+        },
+        "required": [
+          "diagram",
+          "effective"
+        ],
+        "additionalProperties": false
+      },
       "ReviewSignalSettingsDto": {
         "type": "object",
         "properties": {
@@ -11289,26 +11213,6 @@
             }
           }
         }
-      },
-      "ReviewSignalEffectiveSettingsDto_Output": {
-        "type": "object",
-        "properties": {
-          "diagram": {
-            "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
-          },
-          "effective": {
-            "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
-          },
-          "project": {
-            "$ref": "#/components/schemas/ReviewSignalSettingsDto_Output"
-          }
-        },
-        "required": [
-          "diagram",
-          "effective",
-          "project"
-        ],
-        "additionalProperties": false
       },
       "SetupStatusResponseDto_Output": {
         "type": "object",

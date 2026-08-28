@@ -229,7 +229,6 @@ async function upsertSeedProject(tx: Transaction<DB>, ownerId: string, organizat
         description: 'Starter schema workspace',
         name: seedProjectName,
         organizationId,
-        reviewSettings: defaultDiagramReviewSettings,
         slug,
       })
       .returning(['id', 'name', 'slug'])

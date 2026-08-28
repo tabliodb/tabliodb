@@ -184,7 +184,7 @@ export function DiagramSettingsDialog({
                   <div>
                     <h3 className="text-sm font-extrabold">Review rules</h3>
                     <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Checked rules run on this diagram. Folder-disabled rules stay locked off here.
+                      Checked rules run on this diagram. Uncheck a rule only when this ERD intentionally skips it.
                     </p>
                   </div>
                   <Badge variant="blue">{diagramReviewSettingsQuery.isPending ? 'Loading' : 'Diagram'}</Badge>
@@ -192,7 +192,6 @@ export function DiagramSettingsDialog({
                 <ReviewSignalSettingsFields
                   control={form.control}
                   disabled={isPending || diagramReviewSettingsQuery.isFetching || !canEdit}
-                  inheritedDisabledRuleKeys={diagramReviewSettingsQuery.data?.project.disabledRuleKeys}
                 />
               </section>
 

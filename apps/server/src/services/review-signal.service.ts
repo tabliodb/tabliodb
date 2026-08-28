@@ -1,11 +1,11 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   defaultDiagramReviewSettings,
   getDiagramReviewSignals,
   parseDiagramReviewSettings,
   type DiagramModel,
 } from '@tabliodb/schema-core';
-import { Permission, ProjectRole, isGranted, permissionsForProjectRole } from '@tabliodb/shared';
+import { Permission } from '@tabliodb/shared';
 import type { AuthContext } from '../database.js';
 import type {
   ReviewSignalEffectiveSettingsDto,
@@ -13,7 +13,6 @@ import type {
   ReviewSignalResponseDto,
   ReviewSignalSettingsDto,
 } from '../dtos/review-signal.dto.js';
-import { ProjectRepository } from '../repositories/project.repository.js';
 import { ReviewSignalRepository } from '../repositories/review-signal.repository.js';
 import type { JsonValue } from '../schema/index.js';
 import { toIsoDateTime, toNullableIsoDateTime } from '../utils/date-time.js';
@@ -24,7 +23,6 @@ import { DiagramService } from './diagram.service.js';
 export class ReviewSignalService {
   constructor(
     private readonly diagramService: DiagramService,
-    private readonly projectRepository: ProjectRepository,
     private readonly reviewSignalRepository: ReviewSignalRepository,
   ) {}
 
@@ -53,45 +51,6 @@ export class ReviewSignalService {
       ...signals,
       items: signals.items.map(serializeReviewSignal),
     };
-  }
-
-  async getProjectSettings(auth: AuthContext, projectId: string): Promise<ReviewSignalSettingsDto> {
-    this.assertApiKeyScope(auth, Permission.ProjectRead);
-
-    const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    this.assertProjectPermission(project.projectRole, Permission.ProjectRead);
-
-    const settings = await this.reviewSignalRepository.getProjectSettings(projectId);
-
-    return serializeReviewSettings(settings ?? defaultDiagramReviewSettings);
-  }
-
-  async updateProjectSettings(
-    auth: AuthContext,
-    projectId: string,
-    dto: ReviewSignalSettingsDto,
-  ): Promise<ReviewSignalSettingsDto> {
-    this.assertApiKeyScope(auth, Permission.ProjectUpdate);
-
-    const project = await this.projectRepository.getByIdForUser(auth.user.id, projectId);
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    this.assertProjectPermission(project.projectRole, Permission.ProjectUpdate);
-
-    const settings = parseDiagramReviewSettings(dto);
-    const updatedSettings = await this.reviewSignalRepository.updateProjectSettings(projectId, settings);
-
-    if (!updatedSettings) {
-      throw new NotFoundException('Project not found');
-    }
-
-    return serializeReviewSettings(updatedSettings);
   }
 
   async getDiagramSettings(auth: AuthContext, diagramId: string): Promise<ReviewSignalEffectiveSettingsDto> {
@@ -160,27 +119,6 @@ export class ReviewSignalService {
     return serializeReviewSignal(updatedSignal);
   }
 
-  private assertApiKeyScope(auth: AuthContext, permission: Permission): void {
-    if (!auth.apiKey) {
-      return;
-    }
-
-    if (!isGranted({ current: auth.apiKey.permissions, requested: [permission] })) {
-      // Project-level review settings can be called from service tests and SDK automation, so token scope is enforced outside controllers too.
-      throw new ForbiddenException(`${permission} API key scope is required`);
-    }
-  }
-
-  private assertProjectPermission(role: ProjectRole, permission: Permission): void {
-    if (
-      !isGranted({
-        current: permissionsForProjectRole(role),
-        requested: [permission],
-      })
-    ) {
-      throw new ForbiddenException(`${permission} permission is required`);
-    }
-  }
 }
 
 function serializeReviewSettings(settings: ReturnType<typeof parseDiagramReviewSettings>): ReviewSignalSettingsDto {
@@ -192,12 +130,10 @@ function serializeReviewSettings(settings: ReturnType<typeof parseDiagramReviewS
 function serializeEffectiveReviewSettings(settings: {
   diagram: ReturnType<typeof parseDiagramReviewSettings>;
   effective: ReturnType<typeof parseDiagramReviewSettings>;
-  project: ReturnType<typeof parseDiagramReviewSettings>;
 }): ReviewSignalEffectiveSettingsDto {
   return {
     diagram: serializeReviewSettings(settings.diagram),
     effective: serializeReviewSettings(settings.effective),
-    project: serializeReviewSettings(settings.project),
   };
 }
 

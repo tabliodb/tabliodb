@@ -21,14 +21,10 @@ export function ReviewSignalSettingsFields<
 >({
   control,
   disabled,
-  inheritedDisabledRuleKeys = [],
 }: {
   control: Control<TFieldValues>;
   disabled: boolean;
-  inheritedDisabledRuleKeys?: DiagramReviewSignalCode[];
 }) {
-  const inheritedDisabledRules = new Set(inheritedDisabledRuleKeys);
-
   return (
     <div className="grid gap-2">
       {diagramReviewRuleDefinitions.map((rule) => (
@@ -39,8 +35,7 @@ export function ReviewSignalSettingsFields<
           render={({ field }) => {
             const disabledRuleKeys = Array.isArray(field.value) ? (field.value as DiagramReviewSignalCode[]) : [];
             const isDisabledByCurrentScope = disabledRuleKeys.includes(rule.code);
-            const isDisabledByInheritedScope = inheritedDisabledRules.has(rule.code);
-            const isEnabled = !isDisabledByCurrentScope && !isDisabledByInheritedScope;
+            const isEnabled = !isDisabledByCurrentScope;
 
             return (
               <label
@@ -49,12 +44,12 @@ export function ReviewSignalSettingsFields<
                   isEnabled
                     ? 'border-[rgb(var(--tabliodb-border))] hover:bg-[rgb(var(--tabliodb-surface-raised))]'
                     : 'border-[rgb(var(--tabliodb-border))] bg-[rgb(var(--tabliodb-surface-raised))]',
-                  (disabled || isDisabledByInheritedScope) && 'cursor-not-allowed opacity-75',
+                  disabled && 'cursor-not-allowed opacity-75',
                 )}
               >
                 <Checkbox
                   checked={isEnabled}
-                  disabled={disabled || isDisabledByInheritedScope}
+                  disabled={disabled}
                   onCheckedChange={(checked) => {
                     const nextRuleKeys = new Set(disabledRuleKeys);
 
@@ -73,22 +68,15 @@ export function ReviewSignalSettingsFields<
                     <span className="text-[13px] font-extrabold text-[rgb(var(--tabliodb-ink))]">{rule.title}</span>
                     <Badge
                       variant={
-                        isDisabledByInheritedScope || isDisabledByCurrentScope
-                          ? 'neutral'
-                          : getReviewRuleBadgeVariant(rule.severity)
+                        isDisabledByCurrentScope ? 'neutral' : getReviewRuleBadgeVariant(rule.severity)
                       }
                     >
-                      {isDisabledByInheritedScope ? 'Off by folder' : isDisabledByCurrentScope ? 'Off' : rule.severity}
+                      {isDisabledByCurrentScope ? 'Off' : rule.severity}
                     </Badge>
                   </div>
                   <p className="mt-1 text-xs font-semibold leading-5 text-[rgb(var(--tabliodb-ink-muted))]">
                     {rule.description}
                   </p>
-                  {isDisabledByInheritedScope ? (
-                    <p className="mt-1 text-[11px] font-bold leading-4 text-[rgb(var(--tabliodb-ink-subtle))]">
-                      This rule is disabled by the folder default. Enable it from folder settings if this diagram should use it.
-                    </p>
-                  ) : null}
                 </div>
               </label>
             );

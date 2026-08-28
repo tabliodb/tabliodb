@@ -1,9 +1,8 @@
 import type {
   ReviewSignalEffectiveSettingsDtoOutput,
   ReviewSignalListResponseDtoOutput,
-  ReviewSignalSettingsDtoOutput,
 } from '@tabliodb/sdk';
-import { getDiagramReviewSignalSettings, getDiagramReviewSignals, getProjectReviewSignalSettings } from '@tabliodb/sdk';
+import { getDiagramReviewSignalSettings, getDiagramReviewSignals } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
 import { reviewSignalKeys, type ReviewSignalListQuery } from './review-signal.keys';
 
@@ -15,9 +14,6 @@ type ReviewSignalQueries = {
     diagramId: string,
     query?: ReviewSignalListQuery,
   ) => AppQueryOptions<ReviewSignalListResponseDtoOutput, ReturnType<typeof reviewSignalKeys.listByDiagram>>;
-  projectSettings: (
-    projectId: string,
-  ) => AppQueryOptions<ReviewSignalSettingsDtoOutput, ReturnType<typeof reviewSignalKeys.projectSettings>>;
 };
 
 export const reviewSignalQueries: ReviewSignalQueries = {
@@ -32,11 +28,5 @@ export const reviewSignalQueries: ReviewSignalQueries = {
       enabled: Boolean(diagramId),
       queryFn: () => getDiagramReviewSignals({ diagramId, ...query }),
       queryKey: reviewSignalKeys.listByDiagram(diagramId, query),
-    }),
-  projectSettings: (projectId: string) =>
-    appQueryOptions({
-      enabled: Boolean(projectId),
-      queryFn: () => getProjectReviewSignalSettings({ projectId }),
-      queryKey: reviewSignalKeys.projectSettings(projectId),
     }),
 };

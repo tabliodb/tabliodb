@@ -95,7 +95,7 @@ export class ReviewSignalRepository {
     const row = await this.db
       .selectFrom('diagrams')
       .leftJoin('projects', 'projects.id', 'diagrams.projectId')
-      .select(['diagrams.reviewSettings as diagramSettings', 'projects.reviewSettings as projectSettings'])
+      .select(['diagrams.reviewSettings as diagramSettings'])
       .where('diagrams.id', '=', diagramId)
       .where('diagrams.archivedAt', 'is', null)
       .where((eb) => eb.or([eb('diagrams.projectId', 'is', null), eb('projects.archivedAt', 'is', null)]))
@@ -105,41 +105,13 @@ export class ReviewSignalRepository {
       return undefined;
     }
 
-    const project = row.projectSettings ? parseDiagramReviewSettings(row.projectSettings) : { disabledRuleKeys: [] };
     const diagram = parseDiagramReviewSettings(row.diagramSettings);
 
     return {
       diagram,
-      // Effective settings adalah union: project memberi baseline, diagram boleh menambah pengecualian tanpa menghapus default project.
-      effective: mergeReviewSettings(project, diagram),
-      project,
+      // Folder/project tidak lagi menjadi sumber review rules agar user hanya punya satu tempat mental model: diagram settings.
+      effective: diagram,
     };
-  }
-
-  async getProjectSettings(projectId: string) {
-    const row = await this.db
-      .selectFrom('projects')
-      .select('reviewSettings')
-      .where('id', '=', projectId)
-      .where('archivedAt', 'is', null)
-      .executeTakeFirst();
-
-    return row ? parseDiagramReviewSettings(row.reviewSettings) : undefined;
-  }
-
-  async updateProjectSettings(projectId: string, settings: DiagramReviewSettings) {
-    const row = await this.db
-      .updateTable('projects')
-      .set({
-        reviewSettings: settings,
-        updatedAt: new Date(),
-      })
-      .where('id', '=', projectId)
-      .where('archivedAt', 'is', null)
-      .returning('reviewSettings')
-      .executeTakeFirst();
-
-    return row ? parseDiagramReviewSettings(row.reviewSettings) : undefined;
   }
 
   async updateDiagramSettings(diagramId: string, settings: DiagramReviewSettings) {
@@ -196,12 +168,4 @@ function createReviewSignalKey(signal: DiagramReviewSignal): string {
 
 function createStoredSignalKey(input: { ruleKey: string; targetId: string | null; targetType: string }): string {
   return `${input.ruleKey}:${input.targetType}:${input.targetId ?? ''}`;
-}
-
-function mergeReviewSettings(project: DiagramReviewSettings, diagram: DiagramReviewSettings): DiagramReviewSettings {
-  return {
-    disabledRuleKeys: Array.from(
-      new Set([...project.disabledRuleKeys, ...diagram.disabledRuleKeys]),
-    ) as DiagramReviewSettings['disabledRuleKeys'],
-  };
 }

@@ -1139,13 +1139,12 @@ export type ReviewSignalListResponseDtoOutput = {
 export type ReviewSignalSettingsDtoOutput = {
   disabledRuleKeys: DisabledRuleKeys[];
 };
-export type ReviewSignalSettingsDto = {
-  disabledRuleKeys?: DisabledRuleKeys[];
-};
 export type ReviewSignalEffectiveSettingsDtoOutput = {
   diagram: ReviewSignalSettingsDtoOutput;
   effective: ReviewSignalSettingsDtoOutput;
-  project: ReviewSignalSettingsDtoOutput;
+};
+export type ReviewSignalSettingsDto = {
+  disabledRuleKeys?: DisabledRuleKeys[];
 };
 export type SetupStatusResponseDtoOutput = {
   completedAt: string | null;
@@ -3512,47 +3511,6 @@ export function getDiagramReviewSignals(
       {
         ...opts,
       },
-    ),
-  );
-}
-export function getProjectReviewSignalSettings(
-  {
-    projectId,
-  }: {
-    projectId: string;
-  },
-  opts?: Oazapfts.RequestOpts,
-) {
-  return oazapfts.ok(
-    oazapfts.fetchJson<{
-      status: 200;
-      data: ReviewSignalSettingsDtoOutput;
-    }>(`/review-signals/project/${encodeURIComponent(projectId)}/settings`, {
-      ...opts,
-    }),
-  );
-}
-export function updateProjectReviewSignalSettings(
-  {
-    projectId,
-    reviewSignalSettingsDto,
-  }: {
-    projectId: string;
-    reviewSignalSettingsDto: ReviewSignalSettingsDto;
-  },
-  opts?: Oazapfts.RequestOpts,
-) {
-  return oazapfts.ok(
-    oazapfts.fetchJson<{
-      status: 200;
-      data: ReviewSignalSettingsDtoOutput;
-    }>(
-      `/review-signals/project/${encodeURIComponent(projectId)}/settings`,
-      oazapfts.json({
-        ...opts,
-        method: 'PATCH',
-        body: reviewSignalSettingsDto,
-      }),
     ),
   );
 }
