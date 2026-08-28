@@ -742,6 +742,21 @@ export function SchemaCanvas({
       setTableContextMenu(null);
     });
 
+    graph.on('edge:change:target', ({ edge }) => {
+      if (readOnly || modelRef.current.relationships[edge.id]) {
+        return;
+      }
+
+      // While the user is dragging a connector, X6 keeps updating the target point.
+      // Rebuilding the temporary route here makes the live preview use the same orthogonal route language as saved edges.
+      refreshDraftRelationshipPreview(
+        edge as X6Edge,
+        modelRef.current,
+        selectedTableIdRef.current,
+        selectedRelationshipIdRef.current,
+      );
+    });
+
     const handleCommentMarkerMouseDown = (event: MouseEvent) => {
       if (!getCommentMarkerFromEvent(event)) {
         return;
@@ -3151,6 +3166,169 @@ function createDraftRelationshipEdgeMetadata(): EdgeMetadata {
     router: { name: 'manhattan', args: buildManhattanRouterArgs() },
     zIndex: 2,
   };
+}
+
+function refreshDraftRelationshipPreview(
+  edge: X6Edge,
+  model: DiagramModel,
+  selectedTableId: string | null,
+  selectedRelationshipId: string | null,
+): void {
+  const sourcePort = parseColumnPortId(edge.getSourcePortId() ?? undefined);
+
+  if (!sourcePort) {
+    return;
+  }
+
+  const targetPort = parseColumnPortId(edge.getTargetPortId() ?? undefined);
+
+  if (targetPort && targetPort.tableId !== sourcePort.tableId) {
+    const previewRelationship = createPreviewRelationshipFromPorts(edge.id, model, sourcePort, targetPort);
+
+    if (!previewRelationship) {
+      return;
+    }
+
+    const previewModel = {
+      ...model,
+      relationships: {
+        ...model.relationships,
+        [previewRelationship.id]: previewRelationship,
+      },
+    };
+    const relationshipPlan = createRelationshipPlan(previewModel, selectedTableId, selectedRelationshipId, [
+      ...Object.values(model.relationships),
+      previewRelationship,
+    ]);
+    const [metadata] = createRelationshipEdgeMetadata(previewModel, relationshipPlan, [previewRelationship]);
+
+    if (metadata) {
+      // Once the drag target snaps to a real column port, reuse the exact same route planner as saved relationships.
+      applyDraftRelationshipEdgeRoute(edge, metadata.vertices ?? []);
+    }
+
+    return;
+  }
+
+  const targetPoint = edge.getTargetPoint();
+  const route = createFreeTargetRelationshipRoute(model, edge.id, sourcePort, {
+    x: targetPoint.x,
+    y: targetPoint.y,
+  });
+
+  if (route) {
+    // Before snap, there is no real target column yet, so route from the source port to the pointer with the same stub/spine rules.
+    applyDraftRelationshipEdgeRoute(edge, route.vertices, { keepEndpointCornersStraight: false });
+  }
+}
+
+function createPreviewRelationshipFromPorts(
+  relationshipId: string,
+  model: DiagramModel,
+  sourcePort: ParsedColumnPortId,
+  targetPort: ParsedColumnPortId,
+): DatabaseRelationship | null {
+  const sourceColumn = model.columns[sourcePort.columnId];
+  const targetColumn = model.columns[targetPort.columnId];
+
+  if (!sourceColumn || !targetColumn) {
+    return null;
+  }
+
+  return {
+    cardinality: 'one_to_one',
+    id: relationshipId,
+    sourceColumnIds: [sourcePort.columnId],
+    sourceTableId: sourcePort.tableId,
+    targetColumnIds: [targetPort.columnId],
+    targetTableId: targetPort.tableId,
+  };
+}
+
+function createFreeTargetRelationshipRoute(
+  model: DiagramModel,
+  relationshipId: string,
+  sourcePort: ParsedColumnPortId,
+  targetPoint: { x: number; y: number },
+): RelationshipRoute | null {
+  const sourceTerminal = createTerminalBase({
+    active: false,
+    columnId: sourcePort.columnId,
+    relationshipId,
+    role: 'primary',
+    side: sourcePort.side,
+    tableId: sourcePort.tableId,
+  });
+  const sourcePoint = getRelationshipTerminalPoint(model, sourceTerminal);
+
+  if (!sourcePoint) {
+    return null;
+  }
+
+  const targetTerminal = createTerminalBase({
+    active: false,
+    columnId: 'draft-target',
+    relationshipId,
+    role: 'foreign',
+    side: targetPoint.x >= sourcePoint.x ? 'left' : 'right',
+    tableId: 'draft-target',
+  });
+  const targetTerminalPoint: RelationshipTerminalPoint = {
+    bounds: {
+      height: 0,
+      width: 0,
+      x: targetPoint.x,
+      y: targetPoint.y,
+    },
+    x: targetPoint.x,
+    y: targetPoint.y,
+  };
+
+  return createRelationshipRoute(
+    relationshipId,
+    sourceTerminal,
+    targetTerminal,
+    sourcePoint,
+    targetTerminalPoint,
+    0,
+    0,
+    0,
+  );
+}
+
+function applyDraftRelationshipEdgeRoute(
+  edge: X6Edge,
+  vertices: Array<{ x: number; y: number }>,
+  options: { keepEndpointCornersStraight?: boolean } = {},
+): void {
+  const keepEndpointCornersStraight = options.keepEndpointCornersStraight ?? true;
+
+  edge.setRouter({ name: 'normal' });
+  edge.setConnector({
+    name: relationshipConnectorName,
+    args: {
+      minimumRoundedSegment: relationshipConnectorMinimumRoundedSegment,
+      radius: relationshipConnectorRadius,
+      // Free-drag has no final target port yet, so its first corner can be rounded.
+      // Once snapped to a column, we switch back to the exact saved-edge endpoint rule.
+      straightEndpointVertices: keepEndpointCornersStraight ? relationshipConnectorStraightEndpointVertices : 0,
+    },
+  });
+  edge.attr('line/sourceMarker', null);
+  edge.attr('line/targetMarker', null);
+  edge.attr({
+    line: {
+      // Live preview stays visually identical to a freshly created 1:1 relationship: neutral, rounded, and marker-free.
+      sourceMarker: null,
+      stroke: relationshipNeutralColor,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      strokeWidth: 1.5,
+      targetMarker: null,
+    },
+  });
+  edge.setVertices(vertices);
+  edge.setZIndex(2);
 }
 
 function getRelationshipTerminalSignature(terminal: unknown): string {
