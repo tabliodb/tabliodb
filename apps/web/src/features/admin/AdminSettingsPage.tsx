@@ -410,7 +410,7 @@ export function AdminSettingsPage() {
   );
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6 px-5 py-5">
+    <div className="mx-auto grid min-w-0 w-full max-w-5xl gap-6 px-4 py-4 sm:px-5 sm:py-5">
       <SettingsHeader
         description="Control how new employees can enter this self-hosted Tabliodb instance."
         title="Sign-up policy"

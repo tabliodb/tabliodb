@@ -165,7 +165,7 @@ export function AdminUsersPage() {
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-7xl gap-5 px-5 py-5">
+    <div className="mx-auto grid min-w-0 w-full max-w-7xl gap-5 px-4 py-4 sm:px-5 sm:py-5">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-2xl font-extrabold tracking-normal text-[rgb(var(--tabliodb-ink))]">Manage users</h2>
@@ -179,7 +179,7 @@ export function AdminUsersPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-4">
+      <section className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Matching users" value={totalCount} />
         <StatCard label="Showing now" value={stats.total} tone="green" />
         <StatCard label="Instance admins on page" value={stats.instanceAdmins} tone="blue" />
@@ -188,7 +188,7 @@ export function AdminUsersPage() {
 
       {userActionError ? <InlineErrorState error={userActionError} title="User action failed" /> : null}
 
-      <Surface className="overflow-hidden" depth="md">
+      <Surface className="min-w-0 overflow-hidden" depth="md">
         <div className="flex flex-col gap-3 border-b-2 border-[rgb(var(--tabliodb-border))] p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
@@ -202,7 +202,7 @@ export function AdminUsersPage() {
               value={searchTerm}
             />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="tabliodb-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0">
             {roleFilters.map((filter) => (
               <button
                 className={cn(
