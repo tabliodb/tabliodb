@@ -19,6 +19,11 @@ export type EditorConfirmAction =
       type: 'table-delete';
     }
   | {
+      tableCount: number;
+      tableIds: string[];
+      type: 'tables-delete';
+    }
+  | {
       snapshotId: string;
       type: 'snapshot-restore';
     }
@@ -125,21 +130,30 @@ export function EditorConfirmDialog({
   onConfirm: () => void;
 }) {
   const isTableDelete = action?.type === 'table-delete';
+  const isTablesDelete = action?.type === 'tables-delete';
   const isSnapshotGuard = action?.type === 'snapshot-save-unsafe';
-  const title = isTableDelete ? 'Delete table?' : isSnapshotGuard ? action.guard.title : 'Restore snapshot?';
+  const title = isTableDelete
+    ? 'Delete table?'
+    : isTablesDelete
+      ? 'Delete selected tables?'
+      : isSnapshotGuard
+        ? action.guard.title
+        : 'Restore snapshot?';
   const description = isTableDelete
     ? `Table "${action.tableName}" and its relationships will be removed from this draft.`
+    : isTablesDelete
+      ? `${action.tableCount} selected table${action.tableCount === 1 ? '' : 's'} and their relationships will be removed from this draft.`
     : isSnapshotGuard
       ? action.guard.description
       : 'Your current unsaved draft will be replaced by the selected snapshot.';
-  const confirmIcon = isTableDelete ? (
+  const confirmIcon = isTableDelete || isTablesDelete ? (
     <Trash2 className="size-4" />
   ) : isSnapshotGuard ? (
     <Save className="size-4" />
   ) : (
     <RotateCcw className="size-4" />
   );
-  const confirmLabel = isTableDelete ? 'Delete table' : isSnapshotGuard ? 'Save anyway' : 'Restore';
+  const confirmLabel = isTableDelete || isTablesDelete ? 'Delete' : isSnapshotGuard ? 'Save anyway' : 'Restore';
 
   return (
     <Dialog
@@ -173,7 +187,7 @@ export function EditorConfirmDialog({
             disabled={disabled}
             onClick={onConfirm}
             type="button"
-            variant={isSnapshotGuard ? 'primary' : 'danger'}
+            variant={isSnapshotGuard ? 'primary' : isTableDelete || isTablesDelete ? 'danger' : 'primary'}
           >
             {confirmIcon}
             {confirmLabel}

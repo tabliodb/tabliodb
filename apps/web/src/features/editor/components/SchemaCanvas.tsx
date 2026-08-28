@@ -17,8 +17,6 @@ import {
   getTableColumns,
   normalizeDiagramModel,
   type DatabaseColumn,
-  type DatabaseIndex,
-  type DatabaseIndexColumn,
   type DatabaseRelationship,
   type DatabaseTable,
   type DiagramGroup,
@@ -72,6 +70,12 @@ import {
   type CommentMarkerCount,
   type CommentMarkerSummary,
 } from '../comment-markers';
+import {
+  copyTableToClipboard,
+  createUniqueColumnName,
+  createUniqueIndexName,
+  duplicateTableInModel,
+} from '../diagram-table-actions';
 import { formatColumnType } from '../diagram-model';
 import { getDisplayTableColor } from '../table-colors';
 
@@ -138,9 +142,11 @@ export type SchemaCanvasProps = {
   onCommentTargetOpen?: (target: { targetId: string; targetType: CommentTargetType }) => void;
   onColumnSelect?: (columnId: string) => void;
   onTableDocsOpen?: (tableId: string) => void;
+  selectedTableIds?: string[];
   selectedTableId: string | null;
   selectedColumnId?: string | null;
   onModelChange: (model: DiagramModel) => void;
+  onSelectedTableIdsChange?: (tableIds: string[]) => void;
   onSelectedTableChange: (tableId: string | null) => void;
   remoteCursors?: RemoteCanvasCursor[];
   readOnly?: boolean;
@@ -173,6 +179,7 @@ type TableNodeData = {
   portSignature: string;
   readOnly: boolean;
   selectedColumnId: string | null;
+  multiSelected: boolean;
   selected: boolean;
   tableId: string;
   tableName: string;
@@ -280,6 +287,26 @@ type TableContextMenuState = {
   top: number;
 };
 
+type TableSelectionBoxState = {
+  count: number;
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+};
+
+type TableSelectionDragState = {
+  startClientX: number;
+  startClientY: number;
+};
+
+type MultiTableMoveDragState = {
+  activeTableId: string;
+  latestPositions: Record<string, DatabaseTable['position']>;
+  startPositions: Record<string, DatabaseTable['position']>;
+  tableIds: string[];
+};
+
 type CanvasConfirmAction =
   | {
       id: string;
@@ -339,12 +366,14 @@ export function SchemaCanvas({
   onColumnSelect,
   onLocalCursorChange,
   onModelChange,
+  onSelectedTableIdsChange,
   onSelectedTableChange,
   onTableDocsOpen,
   onViewportChange,
   readOnly = false,
   remoteCursors = [],
   selectedColumnId = null,
+  selectedTableIds = [],
   selectedTableId,
   toolbar,
   toolbarOffsetLeft = '1rem',
@@ -359,8 +388,12 @@ export function SchemaCanvas({
   const modelRef = useRef(model);
   const pendingRelationshipMenuRef = useRef<RelationshipMenuState | null>(null);
   const selectedTableIdRef = useRef(selectedTableId);
+  const selectedTableIdsRef = useRef(selectedTableIds);
   const selectedRelationshipIdRef = useRef<string | null>(null);
   const resizingTableIdRef = useRef<string | null>(null);
+  const selectionDragRef = useRef<TableSelectionDragState | null>(null);
+  const multiTableMoveDragRef = useRef<MultiTableMoveDragState | null>(null);
+  const suppressTableClickUntilRef = useRef(0);
   const minimapStaticStateRef = useRef<CanvasMinimapStaticState | null>(null);
   const localCursorFrameRef = useRef(0);
   const pendingLocalCursorRef = useRef<AwarenessState['cursor'] | undefined>(undefined);
@@ -369,12 +402,14 @@ export function SchemaCanvas({
   const onCommentTargetOpenRef = useRef(onCommentTargetOpen);
   const onColumnSelectRef = useRef(onColumnSelect);
   const onModelChangeRef = useRef(onModelChange);
+  const onSelectedTableIdsChangeRef = useRef(onSelectedTableIdsChange);
   const onSelectedTableChangeRef = useRef(onSelectedTableChange);
   const onTableDocsOpenRef = useRef(onTableDocsOpen);
   const onViewportChangeRef = useRef(onViewportChange);
   const remoteCursorsRef = useRef(remoteCursors);
   const [relationshipMenu, setRelationshipMenu] = useState<RelationshipMenuState | null>(null);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
+  const [selectionBox, setSelectionBox] = useState<TableSelectionBoxState | null>(null);
   const [confirmAction, setConfirmAction] = useState<CanvasConfirmAction | null>(null);
   const [remoteCursorPositions, setRemoteCursorPositions] = useState<RemoteCanvasCursorPosition[]>([]);
   // Minimap dimulai dalam keadaan minimized agar editor pertama kali terbuka dengan fokus penuh ke canvas.
@@ -387,8 +422,8 @@ export function SchemaCanvas({
 
   useEffect(() => {
     // Item minimap yang berasal dari model dihitung saat model/selection berubah saja; loop RAF cukup menggabungkan viewport live.
-    minimapStaticStateRef.current = createCanvasMinimapStaticState(model, selectedTableId);
-  }, [model, selectedTableId]);
+    minimapStaticStateRef.current = createCanvasMinimapStaticState(model, selectedTableId, selectedTableIds);
+  }, [model, selectedTableId, selectedTableIds]);
 
   useEffect(() => {
     // Graph X6 tidak diremount saat sidebar dibuka-tutup, jadi quick editor relationship membaca safe-area terbaru lewat ref.
@@ -401,12 +436,20 @@ export function SchemaCanvas({
   }, [selectedTableId]);
 
   useEffect(() => {
+    selectedTableIdsRef.current = selectedTableIds;
+  }, [selectedTableIds]);
+
+  useEffect(() => {
     selectedRelationshipIdRef.current = relationshipMenu?.relationshipId ?? null;
   }, [relationshipMenu?.relationshipId]);
 
   useEffect(() => {
     onModelChangeRef.current = onModelChange;
   }, [onModelChange]);
+
+  useEffect(() => {
+    onSelectedTableIdsChangeRef.current = onSelectedTableIdsChange;
+  }, [onSelectedTableIdsChange]);
 
   useEffect(() => {
     onLocalCursorChangeRef.current = onLocalCursorChange;
@@ -618,6 +661,131 @@ export function SchemaCanvas({
       return target.closest<HTMLElement>('[data-tabliodb-table-id]');
     };
 
+    const applySingleTableSelection = (tableId: string | null) => {
+      // Single-select dan multi-select sengaja saling eksklusif supaya sidebar kiri tidak menampilkan dua konteks edit sekaligus.
+      selectedTableIdRef.current = tableId;
+      selectedTableIdsRef.current = [];
+      onSelectedTableIdsChangeRef.current?.([]);
+      onSelectedTableChangeRef.current(tableId);
+    };
+
+    const applyMultiTableSelection = (tableIds: string[]) => {
+      // Multi-select tidak memakai selectedTableId karena selectedTableId berarti user sedang mengedit satu table secara detail.
+      selectedTableIdRef.current = null;
+      selectedTableIdsRef.current = tableIds;
+      onSelectedTableChangeRef.current(null);
+      onSelectedTableIdsChangeRef.current?.(tableIds);
+    };
+
+    const toggleMultiTableSelection = (tableId: string) => {
+      const currentTableIds = selectedTableIdsRef.current;
+      const nextTableIds = currentTableIds.includes(tableId)
+        ? currentTableIds.filter((currentTableId) => currentTableId !== tableId)
+        : [...currentTableIds, tableId];
+
+      applyMultiTableSelection(nextTableIds);
+    };
+
+    const shouldStartTableSelectionBox = (event: MouseEvent) => {
+      if (event.button !== 0 || !event.shiftKey) {
+        return false;
+      }
+
+      const target = getElementFromEventTarget(event.target);
+
+      return Boolean(
+        target &&
+          !target.closest(
+            [
+              '[data-tabliodb-table-id]',
+              '[data-tabliodb-note-id]',
+              '[data-tabliodb-table-context-menu]',
+              '.tabliodb-editor-chrome',
+              'button',
+              'input',
+              'textarea',
+              'select',
+              '[contenteditable="true"]',
+              '[data-lexical-editor="true"]',
+            ].join(', '),
+          ),
+      );
+    };
+
+    const updateTableSelectionBox = (event: MouseEvent) => {
+      const dragState = selectionDragRef.current;
+
+      if (!dragState) {
+        return [];
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const localStartPoint = graph.clientToLocal(dragState.startClientX, dragState.startClientY);
+      const localEndPoint = graph.clientToLocal(event.clientX, event.clientY);
+      const localSelectionRect = createRectFromPoints(localStartPoint, localEndPoint);
+      const selectedTableIdsInBox = getTableIdsInLocalSelection(modelRef.current, localSelectionRect);
+      const screenSelectionRect = createScreenSelectionRect(
+        containerRect,
+        dragState.startClientX,
+        dragState.startClientY,
+        event.clientX,
+        event.clientY,
+      );
+
+      setSelectionBox({
+        count: selectedTableIdsInBox.length,
+        height: screenSelectionRect.height,
+        left: screenSelectionRect.x,
+        top: screenSelectionRect.y,
+        width: screenSelectionRect.width,
+      });
+
+      if (!areTableSelectionIdsEqual(selectedTableIdsRef.current, selectedTableIdsInBox)) {
+        applyMultiTableSelection(selectedTableIdsInBox);
+      }
+
+      return selectedTableIdsInBox;
+    };
+
+    const handleTableSelectionBoxMouseDown = (event: MouseEvent) => {
+      if (!shouldStartTableSelectionBox(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      selectionDragRef.current = {
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+      };
+      setRelationshipMenu(null);
+      setTableContextMenu(null);
+      applyMultiTableSelection([]);
+      updateTableSelectionBox(event);
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        moveEvent.preventDefault();
+        updateTableSelectionBox(moveEvent);
+      };
+
+      const handleMouseUp = (upEvent: MouseEvent) => {
+        const selectedTableIdsInBox = updateTableSelectionBox(upEvent);
+
+        selectionDragRef.current = null;
+        setSelectionBox(null);
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+
+        if (selectedTableIdsInBox.length > 0) {
+          suppressTableClickUntilRef.current = Date.now() + 120;
+        }
+      };
+
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    };
+
     const getNoteActionFromEvent = (event: Event, fallbackNoteId?: string) => {
       const target = getElementFromEventTarget(event.target);
       const actionButton = target?.closest<HTMLButtonElement>('[data-note-action]');
@@ -682,19 +850,28 @@ export function SchemaCanvas({
       }
 
       if (isTableNodeData(data)) {
-        onSelectedTableChangeRef.current(data.tableId);
+        if ((e as unknown as MouseEvent).shiftKey) {
+          toggleMultiTableSelection(data.tableId);
+          return;
+        }
+
+        applySingleTableSelection(data.tableId);
         return;
       }
 
       if (isNoteNodeData(data)) {
-        onSelectedTableChangeRef.current(null);
+        applySingleTableSelection(null);
       }
     });
 
     graph.on('blank:click', () => {
+      if (Date.now() < suppressTableClickUntilRef.current) {
+        return;
+      }
+
       setRelationshipMenu(null);
       setTableContextMenu(null);
-      onSelectedTableChangeRef.current(null);
+      applySingleTableSelection(null);
     });
 
     graph.on('edge:click', ({ edge, e }) => {
@@ -708,6 +885,7 @@ export function SchemaCanvas({
 
       setRelationshipMenu(createRelationshipMenuStateFromEvent(event, relationship.id));
       setTableContextMenu(null);
+      applyMultiTableSelection([]);
     });
 
     graph.on('edge:connected', ({ edge, e, isNew }) => {
@@ -737,7 +915,7 @@ export function SchemaCanvas({
         nextRelationshipCommand.relationshipId,
       );
       onModelChangeRef.current(applyDiagramCommand(modelRef.current, nextRelationshipCommand));
-      onSelectedTableChangeRef.current(nextRelationshipCommand.targetTableId);
+      applySingleTableSelection(nextRelationshipCommand.targetTableId);
       onColumnSelectRef.current?.(nextRelationshipCommand.targetColumnIds[0]);
       setTableContextMenu(null);
     });
@@ -794,10 +972,18 @@ export function SchemaCanvas({
         return;
       }
 
+      if (event.shiftKey) {
+        // Shift-click di row tetap dianggap memilih table, bukan memilih column, supaya gesture multi-select konsisten.
+        event.preventDefault();
+        event.stopPropagation();
+        toggleMultiTableSelection(tableId);
+        return;
+      }
+
       // Klik row column di canvas memilih table sekaligus column supaya sidebar kiri langsung menunjuk field yang sama.
       event.preventDefault();
       setRelationshipMenu(null);
-      onSelectedTableChangeRef.current(tableId);
+      applySingleTableSelection(tableId);
       onColumnSelectRef.current?.(columnId);
     };
 
@@ -809,10 +995,24 @@ export function SchemaCanvas({
         return;
       }
 
+      if (Date.now() < suppressTableClickUntilRef.current) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      if (event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleMultiTableSelection(tableId);
+        return;
+      }
+
       // Selection diproses di click, bukan mousedown, supaya React tidak me-render ulang HTML node tepat saat X6 memulai drag pertama.
+      event.stopPropagation();
       setRelationshipMenu(null);
       setTableContextMenu(null);
-      onSelectedTableChangeRef.current(tableId);
+      applySingleTableSelection(tableId);
     };
 
     const handleTableContextMenu = (event: MouseEvent) => {
@@ -842,7 +1042,10 @@ export function SchemaCanvas({
         tableId,
         top: clamp(event.clientY - containerRect.top, 12, containerRect.height - menuHeight - 12),
       });
-      onSelectedTableChangeRef.current(tableId);
+
+      if (!selectedTableIdsRef.current.includes(tableId)) {
+        applySingleTableSelection(tableId);
+      }
     };
 
     const handleNoteInteractiveMouseDown = (event: MouseEvent) => {
@@ -1011,6 +1214,7 @@ export function SchemaCanvas({
     container.addEventListener('click', handleNoteActionClick, true);
     container.addEventListener('focusout', handleNoteFocusOut, true);
     container.addEventListener('keydown', handleNoteKeyDown, true);
+    container.addEventListener('mousedown', handleTableSelectionBoxMouseDown, true);
     container.addEventListener('mousedown', handleResizeMouseDown, true);
 
     const publishLocalCursor = (cursor: AwarenessState['cursor'] | undefined, immediate = false) => {
@@ -1086,6 +1290,68 @@ export function SchemaCanvas({
         return;
       }
 
+      const activeMultiSelection = selectedTableIdsRef.current.filter((tableId) => modelRef.current.tables[tableId]);
+
+      if (activeMultiSelection.length > 1 && activeMultiSelection.includes(data.tableId)) {
+        if (multiTableMoveDragRef.current && multiTableMoveDragRef.current.activeTableId !== data.tableId) {
+          // Node pendamping ikut diposisikan lewat programmatic move; hanya node yang dipegang pointer user yang boleh menghitung delta.
+          return;
+        }
+
+        const dragState =
+          multiTableMoveDragRef.current?.activeTableId === data.tableId
+            ? multiTableMoveDragRef.current
+            : createMultiTableMoveDragState(modelRef.current, activeMultiSelection, data.tableId);
+
+        if (!dragState) {
+          return;
+        }
+
+        multiTableMoveDragRef.current = dragState;
+
+        const draggedPosition = node.getPosition();
+        const activeStartPosition = dragState.startPositions[data.tableId];
+        const delta = {
+          x: draggedPosition.x - activeStartPosition.x,
+          y: draggedPosition.y - activeStartPosition.y,
+        };
+        const latestPositions: Record<string, DatabaseTable['position']> = {};
+
+        graph.batchUpdate('tabliodb-multi-table-move', () => {
+          for (const tableId of dragState.tableIds) {
+            const startPosition = dragState.startPositions[tableId];
+            const nextPosition = {
+              x: startPosition.x + delta.x,
+              y: startPosition.y + delta.y,
+            };
+
+            latestPositions[tableId] = nextPosition;
+
+            if (tableId === data.tableId) {
+              continue;
+            }
+
+            const selectedNode = graph.getCellById(tableId) as X6Node | null | undefined;
+
+            if (selectedNode?.isNode()) {
+              // Node pendamping mengikuti node yang sedang diseret secara live; commit model tetap dilakukan sekali di node:moved.
+              selectedNode.position(nextPosition.x, nextPosition.y);
+            }
+          }
+
+          refreshTablesMovePreview(
+            graph,
+            modelRef.current,
+            latestPositions,
+            selectedTableIdRef.current,
+            selectedRelationshipIdRef.current,
+          );
+        });
+
+        dragState.latestPositions = latestPositions;
+        return;
+      }
+
       refreshTableMovePreview(
         graph,
         modelRef.current,
@@ -1105,6 +1371,11 @@ export function SchemaCanvas({
       const position = node.getPosition();
 
       if (isTableNodeData(data)) {
+        if (multiTableMoveDragRef.current && multiTableMoveDragRef.current.activeTableId !== data.tableId) {
+          // Programmatic move untuk anggota selection tidak boleh berubah menjadi commit single-table.
+          return;
+        }
+
         if (resizingTableIdRef.current === data.tableId) {
           // Saat resize dari sisi kiri, node.position() dipanggil secara programmatic; commit model tetap dilakukan sekali di mouseup.
           return;
@@ -1113,6 +1384,41 @@ export function SchemaCanvas({
         const table = modelRef.current.tables[data.tableId];
 
         if (!table) {
+          return;
+        }
+
+        const multiDragState = multiTableMoveDragRef.current;
+
+        if (multiDragState?.activeTableId === data.tableId && multiDragState.tableIds.length > 1) {
+          let nextModel = modelRef.current;
+          const nextSelectedTableIds: string[] = [];
+
+          for (const tableId of multiDragState.tableIds) {
+            const nextPosition = multiDragState.latestPositions[tableId];
+            const currentTable = nextModel.tables[tableId];
+
+            if (!currentTable || !nextPosition) {
+              continue;
+            }
+
+            nextSelectedTableIds.push(tableId);
+
+            if (currentTable.position.x === nextPosition.x && currentTable.position.y === nextPosition.y) {
+              continue;
+            }
+
+            nextModel = applyDiagramCommand(nextModel, {
+              position: nextPosition,
+              tableId,
+              type: 'table.move',
+            });
+          }
+
+          multiTableMoveDragRef.current = null;
+          suppressTableClickUntilRef.current = Date.now() + 160;
+          onModelChangeRef.current(nextModel);
+          onSelectedTableChangeRef.current(null);
+          onSelectedTableIdsChangeRef.current?.(nextSelectedTableIds);
           return;
         }
 
@@ -1128,7 +1434,7 @@ export function SchemaCanvas({
           }),
         );
         // Drag table yang belum selected tetap berakhir dengan table tersebut aktif, tanpa memutus gesture drag pertamanya.
-        onSelectedTableChangeRef.current(table.id);
+        applySingleTableSelection(table.id);
         return;
       }
 
@@ -1227,6 +1533,7 @@ export function SchemaCanvas({
       container.removeEventListener('click', handleNoteActionClick, true);
       container.removeEventListener('focusout', handleNoteFocusOut, true);
       container.removeEventListener('keydown', handleNoteKeyDown, true);
+      container.removeEventListener('mousedown', handleTableSelectionBoxMouseDown, true);
       container.removeEventListener('mousedown', handleResizeMouseDown, true);
       container.removeEventListener('pointerleave', handleCursorPointerLeave);
       container.removeEventListener('pointermove', handleCursorPointerMove);
@@ -1259,6 +1566,7 @@ export function SchemaCanvas({
       graph,
       model,
       selectedTableId,
+      selectedTableIds,
       selectedColumnId,
       relationshipMenu?.relationshipId ?? null,
       commentTargetSummaries,
@@ -1277,6 +1585,7 @@ export function SchemaCanvas({
     relationshipMenu?.relationshipId,
     selectedColumnId,
     selectedTableId,
+    selectedTableIds,
   ]);
 
   useEffect(() => {
@@ -1634,6 +1943,23 @@ export function SchemaCanvas({
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden bg-[rgb(var(--tabliodb-canvas))]">
       <div className="tabliodb-x6-canvas absolute inset-0" ref={containerRef} />
+      {selectionBox ? (
+        <div
+          className="pointer-events-none absolute z-20 rounded-[14px] border-2 border-dashed border-[#ff4fb3] bg-[#fff1f8]/70 shadow-[0_0_0_1px_rgba(255,79,179,0.18)_inset]"
+          style={{
+            height: selectionBox.height,
+            left: selectionBox.left,
+            top: selectionBox.top,
+            width: selectionBox.width,
+          }}
+        >
+          {selectionBox.count > 0 ? (
+            <span className="absolute -top-7 left-0 rounded-full border border-[#ff9ad0] bg-white px-2.5 py-1 text-[11px] font-extrabold text-[#d61b82] shadow-[0_2px_0_rgba(255,154,208,0.45)]">
+              {selectionBox.count} selected
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       {toolbar ? (
         <div className="absolute top-4 z-20 transition-[left] duration-200" style={{ left: toolbarOffsetLeft }}>
           {toolbar}
@@ -2244,183 +2570,18 @@ function CanvasConfirmDialog({
   );
 }
 
-async function copyTableToClipboard(model: DiagramModel, table: DatabaseTable): Promise<void> {
-  const payload = {
-    columns: getTableColumns(model, table.id),
-    indexes: getTableIndexes(model, table),
-    kind: 'tabliodb.table.copy.v1',
-    table,
-  };
-
-  // Clipboard payload tetap JSON terstruktur agar fitur paste/import table nanti bisa membaca data yang sama tanpa scraping text.
-  await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-}
-
-function duplicateTableInModel(model: DiagramModel, tableId: string): { model: DiagramModel; tableId: string } | null {
-  const sourceTable = model.tables[tableId];
-
-  if (!sourceTable) {
-    return null;
-  }
-
-  const sourceColumns = getTableColumns(model, sourceTable.id);
-  const nextTableId = createDiagramEntityId('table');
-  const nextColumnIdBySourceId = new Map<string, string>();
-  const duplicateColumns = sourceColumns.map((column) => {
-    const nextColumnId = createDiagramEntityId('column');
-
-    nextColumnIdBySourceId.set(column.id, nextColumnId);
-
-    return {
-      autoIncrement: column.autoIncrement,
-      collation: column.collation,
-      comment: column.comment,
-      defaultValue: column.defaultValue,
-      generatedExpression: column.generatedExpression,
-      id: nextColumnId,
-      name: column.name,
-      nullable: column.nullable,
-      primaryKey: column.primaryKey,
-      type: { ...column.type },
-      unique: column.unique,
-      unsigned: column.unsigned,
-    };
-  });
-  let nextModel = applyDiagramCommand(model, {
-    color: sourceTable.color,
-    columns: duplicateColumns,
-    name: createUniqueTableName(Object.values(model.tables), `${sourceTable.name}_copy`, sourceTable.schema),
-    position: {
-      x: sourceTable.position.x + diagramDragGridSize * 3,
-      y: sourceTable.position.y + diagramDragGridSize * 3,
-    },
-    schema: sourceTable.schema,
-    tableId: nextTableId,
-    type: 'table.create',
-    width: sourceTable.width,
-  });
-
-  for (const index of getTableIndexes(model, sourceTable)) {
-    const remappedColumns = remapIndexColumns(index.columns, nextColumnIdBySourceId);
-
-    if (remappedColumns.length === 0) {
-      continue;
-    }
-
-    nextModel = applyDiagramCommand(nextModel, {
-      columns: remappedColumns,
-      comment: index.comment,
-      includeColumnIds: remapColumnIds(index.includeColumnIds ?? [], nextColumnIdBySourceId),
-      method: index.method,
-      name: createUniqueIndexName(nextModel, nextModel.tables[nextTableId] ?? sourceTable, index.name),
-      tableId: nextTableId,
-      type: 'index.create',
-      unique: index.unique,
-      where: index.where,
-    });
-  }
-
-  return { model: nextModel, tableId: nextTableId };
-}
-
-function getTableIndexes(model: DiagramModel, table: DatabaseTable): DatabaseIndex[] {
-  return table.indexIds.flatMap((indexId) => {
-    const index = model.indexes[indexId];
-
-    return index ? [index] : [];
-  });
-}
-
-function remapIndexColumns(
-  columns: DatabaseIndexColumn[],
-  columnIdBySourceId: Map<string, string>,
-): DatabaseIndexColumn[] {
-  return columns.flatMap((column) => {
-    const columnId = columnIdBySourceId.get(column.columnId);
-
-    return columnId ? [{ ...column, columnId }] : [];
-  });
-}
-
-function remapColumnIds(columnIds: string[], columnIdBySourceId: Map<string, string>): string[] {
-  return columnIds.flatMap((columnId) => {
-    const nextColumnId = columnIdBySourceId.get(columnId);
-
-    return nextColumnId ? [nextColumnId] : [];
-  });
-}
-
-function createUniqueColumnName(columns: DatabaseColumn[], baseName: string): string {
-  return createUniqueName(
-    new Set(columns.map((column) => column.name.toLowerCase())),
-    normalizeDiagramIdentifier(baseName),
-  );
-}
-
-function createUniqueTableName(tables: DatabaseTable[], baseName: string, schema: string | undefined): string {
-  const usedNames = new Set(tables.map((table) => `${table.schema ?? ''}.${table.name}`.toLowerCase()));
-  const normalizedBaseName = normalizeDiagramIdentifier(baseName);
-  const schemaPrefix = schema ?? '';
-
-  if (!usedNames.has(`${schemaPrefix}.${normalizedBaseName}`)) {
-    return normalizedBaseName;
-  }
-
-  let suffix = 2;
-  let nextName = `${normalizedBaseName}_${suffix}`;
-
-  while (usedNames.has(`${schemaPrefix}.${nextName}`)) {
-    suffix += 1;
-    nextName = `${normalizedBaseName}_${suffix}`;
-  }
-
-  return nextName;
-}
-
-function createUniqueIndexName(model: DiagramModel, table: DatabaseTable, baseName: string): string {
-  const usedNames = new Set(Object.values(model.indexes).map((index) => index.name.toLowerCase()));
-  const normalizedBaseName = normalizeDiagramIdentifier(`${table.name}_${baseName}_idx`);
-
-  return createUniqueName(usedNames, normalizedBaseName);
-}
-
-function createUniqueName(usedNames: Set<string>, baseName: string): string {
-  if (!usedNames.has(baseName.toLowerCase())) {
-    return baseName;
-  }
-
-  let suffix = 2;
-  let nextName = `${baseName}_${suffix}`;
-
-  while (usedNames.has(nextName.toLowerCase())) {
-    suffix += 1;
-    nextName = `${baseName}_${suffix}`;
-  }
-
-  return nextName;
-}
-
-function normalizeDiagramIdentifier(value: string): string {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
-
-  return normalized || 'item';
-}
-
 function createCanvasMinimapStaticState(
   model: DiagramModel,
   selectedTableId: string | null,
+  selectedTableIds: string[] = [],
 ): CanvasMinimapStaticState | null {
+  const selectedTableIdSet = new Set(selectedTableIds);
   const tables = Object.values(model.tables).map<CanvasMinimapTable>((table) => ({
     color: getDisplayTableColor(table.color),
     height: getTableNodeHeight(model, table),
     id: table.id,
     name: table.name,
-    selected: table.id === selectedTableId,
+    selected: table.id === selectedTableId || selectedTableIdSet.has(table.id),
     width: getTableWidth(table),
     x: table.position.x,
     y: table.position.y,
@@ -2870,6 +3031,7 @@ function syncGraphFromModel(
   graph: Graph,
   model: DiagramModel,
   selectedTableId: string | null,
+  selectedTableIds: string[],
   selectedColumnId: string | null,
   selectedRelationshipId: string | null,
   commentTargetSummaries: CommentThreadTargetSummaryDto[],
@@ -2914,6 +3076,7 @@ function syncGraphFromModel(
           model,
           table,
           selectedTableId,
+          selectedTableIds,
           selectedColumnId,
           relationshipPlan.terminalsByTable.get(table.id) ?? [],
           commentMarkerSummary,
@@ -3357,6 +3520,7 @@ function createTableNodeMetadata(
   model: DiagramModel,
   table: DatabaseTable,
   selectedTableId: string | null,
+  selectedTableIds: string[],
   selectedColumnId: string | null,
   terminals: RelationshipTerminal[],
   commentMarkerSummary: CommentMarkerSummary,
@@ -3368,7 +3532,9 @@ function createTableNodeMetadata(
   const height = getTableNodeHeight(model, table);
   const width = getTableWidth(table);
   const selected = table.id === selectedTableId;
-  const portSignature = createColumnPortSignature(table, columns, terminals, readOnly, selected);
+  const multiSelected = selectedTableIds.includes(table.id);
+  const portsVisible = selected || multiSelected;
+  const portSignature = createColumnPortSignature(table, columns, terminals, readOnly, portsVisible);
 
   return {
     id: table.id,
@@ -3386,16 +3552,17 @@ function createTableNodeMetadata(
       portSignature,
       readOnly,
       selectedColumnId,
+      multiSelected,
       selected,
       tableId: table.id,
       tableName: table.name,
     } satisfies TableNodeData,
     height,
     position: table.position,
-    ports: createColumnPorts(table, columns, terminals, readOnly, selected),
+    ports: createColumnPorts(table, columns, terminals, readOnly, portsVisible),
     shape: tableNodeShape,
     width,
-    zIndex: selected ? 2 : 1,
+    zIndex: selected || multiSelected ? 2 : 1,
   };
 }
 
@@ -4204,18 +4371,34 @@ function refreshTableMovePreview(
     return;
   }
 
+  refreshTablesMovePreview(graph, model, { [tableId]: position }, selectedTableId, selectedRelationshipId);
+}
+
+function refreshTablesMovePreview(
+  graph: Graph,
+  model: DiagramModel,
+  tablePositions: Record<string, DatabaseTable['position']>,
+  selectedTableId: string | null,
+  selectedRelationshipId: string | null,
+): void {
+  const tableIds = Object.keys(tablePositions).filter((tableId) => model.tables[tableId]);
+
+  if (tableIds.length === 0) {
+    return;
+  }
+
   const previewModel = {
     ...model,
-    tables: {
-      ...model.tables,
-      [tableId]: {
-        ...table,
-        position,
-      },
-    },
+    tables: Object.fromEntries(
+      Object.entries(model.tables).map(([currentTableId, currentTable]) => [
+        currentTableId,
+        tablePositions[currentTableId] ? { ...currentTable, position: tablePositions[currentTableId] } : currentTable,
+      ]),
+    ),
   };
+  const movedTableIds = new Set(tableIds);
   const affectedRelationships = Object.values(previewModel.relationships).filter(
-    (relationship) => relationship.sourceTableId === tableId || relationship.targetTableId === tableId,
+    (relationship) => movedTableIds.has(relationship.sourceTableId) || movedTableIds.has(relationship.targetTableId),
   );
 
   if (affectedRelationships.length === 0) {
@@ -4457,6 +4640,103 @@ function clampTableNodeWidth(value: number): number {
   return clamp(Math.round(value), tableResizeMinWidth, tableResizeMaxWidth);
 }
 
+function createMultiTableMoveDragState(
+  model: DiagramModel,
+  tableIds: string[],
+  activeTableId: string,
+): MultiTableMoveDragState | null {
+  const existingTableIds = Array.from(new Set(tableIds)).filter((tableId) => model.tables[tableId]);
+
+  if (!existingTableIds.includes(activeTableId)) {
+    return null;
+  }
+
+  const startPositions = Object.fromEntries(
+    existingTableIds.map((tableId) => {
+      const table = model.tables[tableId];
+
+      return [tableId, { ...table.position }];
+    }),
+  );
+
+  return {
+    activeTableId,
+    latestPositions: { ...startPositions },
+    startPositions,
+    tableIds: existingTableIds,
+  };
+}
+
+function createRectFromPoints(startPoint: PointLike, endPoint: PointLike): CanvasRect {
+  const left = Math.min(startPoint.x, endPoint.x);
+  const top = Math.min(startPoint.y, endPoint.y);
+
+  return {
+    height: Math.abs(endPoint.y - startPoint.y),
+    width: Math.abs(endPoint.x - startPoint.x),
+    x: left,
+    y: top,
+  };
+}
+
+function createScreenSelectionRect(
+  containerRect: DOMRect,
+  startClientX: number,
+  startClientY: number,
+  endClientX: number,
+  endClientY: number,
+): CanvasRect {
+  const rawLeft = Math.min(startClientX, endClientX) - containerRect.left;
+  const rawTop = Math.min(startClientY, endClientY) - containerRect.top;
+  const rawRight = Math.max(startClientX, endClientX) - containerRect.left;
+  const rawBottom = Math.max(startClientY, endClientY) - containerRect.top;
+  const left = clamp(rawLeft, 0, containerRect.width);
+  const top = clamp(rawTop, 0, containerRect.height);
+  const right = clamp(rawRight, 0, containerRect.width);
+  const bottom = clamp(rawBottom, 0, containerRect.height);
+
+  return {
+    height: Math.max(1, bottom - top),
+    width: Math.max(1, right - left),
+    x: left,
+    y: top,
+  };
+}
+
+function getTableIdsInLocalSelection(model: DiagramModel, selectionRect: CanvasRect): string[] {
+  return Object.values(model.tables)
+    .filter((table) => doCanvasRectsIntersect(selectionRect, getTableCanvasRect(model, table)))
+    .map((table) => table.id);
+}
+
+function getTableCanvasRect(model: DiagramModel, table: DatabaseTable): CanvasRect {
+  return {
+    height: getTableNodeHeight(model, table),
+    width: getTableWidth(table),
+    x: table.position.x,
+    y: table.position.y,
+  };
+}
+
+function doCanvasRectsIntersect(first: CanvasRect, second: CanvasRect): boolean {
+  return (
+    first.x <= second.x + second.width &&
+    first.x + first.width >= second.x &&
+    first.y <= second.y + second.height &&
+    first.y + first.height >= second.y
+  );
+}
+
+function areTableSelectionIdsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const rightIds = new Set(right);
+
+  return left.every((tableId) => rightIds.has(tableId));
+}
+
 function getGraphScale(graph: Graph): number {
   const zoom = graph.zoom();
 
@@ -4475,6 +4755,7 @@ function isTableNodeDataEqual(current: TableNodeData | undefined, next: TableNod
     current.portSignature === next.portSignature &&
     current.readOnly === next.readOnly &&
     current.selectedColumnId === next.selectedColumnId &&
+    current.multiSelected === next.multiSelected &&
     current.selected === next.selected &&
     current.tableId === next.tableId &&
     current.tableName === next.tableName &&
@@ -4562,15 +4843,18 @@ function renderTableNode(data: TableNodeData): string {
   const commentMarker = renderCommentMarker(data.commentMarker, `table ${data.tableName}`, 'table', data.tableId);
   const displayClass = data.columns.length === 0 ? 'is-collapsed' : '';
   const resizeHandle =
-    data.readOnly || !data.selected
+    data.readOnly || !data.selected || data.multiSelected
       ? ''
       : [
           '<button aria-label="Resize table from left" class="tabliodb-table-node__resize-zone tabliodb-table-node__resize-zone--left" data-resize-side="left" type="button"></button>',
           '<button aria-label="Resize table from right" class="tabliodb-table-node__resize-zone tabliodb-table-node__resize-zone--right" data-resize-side="right" type="button"></button>',
         ].join('');
+  const selectionClass = [data.selected ? 'is-selected' : '', data.multiSelected ? 'is-multi-selected' : '']
+    .filter(Boolean)
+    .join(' ');
 
   return `
-    <div class="tabliodb-table-node ${data.selected ? 'is-selected' : ''} ${displayClass}" data-tabliodb-table-id="${escapeHtml(data.tableId)}" style="--table-accent: ${escapeHtml(data.color)}">
+    <div class="tabliodb-table-node ${selectionClass} ${displayClass}" data-tabliodb-table-id="${escapeHtml(data.tableId)}" style="--table-accent: ${escapeHtml(data.color)}">
       <div class="tabliodb-table-node__header">
         <span class="tabliodb-table-node__status"></span>
         <span class="tabliodb-table-node__name">${escapeHtml(data.tableName)}</span>

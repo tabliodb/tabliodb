@@ -218,6 +218,25 @@ body {
     0 14px 24px rgb(15 23 42 / 12%);
 }
 
+.tabliodb-table-node.is-multi-selected {
+  border-color: #ff4fb3;
+  box-shadow:
+    0 3px 0 #f3a3cf,
+    0 0 0 2px #ff4fb3,
+    0 0 0 5px rgb(255 241 248 / 86%),
+    0 14px 24px rgb(15 23 42 / 12%);
+}
+
+.tabliodb-table-node.is-multi-selected::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: 3;
+  border: 2px dashed #ff8ac7;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 .tabliodb-table-node__header {
   display: grid;
   grid-template-columns: 9px minmax(0, 1fr) auto;

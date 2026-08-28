@@ -3,6 +3,7 @@ import {
   applyDiagramCommand,
   createDiagramEntityId,
   parseDiagramModel,
+  type DatabaseTable,
   type DiagramEntityKind,
   type DiagramModel,
   type DiagramReviewSignal,
@@ -85,6 +86,7 @@ import { AddTableDialog } from './components/AddTableDialog';
 import { CommentsDialog } from './components/CommentsDialog';
 import { DiagramTablesSidebar } from './components/DiagramTablesSidebar';
 import { EditorHeader } from './components/EditorHeader';
+import { MultiSelectTablesSidebar } from './components/MultiSelectTablesSidebar';
 import type { NotificationInboxItem } from './components/EditorHeaderMenus';
 import {
   EditorConfirmDialog,
@@ -196,6 +198,7 @@ export function EditorPage() {
     setSelectedCommentTarget,
     setSelectedTableId,
   } = useEditorSelection();
+  const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
   const editorRouteActions = useEditorRouteActions({
     clearSelection,
     modelRef,
@@ -596,8 +599,33 @@ export function EditorPage() {
     canvasViewportRef.current = viewport;
   }, []);
 
+  const handleSelectedTableIdsChange = useCallback(
+    (tableIds: string[]) => {
+      const currentModel = modelRef.current;
+      const nextTableIds = Array.from(new Set(tableIds)).filter((tableId) => currentModel?.tables[tableId]);
+
+      setSelectedTableIds((currentTableIds) =>
+        areStringArraysEqual(currentTableIds, nextTableIds) ? currentTableIds : nextTableIds,
+      );
+
+      if (nextTableIds.length > 0) {
+        // Multi-select mengganti konteks edit detail; komentar/column target lama dibersihkan agar sidebar kiri tidak ambigu.
+        setSelectedTableId(null);
+        setSelectedCommentTarget(null);
+        setLeftSidebarOpen(true);
+      }
+    },
+    [setSelectedCommentTarget, setSelectedTableId],
+  );
+
+  const handleClearTableSelection = useCallback(() => {
+    setSelectedTableIds([]);
+    clearSelection();
+  }, [clearSelection]);
+
   const handleSelectedTableChange = useCallback(
     (tableId: string | null) => {
+      setSelectedTableIds([]);
       selectTable(tableId);
 
       if (tableId) {
@@ -607,6 +635,34 @@ export function EditorPage() {
     },
     [selectTable],
   );
+
+  const handleDeleteSelectedTablesRequest = useCallback(
+    (tables: DatabaseTable[]) => {
+      if (!canEditDiagram || tables.length === 0) {
+        return;
+      }
+
+      setEditorConfirmAction({
+        tableCount: tables.length,
+        tableIds: tables.map((table) => table.id),
+        type: 'tables-delete',
+      });
+    },
+    [canEditDiagram],
+  );
+
+  useEffect(() => {
+    if (!model) {
+      setSelectedTableIds([]);
+      return;
+    }
+
+    setSelectedTableIds((currentTableIds) => {
+      const nextTableIds = currentTableIds.filter((tableId) => model.tables[tableId]);
+
+      return areStringArraysEqual(currentTableIds, nextTableIds) ? currentTableIds : nextTableIds;
+    });
+  }, [model]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -643,6 +699,7 @@ export function EditorPage() {
     snapshotRecoveryModelRef.current = null;
     canvasViewportRef.current = null;
     setModel(null);
+    setSelectedTableIds([]);
   }, [activeDiagram?.id]);
 
   useEffect(() => {
@@ -714,6 +771,22 @@ export function EditorPage() {
 
       if (
         canEditDiagram &&
+        selectedTableIds.length > 0 &&
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        !isInteractiveShortcutTarget(event.target)
+      ) {
+        event.preventDefault();
+
+        setEditorConfirmAction({
+          tableCount: selectedTableIds.length,
+          tableIds: selectedTableIds,
+          type: 'tables-delete',
+        });
+        return;
+      }
+
+      if (
+        canEditDiagram &&
         selectedTableId &&
         (event.key === 'Delete' || event.key === 'Backspace') &&
         !isInteractiveShortcutTarget(event.target)
@@ -748,6 +821,7 @@ export function EditorPage() {
     handleSaveSnapshot,
     handleUndoModelChange,
     selectedTableId,
+    selectedTableIds,
   ]);
 
   const publishAwareness = useCallback(
@@ -1253,6 +1327,7 @@ export function EditorPage() {
     const nextTableId = Object.keys(nextModel.tables).find((tableId) => !model.tables[tableId]) ?? null;
 
     handleModelChange(nextModel);
+    setSelectedTableIds([]);
     // Table baru langsung menjadi target komentar aktif agar review pertama jatuh ke entity yang baru dibuat.
     selectTable(nextTableId);
   }
@@ -1280,6 +1355,7 @@ export function EditorPage() {
         width: 260,
       }),
     );
+    setSelectedTableIds([]);
     setSelectedTableId(null);
     // Note yang baru dibuat langsung menjadi target komentar aktif agar diskusi bisa diarahkan ke annotation tersebut.
     setSelectedCommentTarget({ targetId: noteId, targetType: 'note' });
@@ -1370,6 +1446,31 @@ export function EditorPage() {
         if (selectedTableId === action.tableId) {
           clearSelection();
         }
+      }
+
+      setEditorConfirmAction(null);
+      return;
+    }
+
+    if (action.type === 'tables-delete') {
+      const currentModel = modelRef.current;
+
+      if (canEditDiagram && currentModel) {
+        const nextModel = action.tableIds.reduce((draftModel, tableId) => {
+          if (!draftModel.tables[tableId]) {
+            return draftModel;
+          }
+
+          // Setiap table.delete melewati schema-core supaya relationship, group membership, index, dan column entity ikut dibersihkan konsisten.
+          return applyDiagramCommand(draftModel, {
+            tableId,
+            type: 'table.delete',
+          });
+        }, currentModel);
+
+        handleModelChange(nextModel);
+        setSelectedTableIds([]);
+        clearSelection();
       }
 
       setEditorConfirmAction(null);
@@ -1895,12 +1996,14 @@ export function EditorPage() {
             onColumnSelect={(columnId) => setSelectedCommentTarget({ targetId: columnId, targetType: 'column' })}
             onLocalCursorChange={handleCanvasCursorChange}
             onModelChange={handleModelChange}
+            onSelectedTableIdsChange={handleSelectedTableIdsChange}
             onSelectedTableChange={handleSelectedTableChange}
             onTableDocsOpen={setTableDocsTableId}
             onViewportChange={handleCanvasViewportChange}
             readOnly={!canEditDiagram}
             remoteCursors={remoteCanvasCursors}
             selectedColumnId={selectedColumnId}
+            selectedTableIds={selectedTableIds}
             selectedTableId={selectedTableId}
             toolbar={canvasToolbar}
             toolbarOffsetLeft={canvasToolbarOffsetLeft}
@@ -1913,10 +2016,21 @@ export function EditorPage() {
         >
           {!leftSidebarOpen ? (
             <SidebarRail icon={PanelLeft} label="Show left sidebar" onClick={() => setLeftSidebarOpen(true)} />
+          ) : selectedTableIds.length > 0 ? (
+            <MultiSelectTablesSidebar
+              model={model}
+              onClearSelection={handleClearTableSelection}
+              onDeleteRequest={handleDeleteSelectedTablesRequest}
+              onHide={() => setLeftSidebarOpen(false)}
+              onModelChange={handleModelChange}
+              onSelectedTableIdsChange={handleSelectedTableIdsChange}
+              readOnly={!canEditDiagram}
+              selectedTableIds={selectedTableIds}
+            />
           ) : (
             <DiagramTablesSidebar
               model={model}
-              onClearTableSelection={() => handleSelectedTableChange(null)}
+              onClearTableSelection={handleClearTableSelection}
               onHide={() => setLeftSidebarOpen(false)}
               onColumnSelect={(columnId) => setSelectedCommentTarget({ targetId: columnId, targetType: 'column' })}
               onModelChange={handleModelChange}
@@ -2285,4 +2399,12 @@ function getEditorLoadingProgress({
 
 function isUnauthorized(error: unknown): boolean {
   return error instanceof TabliodbApiError && error.status === 401;
+}
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
 }
