@@ -101,47 +101,65 @@ export function WorkspaceProjectSwitcher({
   projects: ProjectResponseDto[];
   stackedDialogOpen: boolean;
 }) {
+  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
+
   return (
-    <div className="flex min-w-0 items-center gap-2 border-l border-[rgb(var(--tabliodb-border))] pl-2 sm:pl-3">
-      <WorkspaceSwitcher
-        activeOrganization={activeOrganization}
-        onCreateWorkspace={onCreateWorkspace}
-        onOrganizationSelect={onOrganizationSelect}
-        organizations={organizations}
-      />
-      <DiagramNavigator
-        activeDiagram={activeDiagram}
-        activeOrganization={activeOrganization}
-        activeProject={activeProject}
-        canCreateDiagram={canCreateDiagram}
-        canCreateProject={canCreateProject}
-        canEditDiagram={canEditDiagram}
-        canManageWorkspace={canManageWorkspace}
-        currentUserId={currentUserId}
-        diagrams={diagrams}
-        model={model}
-        onCreateDiagram={onCreateDiagram}
-        onCreateProject={onCreateProject}
-        onDiagramSelect={onDiagramSelect}
-        onDiagramLibraryOpenChange={onDiagramLibraryOpenChange}
-        onDiagramUpdated={onDiagramUpdated}
-        onProjectArchived={onProjectArchived}
-        open={diagramLibraryOpen}
-        projects={projects}
-        stackedDialogOpen={stackedDialogOpen}
-      />
-    </div>
+    <>
+      <div className="flex min-w-0 items-center gap-2 border-l border-[rgb(var(--tabliodb-border))] pl-2 sm:pl-3">
+        <WorkspaceSwitcher
+          activeOrganization={activeOrganization}
+          canManageWorkspace={canManageWorkspace}
+          onCreateWorkspace={onCreateWorkspace}
+          onOpenWorkspaceSettings={() => setWorkspaceSettingsOpen(true)}
+          onOrganizationSelect={onOrganizationSelect}
+          organizations={organizations}
+        />
+        <DiagramNavigator
+          activeDiagram={activeDiagram}
+          activeOrganization={activeOrganization}
+          activeProject={activeProject}
+          canCreateDiagram={canCreateDiagram}
+          canCreateProject={canCreateProject}
+          canEditDiagram={canEditDiagram}
+          currentUserId={currentUserId}
+          diagrams={diagrams}
+          model={model}
+          onCreateDiagram={onCreateDiagram}
+          onCreateProject={onCreateProject}
+          onDiagramSelect={onDiagramSelect}
+          onDiagramLibraryOpenChange={onDiagramLibraryOpenChange}
+          onDiagramUpdated={onDiagramUpdated}
+          onProjectArchived={onProjectArchived}
+          open={diagramLibraryOpen}
+          projects={projects}
+          stackedDialogOpen={stackedDialogOpen}
+        />
+      </div>
+      {canManageWorkspace ? (
+        <WorkspaceSettingsDialog
+          currentUserId={currentUserId}
+          onOpenChange={setWorkspaceSettingsOpen}
+          open={workspaceSettingsOpen}
+          organization={activeOrganization}
+          trigger={null}
+        />
+      ) : null}
+    </>
   );
 }
 
 function WorkspaceSwitcher({
   activeOrganization,
+  canManageWorkspace,
   onCreateWorkspace,
+  onOpenWorkspaceSettings,
   onOrganizationSelect,
   organizations,
 }: {
   activeOrganization: OrganizationDto;
+  canManageWorkspace: boolean;
   onCreateWorkspace: () => void;
+  onOpenWorkspaceSettings: () => void;
   onOrganizationSelect: (organization: OrganizationDto) => void;
   organizations: OrganizationDto[];
 }) {
@@ -197,7 +215,20 @@ function WorkspaceSwitcher({
             );
           })}
         </div>
-        <div className="mt-2 border-t border-[rgb(var(--tabliodb-border))] pt-2">
+        <div className="mt-2 grid gap-1 border-t border-[rgb(var(--tabliodb-border))] pt-2">
+          {canManageWorkspace ? (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                setOpen(false);
+                // Workspace settings lives in the workspace switcher so it reads as account/workspace context, not editor tooling.
+                onOpenWorkspaceSettings();
+              }}
+            >
+              <Settings className="size-4" />
+              Workspace settings
+            </DropdownMenuItem>
+          ) : null}
           <Button
             className="w-full justify-center gap-2"
             onClick={(event) => {
@@ -242,7 +273,6 @@ function DiagramNavigator({
   canCreateDiagram,
   canCreateProject,
   canEditDiagram,
-  canManageWorkspace,
   currentUserId,
   diagrams,
   model,
@@ -262,7 +292,6 @@ function DiagramNavigator({
   canCreateDiagram: boolean;
   canCreateProject: boolean;
   canEditDiagram: boolean;
-  canManageWorkspace: boolean;
   currentUserId: string;
   diagrams: DiagramResponseDto[];
   model: DiagramModel;
@@ -282,7 +311,6 @@ function DiagramNavigator({
   const [diagramSettingsDiagramId, setDiagramSettingsDiagramId] = useState<string | null>(null);
   const [moveDiagramId, setMoveDiagramId] = useState<string | null>(null);
   const [folderSettingsProjectId, setFolderSettingsProjectId] = useState<string | null>(null);
-  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [libraryContextMenu, setLibraryContextMenu] = useState<LibraryContextMenuState | null>(null);
   const libraryContextMenuRef = useRef<HTMLDivElement | null>(null);
   const activeFolderName = activeProject?.name ?? 'No folder';
@@ -295,9 +323,7 @@ function DiagramNavigator({
     : null;
   const isLibraryStackedDialogOpen =
     stackedDialogOpen ||
-    Boolean(
-      diagramSettingsDiagram || moveDiagram || folderSettingsProject || workspaceSettingsOpen || libraryContextMenu,
-    );
+    Boolean(diagramSettingsDiagram || moveDiagram || folderSettingsProject || libraryContextMenu);
   const rootDiagramCount = diagrams.filter((diagram) => !diagram.projectId).length;
   const filteredDiagrams = useMemo(() => {
     const search = diagramSearchTerm.trim().toLowerCase();
@@ -547,27 +573,15 @@ function DiagramNavigator({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-[11px] font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                      Workspace
+                      Folders
                     </p>
                     <h2 className="truncate text-[13px] font-black">{activeOrganization.name}</h2>
-                    <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Folders are optional filters for larger workspaces.
-                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    {canManageWorkspace ? (
-                      <IconButton
-                        className="size-8"
-                        icon={Settings}
-                        label={`Workspace settings for ${activeOrganization.name}`}
-                        onClick={() => setWorkspaceSettingsOpen(true)}
-                        variant="ghost"
-                      />
-                    ) : null}
                     {canCreateProject ? (
                       <Button className="shrink-0 gap-1.5" onClick={handleCreateProject} size="sm" variant="secondary">
                         <FolderPlus className="size-4" />
-                        New
+                        Folder
                       </Button>
                     ) : null}
                   </div>
@@ -643,12 +657,12 @@ function DiagramNavigator({
                   <div className="min-w-0">
                     <h2 className="truncate text-[13px] font-black">{selectedFolderLabel}</h2>
                     <p className="mt-0.5 text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Active canvas: {activeDiagram.name} / {activeFolderName}
+                      Active: {activeDiagram.name} / {activeFolderName}
                     </p>
                   </div>
-                  <Badge className="shrink-0" variant="green">
-                    {filteredDiagrams.length} shown
-                  </Badge>
+                  <span className="shrink-0 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                    {filteredDiagrams.length} diagrams
+                  </span>
                 </div>
                 <div className="relative mt-3">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[rgb(var(--tabliodb-ink-subtle))]" />
@@ -810,15 +824,6 @@ function DiagramNavigator({
           }}
           open={Boolean(folderSettingsProject)}
           project={folderSettingsProject}
-          trigger={null}
-        />
-      ) : null}
-      {canManageWorkspace ? (
-        <WorkspaceSettingsDialog
-          currentUserId={currentUserId}
-          onOpenChange={setWorkspaceSettingsOpen}
-          open={workspaceSettingsOpen}
-          organization={activeOrganization}
           trigger={null}
         />
       ) : null}

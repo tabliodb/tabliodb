@@ -8,7 +8,6 @@ import {
   type ProjectResponseDtoOutput,
 } from '@tabliodb/sdk';
 import {
-  Badge,
   Button,
   Dialog,
   DialogBody,
@@ -274,12 +273,17 @@ export function ProjectSettingsDialog({
       ) : null}
       <DialogContent className="w-[min(94vw,680px)]">
         <DialogHeader>
-          <DialogTitle>Folder settings</DialogTitle>
-          <DialogDescription>Manage folder details, access, and archive state.</DialogDescription>
+          <DialogTitle>Folder</DialogTitle>
+          <DialogDescription>Details and access inherited by diagrams in this folder.</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="grid gap-5">
-          <form className="grid gap-4" id="project-settings-form" onSubmit={form.handleSubmit(handleSubmit)}>
+          <form
+            className="grid gap-4 rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white p-4"
+            id="project-settings-form"
+            onSubmit={form.handleSubmit(handleSubmit)}
+          >
+            <h3 className="text-sm font-black">Details</h3>
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
                 Folder name
@@ -314,22 +318,21 @@ export function ProjectSettingsDialog({
             ) : null}
           </form>
 
-          <section className="border-t-2 border-[rgb(var(--tabliodb-border))] pt-5">
+          <section className="rounded-[var(--tabliodb-radius-lg)] border border-[rgb(var(--tabliodb-border))] bg-white">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+              <div className="p-4 pb-0">
                 <h3 className="flex items-center gap-2 text-sm font-extrabold">
                   <UsersRound className="size-4 text-[rgb(var(--tabliodb-sky-text))]" />
-                  Folder members
+                  Folder access
                 </h3>
                 <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                  {membersQuery.data?.totalCount ?? members.length} people with direct folder access
+                  {membersQuery.data?.totalCount ?? members.length} people
                 </p>
               </div>
-              <Badge variant="green">{members.length} loaded</Badge>
             </div>
 
             <form
-              className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
+              className="m-4 grid gap-3 rounded-[var(--tabliodb-radius-md)] bg-[rgb(var(--tabliodb-surface))] p-3 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
               onSubmit={memberForm.handleSubmit(handleAddMember)}
             >
               <label className="block text-sm">
@@ -368,28 +371,28 @@ export function ProjectSettingsDialog({
                 ) : (
                   <UserPlus className="size-4" />
                 )}
-                Add
+                Add access
               </Button>
             </form>
 
             {membersQuery.isPending ? (
-              <div className="mt-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+              <div className="m-4 flex items-center gap-2 rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white p-4 text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
                 <Loader2 className="size-4 animate-spin" />
-                Loading members
+                Loading access
               </div>
             ) : membersQuery.error ? (
-              <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+              <div className="m-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                 {getErrorMessage(membersQuery.error)}
               </div>
             ) : members.length === 0 ? (
-              <div className="mt-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                No folder members yet
+              <div className="m-4 rounded-2xl border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-4 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                No direct folder access yet
               </div>
             ) : (
-              <div className="tabliodb-scrollbar mt-4 max-h-72 overflow-y-auto rounded-2xl border-2 border-[rgb(var(--tabliodb-border))] bg-white">
+              <div className="tabliodb-scrollbar max-h-72 overflow-y-auto border-t border-[rgb(var(--tabliodb-border))]">
                 <div className="divide-y divide-[rgb(var(--tabliodb-border))]">
                   {members.map((member) => (
-                    <ProjectMemberRow
+                    <FolderAccessRow
                       confirmTransfer={confirmTransferUserId === member.userId}
                       currentUserId={currentUserId}
                       isRemoving={removingUserId === member.userId}
@@ -407,7 +410,7 @@ export function ProjectSettingsDialog({
             )}
 
             {memberMutationError ? (
-              <div className="mt-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
+              <div className="m-4 rounded-[14px] border-2 border-[rgb(var(--tabliodb-danger-border))] bg-[rgb(var(--tabliodb-danger-soft))] p-3 text-sm font-bold text-[rgb(var(--tabliodb-danger-text))]">
                 {getErrorMessage(memberMutationError)}
               </div>
             ) : null}
@@ -425,7 +428,7 @@ export function ProjectSettingsDialog({
             ) : (
               <Archive className="size-4" />
             )}
-            {confirmArchive ? 'Confirm archive' : 'Archive'}
+            {confirmArchive ? 'Confirm archive' : 'Archive folder'}
           </Button>
           <div className="flex gap-2">
             <Button
@@ -455,7 +458,7 @@ export function ProjectSettingsDialog({
   );
 }
 
-function ProjectMemberRow({
+function FolderAccessRow({
   confirmTransfer,
   currentUserId,
   isRemoving,
@@ -489,10 +492,7 @@ function ProjectMemberRow({
       <div className="flex min-w-0 items-center gap-3">
         <UserAvatar className="size-10 rounded-[14px] text-xs" user={member} />
         <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{member.name}</h4>
-            <ProjectRoleBadge role={member.role} />
-          </div>
+          <h4 className="min-w-0 max-w-full truncate text-sm font-extrabold">{member.name}</h4>
           <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">{member.email}</p>
         </div>
       </div>
@@ -502,7 +502,7 @@ function ProjectMemberRow({
             {formatProjectRole(normalizedRole)}
           </div>
           <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-            {isSelf ? 'Your access' : 'Managed by transfer'}
+            {isSelf ? 'Your access' : 'Owner transfer only'}
           </div>
         </div>
       ) : (
@@ -540,7 +540,7 @@ function ProjectMemberRow({
               variant={confirmTransfer ? 'secondary' : 'soft'}
             >
               {isTransferring ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
-              {confirmTransfer ? 'Confirm transfer' : 'Transfer owner'}
+              {confirmTransfer ? 'Confirm transfer' : 'Transfer ownership'}
             </Button>
           </WithTooltip>
         ) : null}
@@ -560,24 +560,6 @@ function ProjectMemberRow({
       </div>
     </article>
   );
-}
-
-function ProjectRoleBadge({ role }: { role: ProjectRoleValue | SdkProjectMemberOutputRole }) {
-  const normalizedRole = toProjectRoleValue(role);
-
-  if (normalizedRole === ProjectRole.Owner) {
-    return <Badge variant="yellow">{formatProjectRole(normalizedRole)}</Badge>;
-  }
-
-  if (normalizedRole === ProjectRole.Editor) {
-    return <Badge variant="green">{formatProjectRole(normalizedRole)}</Badge>;
-  }
-
-  if (normalizedRole === ProjectRole.Commenter) {
-    return <Badge variant="blue">{formatProjectRole(normalizedRole)}</Badge>;
-  }
-
-  return <Badge>{formatProjectRole(normalizedRole)}</Badge>;
 }
 
 function formatProjectRole(role: ProjectRoleValue): string {

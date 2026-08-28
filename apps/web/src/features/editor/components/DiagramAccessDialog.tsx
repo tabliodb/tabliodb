@@ -79,7 +79,7 @@ export function DiagramAccessDialog({
   const effectiveAccessQueryOptions = diagramsQueries.effectiveAccess(diagram.id, diagramAccessPageQuery);
   const effectiveAccessQuery = useQuery({
     ...effectiveAccessQueryOptions,
-    // This single query powers the visible access list: direct grants and inherited grants are merged by the server.
+    // The server merges direct and inherited access so the dialog can show one readable people list.
     enabled: open && effectiveAccessQueryOptions.enabled,
   });
   const addDiagramMemberMutation = useAddDiagramMemberMutation();
@@ -201,14 +201,11 @@ export function DiagramAccessDialog({
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
-      <IconButton disabled={!canManage} icon={UsersRound} label="Diagram access" onClick={() => setOpen(true)} />
+      <IconButton disabled={!canManage} icon={UsersRound} label="Share diagram" onClick={() => setOpen(true)} />
       <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[min(96vw,860px)] max-w-none">
         <DialogHeader className="border-b border-[rgb(var(--tabliodb-border))] pb-4">
-          <DialogTitle>Diagram access</DialogTitle>
-          <DialogDescription>
-            Invite people and review every direct or inherited permission for {diagram.name}. Public read-only links
-            stay in the More menu.
-          </DialogDescription>
+          <DialogTitle>Share diagram</DialogTitle>
+          <DialogDescription>Invite people and manage access for {diagram.name}.</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="grid min-h-0 flex-1 gap-4 overflow-y-auto">
@@ -487,7 +484,7 @@ function formatAccessSummary(member: DiagramEffectiveAccessDto): string {
   }
 
   if (member.accessType === SdkDiagramAccessType.Mixed) {
-    // Mixed access is shown as one quiet sentence so the list remains readable when workspace/folder/team grants stack up.
+    // Mixed access is reduced to one sentence so the list stays readable when workspace, folder, and team access stack up.
     return `Direct access plus ${formatSourceSummary(member.sources.filter((source) => source.inherited))}`;
   }
 

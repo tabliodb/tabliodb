@@ -395,7 +395,7 @@ export function WorkspaceSettingsDialog({
   });
   const teamDiagramOptionsQuery = useQuery({
     ...diagramsQueries.listByWorkspace(organization.id, { limit: 50 }),
-    // Diagram options are needed only when a workspace admin manages team grants.
+    // Diagram options are needed only when a workspace admin manages team access.
     enabled: dialogOpen && activeSettingsTab === 'teams' && canManageWorkspace,
   });
   const auditLogs = auditLogsQuery.data?.items ?? [];
@@ -794,7 +794,7 @@ export function WorkspaceSettingsDialog({
     upsertTeamDiagramAccessMutation.mutate({
       body: {
         diagramId: values.diagramId,
-        // Team diagram grants use the same role enum as folder grants.
+        // Team diagram access uses the same role enum as folder access.
         role: sdkTeamProjectRoleByValue[values.role as TeamProjectRole],
       },
       organizationId: organization.id,
@@ -867,7 +867,7 @@ export function WorkspaceSettingsDialog({
       <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[min(96vw,960px)]">
         <DialogHeader>
           <DialogTitle>Workspace settings</DialogTitle>
-          <DialogDescription>Configure the current workspace without changing the Tabliodb brand.</DialogDescription>
+          <DialogDescription>Workspace people, teams, and default access.</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -892,7 +892,7 @@ export function WorkspaceSettingsDialog({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-sm">
                     <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-[rgb(var(--tabliodb-ink-muted))]">
-                      Default folder role
+                      Default workspace access
                     </span>
                     <ControlledSelect
                       className={selectClassName}
@@ -900,7 +900,7 @@ export function WorkspaceSettingsDialog({
                       disabled={settingsQuery.isPending || updateSettingsMutation.isPending || !canManageWorkspace}
                       name="defaultProjectRole"
                       options={workspaceDefaultRoleOptions.map((role) => ({
-                        label: role === 'none' ? 'No automatic folder role' : formatProjectRole(role),
+                        label: role === 'none' ? 'No automatic access' : formatProjectRole(role),
                         value: role,
                       }))}
                     />
@@ -937,7 +937,9 @@ export function WorkspaceSettingsDialog({
                         {membersQuery.data?.totalCount ?? workspaceMembers.length} people with workspace access
                       </p>
                     </div>
-                    <Badge variant="green">{workspaceMembers.length} shown</Badge>
+                    <span className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                      {workspaceMembers.length} shown
+                    </span>
                   </div>
 
                   <form
@@ -1080,10 +1082,12 @@ export function WorkspaceSettingsDialog({
                       Teams
                     </h3>
                     <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Manage reusable groups before granting folder or diagram access.
+                      Manage reusable teams before adding folder or diagram access.
                     </p>
                   </div>
-                  <Badge variant="green">{teamsQuery.data?.totalCount ?? teams.length} teams</Badge>
+                    <span className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                      {teamsQuery.data?.totalCount ?? teams.length} teams
+                    </span>
                 </div>
 
                 <form
@@ -1163,8 +1167,8 @@ export function WorkspaceSettingsDialog({
                             <div className="min-w-0">
                               <h4 className="truncate text-sm font-extrabold">{selectedTeam.name}</h4>
                               <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} folder grants /{' '}
-                                {selectedTeam.diagramAccessCount} diagram grants
+                                {selectedTeam.memberCount} members / {selectedTeam.projectAccessCount} folder access /{' '}
+                                {selectedTeam.diagramAccessCount} diagram access
                               </p>
                             </div>
                             <WithTooltip content={`Archive ${selectedTeam.name}`}>
@@ -1234,12 +1238,14 @@ export function WorkspaceSettingsDialog({
                             <section className="rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))] p-3">
                               <div className="flex items-center justify-between gap-3">
                                 <div>
-                                  <h5 className="text-sm font-extrabold">Members</h5>
+                                  <h5 className="text-sm font-extrabold">Team members</h5>
                                   <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                    People who inherit every folder and diagram grant on this team
+                                    People in this team
                                   </p>
                                 </div>
-                                <Badge>{selectedTeamMembers.length} shown</Badge>
+                                <span className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  {selectedTeamMembers.length} shown
+                                </span>
                               </div>
 
                               <form
@@ -1299,10 +1305,12 @@ export function WorkspaceSettingsDialog({
                                 <div>
                                   <h5 className="text-sm font-extrabold">Folder access</h5>
                                   <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                    Grants inherited by team members for every diagram inside a folder
+                                    Team access to every diagram inside selected folders
                                   </p>
                                 </div>
-                                <Badge>{selectedTeamProjectAccesses.length} shown</Badge>
+                                <span className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  {selectedTeamProjectAccesses.length} shown
+                                </span>
                               </div>
 
                               <form
@@ -1342,7 +1350,7 @@ export function WorkspaceSettingsDialog({
                                   ) : (
                                     <ShieldCheck className="size-4" />
                                   )}
-                                  Grant
+                                  Add access
                                 </Button>
                               </form>
 
@@ -1353,7 +1361,7 @@ export function WorkspaceSettingsDialog({
                                 </div>
                               ) : selectedTeamProjectAccesses.length === 0 ? (
                                 <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  No folder grants yet
+                                  No folder access yet
                                 </div>
                               ) : (
                                 <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
@@ -1377,10 +1385,12 @@ export function WorkspaceSettingsDialog({
                                 <div>
                                   <h5 className="text-sm font-extrabold">Diagram access</h5>
                                   <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                                    Grants inherited by team members for one specific diagram
+                                    Team access to specific diagrams
                                   </p>
                                 </div>
-                                <Badge>{selectedTeamDiagramAccesses.length} shown</Badge>
+                                <span className="text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+                                  {selectedTeamDiagramAccesses.length} shown
+                                </span>
                               </div>
 
                               <form
@@ -1420,7 +1430,7 @@ export function WorkspaceSettingsDialog({
                                   ) : (
                                     <ShieldCheck className="size-4" />
                                   )}
-                                  Grant
+                                  Add access
                                 </Button>
                               </form>
 
@@ -1431,7 +1441,7 @@ export function WorkspaceSettingsDialog({
                                 </div>
                               ) : selectedTeamDiagramAccesses.length === 0 ? (
                                 <div className="mt-3 rounded-[14px] border-2 border-dashed border-[rgb(var(--tabliodb-border))] p-3 text-center text-sm font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
-                                  No diagram grants yet
+                                  No diagram access yet
                                 </div>
                               ) : (
                                 <div className="tabliodb-scrollbar mt-3 max-h-64 overflow-y-auto rounded-[14px] border-2 border-[rgb(var(--tabliodb-border))]">
@@ -1488,7 +1498,7 @@ export function WorkspaceSettingsDialog({
                   <div>
                     <h3 className="text-sm font-extrabold">Recent activity</h3>
                     <p className="mt-1 text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-                      Workspace, folder, team, and diagram access changes recorded by the server
+                      Workspace, folder, team, and diagram access changes
                     </p>
                   </div>
                   <Badge variant="blue">{auditLogs.length} shown</Badge>
@@ -1596,15 +1606,15 @@ function TeamListItem({
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
         <span className="min-w-0 flex-1 truncate text-sm font-extrabold">{team.name}</span>
-        <Badge className="shrink-0" variant={isSelected ? 'green' : 'neutral'}>
-          {team.memberCount} users
-        </Badge>
+        <span className="shrink-0 text-xs font-extrabold text-[rgb(var(--tabliodb-ink-muted))]">
+          {team.memberCount} people
+        </span>
       </div>
       <p className="line-clamp-2 min-h-8 wrap-break-word text-xs font-semibold text-[rgb(var(--tabliodb-ink-muted))]">
         {team.description || 'No description yet'}
       </p>
       <div className="truncate text-xs font-extrabold text-[rgb(var(--tabliodb-ink-subtle))]">
-        {team.projectAccessCount} folder grants / {team.diagramAccessCount} diagram grants
+        {team.projectAccessCount} folder access / {team.diagramAccessCount} diagram access
       </div>
     </button>
   );
@@ -1721,7 +1731,7 @@ function TeamDiagramAccessRow({
             {access.projectId ? 'Folder' : 'Root'}
           </Badge>
         </div>
-        <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Direct team diagram grant</p>
+        <p className="truncate text-xs font-bold text-[rgb(var(--tabliodb-ink-muted))]">Direct team diagram access</p>
       </div>
       <Select
         className={selectClassName}
@@ -1797,7 +1807,7 @@ function OrganizationMemberRow({
             {formatOrganizationRole(normalizedRole)}
           </div>
           <div className="text-[11px] font-bold text-[rgb(var(--tabliodb-ink-muted))]">
-            {isSelf ? 'Your access' : 'Managed by transfer'}
+            {isSelf ? 'Your access' : 'Owner transfer only'}
           </div>
         </div>
       ) : (
