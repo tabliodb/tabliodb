@@ -373,9 +373,9 @@ function printHelp(): void {
   console.log(`Tabliodb recovery CLI
 
 Usage:
-  npm run recovery -w @tabliodb/server -- create-owner --email owner@example.com --password "new-password" --name "Owner Name" --workspace "Main Workspace"
-  npm run recovery -w @tabliodb/server -- reset-password --email owner@example.com --password "new-password"
-  npm run recovery -w @tabliodb/server -- promote-owner --email existing@example.com
+  bun run recovery -- create-owner --email owner@example.com --password "new-password" --name "Owner Name" --workspace "Main Workspace"
+  bun run recovery -- reset-password --email owner@example.com --password "new-password"
+  bun run recovery -- promote-owner --email existing@example.com
 
 Env fallback:
   TABLIODB_RECOVERY_EMAIL

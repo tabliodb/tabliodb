@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { Database } from '@hocuspocus/extension-database';
 import { Redis as HocuspocusRedis } from '@hocuspocus/extension-redis';
-import { Server } from '@hocuspocus/server';
+import { Hocuspocus, Server, type Configuration, type ServerConfiguration, type WebSocketLike } from '@hocuspocus/server';
 import { Redis as RedisClient } from 'ioredis';
 import type { IncomingHttpHeaders } from 'node:http';
 import {
@@ -32,7 +32,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CollaborationService.name);
   private readonly pendingDocumentStores = new Map<string, PendingDocumentStore>();
   private isShuttingDown = false;
-  private server?: Server;
+  private server?: RealtimeServerHandle;
 
   constructor(
     private readonly authService: AuthService,
@@ -114,7 +114,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Hocuspocus Redis pub/sub enabled for multi-instance realtime sync.');
     }
 
-    this.server = new Server({
+    this.server = createRealtimeServerHandle({
       port: realtime.port,
       onAuthenticate: async ({
         connectionConfig,
@@ -211,7 +211,7 @@ export class CollaborationService implements OnModuleInit, OnModuleDestroy {
         });
       },
       extensions,
-    });
+    }, this.logger);
 
     try {
       await this.server.listen();
@@ -508,6 +508,211 @@ type PendingDocumentStore = {
   state: Uint8Array;
   timer?: NodeJS.Timeout;
 };
+
+type RealtimeServerConfiguration = Partial<ServerConfiguration<CollaborationContext>> & {
+  port: number;
+};
+
+type RealtimeServerHandle = {
+  hocuspocus: Hocuspocus<CollaborationContext>;
+  destroy(): Promise<void>;
+  listen(): Promise<void>;
+};
+
+type BunRuntime = {
+  serve(options: BunServeOptions): BunServerInstance;
+};
+
+type BunServeOptions = {
+  fetch(request: Request, server: BunUpgradeServer): Response | Promise<Response | undefined> | undefined;
+  hostname?: string;
+  port: number;
+  websocket: unknown;
+};
+
+type BunServerInstance = {
+  port: number;
+  stop(force?: boolean): void | Promise<void>;
+};
+
+type BunUpgradeServer = {
+  upgrade(request: Request, options?: unknown): boolean;
+};
+
+type BunCrosswsFactory = (options: {
+  hooks: {
+    close(peer: BunPeer, event: BunCloseEvent): void;
+    error(peer: BunPeer, error: unknown): void;
+    message(peer: BunPeer, message: BunMessage): void;
+    open(peer: BunPeer): void;
+  };
+}) => BunCrosswsAdapter;
+
+type BunCrosswsAdapter = {
+  handleUpgrade(request: Request, server: BunUpgradeServer): Promise<Response | undefined> | Response | undefined;
+  websocket: unknown;
+};
+
+type BunPeer = {
+  close(code?: number, reason?: string): void;
+  id: string;
+  request: Request;
+  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
+  websocket: {
+    readyState?: number;
+  };
+};
+
+type BunMessage = {
+  uint8Array(): Uint8Array;
+};
+
+type BunCloseEvent = {
+  code?: number;
+  reason?: string;
+};
+
+function createRealtimeServerHandle(
+  configuration: RealtimeServerConfiguration,
+  logger: Logger,
+): RealtimeServerHandle {
+  if (isBunRuntime()) {
+    return new BunRealtimeServerHandle(configuration, logger);
+  }
+
+  const nodeServer = new Server(configuration);
+
+  return {
+    hocuspocus: nodeServer.hocuspocus,
+    async listen() {
+      await nodeServer.listen();
+    },
+    destroy() {
+      return nodeServer.destroy();
+    },
+  };
+}
+
+class BunRealtimeServerHandle implements RealtimeServerHandle {
+  readonly hocuspocus: Hocuspocus<CollaborationContext>;
+  private bunServer?: BunServerInstance;
+  private readonly clientConnections = new WeakMap<BunPeer, ReturnType<Hocuspocus<CollaborationContext>['handleConnection']>>();
+  private readonly hostname?: string;
+  private readonly port: number;
+
+  constructor(configuration: RealtimeServerConfiguration, private readonly logger: Logger) {
+    const {
+      address,
+      port,
+      stopOnSignals: _stopOnSignals,
+      websocketOptions: _websocketOptions,
+      ...hocuspocusConfiguration
+    } = configuration;
+
+    this.hostname = address;
+    this.port = port;
+    // Hocuspocus `Server` hard-wires the Node crossws adapter. Bun needs the core Hocuspocus instance so the websocket adapter can be selected per runtime.
+    this.hocuspocus = new Hocuspocus(hocuspocusConfiguration as Partial<Configuration<CollaborationContext>>);
+  }
+
+  async listen(): Promise<void> {
+    const bun = readBunRuntime();
+    const { default: createBunCrossws } = (await import('crossws/adapters/bun')) as {
+      default: BunCrosswsFactory;
+    };
+
+    const websocketAdapter = createBunCrossws({
+      hooks: {
+        open: (peer) => {
+          // Bun wraps ServerWebSocket with a Proxy, so Hocuspocus receives a tiny WebSocketLike facade that delegates to crossws peer methods.
+          const socket: WebSocketLike = {
+            get readyState() {
+              return peer.websocket.readyState ?? 3;
+            },
+            send: (data) => {
+              peer.send(data);
+            },
+            close: (code, reason) => {
+              peer.close(code, reason);
+            },
+          };
+
+          this.clientConnections.set(peer, this.hocuspocus.handleConnection(socket, peer.request));
+        },
+        message: (peer, message) => {
+          this.clientConnections.get(peer)?.handleMessage(message.uint8Array());
+        },
+        close: (peer, event) => {
+          this.clientConnections.get(peer)?.handleClose({
+            // crossws marks Bun close payload values as optional; Hocuspocus expects concrete websocket close metadata.
+            code: event.code ?? 1000,
+            reason: event.reason ?? '',
+          });
+          this.clientConnections.delete(peer);
+        },
+        error: (peer, error) => {
+          this.logger.warn({
+            event: 'realtime.bun_websocket_error',
+            message: formatErrorMessage(error),
+            peerId: peer.id,
+          });
+        },
+      },
+    });
+
+    this.bunServer = bun.serve({
+      hostname: this.hostname,
+      port: this.port,
+      websocket: websocketAdapter.websocket,
+      fetch: async (request, server) => {
+        if (request.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+          // A successful Bun websocket upgrade returns undefined by design; failed upgrades return a normal HTTP Response from crossws.
+          return websocketAdapter.handleUpgrade(request, server);
+        }
+
+        return new Response('Welcome to Hocuspocus!', {
+          headers: {
+            'content-type': 'text/plain; charset=utf-8',
+          },
+        });
+      },
+    });
+
+    await this.hocuspocus.hooks('onListen', {
+      configuration: this.hocuspocus.configuration,
+      instance: this.hocuspocus,
+      port: this.bunServer.port,
+    });
+  }
+
+  async destroy(): Promise<void> {
+    const server = this.bunServer;
+    this.bunServer = undefined;
+
+    if (server) {
+      // `force: true` closes active sockets during application shutdown so Nest does not hang behind an open Bun server.
+      await server.stop(true);
+    }
+
+    this.hocuspocus.closeConnections();
+    this.hocuspocus.flushPendingStores();
+    await this.hocuspocus.hooks('onDestroy', { instance: this.hocuspocus });
+  }
+}
+
+function isBunRuntime(): boolean {
+  return Boolean((globalThis as { Bun?: unknown }).Bun);
+}
+
+function readBunRuntime(): BunRuntime {
+  const bun = (globalThis as { Bun?: BunRuntime }).Bun;
+
+  if (!bun) {
+    throw new Error('Bun runtime is required for the Hocuspocus Bun realtime adapter.');
+  }
+
+  return bun;
+}
 
 function readCollaborationContext(value: unknown): CollaborationContext | null {
   if (!value || typeof value !== 'object') {
