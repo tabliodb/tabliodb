@@ -31,6 +31,16 @@ const AuditLogListQuerySchema = z
   })
   .meta({ id: 'AuditLogListQueryDto' });
 
+const AdminAuditLogListQuerySchema = z
+  .object({
+    action: z.string().trim().max(120).optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    organizationId: z.uuid().optional(),
+    search: z.string().trim().max(120).optional(),
+  })
+  .meta({ id: 'AdminAuditLogListQueryDto' });
+
 const AuditLogListResponseSchema = z
   .object({
     items: z.array(AuditLogSchema),
@@ -40,5 +50,6 @@ const AuditLogListResponseSchema = z
   .meta({ id: 'AuditLogListResponseDto' });
 
 export class AuditLogDto extends createZodDto(AuditLogSchema) {}
+export class AdminAuditLogListQueryDto extends createZodDto(AdminAuditLogListQuerySchema) {}
 export class AuditLogListQueryDto extends createZodDto(AuditLogListQuerySchema) {}
 export class AuditLogListResponseDto extends createZodDto(AuditLogListResponseSchema) {}

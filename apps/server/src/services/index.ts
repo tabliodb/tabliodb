@@ -1,3 +1,4 @@
+import { AdminService } from './admin.service.js';
 import { AuthService } from './auth.service.js';
 import { BackgroundJobService } from './background-job.service.js';
 import { CollaborationService } from './collaboration.service.js';
@@ -24,6 +25,7 @@ import { UserPreferenceService } from './user-preference.service.js';
 import { UserService } from './user.service.js';
 
 export const services = [
+  AdminService,
   AuthService,
   BackgroundJobService,
   CollaborationService,

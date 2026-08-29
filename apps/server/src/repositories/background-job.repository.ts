@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { Insertable, Kysely, Selectable } from 'kysely';
+import { sql, type Insertable, type Kysely, type Selectable } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { BackgroundJobTable, DB, JsonValue } from '../schema/index.js';
+import { decodeOffsetCursor, encodeOffsetCursor } from '../utils/pagination.js';
 
 export type BackgroundJobRecord = Selectable<BackgroundJobTable>;
 
@@ -18,6 +19,15 @@ export type BackgroundJobClaimOptions = {
   limit: number;
   queues: string[];
   workerId: string;
+};
+
+export type AdminBackgroundJobListOptions = {
+  cursor?: string;
+  limit: number;
+  queue?: string;
+  search?: string;
+  status?: BackgroundJobRecord['status'];
+  type?: string;
 };
 
 @Injectable()
@@ -157,5 +167,49 @@ export class BackgroundJobRepository {
       .execute();
 
     return [...retryableJobs, ...exhaustedJobs];
+  }
+
+  async listForInstance(options: AdminBackgroundJobListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await this.getInstanceBackgroundJobFilterQuery(options)
+      .selectAll('background_jobs')
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc')
+      .limit(options.limit + 1)
+      .offset(offset)
+      .execute();
+    const totalRow = await this.getInstanceBackgroundJobFilterQuery(options)
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .executeTakeFirstOrThrow();
+
+    return {
+      // Admin jobs page is read-only for now; filtering still happens server-side so large queues remain usable.
+      items: rows.slice(0, options.limit),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
+  }
+
+  private getInstanceBackgroundJobFilterQuery(options: AdminBackgroundJobListOptions) {
+    const queue = options.queue?.trim();
+    const search = options.search?.trim();
+    const type = options.type?.trim();
+    const searchPattern = search ? `%${search}%` : undefined;
+
+    return this.db
+      .selectFrom('background_jobs')
+      .$if(Boolean(options.status), (query) => query.where('status', '=', options.status!))
+      .$if(Boolean(queue), (query) => query.where('queue', '=', queue!))
+      .$if(Boolean(type), (query) => query.where('type', '=', type!))
+      .$if(Boolean(search), (query) =>
+        query.where(
+          sql<boolean>`(
+            background_jobs.id::text ILIKE ${searchPattern}
+            OR background_jobs.queue ILIKE ${searchPattern}
+            OR background_jobs.type ILIKE ${searchPattern}
+            OR background_jobs.locked_by ILIKE ${searchPattern}
+          )`,
+        ),
+      );
   }
 }

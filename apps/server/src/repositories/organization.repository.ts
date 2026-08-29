@@ -12,6 +12,11 @@ export type OrganizationListOptions = {
   limit: number;
 };
 
+export type AdminWorkspaceListOptions = OrganizationListOptions & {
+  search?: string;
+  userId: string;
+};
+
 export type OrganizationMemberListOptions = {
   cursor?: string;
   limit: number;
@@ -55,6 +60,68 @@ export class OrganizationRepository {
 
     return {
       // Workspace switcher uses the same paginated contract as user/folder lists, even if the first UI loads 50.
+      items: rows.slice(0, options.limit),
+      nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
+      totalCount: Number(totalRow.count),
+    };
+  }
+
+  async listManagedWorkspaces(options: AdminWorkspaceListOptions) {
+    const offset = decodeOffsetCursor(options.cursor);
+    const rows = await this.getManagedWorkspaceFilterQuery(options)
+      .select([
+        'organizations.id',
+        'organizations.name',
+        'organizations.slug',
+        'organizations.defaultFolderRole',
+        'organizations.allowMemberFolderCreate',
+        'organizations.createdAt',
+        'organizations.updatedAt',
+        sql<string | null>`(
+          SELECT current_workspace_members.role
+          FROM organization_members current_workspace_members
+          WHERE current_workspace_members.organization_id = organizations.id
+            AND current_workspace_members.user_id = ${options.userId}
+            AND current_workspace_members.status = 'active'
+          LIMIT 1
+        )`.as('currentUserRole'),
+        sql<number>`(
+          SELECT count(*)::int
+          FROM organization_members workspace_members
+          WHERE workspace_members.organization_id = organizations.id
+            AND workspace_members.status = 'active'
+        )`.as('memberCount'),
+        sql<number>`(
+          SELECT count(*)::int
+          FROM organization_members workspace_owners
+          WHERE workspace_owners.organization_id = organizations.id
+            AND workspace_owners.status = 'active'
+            AND workspace_owners.role = ${OrganizationRole.Owner}
+        )`.as('ownerCount'),
+        sql<number>`(
+          SELECT count(*)::int
+          FROM folders workspace_folders
+          WHERE workspace_folders.organization_id = organizations.id
+            AND workspace_folders.archived_at IS NULL
+        )`.as('folderCount'),
+        sql<number>`(
+          SELECT count(*)::int
+          FROM diagrams workspace_diagrams
+          WHERE workspace_diagrams.organization_id = organizations.id
+            AND workspace_diagrams.archived_at IS NULL
+        )`.as('diagramCount'),
+      ])
+      .orderBy('organizations.updatedAt', 'desc')
+      .orderBy('organizations.id', 'desc')
+      .limit(options.limit + 1)
+      .offset(offset)
+      .execute();
+    const totalRow = await this.getManagedWorkspaceFilterQuery(options)
+      .select((eb) => eb.fn.count<number>('organizations.id').as('count'))
+      .executeTakeFirstOrThrow();
+
+    return {
+      // Instance admin membutuhkan direktori workspace global, bukan list workspace milik user yang sedang login.
       items: rows.slice(0, options.limit),
       nextCursor: rows.length > options.limit ? encodeOffsetCursor(offset + options.limit) : null,
       totalCount: Number(totalRow.count),
@@ -431,6 +498,19 @@ export class OrganizationRepository {
       .where('id', '=', organizationId)
       .where('archivedAt', 'is', null)
       .executeTakeFirst();
+  }
+
+  private getManagedWorkspaceFilterQuery(options: AdminWorkspaceListOptions) {
+    const search = options.search?.trim();
+
+    return this.db
+      .selectFrom('organizations')
+      .where('organizations.archivedAt', 'is', null)
+      .$if(Boolean(search), (query) =>
+        query.where((eb) =>
+          eb.or([eb('organizations.name', 'ilike', `%${search}%`), eb('organizations.slug', 'ilike', `%${search}%`)]),
+        ),
+      );
   }
 }
 

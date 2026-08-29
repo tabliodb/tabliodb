@@ -1,4 +1,5 @@
 import { AppController } from './app.controller.js';
+import { AdminController } from './admin.controller.js';
 import { AuthController } from './auth.controller.js';
 import { CommentController } from './comment.controller.js';
 import { DiagramShareLinkController } from './diagram-share-link.controller.js';
@@ -17,6 +18,7 @@ import { UserController } from './user.controller.js';
 
 export const controllers = [
   AppController,
+  AdminController,
   AuthController,
   CommentController,
   DiagramShareLinkController,

@@ -67,6 +67,7 @@ export function useCreateOrganizationMutation(params: UseCreateOrganizationMutat
         (current) => (current ? prependOrganizationToList(current, data) : current),
       );
       queryClient.invalidateQueries({ queryKey: organizationsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: organizationsKeys.adminWorkspacesRoot() });
       params.mutationConfig?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

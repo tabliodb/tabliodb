@@ -1,13 +1,27 @@
 import { Suspense, type ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { Button, cn } from '@tabliodb/ui';
-import { LayoutDashboard, LogOut, Settings, UserRound, UsersRound } from 'lucide-react';
+import {
+  Activity,
+  Building2,
+  Gauge,
+  LayoutDashboard,
+  LogOut,
+  ServerCog,
+  Settings,
+  UserRound,
+  UsersRound,
+} from 'lucide-react';
 import { routes } from '@/app/routes';
 import { InlineLoadingState } from '@/features/app/RouteStates';
 import { useLogoutMutation } from '@/resources/auth';
 import LOGO from '@/assets/logo.svg';
 
 const adminNavigationItems = [
+  { icon: <Gauge className="size-4" />, label: 'Overview', to: routes.adminOverview.to() },
+  { icon: <Building2 className="size-4" />, label: 'Workspaces', to: routes.adminWorkspaces.to() },
+  { icon: <Activity className="size-4" />, label: 'Activity', to: routes.adminActivity.to() },
+  { icon: <ServerCog className="size-4" />, label: 'Jobs', to: routes.adminJobs.to() },
   { icon: <UsersRound className="size-4" />, label: 'Users', to: routes.adminUsers.to() },
   { icon: <Settings className="size-4" />, label: 'Settings', to: routes.adminSettings.to() },
 ] as const;

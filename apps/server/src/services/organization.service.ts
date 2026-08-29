@@ -4,6 +4,8 @@ import { AuditAction } from '../constants.js';
 import type { AuthContext } from '../database.js';
 import { AuditLogListQueryDto, AuditLogListResponseDto } from '../dtos/audit-log.dto.js';
 import {
+  AdminWorkspaceListQueryDto,
+  AdminWorkspaceListResponseDto,
   OrganizationCreateDto,
   OrganizationDto,
   OrganizationListQueryDto,
@@ -32,6 +34,25 @@ export class OrganizationService {
     private readonly organizationRepository: OrganizationRepository,
     private readonly userRepository: UserRepository,
   ) {}
+
+  async getManagedWorkspaces(
+    auth: AuthContext,
+    query: AdminWorkspaceListQueryDto,
+  ): Promise<AdminWorkspaceListResponseDto> {
+    await this.requireInstanceManager(auth);
+
+    const workspaces = await this.organizationRepository.listManagedWorkspaces({
+      cursor: query.cursor,
+      limit: clampPaginationLimit(query.limit),
+      search: query.search,
+      userId: auth.user.id,
+    });
+
+    return {
+      ...workspaces,
+      items: workspaces.items.map((workspace) => this.serializeManagedWorkspace(workspace)),
+    };
+  }
 
   async create(auth: AuthContext, dto: OrganizationCreateDto): Promise<OrganizationDto> {
     if (auth.apiKey) {
@@ -407,6 +428,18 @@ export class OrganizationService {
     }
   }
 
+  private async requireInstanceManager(auth: AuthContext): Promise<void> {
+    if (auth.apiKey) {
+      this.assertApiKeyScope(auth, Permission.OrganizationManage);
+    }
+
+    const instanceMember = await this.userRepository.getInstanceRole(auth.user.id);
+    if (!instanceMember) {
+      // Workspace ownership is narrower than instance administration; this endpoint can enumerate every workspace.
+      throw new ForbiddenException('Instance admin access is required');
+    }
+  }
+
   private async assertCurrentWorkspaceOwner(auth: AuthContext, organizationId: string): Promise<void> {
     const membership = await this.organizationRepository.getRole(auth.user.id, organizationId);
 
@@ -499,6 +532,23 @@ export class OrganizationService {
     };
   }
 
+  private serializeManagedWorkspace(workspace: AdminWorkspaceRow): AdminWorkspaceListResponseDto['items'][number] {
+    return {
+      allowMemberFolderCreate: workspace.allowMemberFolderCreate,
+      createdAt: toIsoDateTime(workspace.createdAt),
+      currentUserRole: workspace.currentUserRole ? this.toOrganizationRole(workspace.currentUserRole) : null,
+      defaultFolderRole: this.toDefaultFolderRole(workspace.defaultFolderRole),
+      diagramCount: Number(workspace.diagramCount),
+      folderCount: Number(workspace.folderCount),
+      id: workspace.id,
+      memberCount: Number(workspace.memberCount),
+      name: workspace.name,
+      ownerCount: Number(workspace.ownerCount),
+      slug: workspace.slug,
+      updatedAt: toIsoDateTime(workspace.updatedAt),
+    };
+  }
+
   private serializeMember(member: OrganizationMemberRow): OrganizationMemberDto {
     return {
       avatarUrl: member.avatarUrl ?? null,
@@ -536,6 +586,14 @@ export class OrganizationService {
 type OrganizationRow = OrganizationSettingsRow & {
   role: string;
   status: string;
+};
+
+type AdminWorkspaceRow = OrganizationSettingsRow & {
+  currentUserRole: string | null;
+  diagramCount: number | string;
+  folderCount: number | string;
+  memberCount: number | string;
+  ownerCount: number | string;
 };
 
 type OrganizationSettingsRow = {

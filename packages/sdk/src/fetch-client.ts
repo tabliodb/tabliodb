@@ -91,6 +91,74 @@ export type ServerMetricsResponseDtoOutput = {
     routeDurationSampleSize: number;
   };
 };
+export type AuditLogDtoOutput = {
+  id: string;
+  organizationId: string | null;
+  folderId: string | null;
+  diagramId: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata: {
+    [key: string]: any;
+  };
+  ipAddress: string | null;
+  userAgent: string | null;
+  requestId: string | null;
+  createdAt: string;
+};
+export type AuditLogListResponseDtoOutput = {
+  items: AuditLogDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type AdminBackgroundJobDtoOutput = {
+  attempts: number;
+  completedAt: string | null;
+  createdAt: string;
+  error: any | null;
+  failedAt: string | null;
+  id: string;
+  lockedAt: string | null;
+  lockedBy: string | null;
+  maxAttempts: number;
+  payload: any;
+  priority: number;
+  queue: string;
+  result: any | null;
+  scheduledAt: string;
+  startedAt: string | null;
+  status: Status2;
+  type: string;
+  updatedAt: string;
+};
+export type AdminBackgroundJobListResponseDtoOutput = {
+  items: AdminBackgroundJobDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
+export type AdminWorkspaceDtoOutput = {
+  allowMemberFolderCreate: boolean;
+  createdAt: string;
+  currentUserRole: CurrentUserRole | null;
+  defaultFolderRole: DefaultFolderRole | null;
+  diagramCount: number;
+  folderCount: number;
+  id: string;
+  memberCount: number;
+  name: string;
+  ownerCount: number;
+  slug: string;
+  updatedAt: string;
+};
+export type AdminWorkspaceListResponseDtoOutput = {
+  items: AdminWorkspaceDtoOutput[];
+  nextCursor: string | null;
+  totalCount: number;
+};
 export type AuthUserDtoOutput = {
   id: string;
   email: string;
@@ -266,7 +334,7 @@ export type CommentThreadResponseDtoOutput = {
     id: string;
     resolvedAt: string | null;
     resolvedById: string | null;
-    status: Status2;
+    status: Status3;
     targetId: string | null;
     targetType: TargetType;
     unreadCount: number;
@@ -299,7 +367,7 @@ export type CommentThreadListItemDtoOutput = {
   id: string;
   resolvedAt: string | null;
   resolvedById: string | null;
-  status: Status2;
+  status: Status3;
   targetId: string | null;
   targetType: TargetType;
   unreadCount: number;
@@ -348,7 +416,7 @@ export type CommentThreadStatusResponseDtoOutput = {
   id: string;
   resolvedAt: string | null;
   resolvedById: string | null;
-  status: Status2;
+  status: Status3;
   targetId: string | null;
   targetType: TargetType;
   unreadCount: number;
@@ -360,7 +428,7 @@ export type DiagramShareLinkDtoOutput = {
   snapshotId: string | null;
   targetType: TargetType2;
   label: string | null;
-  status: Status3;
+  status: Status4;
   expiresAt: string | null;
   revokedAt: string | null;
   createdById: string;
@@ -401,7 +469,7 @@ export type DiagramResponseDtoOutput = {
   folderId: string | null;
   name: string;
   dialect: Dialect;
-  status: Status4;
+  status: Status5;
   role: Role;
   createdAt: string;
   updatedAt: string;
@@ -711,7 +779,7 @@ export type InvitationDtoOutput = {
   revokedAt: string | null;
   expiresAt: string;
   createdAt: string;
-  status: Status5;
+  status: Status6;
 };
 export type InvitationCreateResponseDtoOutput = {
   invitation: InvitationDtoOutput;
@@ -728,7 +796,7 @@ export type InvitationPublicDtoOutput = {
   diagramRole: DiagramRole | null;
   message: string | null;
   expiresAt: string;
-  status: Status5;
+  status: Status6;
 };
 export type InvitationAcceptDto = {
   token: string;
@@ -794,7 +862,7 @@ export type NotificationInboxItemDtoOutput = {
   } | null;
   thread: {
     id: string;
-    status: Status6;
+    status: Status7;
     targetId: string | null;
     targetType: TargetType3;
     updatedAt: string;
@@ -857,7 +925,7 @@ export type OrganizationMemberDtoOutput = {
   joinedAt: string | null;
   name: string;
   role: Role5;
-  status: Status7;
+  status: Status8;
   updatedAt: string;
   userId: string;
 };
@@ -878,30 +946,6 @@ export type OrganizationMemberRemoveResponseDtoOutput = {
 };
 export type OrganizationOwnershipTransferDto = {
   userId: string;
-};
-export type AuditLogDtoOutput = {
-  id: string;
-  organizationId: string | null;
-  folderId: string | null;
-  diagramId: string | null;
-  actorId: string | null;
-  actorName: string | null;
-  actorEmail: string | null;
-  action: string;
-  entityType: string;
-  entityId: string;
-  metadata: {
-    [key: string]: any;
-  };
-  ipAddress: string | null;
-  userAgent: string | null;
-  requestId: string | null;
-  createdAt: string;
-};
-export type AuditLogListResponseDtoOutput = {
-  items: AuditLogDtoOutput[];
-  nextCursor: string | null;
-  totalCount: number;
 };
 export type FolderResponseDtoOutput = {
   id: string;
@@ -1746,6 +1790,111 @@ export function getServerMetrics(opts?: Oazapfts.RequestOpts) {
     }>('/server/metrics', {
       ...opts,
     }),
+  );
+}
+export function getAdminAuditLogs(
+  {
+    search,
+    organizationId,
+    action,
+    cursor,
+    limit,
+  }: {
+    search?: string;
+    organizationId?: string;
+    action?: string;
+    cursor?: string;
+    limit?: number;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: AuditLogListResponseDtoOutput;
+    }>(
+      `/admin/audit-logs${QS.query(
+        QS.explode({
+          search,
+          organizationId,
+          action,
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function getAdminBackgroundJobs(
+  {
+    $type,
+    status,
+    search,
+    queue,
+    cursor,
+    limit,
+  }: {
+    $type?: string;
+    status?: 'queued' | 'running' | 'completed' | 'failed' | 'dead';
+    search?: string;
+    queue?: string;
+    cursor?: string;
+    limit?: number;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: AdminBackgroundJobListResponseDtoOutput;
+    }>(
+      `/admin/jobs${QS.query(
+        QS.explode({
+          type: $type,
+          status,
+          search,
+          queue,
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
+  );
+}
+export function getAdminWorkspaces(
+  {
+    search,
+    cursor,
+    limit,
+  }: {
+    search?: string;
+    cursor?: string;
+    limit?: number;
+  },
+  opts?: Oazapfts.RequestOpts,
+) {
+  return oazapfts.ok(
+    oazapfts.fetchJson<{
+      status: 200;
+      data: AdminWorkspaceListResponseDtoOutput;
+    }>(
+      `/admin/workspaces${QS.query(
+        QS.explode({
+          search,
+          cursor,
+          limit,
+        }),
+      )}`,
+      {
+        ...opts,
+      },
+    ),
   );
 }
 export function getCurrentUser(opts?: Oazapfts.RequestOpts) {
@@ -4246,6 +4395,24 @@ export enum Status {
   Error = 'error',
   Ok = 'ok',
 }
+export enum Status2 {
+  Queued = 'queued',
+  Running = 'running',
+  Completed = 'completed',
+  Failed = 'failed',
+  Dead = 'dead',
+}
+export enum CurrentUserRole {
+  Owner = 'owner',
+  Admin = 'admin',
+  Member = 'member',
+  Guest = 'guest',
+}
+export enum DefaultFolderRole {
+  Editor = 'editor',
+  Commenter = 'commenter',
+  Viewer = 'viewer',
+}
 export enum InstanceRole {
   Owner = 'owner',
   Admin = 'admin',
@@ -4292,7 +4459,7 @@ export enum TargetType {
   Note = 'note',
   Group = 'group',
 }
-export enum Status2 {
+export enum Status3 {
   Open = 'open',
   Resolved = 'resolved',
 }
@@ -4303,7 +4470,7 @@ export enum TargetType2 {
   Diagram = 'diagram',
   Snapshot = 'snapshot',
 }
-export enum Status3 {
+export enum Status4 {
   Active = 'active',
   Expired = 'expired',
   Revoked = 'revoked',
@@ -4315,7 +4482,7 @@ export enum Dialect {
   Mariadb = 'mariadb',
   Sqlserver = 'sqlserver',
 }
-export enum Status4 {
+export enum Status5 {
   Draft = 'draft',
   Reviewed = 'reviewed',
   Approved = 'approved',
@@ -4480,13 +4647,13 @@ export enum DiagramRole {
   Commenter = 'commenter',
   Viewer = 'viewer',
 }
-export enum Status5 {
+export enum Status6 {
   Pending = 'pending',
   Accepted = 'accepted',
   Revoked = 'revoked',
   Expired = 'expired',
 }
-export enum Status6 {
+export enum Status7 {
   Open = 'open',
   Resolved = 'resolved',
 }
@@ -4511,12 +4678,7 @@ export enum Role5 {
   Member = 'member',
   Guest = 'guest',
 }
-export enum DefaultFolderRole {
-  Editor = 'editor',
-  Commenter = 'commenter',
-  Viewer = 'viewer',
-}
-export enum Status7 {
+export enum Status8 {
   Pending = 'pending',
   Active = 'active',
   Suspended = 'suspended',

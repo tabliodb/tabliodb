@@ -45,6 +45,39 @@ const OrganizationListResponseSchema = z
   })
   .meta({ id: 'OrganizationListResponseDto' });
 
+const AdminWorkspaceSchema = z
+  .object({
+    allowMemberFolderCreate: z.boolean(),
+    createdAt: DateTimeSchema,
+    currentUserRole: OrganizationRoleSchema.nullable(),
+    defaultFolderRole: DefaultFolderRoleSchema.nullable(),
+    diagramCount: z.number().int().nonnegative(),
+    folderCount: z.number().int().nonnegative(),
+    id: z.uuid(),
+    memberCount: z.number().int().nonnegative(),
+    name: z.string(),
+    ownerCount: z.number().int().nonnegative(),
+    slug: z.string(),
+    updatedAt: DateTimeSchema,
+  })
+  .meta({ id: 'AdminWorkspaceDto' });
+
+const AdminWorkspaceListQuerySchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    search: z.string().trim().max(120).optional(),
+  })
+  .meta({ id: 'AdminWorkspaceListQueryDto' });
+
+const AdminWorkspaceListResponseSchema = z
+  .object({
+    items: z.array(AdminWorkspaceSchema),
+    nextCursor: z.string().nullable(),
+    totalCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'AdminWorkspaceListResponseDto' });
+
 const OrganizationCreateSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -127,6 +160,9 @@ const OrganizationSettingsUpdateSchema = z
   .meta({ id: 'OrganizationSettingsUpdateDto' });
 
 export class OrganizationDto extends createZodDto(OrganizationSchema) {}
+export class AdminWorkspaceDto extends createZodDto(AdminWorkspaceSchema) {}
+export class AdminWorkspaceListQueryDto extends createZodDto(AdminWorkspaceListQuerySchema) {}
+export class AdminWorkspaceListResponseDto extends createZodDto(AdminWorkspaceListResponseSchema) {}
 export class OrganizationCreateDto extends createZodDto(OrganizationCreateSchema) {}
 export class OrganizationListQueryDto extends createZodDto(OrganizationListQuerySchema) {}
 export class OrganizationListResponseDto extends createZodDto(OrganizationListResponseSchema) {}

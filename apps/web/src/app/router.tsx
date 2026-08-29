@@ -8,8 +8,12 @@ import { RootLayout } from './layouts/RootLayout';
 import { SystemLayout } from './layouts/SystemLayout';
 import { RouteErrorBoundary } from './routes/RouteErrorBoundary';
 import type { RouteTitleContext } from './route-meta';
+import { adminActivityLoader } from '@/features/admin/loaders/adminActivityLoader';
+import { adminJobsLoader } from '@/features/admin/loaders/adminJobsLoader';
+import { adminOverviewLoader } from '@/features/admin/loaders/adminOverviewLoader';
 import { adminSettingsLoader } from '@/features/admin/loaders/adminSettingsLoader';
 import { adminUsersLoader } from '@/features/admin/loaders/adminUsersLoader';
+import { adminWorkspacesLoader } from '@/features/admin/loaders/adminWorkspacesLoader';
 import { requireInstanceAdmin } from '@/features/admin/middleware/requireInstanceAdmin';
 import { LoadingState } from '@/features/app/RouteStates';
 import { loginLoader } from '@/features/auth/loaders/loginLoader';
@@ -25,6 +29,18 @@ import { routes } from './routes';
 
 const AdminUsersPage = lazy(() =>
   import('@/features/admin/AdminUsersPage').then((module) => ({ default: module.AdminUsersPage })),
+);
+const AdminOverviewPage = lazy(() =>
+  import('@/features/admin/AdminOverviewPage').then((module) => ({ default: module.AdminOverviewPage })),
+);
+const AdminWorkspacesPage = lazy(() =>
+  import('@/features/admin/AdminWorkspacesPage').then((module) => ({ default: module.AdminWorkspacesPage })),
+);
+const AdminActivityPage = lazy(() =>
+  import('@/features/admin/AdminActivityPage').then((module) => ({ default: module.AdminActivityPage })),
+);
+const AdminJobsPage = lazy(() =>
+  import('@/features/admin/AdminJobsPage').then((module) => ({ default: module.AdminJobsPage })),
 );
 const AdminSettingsPage = lazy(() =>
   import('@/features/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })),
@@ -133,8 +149,40 @@ export const router = createBrowserRouter([
             middleware: [requireSetupComplete, requireAuthenticated, requireInstanceAdmin],
             children: [
               {
-                element: <Navigate replace to={routes.adminUsers.to()} />,
+                element: <Navigate replace to={routes.adminOverview.to()} />,
                 path: routes.admin.path,
+              },
+              {
+                element: <AdminOverviewPage />,
+                loader: adminOverviewLoader,
+                path: routes.adminOverview.path,
+                handle: {
+                  title: 'Overview',
+                },
+              },
+              {
+                element: <AdminWorkspacesPage />,
+                loader: adminWorkspacesLoader,
+                path: routes.adminWorkspaces.path,
+                handle: {
+                  title: 'Workspaces',
+                },
+              },
+              {
+                element: <AdminActivityPage />,
+                loader: adminActivityLoader,
+                path: routes.adminActivity.path,
+                handle: {
+                  title: 'Activity',
+                },
+              },
+              {
+                element: <AdminJobsPage />,
+                loader: adminJobsLoader,
+                path: routes.adminJobs.path,
+                handle: {
+                  title: 'Jobs',
+                },
               },
               {
                 element: <AdminUsersPage />,

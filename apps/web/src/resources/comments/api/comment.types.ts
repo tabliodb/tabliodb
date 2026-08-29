@@ -9,14 +9,12 @@ import type {
   CommentThreadResponseDtoOutput,
   CommentThreadStatusResponseDtoOutput,
   CommentThreadTargetSummaryDtoOutput,
-  Status2,
-  TargetType,
   Type,
   getThreadComments,
 } from '@tabliodb/sdk';
 
-export type CommentTargetType = `${TargetType}`;
-export type CommentThreadStatus = `${Status2}`;
+export type CommentTargetType = `${CommentThreadListItemDtoOutput['targetType']}`;
+export type CommentThreadStatus = `${CommentThreadListItemDtoOutput['status']}`;
 export type CommentBodyFormat = `${BodyFormat}`;
 export type CommentRootNodeType = `${Type}`;
 
@@ -54,10 +52,7 @@ export type CommentLexicalLinkNodeDto = {
 };
 
 export type CommentLexicalInlineNodeDto =
-  | CommentLexicalLineBreakNodeDto
-  | CommentLexicalLinkNodeDto
-  | CommentLexicalMentionNodeDto
-  | CommentLexicalTextNodeDto;
+  CommentLexicalLineBreakNodeDto | CommentLexicalLinkNodeDto | CommentLexicalMentionNodeDto | CommentLexicalTextNodeDto;
 
 export type CommentLexicalParagraphNodeDto = {
   children: CommentLexicalInlineNodeDto[];

@@ -1,18 +1,23 @@
 import type { PaginationQuery } from '@tabliodb/shared';
 import {
+  getAdminWorkspaces,
   getOrganizationAuditLogs,
   getOrganizationMembers,
   getOrganizationSettings,
   getOrganizations,
+  type AdminWorkspaceListResponseDtoOutput,
   type AuditLogListResponseDtoOutput,
   type OrganizationListResponseDtoOutput,
   type OrganizationMemberListResponseDtoOutput,
   type OrganizationSettingsDtoOutput,
 } from '@tabliodb/sdk';
 import { appQueryOptions, type AppQueryOptions } from '@/lib/react-query';
-import { organizationsKeys } from './organization.keys';
+import { organizationsKeys, type AdminWorkspaceListQuery } from './organization.keys';
 
 type OrganizationsQueries = {
+  adminWorkspaces: (
+    query?: AdminWorkspaceListQuery,
+  ) => AppQueryOptions<AdminWorkspaceListResponseDtoOutput, ReturnType<typeof organizationsKeys.adminWorkspaces>>;
   auditLogs: (
     organizationId: string,
     query?: PaginationQuery,
@@ -30,6 +35,12 @@ type OrganizationsQueries = {
 };
 
 export const organizationsQueries: OrganizationsQueries = {
+  adminWorkspaces: (query: AdminWorkspaceListQuery = {}) =>
+    appQueryOptions({
+      queryFn: () => getAdminWorkspaces(query),
+      queryKey: organizationsKeys.adminWorkspaces(query),
+    }),
+
   auditLogs: (organizationId: string, query: PaginationQuery = {}) =>
     appQueryOptions({
       enabled: Boolean(organizationId),

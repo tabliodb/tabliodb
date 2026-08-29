@@ -77,6 +77,22 @@ export const routes = {
     path: '/admin',
     to: () => '/admin',
   },
+  adminOverview: {
+    path: '/admin/overview',
+    to: () => '/admin/overview',
+  },
+  adminWorkspaces: {
+    path: '/admin/workspaces',
+    to: () => '/admin/workspaces',
+  },
+  adminActivity: {
+    path: '/admin/activity',
+    to: () => '/admin/activity',
+  },
+  adminJobs: {
+    path: '/admin/jobs',
+    to: () => '/admin/jobs',
+  },
   adminUsers: {
     path: '/admin/users',
     to: () => '/admin/users',
